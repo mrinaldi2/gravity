@@ -4,10 +4,12 @@
 
 mod common;
 
+use std::cell::Cell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
-use common::devtools::{fake_devtools, start_browser};
+use common::devtools::{fake_devtools, frame_number, start_browser, streaming_devtools};
 use common::peers::{project, wait_until};
 use common::*;
 use serde_json::{json, Value};
@@ -117,6 +119,61 @@ async fn the_app_watches_a_bots_browser_live() {
     phone.request(json!({"type": "unwatch_browser"})).await;
     let app = d.app.clone();
     wait_until("the shared stream stops", || app.browsers.live() == 0).await;
+}
+
+#[tokio::test]
+async fn a_stalled_viewer_skips_frames_instead_of_queuing_them() {
+    const FRAMES: usize = 60;
+    let d = spawn_daemon_with(|cfg| cfg.user_home = cfg.home.join("user")).await;
+    let mut c = WsClient::connect(&d).await;
+    let pid = project(&mut c, "web").await;
+    let bot = create_bot(&mut c, &pid, "surfer").await;
+    let id = bot["id"].as_str().expect("id").to_string();
+    // A quarter megabyte of screen every 5 ms: far more, in all, than the
+    // link holds while the phone is not reading.
+    let (port, sent) = streaming_devtools(FRAMES, 256 * 1024, Duration::from_millis(5)).await;
+    start_browser(&d, &id, port);
+    let ok = c
+        .request(json!({"type": "watch_browser", "bot_id": id}))
+        .await;
+    assert_eq!(ok["type"], "ok", "{ok}");
+
+    // The phone stops reading (a dead zone) for as long as the screen keeps
+    // changing, then asks for something once it is back. A debug build on a
+    // busy machine takes its time over megabytes of frames, so the waits
+    // here go by what arrives, not by the clock.
+    let slow = Duration::from_secs(60);
+    let deadline = tokio::time::Instant::now() + slow;
+    while sent.load(Ordering::SeqCst) < FRAMES {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "the screencast stalled"
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let req_id = c.send(json!({"type": "list_projects"})).await;
+    let frames_first = Cell::new(0);
+    let reply = c
+        .wait_for_within(slow, |v| {
+            if v["type"] == "browser_frame" {
+                frames_first.set(frames_first.get() + 1);
+            }
+            v["req_id"] == req_id.as_str()
+        })
+        .await;
+    assert_eq!(reply["type"], "projects", "{reply}");
+    // Only what was already on the wire comes first, not every frame.
+    assert!(
+        frames_first.get() < FRAMES / 2,
+        "{} of {FRAMES} frames queued ahead of the reply",
+        frames_first.get()
+    );
+    // The newest screen still arrives.
+    c.wait_for_within(slow, |v| {
+        v["type"] == "browser_frame" && frame_number(v) == FRAMES - 1
+    })
+    .await;
 }
 
 #[tokio::test]

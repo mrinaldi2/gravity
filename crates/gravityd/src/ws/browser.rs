@@ -23,25 +23,29 @@ impl Conn {
             .get("tab_id")
             .and_then(Value::as_str)
             .map(str::to_string);
-        if let Some(old) = self.browser_watch.take() {
-            old.abort();
-        }
+        self.stop_browser_watch();
         self.send(json!({ "type": "ok", "req_id": req_id }));
         self.browser_watch = Some(tokio::spawn(crate::browser::view::watch(
             self.app.clone(),
             bot,
             tab,
-            self.out.clone(),
+            self.viewer.clone(),
         )));
         Ok(())
     }
 
     pub(super) fn unwatch_browser(&mut self, req_id: &Value) -> anyhow::Result<()> {
+        self.stop_browser_watch();
+        self.send(json!({ "type": "ok", "req_id": req_id }));
+        Ok(())
+    }
+
+    /// Ends the watch, dropping a frame of it still waiting to be sent.
+    fn stop_browser_watch(&mut self) {
         if let Some(old) = self.browser_watch.take() {
             old.abort();
         }
-        self.send(json!({ "type": "ok", "req_id": req_id }));
-        Ok(())
+        self.viewer.clear();
     }
 
     /// The bot's browser actions, newest first, each with the turn it

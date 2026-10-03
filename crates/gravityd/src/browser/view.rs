@@ -4,6 +4,11 @@
 //! one the bot used last, unless the owner picked another to look at. Every
 //! connection watching the same browser reads the same shared stream (see
 //! `streams`), so the desktop and a phone cost one screencast, not two.
+//!
+//! Frames do not queue with the connection's other traffic: each goes into a
+//! one-frame slot the connection's writer empties when the link has room, so
+//! a newer frame replaces one not yet sent. A slow link skips frames, and a
+//! reply or a push never waits behind more than the one frame being written.
 
 use std::sync::Arc;
 
@@ -15,6 +20,38 @@ use crate::app::AppState;
 
 use super::streams::{Frame, TabStream};
 use super::BotBrowser;
+
+/// Where a watch sends what it shows: tab lists in order with everything
+/// else on the connection, frames into the newest-wins slot.
+#[derive(Clone)]
+pub struct Viewer {
+    pushes: UnboundedSender<Value>,
+    frames: watch::Sender<Option<Value>>,
+}
+
+impl Viewer {
+    /// A viewer sending through `pushes`, and the slot its frames wait in.
+    pub fn new(pushes: UnboundedSender<Value>) -> (Self, watch::Receiver<Option<Value>>) {
+        let (frames, slot) = watch::channel(None);
+        (Self { pushes, frames }, slot)
+    }
+
+    /// Sends a push in order; false once the connection is gone.
+    pub fn push(&self, push: Value) -> bool {
+        self.pushes.send(push).is_ok()
+    }
+
+    /// Puts a frame in the slot, replacing one not yet sent; false once the
+    /// connection is gone.
+    pub fn frame(&self, frame: Value) -> bool {
+        self.frames.send(Some(frame)).is_ok()
+    }
+
+    /// Empties the slot, so a frame of a watch that ended is not sent.
+    pub fn clear(&self) {
+        self.frames.send_replace(None);
+    }
+}
 
 /// The profile directory of a bot's browser, when the bot runs here.
 pub fn profile(app: &AppState, bot: &bus::Bot) -> Option<std::path::PathBuf> {
@@ -28,12 +65,7 @@ pub fn profile(app: &AppState, bot: &bus::Bot) -> Option<std::path::PathBuf> {
 
 /// Watches a bot's browser for one connection until the task is aborted,
 /// through the stream every viewer of that browser shares.
-pub async fn watch(
-    app: Arc<AppState>,
-    bot: bus::Bot,
-    chosen: Option<String>,
-    out: UnboundedSender<Value>,
-) {
+pub async fn watch(app: Arc<AppState>, bot: bus::Bot, chosen: Option<String>, out: Viewer) {
     if bot.is_linked() {
         // Its browser is on its machine, which streams it here.
         crate::peer::browser::watch(app, bot, chosen, out).await;
@@ -71,7 +103,7 @@ pub async fn watch(
                     "following": chosen.is_none(),
                     "tabs": open.iter().map(|t| json!({ "id": t.id, "title": t.title, "url": t.url })).collect::<Vec<_>>()
                 });
-                if out.send(listing).is_err() {
+                if !out.push(listing) {
                     break;
                 }
                 let on_show = showing.as_ref().map(|(id, _, _)| id.clone());
@@ -97,11 +129,11 @@ pub async fn watch(
                 let Some(frame) = frames.borrow_and_update().clone() else {
                     continue;
                 };
-                let sent = out.send(json!({
+                let sent = out.frame(json!({
                     "type": "browser_frame", "bot_id": bot.id, "tab_id": tab_id,
                     "data": &*frame.data, "width": frame.width, "height": frame.height
                 }));
-                if sent.is_err() {
+                if !sent {
                     break;
                 }
             }

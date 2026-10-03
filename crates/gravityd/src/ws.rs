@@ -4,18 +4,20 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::extract::ws::{Message as WsMessage, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use bus::Capability;
-use futures::{SinkExt, StreamExt};
+use futures::StreamExt;
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::app::{AppState, DAEMON_VERSION, PROTOCOL_VERSION};
+use crate::browser::view::Viewer;
 
 mod admin;
 mod browser;
@@ -37,10 +39,24 @@ mod tasks;
 mod terminal;
 mod views;
 mod workers;
+mod writer;
 
 pub(crate) use views::{bot_view, project_view};
 
 const MAX_FRAME_BYTES: usize = 1024 * 1024;
+
+/// How often the server pings a client, so a quiet link still carries traffic
+/// both ways.
+const PING_INTERVAL: Duration = Duration::from_secs(20);
+
+/// A client that sends nothing at all for this long (no request, ping or
+/// pong) is gone: a phone that drove into a tunnel, say. Its connection is
+/// closed rather than left to the OS, which can take far longer to notice.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// How long a closing connection's writer may take to send what is left. A
+/// writer stuck on a dead link is stopped instead, so the socket closes.
+const WRITER_GRACE: Duration = Duration::from_secs(5);
 
 pub async fn ws_handler(
     State(app): State<Arc<AppState>>,
@@ -84,6 +100,8 @@ struct Conn {
     attachments: HashMap<String, JoinHandle<()>>,
     /// The bot browser this connection is watching, if any.
     browser_watch: Option<JoinHandle<()>>,
+    /// Where that watch sends: `out`, and the writer's newest-wins frame slot.
+    viewer: Viewer,
     caps: Vec<Capability>,
     /// None for the owner token; the issuing device otherwise. A ruling made
     /// from a device stays attributable after that device is revoked.
@@ -91,29 +109,23 @@ struct Conn {
 }
 
 async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
-    let (mut sink, mut stream) = socket.split();
-    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Value>();
+    let (sink, mut stream) = socket.split();
+    let (out_tx, out_rx) = mpsc::unbounded_channel::<Value>();
+    let (viewer, frames) = Viewer::new(out_tx.clone());
 
-    // Writer task: serialize all outbound frames through one channel.
-    let writer = tokio::spawn(async move {
-        while let Some(v) = out_rx.recv().await {
-            let text = v.to_string();
-            if sink.send(WsMessage::Text(text)).await.is_err() {
-                break;
-            }
-        }
-    });
+    // Writer task: everything outbound goes through one sink.
+    let writer = tokio::spawn(writer::write_out(sink, out_rx, frames, PING_INTERVAL));
 
     // Handshake: first frame must be a valid hello.
-    let session = match stream.next().await {
-        Some(Ok(WsMessage::Text(text))) => {
+    let session = match tokio::time::timeout(IDLE_TIMEOUT, stream.next()).await {
+        Ok(Some(Ok(WsMessage::Text(text)))) => {
             handshake(&app, &out_tx, &text).map(|session| (session, shows_permission_cards(&text)))
         }
         _ => None,
     };
     let Some(((caps, device_id), cards)) = session else {
-        drop(out_tx);
-        let _ = writer.await;
+        drop((out_tx, viewer));
+        finish(writer).await;
         return;
     };
 
@@ -169,11 +181,26 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
         out: out_tx.clone(),
         attachments: HashMap::new(),
         browser_watch: None,
+        viewer,
         caps,
         device_id,
     };
 
-    while let Some(Ok(frame)) = stream.next().await {
+    // Any frame counts as a sign of life, a ping or pong as much as a request.
+    // Pongs to the client's pings go out with the next read or write, both of
+    // which flush.
+    loop {
+        let frame = match tokio::time::timeout(IDLE_TIMEOUT, stream.next()).await {
+            Ok(Some(Ok(frame))) => frame,
+            Ok(_) => break,
+            Err(_) => {
+                tracing::info!(
+                    idle_secs = IDLE_TIMEOUT.as_secs(),
+                    "client went silent; closing its connection"
+                );
+                break;
+            }
+        };
         match frame {
             WsMessage::Text(text) => {
                 if text.len() > MAX_FRAME_BYTES {
@@ -199,7 +226,17 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
     push_task.abort();
     drop(out_tx);
     drop(conn);
-    let _ = writer.await;
+    finish(writer).await;
+}
+
+/// Lets the writer send what is left, unless the link is too slow to.
+async fn finish(mut writer: JoinHandle<()>) {
+    if tokio::time::timeout(WRITER_GRACE, &mut writer)
+        .await
+        .is_err()
+    {
+        writer.abort();
+    }
 }
 
 /// Whether the client's hello says it shows permission cards.

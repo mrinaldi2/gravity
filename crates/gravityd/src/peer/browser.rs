@@ -7,7 +7,8 @@
 //! viewers (the desktop, a phone), and renames the bot to the stand-in.
 //!
 //! Frames cross the link newest-only, at most a few a second, so a slow link
-//! never queues them up; tab lists go straight through.
+//! never queues them up; tab lists go straight through. On this side they go
+//! to each viewer's newest-wins slot, as a local bot's frames do.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
@@ -19,6 +20,7 @@ use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
 use crate::app::AppState;
+use crate::browser::view::Viewer;
 
 /// Fewest milliseconds between two frames sent over the link.
 const FRAME_INTERVAL: Duration = Duration::from_millis(150);
@@ -110,8 +112,15 @@ pub(super) fn serve_watch(
     );
     let tab = frame["tab_id"].as_str().map(str::to_string);
     let (tx, rx) = mpsc::unbounded_channel();
-    let watcher = crate::browser::view::watch(app.clone(), bot, tab, tx);
-    let relay = relay(app.peers.clone(), peer.id.clone(), feed_id.clone(), rx);
+    let (viewer, frames) = Viewer::new(tx);
+    let watcher = crate::browser::view::watch(app.clone(), bot, tab, viewer);
+    let relay = relay(
+        app.peers.clone(),
+        peer.id.clone(),
+        feed_id.clone(),
+        rx,
+        frames,
+    );
     let task = tokio::spawn(async move {
         tokio::join!(watcher, relay);
     });
@@ -133,22 +142,26 @@ async fn relay(
     peer_id: String,
     feed_id: String,
     mut rx: mpsc::UnboundedReceiver<Value>,
+    mut frames: watch::Receiver<Option<Value>>,
 ) {
-    let mut pending: Option<Value> = None;
+    let mut pending = false;
     let mut tick = tokio::time::interval(FRAME_INTERVAL);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
             push = rx.recv() => {
                 let Some(push) = push else { break };
-                if push["type"] == "browser_frame" {
-                    pending = Some(push);
-                } else {
-                    hub.notify(&peer_id, json!({ "type": "browser_feed", "feed_id": feed_id, "push": push }));
-                }
+                hub.notify(&peer_id, json!({ "type": "browser_feed", "feed_id": feed_id, "push": push }));
             }
-            _ = tick.tick(), if pending.is_some() => {
-                if let Some(push) = pending.take() {
+            changed = frames.changed(), if !pending => {
+                if changed.is_err() {
+                    break;
+                }
+                pending = true;
+            }
+            _ = tick.tick(), if pending => {
+                pending = false;
+                if let Some(push) = frames.borrow_and_update().clone() {
                     hub.notify(&peer_id, json!({ "type": "browser_feed", "feed_id": feed_id, "push": push }));
                 }
             }
@@ -239,16 +252,11 @@ async fn feed(
 }
 
 /// Watches a linked bot's browser for one connection, through its machine.
-pub async fn watch(
-    app: Arc<AppState>,
-    stand_in: Bot,
-    tab: Option<String>,
-    out: mpsc::UnboundedSender<Value>,
-) {
+pub async fn watch(app: Arc<AppState>, stand_in: Bot, tab: Option<String>, out: Viewer) {
     let feed = match feed(&app, &stand_in, tab).await {
         Ok(feed) => feed,
         Err(e) => {
-            let _ = out.send(json!({
+            out.push(json!({
                 "type": "browser_tabs", "bot_id": stand_in.id, "open": false, "tabs": [],
                 "active": null, "reason": format!("{e:#}")
             }));
@@ -265,20 +273,25 @@ pub async fn watch(
         })
     };
     loop {
-        let push = tokio::select! {
+        // Frames go to the viewer's newest-wins slot, so a slow phone skips
+        // them rather than queuing what the peer sends.
+        let (push, is_frame) = tokio::select! {
             changed = tabs.changed() => match changed {
-                Ok(()) => local(&tabs.borrow_and_update()),
+                Ok(()) => (local(&tabs.borrow_and_update()), false),
                 Err(_) => break,
             },
             changed = frames.changed() => match changed {
-                Ok(()) => local(&frames.borrow_and_update()),
+                Ok(()) => (local(&frames.borrow_and_update()), true),
                 Err(_) => break,
             },
         };
-        if let Some(push) = push {
-            if out.send(push).is_err() {
-                break;
-            }
+        let sent = match push {
+            Some(push) if is_frame => out.frame(push),
+            Some(push) => out.push(push),
+            None => true,
+        };
+        if !sent {
+            break;
         }
     }
     drop(feed);

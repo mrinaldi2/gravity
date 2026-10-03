@@ -123,7 +123,16 @@ impl WsClient {
     }
 
     pub async fn wait_for(&mut self, pred: impl Fn(&Value) -> bool) -> Value {
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        self.wait_for_within(Duration::from_secs(5), pred).await
+    }
+
+    /// `wait_for` with a deadline of its own, for a frame behind heavy traffic.
+    pub async fn wait_for_within(
+        &mut self,
+        within: Duration,
+        pred: impl Fn(&Value) -> bool,
+    ) -> Value {
+        let deadline = tokio::time::Instant::now() + within;
         loop {
             let frame = tokio::time::timeout_at(deadline, self.rx.next())
                 .await

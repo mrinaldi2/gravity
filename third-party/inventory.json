@@ -6,7 +6,7 @@
   "inputs": {
     "Cargo.lock": "2d03468c3b96ec984adfa2e515c1f8a20a6fa7dc39b3b2753b350085647f75c9",
     "Cargo.toml": "17f46fbe0ce2a8fab2e1b26a1b10435ac1968ae6f8150db33bb1e05c25fb7491",
-    "crates/gravityd/Cargo.toml": "e948b84372298a104eba4ea6dd4e76cd75e2c16278587dae0a51368943d4c2a7",
+    "crates/gravityd/Cargo.toml": "12ba20be304dcc6155161671ce3a4a8a20b5d41756d74833e2e4d117c15bcc30",
     "crates/bus/Cargo.toml": "c4c4f51131d78f8ae8cb6e96fcb918c245998d9c1e01312f513fb56dfc452910",
     "apps/desktop/src-tauri/Cargo.lock": "34e0f80660700f2a72a2b0580804e48aec4c5ef8b6cbc72795d3005a85825175",
     "apps/desktop/src-tauri/Cargo.toml": "dc14fde01c52c1286cba798b4ec296eff81615924a0ba517959215138141618d",

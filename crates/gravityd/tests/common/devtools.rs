@@ -39,22 +39,64 @@ pub fn start_browser(d: &TestDaemon, bot_id: &str, port: u16) {
 /// `Page.startScreencast` with a frame, keeping connections open as Chrome
 /// does. Returns the HTTP port.
 pub async fn fake_devtools(title: &'static str, screencasts: Arc<AtomicUsize>) -> u16 {
+    let screen = |n: usize| (n == 0).then(|| "SlBFRw==".to_string());
+    serve_devtools(title, screencasts, screen, Duration::ZERO).await
+}
+
+/// Like `fake_devtools`, but the screencast sends `count` frames of `size`
+/// bytes, one every `every`, each starting with its number (`000042…`).
+/// Returns the port and how many frames have been sent so far.
+pub async fn streaming_devtools(
+    count: usize,
+    size: usize,
+    every: Duration,
+) -> (u16, Arc<AtomicUsize>) {
+    let sent = Arc::new(AtomicUsize::new(0));
+    let counter = sent.clone();
+    let screen = move |n: usize| {
+        counter.store(n, Ordering::SeqCst);
+        (n < count).then(|| format!("{n:06}{}", "A".repeat(size)))
+    };
+    let port = serve_devtools("Stream", Arc::new(AtomicUsize::new(0)), screen, every).await;
+    (port, sent)
+}
+
+/// The frame numbered `n` of a `streaming_devtools` screencast.
+pub fn frame_number(frame: &Value) -> usize {
+    frame["data"].as_str().expect("data")[..6]
+        .parse()
+        .expect("frame number")
+}
+
+async fn serve_devtools(
+    title: &'static str,
+    screencasts: Arc<AtomicUsize>,
+    screen: impl Fn(usize) -> Option<String> + Clone + Send + Sync + 'static,
+    every: Duration,
+) -> u16 {
     let ws = TcpListener::bind("127.0.0.1:0").await.expect("bind ws");
     let ws_port = ws.local_addr().expect("addr").port();
     tokio::spawn(async move {
         while let Ok((stream, _)) = ws.accept().await {
             screencasts.fetch_add(1, Ordering::SeqCst);
+            let screen = screen.clone();
             tokio::spawn(async move {
                 let mut socket = tokio_tungstenite::accept_async(stream).await.expect("ws");
                 while let Some(Ok(WsMsg::Text(text))) = socket.next().await {
                     let call: Value = serde_json::from_str(&text).expect("json");
-                    if call["method"] == "Page.startScreencast" {
+                    if call["method"] != "Page.startScreencast" {
+                        continue;
+                    }
+                    let mut n = 0;
+                    while let Some(data) = screen(n) {
                         let frame = json!({
                             "method": "Page.screencastFrame",
-                            "params": { "data": "SlBFRw==", "sessionId": 1,
+                            "params": { "data": data, "sessionId": n + 1,
                                         "metadata": { "deviceWidth": 800, "deviceHeight": 600 } }
                         });
                         let _ = socket.send(WsMsg::Text(frame.to_string())).await;
+                        n += 1;
+                        tokio::time::sleep(every).await;
                     }
                 }
             });

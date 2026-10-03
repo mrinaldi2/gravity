@@ -61,6 +61,16 @@ Browser-context connections are additionally subject to Origin validation:
 requests with an Origin header must match localhost/tauri defaults or the
 daemon's `allowed_origins` config, otherwise the upgrade is rejected with 403.
 
+## Keepalive
+
+The server sends a WebSocket Ping every ~20 s and closes a connection that has
+sent nothing at all for ~60 s (any frame counts: a request, a Ping, a Pong). Closing
+it ends everything the connection was doing, as a normal close does: terminal
+attachments, the browser watch, pushes. A client that pings on its own, or simply
+answers the server's pings (WebSocket libraries do), stays connected. The server
+answers a client's Ping with a Pong promptly; at most one `browser_frame` is ever
+ahead of it.
+
 ## Errors
 
 `{ "type": "error", "req_id": "...", "code": "<snake_case>", "message": "human text" }`
@@ -128,7 +138,7 @@ Codes: `auth_failed`, `unsupported_version`, `not_found`, `invalid_request`,
 | `write_artifact` | `project_id, name, base64` (one chunk, up to ~512 KB), `upload_id?` (from the first chunk's reply), `last` | `upload` (`upload_id`, and `path` once the last chunk is in); `control` grant. Files land in the project's `artifacts/uploads/`, up to 16 MB |
 | `list_tasks` | `bot_id, limit?` (default 100) | `tasks`: newest first, each with `state`, `role` (`assigned` \| `delegated`), `other` (`name`, `machine?`), `request` and `result?` as previews (`request_truncated`, `result_truncated` say when they were cut), `deadline_at?`, `closed_at?` |
 | `get_task` | `bot_id, task_id` | `task`: the same shape with the whole request and result |
-| `watch_browser` | `bot_id, tab_id?` | `ok`, then `browser_tabs` and `browser_frame` pushes to this connection, starting with the current tabs and screen. `tab_id` shows that tab; without it the view follows the tab the bot used last. One watch per connection: a new one replaces it. Every connection watching a bot shares one stream, and a slow one gets the newest frame rather than every frame. Requires `read` |
+| `watch_browser` | `bot_id, tab_id?` | `ok`, then `browser_tabs` and `browser_frame` pushes to this connection, starting with the current tabs and screen. `tab_id` shows that tab; without it the view follows the tab the bot used last. One watch per connection: a new one replaces it. Every connection watching a bot shares one stream. Frames are newest-wins: a slow connection skips frames rather than queuing them, and replies and pushes never wait behind more than one frame. Requires `read` |
 | `unwatch_browser` | – | `ok`; stops the stream |
 | `list_browser_activity` | `bot_id, limit?` (default 100) | `browser_activity`: `activity`, newest first, each `{ turn_id, step_id, at, browser: own\|owners_chrome, title, subtitle?, status, trigger }`; `trigger` is what started the turn, as in the chat |
 | `list_bot_commands` | `bot_id, limit?` (default 100) | `bot_commands`: `commands`, running first then newest, each `{ id, command, description?, background, status: running\|done\|failed\|stopped, started_at, ended_at?, exit_code?, task_id?, output? }`. Read from the bot's transcript: a background command runs until the runtime reports it finished or the bot stops it, and a running one's `output` is the live end of its output file. A command left running when its session ended is `stopped`. For a linked bot, read from its machine. Refetch on `chat_turns` for the bot, and every few seconds while a background command runs. Requires `read` |
@@ -232,7 +242,9 @@ breaking wire-shape change; v1 clients must upgrade before connecting.
   — sent to a connection watching that bot's browser (`watch_browser`) whenever its tabs
   change. `open` is false while the bot has no browser running.
 - `browser_frame`: `{ "bot_id", "tab_id", "data", "width", "height" }` — the newest screen of
-  the tab on show, a base64 JPEG. Only sent while watching.
+  the tab on show, a base64 JPEG. Only sent while watching. Newest-wins: at most one is
+  being written to a connection at a time, a newer screen replaces one not yet sent, and
+  other traffic goes first, so frames may be skipped on a slow link.
 - `chat_turns`: `{ "bot_id", "turns": [...] }` — turns of a loaded chat that are new or
   changed, usually the open one. Merge by turn `id`. Only bots whose chat a client has
   listed are followed. The turn model is described in
