@@ -13,6 +13,8 @@ use super::Conn;
 /// Turns sent when the client does not ask for a number.
 const DEFAULT_PAGE: usize = 30;
 const MAX_PAGE: usize = 200;
+/// Most artifacts one `list_artifacts` page may ask for.
+const MAX_ARTIFACTS_PAGE: usize = 500;
 
 impl Conn {
     pub(super) fn list_chat(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
@@ -89,11 +91,25 @@ impl Conn {
 
     pub(super) fn list_artifacts(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let project_id = Self::str_field(req, "project_id")?.to_string();
+        // Without a limit the whole listing comes back, as older clients
+        // expect.
+        let limit = req
+            .get("limit")
+            .and_then(Value::as_u64)
+            .map(|n| (n as usize).clamp(1, MAX_ARTIFACTS_PAGE));
+        let before = req
+            .get("before")
+            .and_then(Value::as_str)
+            .map(str::to_string);
         self.blocking(req_id, move |app| {
             let project = live_project(app, &project_id)?;
-            let mut artifacts = files::list_artifacts(app, &project);
-            crate::chat::authors::attribute(app, &project, &mut artifacts);
-            Ok(json!({ "type": "artifacts", "project_id": project_id, "artifacts": artifacts }))
+            let listing = files::list_artifacts(app, &project);
+            let mut page = files::page(listing, before.as_deref(), limit);
+            crate::chat::authors::attribute(app, &project, &mut page.artifacts);
+            Ok(json!({
+                "type": "artifacts", "project_id": project_id, "artifacts": page.artifacts,
+                "has_more": page.next_before.is_some(), "next_before": page.next_before
+            }))
         });
         Ok(())
     }

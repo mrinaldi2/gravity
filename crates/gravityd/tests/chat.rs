@@ -217,3 +217,85 @@ async fn attachments_upload_in_chunks_into_the_project_artifacts() {
         .await;
     assert_eq!(refused["type"], "error");
 }
+
+#[tokio::test]
+async fn artifacts_come_a_page_at_a_time_newest_first() {
+    let mut s = setup().await;
+    let project =
+        s.d.app
+            .db
+            .get_project(&s.project_id)
+            .expect("db")
+            .expect("project");
+    let artifacts = gravityd::paths::artifacts_dir(&s.d.app.cfg, &project.dir_name);
+    let start = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    // Two files share a time, so the cursor has to tell them apart by path.
+    for (i, name) in ["a.md", "b.md", "c.md", "d.md", "e.md", "f.md", "g.md"]
+        .iter()
+        .enumerate()
+    {
+        let path = artifacts.join(name);
+        std::fs::write(&path, name).expect("write");
+        let at = start + std::time::Duration::from_secs(i.min(5) as u64 * 60);
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .and_then(|f| f.set_modified(at))
+            .expect("mtime");
+    }
+    let names = |reply: &Value| -> Vec<String> {
+        reply["artifacts"]
+            .as_array()
+            .expect("artifacts")
+            .iter()
+            .map(|a| a["rel"].as_str().expect("rel").to_string())
+            .collect()
+    };
+
+    // An older client asks for no limit and gets everything.
+    let all =
+        s.c.request(json!({"type": "list_artifacts", "project_id": s.project_id}))
+            .await;
+    assert_eq!(all["has_more"], false);
+    let everything = names(&all);
+    assert_eq!(&everything[..3], ["f.md", "g.md", "e.md"], "newest first");
+
+    // Pages of three walk the same list.
+    let mut paged = Vec::new();
+    let mut before = Value::Null;
+    loop {
+        let page =
+            s.c.request(json!({
+                "type": "list_artifacts", "project_id": s.project_id,
+                "limit": 3, "before": before
+            }))
+            .await;
+        let got = names(&page);
+        assert!(got.len() <= 3, "{page}");
+        paged.extend(got);
+        if page["has_more"] == false {
+            assert!(page["next_before"].is_null());
+            break;
+        }
+        before = page["next_before"].clone();
+    }
+    assert_eq!(paged, everything);
+
+    // A file edited while the phone pages moves to the top; the rest of the
+    // pages still bring every other file.
+    let first =
+        s.c.request(json!({"type": "list_artifacts", "project_id": s.project_id, "limit": 3}))
+            .await;
+    std::fs::write(artifacts.join("b.md"), "edited").expect("edit");
+    let rest =
+        s.c.request(json!({
+            "type": "list_artifacts", "project_id": s.project_id,
+            "before": first["next_before"]
+        }))
+        .await;
+    let mut seen = names(&first);
+    seen.extend(names(&rest));
+    for name in everything.iter().filter(|n| *n != "b.md") {
+        assert!(seen.contains(name), "{name} skipped: {seen:?}");
+    }
+}

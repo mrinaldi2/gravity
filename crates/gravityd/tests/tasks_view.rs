@@ -5,7 +5,7 @@ mod common;
 
 use common::tasks::{drain_until, project_with_bots};
 use common::*;
-use serde_json::json;
+use serde_json::{json, Value};
 
 #[tokio::test]
 async fn a_bot_sees_its_open_and_finished_tasks_from_both_ends() {
@@ -89,4 +89,72 @@ async fn the_list_previews_long_text_and_get_task_has_all_of_it() {
         .request(json!({"type": "get_task", "bot_id": "someone-else", "task_id": task_id}))
         .await;
     assert_eq!(stranger["type"], "error");
+}
+
+#[tokio::test]
+async fn open_tasks_load_apart_from_a_page_of_closed_ones() {
+    let (pair, mut clients) = project_with_bots(&["lead", "dev"]).await;
+    let old = clients[0]
+        .call(
+            "send_message",
+            json!({"to": "dev", "kind": "task", "body": "old and still open"}),
+        )
+        .await["task_id"]
+        .as_str()
+        .expect("task id")
+        .to_string();
+    drain_until(&mut clients[1], "old and still open").await;
+    for n in 0..3 {
+        let body = format!("quick job {n}");
+        let sent = clients[0]
+            .call(
+                "send_message",
+                json!({"to": "dev", "kind": "task", "body": body}),
+            )
+            .await;
+        drain_until(&mut clients[1], &body).await;
+        clients[1]
+            .call(
+                "complete_task",
+                json!({"task_id": sent["task_id"], "result": "done"}),
+            )
+            .await;
+    }
+
+    let mut c = WsClient::connect(&pair.d).await;
+    let newest = c
+        .request(json!({"type": "list_tasks", "bot_id": pair.ids[0], "limit": 2}))
+        .await;
+    let ids: Vec<&Value> = newest["tasks"]
+        .as_array()
+        .expect("tasks")
+        .iter()
+        .map(|t| &t["id"])
+        .collect();
+    assert!(
+        !ids.contains(&&json!(old)),
+        "the old task falls off a mixed page"
+    );
+
+    let open = c
+        .request(json!({"type": "list_tasks", "bot_id": pair.ids[0], "state": "open"}))
+        .await;
+    let open = open["tasks"].as_array().expect("tasks");
+    assert_eq!(open.len(), 1);
+    assert_eq!(open[0]["id"], old);
+
+    let closed = c
+        .request(json!({
+            "type": "list_tasks", "bot_id": pair.ids[0], "state": "closed", "limit": 2
+        }))
+        .await;
+    let closed = closed["tasks"].as_array().expect("tasks");
+    assert_eq!(closed.len(), 2);
+    assert!(closed.iter().all(|t| t["state"] == "done"));
+    assert_eq!(closed[0]["request"], "quick job 2", "newest first");
+
+    let wrong = c
+        .request(json!({"type": "list_tasks", "bot_id": pair.ids[0], "state": "done"}))
+        .await;
+    assert_eq!(wrong["code"], "invalid_request", "{wrong}");
 }

@@ -7,15 +7,22 @@ use rusqlite::{params, OptionalExtension};
 use super::Db;
 
 impl Db {
-    /// Tasks assigned to or delegated by a bot, newest first.
-    pub fn tasks_involving(&self, bot_id: &str, limit: i64) -> anyhow::Result<Vec<Task>> {
+    /// Tasks assigned to or delegated by a bot, newest first: only the open
+    /// ones or only the closed ones when `open` says which.
+    pub fn tasks_involving(
+        &self,
+        bot_id: &str,
+        open: Option<bool>,
+        limit: i64,
+    ) -> anyhow::Result<Vec<Task>> {
         let conn = self.lock();
         let ids: Vec<String> = conn
             .prepare(
-                "SELECT id FROM task WHERE to_bot_id = ?1 OR from_bot_id = ?1
+                "SELECT id FROM task WHERE (to_bot_id = ?1 OR from_bot_id = ?1)
+                   AND (?3 IS NULL OR (state = 'open') = ?3)
                  ORDER BY created_at DESC LIMIT ?2",
             )?
-            .query_map(params![bot_id, limit], |r| r.get(0))?
+            .query_map(params![bot_id, limit, open], |r| r.get(0))?
             .collect::<Result<_, _>>()?;
         drop(conn);
         let mut out = Vec::with_capacity(ids.len());

@@ -79,9 +79,21 @@ impl Conn {
             .and_then(Value::as_i64)
             .unwrap_or(DEFAULT_LIMIT)
             .clamp(1, 500);
+        // A client pages closed tasks apart from open ones, so an old open
+        // task never falls off the page.
+        let open = match req.get("state").and_then(Value::as_str) {
+            None => None,
+            Some("open") => Some(true),
+            Some("closed") => Some(false),
+            Some(other) => {
+                let message = format!("'state' is open or closed, not {other}");
+                self.reply_err(req_id, "invalid_request", &message);
+                return Ok(());
+            }
+        };
         let db = &self.app.db;
         let tasks = db
-            .tasks_involving(bot_id, limit)?
+            .tasks_involving(bot_id, open, limit)?
             .iter()
             .map(|task| task_json(db, task, bot_id, Length::Preview))
             .collect::<anyhow::Result<Vec<_>>>()?;

@@ -2,6 +2,7 @@
 //! under a bot's own directory. Nothing else on the machine is reachable,
 //! however the path is spelled.
 
+use std::cmp::Reverse;
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
@@ -59,8 +60,51 @@ pub fn list_artifacts(app: &AppState, project: &Project) -> Vec<Artifact> {
     let root = artifacts_dir(app, project);
     let mut out = Vec::new();
     walk(&root, &root, 0, &mut out);
-    out.sort_by(|a, b| b.modified.cmp(&a.modified));
+    out.sort_by(|a, b| order(a).cmp(&order(b)));
     out
+}
+
+/// Newest first, then by path, so a page cursor always lands in one place.
+fn order(artifact: &Artifact) -> (Reverse<Option<&str>>, &str) {
+    (Reverse(artifact.modified.as_deref()), &artifact.rel)
+}
+
+/// One page of an artifacts listing.
+pub struct Page {
+    pub artifacts: Vec<Artifact>,
+    /// Where the next page starts, when there is one: pass it as `before`.
+    pub next_before: Option<String>,
+}
+
+/// Up to `limit` of a listing's artifacts after the `before` cursor. The
+/// cursor names the last artifact of the previous page by when it changed and
+/// where it is, so files that change between pages do not shift the rest.
+pub fn page(listing: Vec<Artifact>, before: Option<&str>, limit: Option<usize>) -> Page {
+    let cursor = before.map(|before| {
+        let (modified, rel) = before.split_once('|').unwrap_or(("", before));
+        (Reverse((!modified.is_empty()).then_some(modified)), rel)
+    });
+    let mut artifacts: Vec<Artifact> = listing
+        .into_iter()
+        .filter(|a| cursor.as_ref().is_none_or(|cursor| order(a) > *cursor))
+        .collect();
+    let next_before = match limit {
+        Some(limit) if artifacts.len() > limit => {
+            artifacts.truncate(limit);
+            artifacts.last().map(|last| {
+                format!(
+                    "{}|{}",
+                    last.modified.as_deref().unwrap_or_default(),
+                    last.rel
+                )
+            })
+        }
+        _ => None,
+    };
+    Page {
+        artifacts,
+        next_before,
+    }
 }
 
 fn walk(root: &Path, dir: &Path, depth: usize, out: &mut Vec<Artifact>) {
