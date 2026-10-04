@@ -70,6 +70,7 @@ export class FakeDaemon implements DaemonApi {
     return this;
   }
 
+  // fallow-ignore-next-line unused-class-member -- reached through BoardApi and the board tests
   emitBoardEvent(event: BoardEvent): void {
     for (const handler of this.boardHandlers) {
       handler(event);
@@ -139,6 +140,7 @@ export class FakeDaemon implements DaemonApi {
     return Promise.reject(new Error(`fake replied '${reply.type}', expected '${expect}'`));
   }
 
+  // fallow-ignore-next-line unused-class-member -- reached through BoardApi and the board tests
   async board(call: BoardCall): Promise<BoardReply> {
     this.boardCalls.push(call);
     const responder = this.boardResponders.get(call.case);
@@ -148,6 +150,7 @@ export class FakeDaemon implements DaemonApi {
     return responder(call);
   }
 
+  // fallow-ignore-next-line unused-class-member -- reached through BoardApi and the board tests
   onBoardEvent(handler: (event: BoardEvent) => void): () => void {
     this.boardHandlers.add(handler);
     return () => {

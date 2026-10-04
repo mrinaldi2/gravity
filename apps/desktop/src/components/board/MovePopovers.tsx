@@ -275,7 +275,6 @@ export function MoveDialog(props: MoveDialogProps): ReactElement {
         <h2 className="confirm-title">{title}</h2>
         {needsOverride ? (
           <label className="field">
-            <span className="field-hint">{textOf(unmet, "wip.full")}</span>
             <span className="field-label">Override reason</span>
             <input
               type="text"
@@ -285,11 +284,11 @@ export function MoveDialog(props: MoveDialogProps): ReactElement {
                 setOverride(event.target.value);
               }}
             />
+            <span className="field-hint">{textOf(unmet, "wip.full")}</span>
           </label>
         ) : null}
         {needsReason ? (
           <label className="field">
-            <span className="field-hint">{textOf(unmet, "reason.required")}</span>
             <span className="field-label">Reason</span>
             <input
               type="text"
@@ -299,6 +298,7 @@ export function MoveDialog(props: MoveDialogProps): ReactElement {
                 setReason(event.target.value);
               }}
             />
+            <span className="field-hint">{textOf(unmet, "reason.required")}</span>
           </label>
         ) : null}
         <div className="confirm-actions">
