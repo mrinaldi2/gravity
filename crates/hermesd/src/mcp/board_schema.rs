@@ -202,7 +202,23 @@ pub(super) fn decode<T: DeserializeOwned>(
     serde_json::from_value(Value::Object(wire)).map_err(|e| anyhow::anyhow!("bad arguments: {e}"))
 }
 
-/// Contract output for a bot: wire enum names become the short ones.
+/// proto3 JSON's lowerCamelCase field names back to the proto's own, which
+/// are also the argument names.
+fn snake(key: &str) -> String {
+    let mut out = String::with_capacity(key.len() + 4);
+    for ch in key.chars() {
+        if ch.is_ascii_uppercase() {
+            out.push('_');
+            out.push(ch.to_ascii_lowercase());
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+/// Contract output for a bot: field names as in the proto (`column_key`),
+/// and wire enum names become the short ones.
 pub(super) fn friendly(mut value: Value) -> Value {
     static SHORT: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
     let short = SHORT.get_or_init(|| {
@@ -219,7 +235,15 @@ pub(super) fn friendly(mut value: Value) -> Value {
                 }
             }
             Value::Array(items) => items.iter_mut().for_each(|i| walk(i, short)),
-            Value::Object(map) => map.values_mut().for_each(|i| walk(i, short)),
+            Value::Object(map) => {
+                *map = std::mem::take(map)
+                    .into_iter()
+                    .map(|(key, mut value)| {
+                        walk(&mut value, short);
+                        (snake(&key), value)
+                    })
+                    .collect();
+            }
             _ => {}
         }
     }

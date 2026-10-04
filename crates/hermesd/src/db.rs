@@ -24,6 +24,7 @@ pub mod agent_talk;
 mod board;
 mod board_edit;
 mod board_items;
+mod board_links;
 mod board_moves;
 mod board_notes;
 mod board_reads;

@@ -92,6 +92,40 @@ pub(super) fn conditions(
     }
 }
 
+/// The Definition of Ready fields a template may require.
+pub const DOR_FIELDS: &[&str] = &[
+    "acceptance_criteria",
+    "platforms",
+    "size",
+    "spec_link_for_ui_or_daemon",
+    "steps_to_reproduce",
+    "expected_actual",
+    "question",
+    "timebox",
+    "goal",
+    "description",
+];
+
+/// A template's `ready` list names only known fields (ARCH-R4 F2): a typo
+/// would otherwise switch its rule off unnoticed. For `template_upsert`.
+pub fn check_template(body: &serde_json::Value) -> Result<(), String> {
+    let unknown: Vec<&str> = body["ready"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|f| f.as_str().unwrap_or("(not a string)"))
+        .filter(|f| !DOR_FIELDS.contains(f))
+        .collect();
+    if unknown.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "unknown Definition of Ready fields {unknown:?}; known: {}",
+            DOR_FIELDS.join(", ")
+        ))
+    }
+}
+
 /// Inbox → Ready: the template's DoR fields, size not L, blockers done.
 fn definition_of_ready(item: &Item, ctx: &Context, out: &mut Vec<Unmet>) {
     let section = |heading: &str| section_filled(&item.description, heading);
@@ -128,7 +162,8 @@ fn definition_of_ready(item: &Item, ctx: &Context, out: &mut Vec<Unmet>) {
                     .all(|l| l.trim().is_empty() || l.starts_with('#') || is_hint(l)),
                 "Describe what and why.",
             ),
-            // Templates are editable; a field this build doesn't know blocks nothing.
+            // `check_template` refuses unknown fields at upsert; one stored
+            // before that (or by a newer build) blocks nothing.
             _ => (false, ""),
         };
         if missing {

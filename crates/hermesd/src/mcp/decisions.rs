@@ -50,6 +50,7 @@ pub(super) fn raise_decision(
     args: &Value,
 ) -> anyhow::Result<Value> {
     let me = caller(app, bot_id)?;
+    let item = super::board::item_arg(app, &me, args)?;
     let options: Vec<DecisionOption> = match args.get("options") {
         Some(value) if !value.is_null() => serde_json::from_value(value.clone())
             .map_err(|e| anyhow::anyhow!("'options' is not a list of {{key, label}}: {e}"))?,
@@ -77,6 +78,11 @@ pub(super) fn raise_decision(
             supersedes: str_arg(args, "supersedes"),
         },
     )?;
+    if let Some(item) = &item {
+        let actor = super::board::bot_actor(&me);
+        app.db
+            .link_decision_item(&raised.decision.id, item, &actor)?;
+    }
     let mut out = json!({ "decision": summary(&raised.decision) });
     if !raised.similar.is_empty() {
         // Advisory, and worded as such: the point is that the bot reads a

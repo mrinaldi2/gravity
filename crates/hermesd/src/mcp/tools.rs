@@ -49,6 +49,10 @@ pub(super) fn send_message(
         MessageKind::Task | MessageKind::Reply | MessageKind::Note => {}
     }
     let ref_id = args.get("ref").and_then(|v| v.as_str());
+    let item = super::board::item_arg(app, &me, args)?;
+    if item.is_some() && kind != MessageKind::Task {
+        anyhow::bail!("'item' links a delegated task to a board item; send kind 'task'");
+    }
 
     // Hop/origin tracking: extend the chain from the caller's newest open task.
     let open_task = app.db.newest_open_task_for(bot_id)?;
@@ -190,6 +194,10 @@ pub(super) fn send_message(
                 hop + 1,
                 &new_chain,
             )?;
+            if let Some(item) = &item {
+                app.db
+                    .link_task_item(&task.id, item, &super::board::bot_actor(&me))?;
+            }
             Ok(json!({ "message_id": msg.id, "num": msg.num, "task_id": task.id }))
         }
         MessageKind::Chat | MessageKind::Done => unreachable!("refused above"),

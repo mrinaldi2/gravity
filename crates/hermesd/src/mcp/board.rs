@@ -24,10 +24,7 @@ pub(super) struct Me {
 
 impl Me {
     pub(super) fn actor(&self) -> Actor<'_> {
-        Actor::Bot {
-            id: &self.bot.id,
-            project_id: &self.bot.project_id,
-        }
+        bot_actor(&self.bot)
     }
 }
 
@@ -126,6 +123,33 @@ pub(super) fn own_item(app: &Arc<AppState>, me: &Me, id: &str) -> anyhow::Result
     match app.db.item_project(id)? {
         Some(p) if p == me.bot.project_id => Ok(()),
         _ => anyhow::bail!("no item {id} in this project"),
+    }
+}
+
+/// The optional `item` argument of a bus tool (`send_message`,
+/// `raise_decision`, `complete_task`): an item of the caller's project.
+pub(super) fn item_arg(
+    app: &Arc<AppState>,
+    bot: &bus::Bot,
+    args: &Value,
+) -> anyhow::Result<Option<String>> {
+    let Some(id) = args
+        .get("item")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    else {
+        return Ok(None);
+    };
+    match app.db.item_project(id)? {
+        Some(p) if p == bot.project_id => Ok(Some(id.to_string())),
+        _ => anyhow::bail!("no item {id} in this project"),
+    }
+}
+
+pub(super) fn bot_actor(bot: &bus::Bot) -> Actor<'_> {
+    Actor::Bot {
+        id: &bot.id,
+        project_id: &bot.project_id,
     }
 }
 

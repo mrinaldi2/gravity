@@ -268,3 +268,16 @@ fn rules_outside_moves() {
         "role.not_allowed"
     );
 }
+
+#[test]
+fn templates_name_only_known_dor_fields() {
+    for (item_type, body) in crate::board::defaults::item_templates() {
+        assert_eq!(check_template(&body), Ok(()), "{item_type:?}");
+    }
+    let typo = serde_json::json!({"ready": ["acceptance_critera", "size"]});
+    let err = check_template(&typo).unwrap_err();
+    assert!(
+        err.contains("acceptance_critera") && err.contains("acceptance_criteria"),
+        "{err}"
+    );
+}

@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 
 use conditions::conditions;
+pub use conditions::{check_template, DOR_FIELDS};
 
 use super::model::{
     BoardColumn, ColumnCategory as Cat, Item, ItemLink, LinkKind, PersonRole, Platform, Role,
