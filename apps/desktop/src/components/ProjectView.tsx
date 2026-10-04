@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ReactElement } from "react";
 import type { DaemonApi } from "../protocol/api";
 import type { Bot, NotifyLevel, Project, ProjectRepo } from "../protocol/entities";
+import { fmtTimestamp } from "../util";
 import ConfirmDialog from "./overlay/ConfirmDialog";
 import ProjectPermissionsForm from "./ProjectPermissionsForm";
 import ProjectRepoForm from "./ProjectRepoForm";
@@ -118,7 +119,7 @@ export default function ProjectView(props: ProjectViewProps): ReactElement {
           <dt>Folder</dt>
           <dd className="mono">{project.dir_name}</dd>
           <dt>Created</dt>
-          <dd>{project.created_at}</dd>
+          <dd>{fmtTimestamp(project.created_at)}</dd>
         </dl>
       </div>
 
