@@ -100,10 +100,8 @@ impl RuntimeAdapter for CodexAdapter {
     }
 }
 
-fn start_server(
-    spec: &BotSpec,
-    remote: Option<&transport::Remote>,
-) -> anyhow::Result<StartedSession> {
+/// `codex app-server` in the bot's workspace, with the bot's environment.
+fn server_command(spec: &BotSpec) -> anyhow::Result<std::process::Command> {
     let codex = spec
         .codex
         .as_ref()
@@ -114,7 +112,19 @@ fn start_server(
         .arg("app-server")
         .current_dir(&spec.workspace)
         .envs(spec.env.iter().cloned())
-        .env_remove("CODEX_THREAD_ID")
+        .env_remove("CODEX_THREAD_ID");
+    for key in super::withheld_env() {
+        command.env_remove(key);
+    }
+    Ok(command)
+}
+
+fn start_server(
+    spec: &BotSpec,
+    remote: Option<&transport::Remote>,
+) -> anyhow::Result<StartedSession> {
+    let mut command = server_command(spec)?;
+    command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -130,9 +140,10 @@ fn start_server(
     } else {
         command.args(["--listen", "stdio://"]);
     }
+    let bin = command.get_program().to_string_lossy().into_owned();
     let mut child = command
         .spawn()
-        .with_context(|| format!("spawn Codex CLI App Server using {}", codex.bin))?;
+        .with_context(|| format!("spawn Codex CLI App Server using {bin}"))?;
     let stdin = child.stdin.take().context("Codex stdin")?;
     let stdout = child.stdout.take().context("Codex stdout")?;
     let stderr = child.stderr.take().context("Codex stderr")?;
@@ -281,5 +292,46 @@ impl RuntimeSession for CodexSession {
 impl Drop for CodexSession {
     fn drop(&mut self) {
         let _ = self.kill();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{server_command, BotSpec, CodexSpec};
+    use std::ffi::OsStr;
+
+    /// A Codex bot never sees the daemon's home variables, even when they
+    /// reach its environment; see `withheld_env`.
+    #[test]
+    fn the_server_never_inherits_the_daemon_home() {
+        let spec = BotSpec {
+            codex: Some(CodexSpec {
+                bin: "codex".into(),
+                args: Vec::new(),
+                port: 1,
+                artifacts: None,
+                browser: None,
+                profile: bus::PermissionProfile::Standard,
+                trusted_paths: Vec::new(),
+            }),
+            bot_id: "codex-test".into(),
+            bot_name: "codex".into(),
+            workspace: std::env::temp_dir(),
+            claude_bin: String::new(),
+            claude_args: Vec::new(),
+            env: vec![
+                ("THEHERMES_HOME".into(), "/home".into()),
+                ("GRAVITY_HOME".into(), "/home".into()),
+                ("THEHERMES_TOKEN".into(), "t".into()),
+            ],
+            cols: 80,
+            rows: 24,
+        };
+        let command = server_command(&spec).unwrap();
+        let envs: Vec<_> = command.get_envs().collect();
+        for key in ["THEHERMES_HOME", "GRAVITY_HOME"] {
+            assert!(envs.contains(&(OsStr::new(key), None)), "{key}: {envs:?}");
+        }
+        assert!(envs.contains(&(OsStr::new("THEHERMES_TOKEN"), Some(OsStr::new("t")))));
     }
 }

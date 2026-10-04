@@ -19,6 +19,18 @@ use tokio::sync::mpsc;
 
 use crate::channel::MsgSocket;
 
+/// The daemon's home variables, which no bot session inherits. The daemon
+/// hands its home to whatever needs it explicitly (the guard hook gets
+/// `--home`); a bot that ran `hermesd service install` or an installer from
+/// its shell with them set would act on the daemon's home instead of the
+/// user's default.
+pub(crate) fn withheld_env() -> [String; 2] {
+    [
+        crate::brand::env_name("HOME"),
+        crate::brand::legacy_env_name("HOME"),
+    ]
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Capabilities {
     pub kind: &'static str,

@@ -160,3 +160,42 @@ fn keeps_complete_four_byte_sequences() {
     assert_eq!(utf8_prefix_len(full), full.len());
     assert_eq!(utf8_prefix_len(&full[..full.len() - 1]), 1);
 }
+
+/// A bot never sees the daemon's home variables, even when they reach its
+/// environment; see `withheld_env`.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_bot_never_inherits_the_daemon_home() {
+    use super::{PtyAdapter, RuntimeAdapter};
+    use crate::runtime::{BotSpec, SessionEvent};
+
+    let spec = BotSpec {
+        codex: None,
+        bot_id: "pty-env-test".into(),
+        bot_name: "pty".into(),
+        workspace: std::env::temp_dir(),
+        claude_bin: "/bin/sh".into(),
+        claude_args: vec![
+            "-c".into(),
+            "echo \"[${THEHERMES_HOME-unset}|${GRAVITY_HOME-unset}|$THEHERMES_TOKEN]\"".into(),
+        ],
+        env: vec![
+            ("THEHERMES_HOME".into(), "/home".into()),
+            ("GRAVITY_HOME".into(), "/home".into()),
+            ("THEHERMES_TOKEN".into(), "t".into()),
+        ],
+        cols: 80,
+        rows: 24,
+    };
+    let mut started = PtyAdapter.start(&spec).expect("spawn sh in a pty");
+    let mut out = Vec::new();
+    while let Some(event) = started.events.recv().await {
+        match event {
+            SessionEvent::Output(data) => out.extend(data),
+            SessionEvent::Exited { .. } => break,
+            _ => {}
+        }
+    }
+    let out = String::from_utf8_lossy(&out);
+    assert!(out.contains("[unset|unset|t]"), "{out}");
+}
