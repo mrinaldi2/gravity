@@ -30,6 +30,8 @@ pub struct ServicePaths {
     home: PathBuf,
     user_home: PathBuf,
     launch_agents: PathBuf,
+    /// Whether `home` was set with `THEHERMES_HOME`.
+    home_overridden: bool,
 }
 
 impl ServicePaths {
@@ -38,7 +40,23 @@ impl ServicePaths {
             launch_agents: user_home.join("Library/LaunchAgents"),
             home,
             user_home,
+            home_overridden: crate::config::home_is_overridden(),
         }
+    }
+
+    #[cfg(test)]
+    fn with_home_overridden(self, home_overridden: bool) -> Self {
+        Self {
+            home_overridden,
+            ..self
+        }
+    }
+
+    /// The pre-rename agent's plist carries no home, so its daemon runs the
+    /// default pre-rename home; `None` when this install must leave that
+    /// home alone (see [`stage::default_legacy_home`]).
+    fn legacy_agent_home(&self) -> Option<PathBuf> {
+        stage::default_legacy_home(&self.user_home, self.home_overridden)
     }
 
     pub fn bin_path(&self) -> PathBuf {

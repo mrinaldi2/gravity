@@ -15,7 +15,7 @@ mod task;
 
 use host::{Schtasks, System, TaskScheduler};
 use sequence::{HomeMigration, Host, Layout, Migration};
-use stage::{remove_if_present, same_path, with_suffix};
+use stage::{default_legacy_home, remove_if_present, same_path, with_suffix};
 
 pub const SERVICE_LABEL: &str = crate::brand::WINDOWS_TASK;
 const DEFAULT_CONFIG: &str = include_str!("../../../../../ops/hermesd.example.toml");
@@ -23,11 +23,24 @@ const DEFAULT_CONFIG: &str = include_str!("../../../../../ops/hermesd.example.to
 pub struct ServicePaths {
     home: PathBuf,
     user_home: PathBuf,
+    /// Whether `home` was set with `THEHERMES_HOME`.
+    home_overridden: bool,
 }
 
 impl ServicePaths {
     pub fn new(home: PathBuf, user_home: PathBuf) -> Self {
-        Self { home, user_home }
+        Self {
+            home,
+            user_home,
+            home_overridden: crate::config::home_is_overridden(),
+        }
+    }
+    #[cfg(test)]
+    fn with_home_overridden(self, home_overridden: bool) -> Self {
+        Self {
+            home_overridden,
+            ..self
+        }
     }
     pub fn bin_path(&self) -> PathBuf {
         self.home.join("bin/hermesd.exe")
@@ -54,13 +67,14 @@ impl ServicePaths {
         self.home.join(crate::brand::daemon_file("-task.pid"))
     }
     /// Homes a task from before the rename may run from: this one, when it
-    /// was set explicitly, and the default pre-rename home.
+    /// was set explicitly, and the default pre-rename home unless this one
+    /// is overridden (see [`default_legacy_home`]).
     fn legacy_homes(&self) -> Vec<PathBuf> {
         let mut homes = vec![self.home.clone()];
-        let default = self.user_home.join(crate::brand::LEGACY_HOME_DIR_NAME);
-        if default != self.home {
-            homes.push(default);
-        }
+        homes.extend(
+            default_legacy_home(&self.user_home, self.home_overridden)
+                .filter(|default| *default != self.home),
+        );
         homes
     }
 }
