@@ -242,3 +242,48 @@ async fn a_revoked_peer_frees_its_name_so_the_machines_pair_again() {
     assert_ne!(win_peer_id, t.win_peer_id);
     assert_ne!(again, mac_peer_id);
 }
+
+/// A client holds the bots it was last sent. One that loaded them while the
+/// peer's daemon was restarting must hear that the link came back, or it
+/// shows the peer's bots stopped, chat and terminal shut, for good.
+#[tokio::test]
+async fn a_linked_bot_is_ready_again_once_its_peer_reconnects() {
+    let mut t = team().await;
+    let mac_peer_id = t
+        .mac
+        .app
+        .db
+        .get_bot(&t.linked_windev)
+        .expect("db")
+        .expect("stand-in")
+        .peer_id
+        .expect("peer");
+
+    // The PC's daemon drops the link, as a restart does; the Mac redials.
+    t.win.app.peers.disconnect(&t.win_peer_id);
+    let mac = &t.mac;
+    wait_until("the link drops", || !mac.app.peers.is_online(&mac_peer_id)).await;
+    let listed = t
+        .mac_client
+        .request(json!({"type": "list_bots", "project_id": serde_json::Value::Null}))
+        .await;
+    let stand_in = listed["bots"]
+        .as_array()
+        .expect("bots")
+        .iter()
+        .find(|b| b["id"] == json!(t.linked_windev))
+        .expect("stand-in listed")
+        .clone();
+    assert_eq!(stand_in["state"], "stopped", "{stand_in}");
+
+    let linked = t.linked_windev.clone();
+    let back = t
+        .mac_client
+        .wait_for_within(Duration::from_secs(15), |v| {
+            v["type"] == "bot_updated"
+                && v["bot"]["id"] == json!(linked)
+                && v["bot"]["state"] == "ready"
+        })
+        .await;
+    assert_eq!(back["bot"]["peer"]["online"], true, "{back}");
+}
