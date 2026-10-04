@@ -171,11 +171,26 @@ pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
 
 /// Reinstalls the managed daemon from the bundled sidecar when its binary has
 /// gone missing, so a broken upgrade heals on the next app launch.
+///
+/// A repair stays a repair: it never moves the home. While a migration is
+/// pending it does nothing, and the install that migrates runs only after
+/// the user confirmed it ([`install_local_daemon`]); `--no-migrate` makes the
+/// sidecar refuse rather than migrate should the two checks ever disagree.
 pub(crate) fn repair_local_daemon_if_broken() -> Result<(), String> {
-    if !managed_daemon_needs_repair(&daemon_home()?, &user_home()?) {
+    let user_home = user_home()?;
+    if !repair_needed(&daemon_home()?, &user_home, migration_pending(&user_home)) {
         return Ok(());
     }
-    install_bundled_local_daemon()
+    let out = run_sidecar(&["service", "install", "--no-migrate"])?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("daemon repair failed: {}", stderr.trim()));
+    }
+    Ok(())
+}
+
+fn repair_needed(home: &Path, user_home: &Path, migration_pending: bool) -> bool {
+    !migration_pending && managed_daemon_needs_repair(home, user_home)
 }
 
 /// Must match `hermesd`'s own config default and `DEFAULT_ENDPOINT` in the

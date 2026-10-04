@@ -126,6 +126,9 @@ fn a_service_without_its_binary_needs_repair() {
     std::fs::create_dir_all(marker.parent().expect("marker parent")).expect("marker directory");
     std::fs::write(&marker, b"task").expect("service marker");
     assert!(managed_daemon_needs_repair(&home, &user_home));
+    assert!(repair_needed(&home, &user_home, false));
+    // Moving the home needs the user's yes; a launch-time repair waits.
+    assert!(!repair_needed(&home, &user_home, true));
 
     let legacy = home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX));
     std::fs::create_dir_all(legacy.parent().expect("binary parent")).expect("binary directory");
