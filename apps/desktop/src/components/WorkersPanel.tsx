@@ -4,6 +4,7 @@ import { useLoadOnConnect } from "../hooks/useLoadOnConnect";
 import type { DaemonApi } from "../protocol/api";
 import type { WorkerView } from "../protocol/workers";
 import { errText, fmtShortTime } from "../util";
+import ConfirmDialog from "./overlay/ConfirmDialog";
 
 interface WorkersPanelProps {
   readonly client: DaemonApi;
@@ -44,6 +45,7 @@ export default function WorkersPanel({
 }: WorkersPanelProps): ReactElement {
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stopping, setStopping] = useState<WorkerView | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -89,7 +91,9 @@ export default function WorkersPanel({
       key={worker.id}
       worker={worker}
       canCancel={canControl && connected}
-      onCancel={() => void cancel(worker)}
+      onCancel={() => {
+        setStopping(worker);
+      }}
     />
   );
   return (
@@ -113,6 +117,20 @@ export default function WorkersPanel({
       <WorkerSection title="Running" workers={running} row={row} />
       <WorkerSection title="Queued" workers={queued} row={row} />
       <WorkerSection title="Finished" workers={finished} row={row} />
+      {stopping === null ? null : (
+        <ConfirmDialog
+          title={`Stop ${stopping.name}?`}
+          body="Its task is cancelled."
+          confirmLabel="Stop worker"
+          onConfirm={() => {
+            setStopping(null);
+            void cancel(stopping);
+          }}
+          onCancel={() => {
+            setStopping(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -9,14 +9,15 @@
   --text-dim: #8b90a0;
   /* One step brighter than --text: the owner's published words and headlines. */
   --text-strong: #f2f3f7;
-  /* Below --text-dim: key hints, ages and separators. */
-  --text-faint: #5c6170;
+  /* Below --text-dim: key hints, ages and separators. Still WCAG AA (4.7:1+) on
+     --bg, --bg-raised and --bg-hover; keep hierarchy with size and weight. */
+  --text-faint: #828899;
   --accent: #7aa2f7;
   --green: #4ade80;
   --blue: #60a5fa;
   --amber: #fbbf24;
   --red: #f87171;
-  --gray: #6b7280;
+  --gray: #828899;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
   --mono: "SF Mono", "Menlo", "Monaco", monospace;
   /* Height of the window drag strip the macOS traffic lights sit in. */

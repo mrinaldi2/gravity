@@ -62,6 +62,9 @@ describe("WorkersPanel", () => {
     }));
     render(<WorkersPanel client={client} projectId="p1" connected canControl />);
     await userEvent.click(await screen.findByRole("button", { name: "Cancel ch-3" }));
+    const dialog = screen.getByRole("dialog", { name: "Stop ch-3?" });
+    expect(client.requests.some((r) => r.body.type === "cancel_worker")).toBe(false);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Stop worker" }));
     expect(client.requests.map((r) => r.body)).toContainEqual({
       type: "cancel_worker",
       worker_id: "w3",

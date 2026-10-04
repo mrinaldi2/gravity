@@ -171,3 +171,8 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+.confirm-actions .btn-danger:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}

@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import type { DaemonApi } from "../../protocol/api";
 import type { Bot, BotRevision, NotifyLevel } from "../../protocol/entities";
 import { errText } from "../../util";
+import ConfirmDialog from "../overlay/ConfirmDialog";
 
 /**
  * A bot's identity history.
@@ -56,6 +57,7 @@ export default function BotHistory({
   const [revisions, setRevisions] = useState<readonly BotRevision[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [reverting, setReverting] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<BotRevision | null>(null);
 
   const load = async (): Promise<void> => {
     setLoading(true);
@@ -123,7 +125,7 @@ export default function BotHistory({
                 className="btn btn-small"
                 disabled={!canControl || reverting !== null}
                 onClick={() => {
-                  void revert(revision);
+                  setConfirming(revision);
                 }}
               >
                 {reverting === revision.id ? "Reverting…" : "Revert"}
@@ -132,6 +134,20 @@ export default function BotHistory({
           </li>
         ))}
       </ul>
+      {confirming === null ? null : (
+        <ConfirmDialog
+          title={`Revert to ${confirming.created_at}?`}
+          body={`The ${confirming.field} goes back to what it was before this change. The current ${confirming.field} is kept in History.`}
+          confirmLabel="Revert"
+          onConfirm={() => {
+            setConfirming(null);
+            void revert(confirming);
+          }}
+          onCancel={() => {
+            setConfirming(null);
+          }}
+        />
+      )}
     </details>
   );
 }

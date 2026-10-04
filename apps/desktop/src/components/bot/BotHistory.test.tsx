@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { FakeDaemon } from "../../test/fakeDaemon";
@@ -90,6 +90,8 @@ describe("BotHistory", () => {
     await open(user);
 
     await user.click(await screen.findByRole("button", { name: "Revert" }));
+    expect(daemon.requests.some((r) => r.body.type === "revert_bot_revision")).toBe(false);
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Revert" }));
 
     await waitFor(() => {
       expect(onBotUpdated).toHaveBeenCalled();
@@ -108,9 +110,23 @@ describe("BotHistory", () => {
     await open(user);
 
     await user.click(await screen.findByRole("button", { name: "Revert" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Revert" }));
     await waitFor(() => {
       expect(onToast).toHaveBeenCalledWith("error", "Revert failed", "gone");
     });
+  });
+
+  it("keeps the revision when the revert is cancelled", async () => {
+    const user = userEvent.setup();
+    const daemon = withRevisions([fx.botRevision()]);
+    renderHistory(daemon);
+    await open(user);
+
+    await user.click(await screen.findByRole("button", { name: "Revert" }));
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(daemon.requests.some((r) => r.body.type === "revert_bot_revision")).toBe(false);
   });
 
   it("says so when there is no history", async () => {

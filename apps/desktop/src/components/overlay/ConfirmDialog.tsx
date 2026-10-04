@@ -10,7 +10,10 @@ interface ConfirmDialogProps {
   readonly onCancel: () => void;
 }
 
-/** Modal yes/no prompt guarding a destructive action. */
+/**
+ * Modal yes/no prompt guarding a destructive action. Cancel holds the initial
+ * focus so a stray Enter never confirms; Escape cancels.
+ */
 export default function ConfirmDialog({
   title,
   body,
@@ -36,10 +39,10 @@ export default function ConfirmDialog({
         <h2 className="confirm-title">{title}</h2>
         <p className="confirm-body">{body}</p>
         <div className="confirm-actions">
-          <button type="button" className="btn btn-small" onClick={onCancel}>
+          <button type="button" className="btn btn-small" autoFocus onClick={onCancel}>
             Cancel
           </button>
-          <button type="button" className="btn btn-small btn-danger" autoFocus onClick={onConfirm}>
+          <button type="button" className="btn btn-small btn-danger" onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>
