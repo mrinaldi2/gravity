@@ -106,6 +106,7 @@ impl Conn {
             "clear_bot_session" => self.clear_bot_session(&req_id, req),
             "watch_browser" => self.watch_browser(&req_id, req),
             "unwatch_browser" => self.unwatch_browser(&req_id),
+            "browser_input" => self.browser_input(req),
             "list_browser_activity" => self.list_browser_activity(&req_id, req),
             "list_bot_commands" => self.list_bot_commands(&req_id, req),
             "list_agent_conversations" => self.list_agent_conversations(&req_id, req),

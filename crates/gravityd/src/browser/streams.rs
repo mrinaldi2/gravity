@@ -13,10 +13,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
-use super::cdp::{self, Tab};
+use super::cdp::{self, Command, Tab};
 
 /// How often a browser's tab list is checked: tabs opening, closing,
 /// navigating.
@@ -51,6 +51,8 @@ pub struct BotStream {
 /// One tab's screen, kept current while anyone watches it.
 pub struct TabStream {
     frames: watch::Receiver<Option<Frame>>,
+    /// The owner's mouse and keyboard, for the tab.
+    input: mpsc::UnboundedSender<Command>,
     _screencast: Owned,
 }
 
@@ -79,9 +81,10 @@ impl BotStream {
             return stream;
         }
         let (send, frames) = watch::channel(None);
+        let (input, commands) = mpsc::unbounded_channel();
         let target = tab.clone();
         let task = tokio::spawn(async move {
-            let result = cdp::screencast(&target, |data, width, height| {
+            let result = cdp::screencast(&target, commands, |data, width, height| {
                 send.send_replace(Some(Frame {
                     data: data.into(),
                     width,
@@ -96,6 +99,7 @@ impl BotStream {
         });
         let stream = Arc::new(TabStream {
             frames,
+            input,
             _screencast: Owned(task),
         });
         screens.insert(tab.id.clone(), Arc::downgrade(&stream));
@@ -140,6 +144,27 @@ impl BrowserStreams {
         });
         bots.insert(bot_id.to_string(), Arc::downgrade(&stream));
         stream
+    }
+
+    /// Passes the owner's mouse and keyboard to a tab someone is watching.
+    /// Input goes only to a tab on show: the owner acts on what they see.
+    pub fn input(&self, bot_id: &str, tab_id: &str, commands: Vec<Command>) -> anyhow::Result<()> {
+        let bot = {
+            let bots = self.bots.lock().unwrap_or_else(|e| e.into_inner());
+            bots.get(bot_id).and_then(Weak::upgrade)
+        };
+        let screen = bot.and_then(|bot| {
+            let screens = bot.screens.lock().unwrap_or_else(|e| e.into_inner());
+            screens.get(tab_id).and_then(Weak::upgrade)
+        });
+        let screen = screen.ok_or_else(|| anyhow::anyhow!("that tab is not on show"))?;
+        for command in commands {
+            screen
+                .input
+                .send(command)
+                .map_err(|_| anyhow::anyhow!("that tab has closed"))?;
+        }
+        Ok(())
     }
 
     /// How many bot browsers are being streamed, for tests and diagnostics.

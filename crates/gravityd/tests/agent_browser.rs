@@ -9,7 +9,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-use common::devtools::{fake_devtools, frame_number, start_browser, streaming_devtools};
+use common::devtools::{
+    fake_devtools, frame_number, recording_devtools, start_browser, streaming_devtools,
+};
 use common::peers::{project, wait_until};
 use common::*;
 use serde_json::{json, Value};
@@ -119,6 +121,64 @@ async fn the_app_watches_a_bots_browser_live() {
     phone.request(json!({"type": "unwatch_browser"})).await;
     let app = d.app.clone();
     wait_until("the shared stream stops", || app.browsers.live() == 0).await;
+}
+
+#[tokio::test]
+async fn the_owner_clicks_and_types_into_the_tab_on_show() {
+    let d = spawn_daemon_with(|cfg| cfg.user_home = cfg.home.join("user")).await;
+    let mut c = WsClient::connect(&d).await;
+    let pid = project(&mut c, "web").await;
+    let bot = create_bot(&mut c, &pid, "surfer").await;
+    let id = bot["id"].as_str().expect("id").to_string();
+    let (port, calls) = recording_devtools("Sign in").await;
+    start_browser(&d, &id, port);
+
+    // Input goes only to a tab someone is watching.
+    c.send(
+        json!({"type": "browser_input", "bot_id": id, "tab_id": "tab-1",
+                  "event": {"kind": "text", "text": "early"}}),
+    )
+    .await;
+    let refused = c.wait_for(|v| v["type"] == "error").await;
+    assert!(
+        refused["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("not on show")),
+        "{refused}"
+    );
+
+    c.request(json!({"type": "watch_browser", "bot_id": id}))
+        .await;
+    c.wait_for(|v| v["type"] == "browser_frame").await;
+    for event in [
+        json!({"kind": "mouse", "action": "down", "x": 40, "y": 80, "button": "left", "clicks": 1}),
+        json!({"kind": "mouse", "action": "up", "x": 40, "y": 80, "button": "left", "clicks": 1}),
+        json!({"kind": "key", "action": "down", "key": "a", "code": "KeyA", "key_code": 65, "text": "a"}),
+        json!({"kind": "text", "text": "hunter2"}),
+    ] {
+        c.send(json!({"type": "browser_input", "bot_id": id, "tab_id": "tab-1", "event": event}))
+            .await;
+    }
+    let seen = calls.clone();
+    wait_until("the tab gets the owner's input", || {
+        seen.lock().expect("calls").len() == 4
+    })
+    .await;
+    let calls = calls.lock().expect("calls").clone();
+    let methods: Vec<_> = calls.iter().map(|c| c["method"].clone()).collect();
+    assert_eq!(
+        methods,
+        [
+            "Input.dispatchMouseEvent",
+            "Input.dispatchMouseEvent",
+            "Input.dispatchKeyEvent",
+            "Input.insertText"
+        ]
+    );
+    assert_eq!(calls[0]["params"]["type"], "mousePressed");
+    assert_eq!(calls[0]["params"]["x"], 40.0);
+    assert_eq!(calls[2]["params"]["text"], "a");
+    assert_eq!(calls[3]["params"]["text"], "hunter2");
 }
 
 #[tokio::test]

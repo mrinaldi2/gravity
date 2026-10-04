@@ -53,6 +53,7 @@ pub(super) fn event(app: &Arc<AppState>, peer_id: &str, frame: &Value) {
         "term_frames" => super::term::receive_frames(app, peer_id, frame),
         "browser_feed" => super::browser::receive(app, peer_id, frame),
         "browser_unwatch" => super::browser::serve_unwatch(app, &peer, frame),
+        "browser_input" => super::browser::serve_input(app, &peer, frame),
         "term_input" | "term_resize" | "term_detach" => super::term::serve_event(app, &peer, frame),
         "chat_turns" => super::chat::receive_turns(app, peer_id, frame),
         "project_roster" => super::mirror::receive_roster(app, peer_id, frame),

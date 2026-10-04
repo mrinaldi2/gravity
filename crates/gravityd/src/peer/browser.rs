@@ -6,6 +6,9 @@
 //! other daemon keeps one feed per stand-in and tab choice, shared by all its
 //! viewers (the desktop, a phone), and renames the bot to the stand-in.
 //!
+//! The owner's mouse and keyboard go the other way (`browser_input`), to the
+//! tab the bot's machine is showing.
+//!
 //! Frames cross the link newest-only, at most a few a second, so a slow link
 //! never queues them up; tab lists go straight through. On this side they go
 //! to each viewer's newest-wins slot, as a local bot's frames do.
@@ -169,6 +172,26 @@ async fn relay(
     }
 }
 
+/// The owner's mouse and keyboard from the peer, for a tab it watches.
+pub(super) fn serve_input(app: &AppState, peer: &Peer, frame: &Value) {
+    let bot_id = frame["bot_id"].as_str().unwrap_or_default();
+    let Ok(Some(bot)) = app.db.get_live_bot(bot_id) else {
+        return;
+    };
+    if bot.is_linked()
+        || !app
+            .db
+            .is_exposed_to_peer(&peer.id, &bot.id)
+            .unwrap_or(false)
+    {
+        return;
+    }
+    let tab_id = frame["tab_id"].as_str().unwrap_or_default();
+    if let Err(e) = crate::browser::view::input(app, &bot, tab_id, &frame["event"]) {
+        tracing::debug!(bot = %bot.name, error = %e, "peer browser input not delivered");
+    }
+}
+
 /// The peer stopped watching.
 pub(super) fn serve_unwatch(app: &AppState, peer: &Peer, frame: &Value) {
     let feed_id = frame["feed_id"].as_str().unwrap_or_default().to_string();
@@ -249,6 +272,16 @@ async fn feed(
     };
     fresh.ask().await?;
     Ok(fresh)
+}
+
+/// The owner's mouse and keyboard here, for the browser on the bot's machine.
+pub fn input(app: &AppState, stand_in: &Bot, tab_id: &str, event: &Value) {
+    if let (Some(peer), Some(remote)) = (&stand_in.peer_id, &stand_in.remote_bot_id) {
+        app.peers.notify(
+            peer,
+            json!({ "type": "browser_input", "bot_id": remote, "tab_id": tab_id, "event": event }),
+        );
+    }
 }
 
 /// Watches a linked bot's browser for one connection, through its machine.

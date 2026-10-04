@@ -1,5 +1,5 @@
-//! A bot's own browser on the control plane: watching it live, and what the
-//! bot did with it. See "Browser" in `docs/protocol.md`.
+//! A bot's own browser on the control plane: watching it live, taking the
+//! mouse and keyboard, and what the bot did with it. See "Browser" in `docs/protocol.md`.
 
 use serde_json::{json, Value};
 
@@ -37,6 +37,22 @@ impl Conn {
     pub(super) fn unwatch_browser(&mut self, req_id: &Value) -> anyhow::Result<()> {
         self.stop_browser_watch();
         self.send(json!({ "type": "ok", "req_id": req_id }));
+        Ok(())
+    }
+
+    /// The owner's mouse or keyboard on the tab on show, to sign the bot in or
+    /// get it past a page. Fire-and-forget, as terminal input is: no reply,
+    /// and an error only when the event cannot be delivered.
+    pub(super) fn browser_input(&self, req: &Value) -> anyhow::Result<()> {
+        let bot_id = Self::str_field(req, "bot_id")?;
+        let tab_id = Self::str_field(req, "tab_id")?;
+        let Some(bot) = self.app.db.get_live_bot(bot_id)? else {
+            self.reply_err(&Value::Null, "not_found", "bot not found");
+            return Ok(());
+        };
+        if let Err(e) = crate::browser::view::input(&self.app, &bot, tab_id, &req["event"]) {
+            self.reply_err(&Value::Null, "invalid_request", &format!("{e:#}"));
+        }
         Ok(())
     }
 

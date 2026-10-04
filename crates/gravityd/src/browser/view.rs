@@ -63,6 +63,17 @@ pub fn profile(app: &AppState, bot: &bus::Bot) -> Option<std::path::PathBuf> {
     Some(BotBrowser::new(&root).profile())
 }
 
+/// Passes the owner's mouse and keyboard to a tab of a bot's browser that
+/// someone here is watching, or to its machine for a linked bot.
+pub fn input(app: &AppState, bot: &bus::Bot, tab_id: &str, event: &Value) -> anyhow::Result<()> {
+    if bot.is_linked() {
+        crate::peer::browser::input(app, bot, tab_id, event);
+        return Ok(());
+    }
+    let commands = super::input::commands(event)?;
+    app.browsers.input(&bot.id, tab_id, commands)
+}
+
 /// Watches a bot's browser for one connection until the task is aborted,
 /// through the stream every viewer of that browser shares.
 pub async fn watch(app: Arc<AppState>, bot: bus::Bot, chosen: Option<String>, out: Viewer) {

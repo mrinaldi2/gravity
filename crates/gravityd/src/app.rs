@@ -36,6 +36,7 @@ pub const CAPABILITIES: &[&str] = &[
     "agent_conversations",
     "peer_terminal",
     "peer_browser",
+    "browser_input",
     "bot_commands",
     "restart_bot",
     "workers",

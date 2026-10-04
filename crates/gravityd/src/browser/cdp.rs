@@ -1,5 +1,6 @@
 //! Just enough of the Chrome DevTools Protocol to show a bot's browser: find
-//! it, list its tabs, and stream one tab's screen.
+//! it, list its tabs, stream one tab's screen, and pass the owner's mouse and
+//! keyboard to it.
 
 use std::path::Path;
 
@@ -7,6 +8,7 @@ use anyhow::Context;
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
 /// A page open in the bot's browser.
@@ -92,10 +94,15 @@ async fn read_response(stream: &mut tokio::net::TcpStream, path: &str) -> anyhow
     }
 }
 
+/// A DevTools call for the tab: its method and params.
+pub type Command = (&'static str, Value);
+
 /// Streams a tab's screen: calls `frame` with each JPEG (base64) and the
-/// page's size, until the tab closes or `frame` returns false.
+/// page's size, until the tab closes or `frame` returns false. Commands sent
+/// through `input` go to the tab on the same connection, in order.
 pub async fn screencast(
     tab: &Tab,
+    mut input: mpsc::UnboundedReceiver<Command>,
     mut frame: impl FnMut(&str, u64, u64) -> bool,
 ) -> anyhow::Result<()> {
     let (socket, _) = tokio_tungstenite::connect_async(tab.ws_url.as_str())
@@ -108,7 +115,19 @@ pub async fn screencast(
     });
     sink.send(Message::Text(start.to_string())).await?;
     let mut next_id = 2;
-    while let Some(message) = stream.next().await {
+    loop {
+        let message = tokio::select! {
+            message = stream.next() => message,
+            Some((method, params)) = input.recv() => {
+                let call = json!({ "id": next_id, "method": method, "params": params });
+                next_id += 1;
+                sink.send(Message::Text(call.to_string())).await?;
+                continue;
+            }
+        };
+        let Some(message) = message else {
+            break;
+        };
         let Message::Text(text) = message? else {
             continue;
         };

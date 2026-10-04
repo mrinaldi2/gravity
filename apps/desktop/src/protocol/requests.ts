@@ -1,5 +1,6 @@
 // Client → server frames (protocol v2).
 
+import type { BrowserInputEvent } from "./agents";
 import type { PermissionAnswer } from "./chat";
 import type { DecisionRequestBody } from "./decisionRequests";
 import type {
@@ -185,6 +186,13 @@ export type ClientRequestBody =
   /** Streams `browser_tabs` and `browser_frame`; `tab_id` pins a tab, else it follows the bot. */
   | { readonly type: "watch_browser"; readonly bot_id: string; readonly tab_id?: string }
   | { readonly type: "unwatch_browser" }
+  /** The owner's mouse or keyboard on the tab on show; fire-and-forget. */
+  | {
+      readonly type: "browser_input";
+      readonly bot_id: string;
+      readonly tab_id: string;
+      readonly event: BrowserInputEvent;
+    }
   | { readonly type: "list_browser_activity"; readonly bot_id: string; readonly limit?: number }
   | { readonly type: "list_bot_commands"; readonly bot_id: string; readonly limit?: number }
   | { readonly type: "list_agent_conversations"; readonly project_id: string }
@@ -217,7 +225,10 @@ export type ClientRequestBody =
  * Requests eligible for the request/response helper: everything but the
  * handshake and the fire-and-forget frames.
  */
-export type RequestBody = Exclude<ClientRequestBody, { type: "hello" | "input" | "resize" }>;
+export type RequestBody = Exclude<
+  ClientRequestBody,
+  { type: "hello" | "input" | "resize" | "browser_input" }
+>;
 
 /** Fire-and-forget frames: no reply is expected. */
-export type FireBody = Extract<ClientRequestBody, { type: "input" | "resize" }>;
+export type FireBody = Extract<ClientRequestBody, { type: "input" | "resize" | "browser_input" }>;

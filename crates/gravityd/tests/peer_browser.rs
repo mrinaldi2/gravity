@@ -7,7 +7,7 @@ mod common;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
-use common::devtools::{fake_devtools, start_browser};
+use common::devtools::{fake_devtools, recording_devtools, start_browser};
 use common::peers::{team, wait_until};
 use common::*;
 use serde_json::{json, Value};
@@ -57,6 +57,35 @@ async fn the_other_machines_bot_browser_can_be_watched() {
         win.app.peers.browsers.serving() == 0
     })
     .await;
+}
+
+#[tokio::test]
+async fn the_owner_types_into_the_other_machines_bot_browser() {
+    let mut t = team().await;
+    let windev = t.linked_windev.clone();
+    let (port, calls) = recording_devtools("Sign in").await;
+    start_browser(&t.win, &t.windev_id, port);
+    t.mac_client
+        .request(json!({"type": "watch_browser", "bot_id": windev}))
+        .await;
+    t.mac_client
+        .wait_for(|v| v["type"] == "browser_frame")
+        .await;
+
+    t.mac_client
+        .send(
+            json!({"type": "browser_input", "bot_id": windev, "tab_id": "tab-1",
+                     "event": {"kind": "text", "text": "hunter2"}}),
+        )
+        .await;
+    let seen = calls.clone();
+    wait_until("the PC's tab gets the typing", || {
+        seen.lock().expect("calls").len() == 1
+    })
+    .await;
+    let call = calls.lock().expect("calls")[0].clone();
+    assert_eq!(call["method"], "Input.insertText");
+    assert_eq!(call["params"]["text"], "hunter2");
 }
 
 #[tokio::test]

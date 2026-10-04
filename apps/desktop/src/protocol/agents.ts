@@ -35,6 +35,44 @@ export interface BrowserFramePush {
   readonly height: number;
 }
 
+/** A mouse button, or none while the mouse only moves. */
+type MouseButton = "left" | "middle" | "right" | "none";
+
+/**
+ * The owner's mouse or keyboard on the tab on show (`browser_input`).
+ * Coordinates are the page's CSS pixels, the size `browser_frame` reports;
+ * `modifiers` is DevTools' mask: Alt 1, Ctrl 2, Meta 4, Shift 8.
+ */
+export type BrowserInputEvent =
+  | {
+      readonly kind: "mouse";
+      readonly action: "down" | "up" | "move";
+      readonly x: number;
+      readonly y: number;
+      readonly button: MouseButton;
+      readonly clicks: number;
+      readonly modifiers: number;
+    }
+  | {
+      readonly kind: "wheel";
+      readonly x: number;
+      readonly y: number;
+      readonly dx: number;
+      readonly dy: number;
+      readonly modifiers: number;
+    }
+  | {
+      readonly kind: "key";
+      readonly action: "down" | "up";
+      readonly key: string;
+      readonly code: string;
+      readonly key_code: number;
+      /** What the key types, if anything. */
+      readonly text?: string;
+      readonly modifiers: number;
+    }
+  | { readonly kind: "text"; readonly text: string };
+
 /** Whose browser a step drove. */
 type BrowserKind = "own" | "owners_chrome";
 

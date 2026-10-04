@@ -31,7 +31,8 @@ the conversations between a project's bots (`list_agent_conversations`,
 `list_agent_conversation`), and `peer_terminal` when a linked bot's terminal can be
 attached to, typed into and resized here, relayed from its machine, and
 `peer_browser` when a linked bot's browser can be watched here the same way
-(`watch_browser`, `list_browser_activity` on the stand-in), and `bot_commands` when
+(`watch_browser`, `list_browser_activity` on the stand-in), `browser_input` when
+the owner can click and type into a watched bot browser (`browser_input`), and `bot_commands` when
 `list_bot_commands` lists what each bot is running, and `restart_bot` when bots
 can be restarted or cleared (`restart_bot`, `clear_bot_session`), and `workers`
 when bots can spawn temporary workers (`temporary` on bots, `repo` on projects,
@@ -140,6 +141,7 @@ Codes: `auth_failed`, `unsupported_version`, `not_found`, `invalid_request`,
 | `get_task` | `bot_id, task_id` | `task`: the same shape with the whole request and result |
 | `watch_browser` | `bot_id, tab_id?` | `ok`, then `browser_tabs` and `browser_frame` pushes to this connection, starting with the current tabs and screen. `tab_id` shows that tab; without it the view follows the tab the bot used last. One watch per connection: a new one replaces it. Every connection watching a bot shares one stream. Frames are newest-wins: a slow connection skips frames rather than queuing them, and replies and pushes never wait behind more than one frame. Requires `read` |
 | `unwatch_browser` | – | `ok`; stops the stream |
+| `browser_input` | `bot_id, tab_id, event` | Fire-and-forget, as `input` is: no reply, and an `error` (null `req_id`) only when the event cannot be delivered. The owner's mouse or keyboard on a tab this daemon is streaming (`watch_browser`), to sign a bot in or get it past a page. `event` is one of `{ kind: "mouse", action: down\|up\|move, x, y, button: left\|middle\|right\|none, clicks, modifiers }`, `{ kind: "wheel", x, y, dx, dy, modifiers }`, `{ kind: "key", action: down\|up, key, code, key_code, text?, modifiers }` (`text` is what a key going down types) or `{ kind: "text", text }` (a paste). Coordinates are the page's CSS pixels, the `width` and `height` of `browser_frame`; `modifiers` is Alt 1, Ctrl 2, Meta 4, Shift 8. For a linked bot it is relayed to its machine. Requires `control` |
 | `list_browser_activity` | `bot_id, limit?` (default 100) | `browser_activity`: `activity`, newest first, each `{ turn_id, step_id, at, browser: own\|owners_chrome, title, subtitle?, status, trigger }`; `trigger` is what started the turn, as in the chat |
 | `list_bot_commands` | `bot_id, limit?` (default 100) | `bot_commands`: `commands`, running first then newest, each `{ id, command, description?, background, status: running\|done\|failed\|stopped, started_at, ended_at?, exit_code?, task_id?, output? }`. Read from the bot's transcript: a background command runs until the runtime reports it finished or the bot stops it, and a running one's `output` is the live end of its output file. A command left running when its session ended is `stopped`. For a linked bot, read from its machine. Refetch on `chat_turns` for the bot, and every few seconds while a background command runs. Requires `read` |
 | `list_agent_conversations` | `project_id` | `agent_conversations`: `conversations`, most recent first, each `{ bot_ids: [a, b], message_count, last_at, last }`, and `bots` (`id, name, avatar, machine?, deleted`) naming everyone in them |

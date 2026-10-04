@@ -23,7 +23,7 @@ function Pane({
   readonly connected: boolean;
 }): ReactElement {
   const watch = useBrowserWatch(client, bot.id, active, connected);
-  return <BrowserPane client={client} bot={bot} watch={watch} connected={connected} />;
+  return <BrowserPane client={client} bot={bot} watch={watch} connected={connected} canControl />;
 }
 
 const FRAME = {
@@ -74,6 +74,48 @@ describe("BrowserPane", () => {
     });
     await userEvent.click(within(tabs).getByRole("button", { name: "Follow bot" }));
     expect(client.requests.at(-1)?.body).toEqual({ type: "watch_browser", bot_id: "b1" });
+  });
+
+  it("lets the owner take the mouse and keyboard, and give them back", async () => {
+    const client = agentsDaemon();
+    render(<Pane client={client} bot={fx.bot()} active connected />);
+    act(() => {
+      client.emit("browser_tabs", browserTabs);
+      client.emit("browser_frame", FRAME);
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Take control" }));
+    const page = screen.getByRole("application", { name: "alice's browser, under your control" });
+    expect(page).toHaveFocus();
+    const shot = within(page).getByRole("img");
+    shot.getBoundingClientRect = () => DOMRect.fromRect({ x: 0, y: 0, width: 400, height: 300 });
+
+    await userEvent.pointer({
+      keys: "[MouseLeft]",
+      target: shot,
+      coords: { clientX: 100, clientY: 50 },
+    });
+    await userEvent.keyboard("h");
+    await userEvent.paste("hunter2");
+    const sent = client.fired.flatMap((f) => (f.type === "browser_input" ? [f] : []));
+    expect(sent.every((f) => f.bot_id === "b1" && f.tab_id === "tab-1")).toBe(true);
+    expect(sent.map((f) => f.event)).toEqual([
+      { kind: "mouse", action: "down", x: 200, y: 100, button: "left", clicks: 1, modifiers: 0 },
+      { kind: "mouse", action: "up", x: 200, y: 100, button: "left", clicks: 1, modifiers: 0 },
+      {
+        kind: "key",
+        action: "down",
+        key: "h",
+        code: "KeyH",
+        key_code: 72,
+        modifiers: 0,
+        text: "h",
+      },
+      { kind: "key", action: "up", key: "h", code: "KeyH", key_code: 72, modifiers: 0 },
+      { kind: "text", text: "hunter2" },
+    ]);
+
+    await userEvent.click(screen.getByRole("button", { name: "Give back control" }));
+    expect(screen.queryByRole("application")).not.toBeInTheDocument();
   });
 
   it("says when the browser is closed, and ignores other bots' frames", async () => {

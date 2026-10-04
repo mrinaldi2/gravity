@@ -104,7 +104,13 @@ export default function BotPanes(props: BotPanesProps): ReactElement {
           // Mounted while hidden, so the live screen and the activity log
           // are there the moment the tab is opened.
           <div className={paneClass(active === "browser")}>
-            <BrowserPane client={client} bot={bot} watch={props.browser} connected={connected} />
+            <BrowserPane
+              client={client}
+              bot={bot}
+              watch={props.browser}
+              connected={connected}
+              canControl={canControl && client.capabilities.includes("browser_input")}
+            />
           </div>
         ) : null}
         {active === "routines" ? (

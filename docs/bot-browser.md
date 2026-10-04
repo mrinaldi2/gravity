@@ -44,6 +44,16 @@ The bot's **Browser** tab shows:
   the request that started its turn ("Task from lead: compare the pricing
   tiers"). Actions in the owner's Chrome are marked "your Chrome".
 
+**Take control** hands the owner the page's mouse and keyboard: clicks,
+scrolling, typing and pasting go to the tab on show (`browser_input`), so the
+owner can sign the bot in to a site, or get it past a CAPTCHA or a step it
+cannot do. The bot is not paused meanwhile; the logins it gets this way stay
+in its profile. "Give back control" ends it. It needs the `control` grant, and
+the daemon passes the input to the tab over the same DevTools connection as
+its screencast (`Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`,
+`Input.insertText`). A linked bot's input is relayed to its machine, which
+needs a daemon that understands `browser_input`.
+
 The app starts watching as soon as a bot is selected, whatever tab is open, so
 the Browser tab is live when opened; its label shows a red dot while the bot's
 browser is open.

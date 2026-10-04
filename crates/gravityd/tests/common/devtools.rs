@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures::{SinkExt, StreamExt};
@@ -40,7 +40,25 @@ pub fn start_browser(d: &TestDaemon, bot_id: &str, port: u16) {
 /// does. Returns the HTTP port.
 pub async fn fake_devtools(title: &'static str, screencasts: Arc<AtomicUsize>) -> u16 {
     let screen = |n: usize| (n == 0).then(|| "SlBFRw==".to_string());
-    serve_devtools(title, screencasts, screen, Duration::ZERO).await
+    serve_devtools(title, screencasts, screen, Duration::ZERO, Calls::default()).await
+}
+
+/// What a tab was asked to do besides streaming: the input passed to it.
+pub type Calls = Arc<Mutex<Vec<Value>>>;
+
+/// Like `fake_devtools`, recording every other call made of the tab.
+pub async fn recording_devtools(title: &'static str) -> (u16, Calls) {
+    let calls = Calls::default();
+    let screen = |n: usize| (n == 0).then(|| "SlBFRw==".to_string());
+    let port = serve_devtools(
+        title,
+        Arc::new(AtomicUsize::new(0)),
+        screen,
+        Duration::ZERO,
+        calls.clone(),
+    )
+    .await;
+    (port, calls)
 }
 
 /// Like `fake_devtools`, but the screencast sends `count` frames of `size`
@@ -57,7 +75,14 @@ pub async fn streaming_devtools(
         counter.store(n, Ordering::SeqCst);
         (n < count).then(|| format!("{n:06}{}", "A".repeat(size)))
     };
-    let port = serve_devtools("Stream", Arc::new(AtomicUsize::new(0)), screen, every).await;
+    let port = serve_devtools(
+        "Stream",
+        Arc::new(AtomicUsize::new(0)),
+        screen,
+        every,
+        Calls::default(),
+    )
+    .await;
     (port, sent)
 }
 
@@ -73,6 +98,7 @@ async fn serve_devtools(
     screencasts: Arc<AtomicUsize>,
     screen: impl Fn(usize) -> Option<String> + Clone + Send + Sync + 'static,
     every: Duration,
+    calls: Calls,
 ) -> u16 {
     let ws = TcpListener::bind("127.0.0.1:0").await.expect("bind ws");
     let ws_port = ws.local_addr().expect("addr").port();
@@ -80,11 +106,16 @@ async fn serve_devtools(
         while let Ok((stream, _)) = ws.accept().await {
             screencasts.fetch_add(1, Ordering::SeqCst);
             let screen = screen.clone();
+            let calls = calls.clone();
             tokio::spawn(async move {
                 let mut socket = tokio_tungstenite::accept_async(stream).await.expect("ws");
                 while let Some(Ok(WsMsg::Text(text))) = socket.next().await {
                     let call: Value = serde_json::from_str(&text).expect("json");
+                    if call["method"] == "Page.screencastFrameAck" {
+                        continue;
+                    }
                     if call["method"] != "Page.startScreencast" {
+                        calls.lock().expect("calls").push(call);
                         continue;
                     }
                     let mut n = 0;

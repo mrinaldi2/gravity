@@ -1,8 +1,10 @@
+import { useCallback, useState } from "react";
 import type { ReactElement } from "react";
-import type { BrowserFramePush, BrowserTabsPush } from "../../protocol/agents";
+import type { BrowserFramePush, BrowserInputEvent, BrowserTabsPush } from "../../protocol/agents";
 import type { DaemonApi } from "../../protocol/api";
 import type { Bot } from "../../protocol/entities";
 import BrowserActivityList from "./BrowserActivityList";
+import BrowserControl from "./BrowserControl";
 import { useBrowserActivity } from "./useBrowserActivity";
 import type { BrowserWatch } from "./useBrowserWatch";
 
@@ -12,6 +14,8 @@ interface BrowserPaneProps {
   /** The bot's browser as it streams (see `useBrowserWatch`). */
   readonly watch: BrowserWatch;
   readonly connected: boolean;
+  /** Whether the owner may take the mouse and keyboard (`browser_input`). */
+  readonly canControl: boolean;
 }
 
 /** Where the bot's own browser stands, said above the screen. */
@@ -64,15 +68,17 @@ export function TabStrip({
   );
 }
 
-/** The tab on show, as its latest screen. */
+/** The tab on show, as its latest screen; under the owner's control with `onInput`. */
 export function BrowserScreen({
   tabs,
   frame,
   name,
+  onInput,
 }: {
   readonly tabs: BrowserTabsPush | null;
   readonly frame: BrowserFramePush | null;
   readonly name: string;
+  readonly onInput?: (tabId: string, event: BrowserInputEvent) => void;
 }): ReactElement {
   if (tabs === null) {
     return <div className="browser-empty muted">Looking for the browser…</div>;
@@ -90,7 +96,9 @@ export function BrowserScreen({
       <div className="browser-url" title={url}>
         {url}
       </div>
-      {frame !== null && frame.tab_id === tabs.active ? (
+      {frame !== null && frame.tab_id === tabs.active && onInput !== undefined ? (
+        <BrowserControl frame={frame} name={name} onInput={onInput} />
+      ) : frame !== null && frame.tab_id === tabs.active ? (
         <img
           className="browser-frame"
           src={`data:image/jpeg;base64,${frame.data}`}
@@ -105,6 +113,40 @@ export function BrowserScreen({
   );
 }
 
+/** What the browser is, and the switch handing the owner its mouse and keyboard. */
+function ControlBar({
+  bot,
+  offered,
+  controlling,
+  onToggle,
+}: {
+  readonly bot: Bot;
+  readonly offered: boolean;
+  readonly controlling: boolean;
+  readonly onToggle: () => void;
+}): ReactElement {
+  return (
+    <div className="browser-bar">
+      <div className="browser-note muted">
+        {controlling
+          ? `Your clicks and typing go to the page; ${bot.name} may act on it too.`
+          : chromeNote(bot)}
+      </div>
+      {offered ? (
+        <button
+          type="button"
+          className={`browser-take ${controlling ? "browser-take-on" : ""}`}
+          aria-pressed={controlling}
+          title="Use the mouse and keyboard on the page, to sign in or get past a step"
+          onClick={onToggle}
+        >
+          {controlling ? "Give back control" : "Take control"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * The bot's own browser, live: its tabs, the page on show, and every
  * browser action it took with the turn that led to it.
@@ -114,17 +156,37 @@ export default function BrowserPane({
   bot,
   watch,
   connected,
+  canControl,
 }: BrowserPaneProps): ReactElement {
   const activity = useBrowserActivity(client, bot.id, connected);
+  const [control, setControl] = useState(false);
+  const input = useCallback(
+    (tabId: string, event: BrowserInputEvent): void => {
+      client.fire({ type: "browser_input", bot_id: bot.id, tab_id: tabId, event });
+    },
+    [client, bot.id],
+  );
+  const open = watch.tabs !== null && watch.tabs.open;
+  const controlling = control && canControl && open && connected;
   return (
     <div className="browser-pane">
       <div className="browser-main">
-        <div className="browser-note muted">{chromeNote(bot)}</div>
-        {watch.tabs !== null && watch.tabs.open ? (
-          <TabStrip tabs={watch.tabs} onPick={watch.pick} />
-        ) : null}
+        <ControlBar
+          bot={bot}
+          offered={canControl && open}
+          controlling={controlling}
+          onToggle={() => {
+            setControl(!controlling);
+          }}
+        />
+        {watch.tabs !== null && open ? <TabStrip tabs={watch.tabs} onPick={watch.pick} /> : null}
         {watch.error === null ? null : <div className="chat-note chat-error">{watch.error}</div>}
-        <BrowserScreen tabs={watch.tabs} frame={watch.frame} name={bot.name} />
+        <BrowserScreen
+          tabs={watch.tabs}
+          frame={watch.frame}
+          name={bot.name}
+          {...(controlling ? { onInput: input } : {})}
+        />
       </div>
       <BrowserActivityList activity={activity.items} error={activity.error} />
     </div>
