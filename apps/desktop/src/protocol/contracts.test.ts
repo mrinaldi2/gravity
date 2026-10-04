@@ -61,7 +61,20 @@ describe("board contract", () => {
     const files = readdirSync(join(ROOT, "crates", "bus", "fixtures", "board"))
       .filter((name) => name.endsWith(".json"))
       .map((name) => name.replace(/\.json$/, ""));
-    expect(new Set(files)).toEqual(new Set(ENTITIES));
+    expect(new Set(files)).toEqual(new Set([...ENTITIES, "enums"]));
+  });
+
+  it("lists every enum variant the schema allows", () => {
+    const fixture = readJson(join(ROOT, "crates", "bus", "fixtures", "board", "enums.json"));
+    const definitions = isRecord(schema["definitions"]) ? schema["definitions"] : {};
+    const fromSchema = Object.fromEntries(
+      Object.entries(definitions).flatMap(([name, definition]) =>
+        isRecord(definition) && Array.isArray(definition["enum"])
+          ? [[name, definition["enum"]]]
+          : [],
+      ),
+    );
+    expect(fixture).toEqual(fromSchema);
   });
 
   it.each(ENTITIES)("decodes the %s fixture with the generated shape", (entity) => {

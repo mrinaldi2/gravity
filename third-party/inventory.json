@@ -4,10 +4,10 @@
     "x86_64-pc-windows-msvc"
   ],
   "inputs": {
-    "Cargo.lock": "1985cc1b0708dea413599e2a009895078e54c7d33db590f3e033b5fbc3d774bb",
+    "Cargo.lock": "9c0ea6d2f57c7aadba3376215a490c0a23f7c81f9835890e5eb2cc52e402067d",
     "Cargo.toml": "97ce18d5b60cb95220a04ad1f4598426efc70391a049cb9cf800557ec985bced",
     "crates/hermesd/Cargo.toml": "c22c08b166f4c391e7014e663b0cc38817d48aa246215e2d2063371f8e060712",
-    "crates/bus/Cargo.toml": "436b87659b3da768390df1faf40f81813e07bda3f59e838fbf273c3ed9b5c054",
+    "crates/bus/Cargo.toml": "35407ed88e23f0f2b3d19ee7c254520bd078acea422ad1479dfd1519251d22f0",
     "apps/desktop/src-tauri/Cargo.lock": "fc93bb1ba77910d2f418b05f8f7768a2b7c3a6a5bd81365bd53a94ff99c23b03",
     "apps/desktop/src-tauri/Cargo.toml": "b702363edb87574fbeffe9308ec2f0f0e5a344fb825a40d5d6b8b0ad00d805f6",
     "apps/desktop/src-tauri/tauri.conf.json": "32ef6d92998f6b01b0391173d7e907ed821d6135b18cfd26ee47373a0d1d73b5",

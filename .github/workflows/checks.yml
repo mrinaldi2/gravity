@@ -119,6 +119,10 @@ jobs:
       - name: Schema is current
         run: cargo run -q -p bus --features schema --bin contract -- --check
 
+      # Includes the check that fixtures/board/enums.json lists every variant.
+      - name: Contract tests with the schema
+        run: cargo test -p bus --features schema
+
       - name: TypeScript is current
         working-directory: apps/desktop
         run: pnpm contract:check

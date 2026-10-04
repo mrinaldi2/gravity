@@ -35,6 +35,7 @@ run("cargo", ["test", "--workspace", "--all-targets"]);
 // schema must match the Rust types.
 run("cargo", ["clippy", "-p", "bus", "--features", "schema", "--all-targets", "--", "-D", "warnings"]);
 run("cargo", ["run", "-q", "-p", "bus", "--features", "schema", "--bin", "contract", "--", "--check"]);
+run("cargo", ["test", "-p", "bus", "--features", "schema"]);
 
 const files = spawnSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.rs", "*.css"], { encoding: "utf8" });
 if (files.status !== 0) {

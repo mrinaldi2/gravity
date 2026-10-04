@@ -63,7 +63,8 @@ fn fixtures_and_entities_match_one_to_one() {
                 .into_owned()
         })
         .collect();
-    let expected: BTreeSet<String> = ENTITIES.iter().map(|s| (*s).to_string()).collect();
+    let mut expected: BTreeSet<String> = ENTITIES.iter().map(|s| (*s).to_string()).collect();
+    expected.insert("enums".to_string());
     assert_eq!(on_disk, expected);
 }
 
@@ -86,4 +87,56 @@ fn fixture_names_are_the_contract_fields() {
     ))
     .expect("the fixtures together form a BoardContract");
     assert_eq!(root.item.id, "H-017");
+}
+
+fn enums_fixture() -> serde_json::Map<String, Value> {
+    let raw = std::fs::read_to_string(fixture_dir().join("enums.json")).expect("enums.json");
+    match serde_json::from_str(&raw).expect("json") {
+        Value::Object(map) => map,
+        other => panic!("enums.json is not an object: {other}"),
+    }
+}
+
+fn every_variant<T: DeserializeOwned + Serialize>(
+    enums: &serde_json::Map<String, Value>,
+    name: &str,
+) {
+    let listed = enums
+        .get(name)
+        .unwrap_or_else(|| panic!("enums.json lacks {name}"));
+    round_trip::<Vec<T>>(name, listed);
+}
+
+/// Every variant of every enum, not just the one a fixture happens to use.
+#[test]
+fn every_enum_variant_round_trips() {
+    let enums = enums_fixture();
+    every_variant::<ColumnCategory>(&enums, "ColumnCategory");
+    every_variant::<ItemEventKind>(&enums, "ItemEventKind");
+    every_variant::<ItemType>(&enums, "ItemType");
+    every_variant::<LinkKind>(&enums, "LinkKind");
+    every_variant::<PersonRole>(&enums, "PersonRole");
+    every_variant::<Platform>(&enums, "Platform");
+    every_variant::<Priority>(&enums, "Priority");
+    every_variant::<Role>(&enums, "Role");
+    every_variant::<Size>(&enums, "Size");
+    every_variant::<TemplateKind>(&enums, "TemplateKind");
+    every_variant::<VerificationResult>(&enums, "VerificationResult");
+    every_variant::<WipScope>(&enums, "WipScope");
+    assert_eq!(enums.len(), 12, "a new enum needs its line above");
+}
+
+/// The fixture lists exactly what the schema allows, so a variant added in
+/// Rust and missing here fails (run with `--features schema`).
+#[cfg(feature = "schema")]
+#[test]
+fn the_enum_fixture_matches_the_schema() {
+    let schema = bus::contract::board_schema();
+    let from_schema: serde_json::Map<String, Value> = schema["definitions"]
+        .as_object()
+        .expect("definitions")
+        .iter()
+        .filter_map(|(name, def)| def.get("enum").map(|list| (name.clone(), list.clone())))
+        .collect();
+    assert_eq!(enums_fixture(), from_schema);
 }

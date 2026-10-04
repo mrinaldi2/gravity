@@ -1,0 +1,84 @@
+{
+  "ColumnCategory": [
+    "inbox",
+    "ready",
+    "doing",
+    "review",
+    "verify",
+    "approval",
+    "deploying",
+    "done",
+    "cancelled"
+  ],
+  "ItemEventKind": [
+    "created",
+    "moved",
+    "edited",
+    "commented",
+    "linked",
+    "assigned",
+    "blocked",
+    "ranked"
+  ],
+  "ItemType": [
+    "epic",
+    "feature",
+    "bug",
+    "spike",
+    "chore"
+  ],
+  "LinkKind": [
+    "task",
+    "decision",
+    "artifact",
+    "branch",
+    "pr",
+    "meeting",
+    "item:blocks",
+    "item:relates",
+    "item:duplicates"
+  ],
+  "PersonRole": [
+    "reviewer",
+    "verifier"
+  ],
+  "Platform": [
+    "desktop",
+    "ios",
+    "daemon",
+    "infra"
+  ],
+  "Priority": [
+    "P0",
+    "P1",
+    "P2",
+    "P3"
+  ],
+  "Role": [
+    "lead",
+    "coach",
+    "devops",
+    "reviewer.arch",
+    "reviewer.ux",
+    "tester",
+    "dev"
+  ],
+  "Size": [
+    "S",
+    "M",
+    "L"
+  ],
+  "TemplateKind": [
+    "item_type",
+    "meeting_type"
+  ],
+  "VerificationResult": [
+    "pass",
+    "fail",
+    "blocked"
+  ],
+  "WipScope": [
+    "column",
+    "per_assignee"
+  ]
+}
