@@ -1,0 +1,9 @@
+{
+  "boardPush": {
+    "boardEvent": {
+      "projectId": "p1",
+      "seq": "13",
+      "kind": "BOARD_EVENT_KIND_RESYNC"
+    }
+  }
+}

@@ -1,0 +1,212 @@
+// The board's requests, responses and pushes, contract version 1 (H-020
+// §1.5, ADR-001 §1). They travel inside `hermes.wire.v1.Envelope` in WS
+// binary frames: a request under the client's `req_id`, its response under
+// the same id, and pushes under `req_id` 0. A refusal that is not a guard
+// (no grant, unknown item, bad arguments) is the envelope's `Error` instead.
+//
+// Grants: reads and watching need `read`; `item_move` needs `control`.
+syntax = "proto3";
+
+package hermes.board.v1;
+
+import "hermes/board/v1/board.proto";
+
+message BoardRequest {
+  oneof request {
+    BoardGet board_get = 1;
+    ItemGet item_get = 2;
+    ItemHistory item_history = 3;
+    ItemQuery item_query = 4;
+    ItemMoveCheck item_move_check = 5;
+    ItemMove item_move = 6;
+    BoardWatch board_watch = 7;
+    BoardUnwatch board_unwatch = 8;
+  }
+}
+
+message BoardResponse {
+  oneof response {
+    // To `board_get` and `board_watch`.
+    BoardSnapshot board = 1;
+    // To `item_get`.
+    ItemDetail item = 2;
+    // To `item_history`.
+    ItemHistoryPage history = 3;
+    // To `item_query`.
+    ItemQueryResult items = 4;
+    // To `item_move_check`.
+    MoveCheck move_check = 5;
+    // To `item_move`.
+    MoveResult moved = 6;
+    // To `board_unwatch`.
+    BoardUnwatched unwatched = 7;
+  }
+}
+
+// Sent only to connections watching the project.
+message BoardPush {
+  oneof push {
+    BoardEvent board_event = 1;
+  }
+}
+
+// --- Requests ---------------------------------------------------------------
+
+// The whole board. On a project without one, a connection with `control`
+// enables it with the default columns, templates and roles; with `read`
+// only it is refused with `no_board`.
+message BoardGet {
+  string project_id = 1;
+}
+
+// One item in full, for the drawer.
+message ItemGet {
+  string id = 1;
+}
+
+// An item's history, oldest first, a page at a time.
+message ItemHistory {
+  string id = 1;
+  // The last event id of the previous page; unset for the first page.
+  optional int64 after = 2;
+  // At most this many events; 0 means 100. Capped at 500.
+  uint32 limit = 3;
+}
+
+// Cards matching every filter that is set; an unset filter matches all.
+message ItemQuery {
+  string project_id = 1;
+  // Full-text search over title, description and comments (FTS5 syntax).
+  optional string text = 2;
+  repeated string column_keys = 3;
+  optional string assignee = 4;
+  repeated ItemType types = 5;
+  repeated Priority priorities = 6;
+  repeated Platform platforms = 7;
+  optional bool blocked = 8;
+}
+
+// What stands between the item and every other column, for this connection.
+message ItemMoveCheck {
+  string id = 1;
+}
+
+// Move the item if every guard holds. Needs `control`.
+message ItemMove {
+  string id = 1;
+  // The target column's key.
+  string to = 2;
+  // The version the client last read; a stale one is a conflict.
+  uint64 expected_version = 3;
+  // Required by some moves (rework, reject, cancel); see `reason.required`.
+  optional string reason = 4;
+  // Moves past a full WIP limit, for the lead or the owner.
+  optional string override_reason = 5;
+}
+
+// Receive `board_event` pushes for the project. Answered with the snapshot
+// the pushes continue from: apply pushes whose `seq` is above its `seq`.
+message BoardWatch {
+  string project_id = 1;
+}
+
+message BoardUnwatch {
+  string project_id = 1;
+}
+
+// --- Responses --------------------------------------------------------------
+
+message BoardSnapshot {
+  // Holds `home_daemon_id`, the daemon that owns this board.
+  BoardSettings settings = 1;
+  // Board order, hidden ones included (`visible` says which to show).
+  repeated BoardColumn columns = 2;
+  // Column then rank order.
+  repeated ItemCard cards = 3;
+  repeated ProjectRole roles = 4;
+  // The project's push sequence this snapshot is current with.
+  uint64 seq = 5;
+}
+
+message ItemDetail {
+  Item item = 1;
+  repeated ItemLink links = 2;
+  // Oldest first.
+  repeated ItemComment comments = 3;
+  // The first page of history, oldest first; `item_history` continues it.
+  repeated ItemEvent history = 4;
+  // Set when there is more history after this page.
+  optional int64 history_next = 5;
+}
+
+message ItemHistoryPage {
+  string item_id = 1;
+  repeated ItemEvent events = 2;
+  // Pass as `after` for the next page; unset on the last page.
+  optional int64 next = 3;
+}
+
+message ItemQueryResult {
+  repeated ItemCard cards = 1;
+}
+
+message MoveCheck {
+  string item_id = 1;
+  // Every column but the item's own, in board order.
+  repeated ColumnCheck columns = 2;
+}
+
+message ColumnCheck {
+  string column_key = 1;
+  // Empty when the move is allowed as it stands.
+  repeated Unmet unmet = 2;
+}
+
+message MoveResult {
+  oneof outcome {
+    // The move happened; the item as it is now.
+    Item done = 1;
+    // Guards not met; nothing was written.
+    MoveRefused refused = 2;
+    // The item changed since `expected_version`; the item as it is now.
+    Item conflict = 3;
+  }
+}
+
+message MoveRefused {
+  repeated Unmet unmet = 1;
+}
+
+message BoardUnwatched {
+  string project_id = 1;
+}
+
+// --- Pushes -----------------------------------------------------------------
+
+enum BoardEventKind {
+  BOARD_EVENT_KIND_UNSPECIFIED = 0;
+  // An item was created or changed in place; `card` is its new form.
+  BOARD_EVENT_KIND_ITEM_UPSERTED = 1;
+  // An item changed column; `card` is its new form, `from_column` the old.
+  BOARD_EVENT_KIND_ITEM_MOVED = 2;
+  // An item left the board; only `item_id` is set.
+  BOARD_EVENT_KIND_ITEM_REMOVED = 3;
+  // Columns were added, edited or reordered: refetch `board_get`.
+  BOARD_EVENT_KIND_COLUMNS_CHANGED = 4;
+  // Board settings changed: refetch `board_get`.
+  BOARD_EVENT_KIND_SETTINGS_CHANGED = 5;
+  // This connection missed pushes: refetch `board_get`.
+  BOARD_EVENT_KIND_RESYNC = 6;
+}
+
+message BoardEvent {
+  string project_id = 1;
+  // Per project, rising by one per change. A push whose `seq` is not the
+  // last one plus one (a gap, or a lower number after the daemon restarted)
+  // means pushes were missed: refetch `board_get`.
+  uint64 seq = 2;
+  BoardEventKind kind = 3;
+  string item_id = 4;
+  optional ItemCard card = 5;
+  optional string from_column = 6;
+}

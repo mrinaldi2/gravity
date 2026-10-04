@@ -1,0 +1,33 @@
+{
+  "boardPush": {
+    "boardEvent": {
+      "projectId": "p1",
+      "seq": "13",
+      "kind": "BOARD_EVENT_KIND_ITEM_MOVED",
+      "itemId": "H-017",
+      "card": {
+        "id": "H-017",
+        "type": "ITEM_TYPE_FEATURE",
+        "title": "Board and dashboard",
+        "priority": "PRIORITY_P1",
+        "size": "SIZE_M",
+        "rank": "a0V",
+        "columnKey": "review",
+        "assignee": "b-desktop-dev",
+        "platforms": [
+          "PLATFORM_DAEMON",
+          "PLATFORM_DESKTOP"
+        ],
+        "labels": [
+          "dashboard"
+        ],
+        "blocked": true,
+        "stale": false,
+        "acChecked": 1,
+        "acTotal": 2,
+        "version": "8"
+      },
+      "fromColumn": "doing"
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "reqId": "6",
+  "boardResponse": {
+    "moved": {
+      "conflict": {
+        "id": "H-017",
+        "seq": 17,
+        "type": "ITEM_TYPE_FEATURE",
+        "title": "Board and dashboard",
+        "description": "## Problem\nWork is tracked in a markdown file.",
+        "platforms": [
+          "PLATFORM_DAEMON",
+          "PLATFORM_DESKTOP"
+        ],
+        "size": "SIZE_M",
+        "priority": "PRIORITY_P1",
+        "rank": "a0V",
+        "columnKey": "doing",
+        "category": "COLUMN_CATEGORY_DOING",
+        "blocked": {
+          "by": "H-016",
+          "reason": "Needs the contract scaffold",
+          "since": "2026-10-04T09:12:33Z"
+        },
+        "assignee": "b-desktop-dev",
+        "labels": [
+          "dashboard"
+        ],
+        "acceptanceCriteria": [
+          {
+            "idx": 0,
+            "text": "Cards move between columns",
+            "checked": true,
+            "checkedBy": "b-tester",
+            "checkedAt": "2026-10-04T09:12:33Z",
+            "machine": "mac"
+          },
+          {
+            "idx": 1,
+            "text": "A refused move says why",
+            "checked": false
+          }
+        ],
+        "people": [
+          {
+            "botId": "b-architect",
+            "role": "PERSON_ROLE_REVIEWER"
+          },
+          {
+            "botId": "b-tester",
+            "role": "PERSON_ROLE_VERIFIER"
+          }
+        ],
+        "verifications": [
+          {
+            "machine": "mac",
+            "result": "VERIFICATION_RESULT_PASS",
+            "by": "b-tester",
+            "at": "2026-10-04T09:12:33Z"
+          }
+        ],
+        "createdBy": "user",
+        "createdAt": "2026-10-04T09:12:33Z",
+        "updatedAt": "2026-10-04T09:12:33Z",
+        "stateEnteredAt": "2026-10-04T09:12:33Z",
+        "version": "7"
+      }
+    }
+  }
+}

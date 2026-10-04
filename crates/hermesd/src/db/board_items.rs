@@ -308,49 +308,7 @@ impl Db {
         filter: &str,
         arg: Option<&str>,
     ) -> anyhow::Result<Vec<ItemCard>> {
-        let conn = self.lock();
-        let stale_after = settings_in(&conn, project_id)?.map_or(24, |s| s.stale_after_hours);
-        let stale_before = now() - Duration::hours(i64::from(stale_after));
-        let sql = format!(
-            "SELECT i.id, i.type, i.title, i.priority, i.size, i.rank, i.column_key, i.assignee,
-                    i.platforms, i.labels, i.blocked_since IS NOT NULL, i.category,
-                    i.state_entered_at, i.version,
-                    (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id AND a.checked),
-                    (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id)
-             FROM item i JOIN board_column c ON c.project_id = i.project_id AND c.key = i.column_key
-             WHERE i.project_id = ?1 {filter}
-             ORDER BY c.ord, i.rank"
-        );
-        let mut stmt = conn.prepare(&sql)?;
-        let map = |r: &rusqlite::Row<'_>| -> rusqlite::Result<ItemCard> {
-            let category: ColumnCategory = from_text(r.get(11)?)?;
-            Ok(ItemCard {
-                id: r.get(0)?,
-                item_type: from_text(r.get(1)?)?,
-                title: r.get(2)?,
-                priority: from_text(r.get(3)?)?,
-                size: r.get::<_, Option<String>>(4)?.map(from_text).transpose()?,
-                rank: r.get(5)?,
-                column_key: r.get(6)?,
-                assignee: r.get(7)?,
-                platforms: from_json_list(r.get(8)?)?,
-                labels: from_json(r.get(9)?)?,
-                blocked: r.get(10)?,
-                stale: is_active(category) && parse_at(r.get(12)?) < stale_before,
-                version: r.get(13)?,
-                ac_checked: r.get(14)?,
-                ac_total: r.get(15)?,
-            })
-        };
-        let cards = match arg {
-            Some(arg) => stmt
-                .query_map(params![project_id, arg], map)?
-                .collect::<Result<_, _>>()?,
-            None => stmt
-                .query_map(params![project_id], map)?
-                .collect::<Result<_, _>>()?,
-        };
-        Ok(cards)
+        cards_in(&self.lock(), project_id, filter, arg)
     }
 
     /// An item's history, oldest first.
@@ -377,4 +335,56 @@ impl Db {
             .collect::<Result<_, _>>()?;
         Ok(rows)
     }
+}
+
+/// The cards of a project matching `filter` (SQL over `i`, the item, with
+/// `arg` as `?2`), in column then rank order.
+pub(super) fn cards_in(
+    conn: &Connection,
+    project_id: &str,
+    filter: &str,
+    arg: Option<&str>,
+) -> anyhow::Result<Vec<ItemCard>> {
+    let stale_after = settings_in(conn, project_id)?.map_or(24, |s| s.stale_after_hours);
+    let stale_before = now() - Duration::hours(i64::from(stale_after));
+    let sql = format!(
+        "SELECT i.id, i.type, i.title, i.priority, i.size, i.rank, i.column_key, i.assignee,
+                i.platforms, i.labels, i.blocked_since IS NOT NULL, i.category,
+                i.state_entered_at, i.version,
+                (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id AND a.checked),
+                (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id)
+         FROM item i JOIN board_column c ON c.project_id = i.project_id AND c.key = i.column_key
+         WHERE i.project_id = ?1 {filter}
+         ORDER BY c.ord, i.rank"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let map = |r: &rusqlite::Row<'_>| -> rusqlite::Result<ItemCard> {
+        let category: ColumnCategory = from_text(r.get(11)?)?;
+        Ok(ItemCard {
+            id: r.get(0)?,
+            item_type: from_text(r.get(1)?)?,
+            title: r.get(2)?,
+            priority: from_text(r.get(3)?)?,
+            size: r.get::<_, Option<String>>(4)?.map(from_text).transpose()?,
+            rank: r.get(5)?,
+            column_key: r.get(6)?,
+            assignee: r.get(7)?,
+            platforms: from_json_list(r.get(8)?)?,
+            labels: from_json(r.get(9)?)?,
+            blocked: r.get(10)?,
+            stale: is_active(category) && parse_at(r.get(12)?) < stale_before,
+            version: r.get(13)?,
+            ac_checked: r.get(14)?,
+            ac_total: r.get(15)?,
+        })
+    };
+    let cards = match arg {
+        Some(arg) => stmt
+            .query_map(params![project_id, arg], map)?
+            .collect::<Result<_, _>>()?,
+        None => stmt
+            .query_map(params![project_id], map)?
+            .collect::<Result<_, _>>()?,
+    };
+    Ok(cards)
 }

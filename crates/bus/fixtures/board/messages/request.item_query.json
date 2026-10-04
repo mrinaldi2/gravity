@@ -1,0 +1,26 @@
+{
+  "reqId": "4",
+  "boardRequest": {
+    "itemQuery": {
+      "projectId": "p1",
+      "text": "dashboard",
+      "columnKeys": [
+        "doing",
+        "review"
+      ],
+      "assignee": "b-desktop-dev",
+      "types": [
+        "ITEM_TYPE_FEATURE",
+        "ITEM_TYPE_BUG"
+      ],
+      "priorities": [
+        "PRIORITY_P0",
+        "PRIORITY_P1"
+      ],
+      "platforms": [
+        "PLATFORM_DESKTOP"
+      ],
+      "blocked": false
+    }
+  }
+}

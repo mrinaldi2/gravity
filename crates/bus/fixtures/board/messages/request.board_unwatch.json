@@ -1,0 +1,8 @@
+{
+  "reqId": "8",
+  "boardRequest": {
+    "boardUnwatch": {
+      "projectId": "p1"
+    }
+  }
+}

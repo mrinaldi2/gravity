@@ -14,21 +14,35 @@ use std::collections::BTreeMap;
 /// code mapping to and from them needs no dependency of its own.
 pub use pbjson_types;
 
-/// The board surface (H-017): entities now, requests and pushes in B4.
+/// The generated code, nested as its proto packages are, so a message of one
+/// package can name another's (the wire `Envelope` carries the board's).
 #[allow(clippy::all, clippy::pedantic, missing_docs)]
+mod hermes {
+    pub mod board {
+        pub mod v1 {
+            include!(concat!(env!("OUT_DIR"), "/hermes.board.v1.rs"));
+            include!(concat!(env!("OUT_DIR"), "/hermes.board.v1.serde.rs"));
+        }
+    }
+    pub mod wire {
+        pub mod v1 {
+            include!(concat!(env!("OUT_DIR"), "/hermes.wire.v1.rs"));
+            include!(concat!(env!("OUT_DIR"), "/hermes.wire.v1.serde.rs"));
+        }
+    }
+}
+
+/// The board surface (H-017): entities, requests, responses and pushes.
 pub mod board {
-    include!(concat!(env!("OUT_DIR"), "/hermes.board.v1.rs"));
-    include!(concat!(env!("OUT_DIR"), "/hermes.board.v1.serde.rs"));
+    pub use super::hermes::board::v1::*;
 
     /// Bumped only on a breaking change to this surface.
     pub const VERSION: u32 = 1;
 }
 
 /// What a WebSocket binary frame carries: an `Envelope` per frame.
-#[allow(clippy::all, clippy::pedantic, missing_docs)]
 pub mod wire {
-    include!(concat!(env!("OUT_DIR"), "/hermes.wire.v1.rs"));
-    include!(concat!(env!("OUT_DIR"), "/hermes.wire.v1.serde.rs"));
+    pub use super::hermes::wire::v1::*;
 }
 
 /// Every contract surface this build speaks, with its version.

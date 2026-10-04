@@ -62,6 +62,8 @@ pub struct AppState {
     pub browsers: crate::browser::streams::BrowserStreams,
     /// The temporary-worker queue's wake-up and placement lock.
     pub workers: crate::workers::Workers,
+    /// Board changes, numbered per project, for the clients watching them.
+    pub board: crate::board::feed::BoardFeed,
     pub started_at: Instant,
     /// Wall-clock start, kept alongside the monotonic `started_at` purely so
     /// [`AppState::stale_build`] can compare it against a file mtime.
@@ -103,6 +105,7 @@ impl AppState {
             approvals: crate::approval::Approvals::default(),
             browsers: crate::browser::streams::BrowserStreams::default(),
             workers: crate::workers::Workers::default(),
+            board: crate::board::feed::BoardFeed::default(),
             started_at: Instant::now(),
             started_wall: SystemTime::now(),
         });

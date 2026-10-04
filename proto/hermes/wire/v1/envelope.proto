@@ -5,12 +5,18 @@ syntax = "proto3";
 
 package hermes.wire.v1;
 
+import "hermes/board/v1/requests.proto";
+
 message Envelope {
   // Correlates a response with its request, as `req_id` does in JSON frames.
   uint64 req_id = 1;
-  // One arm per typed surface's requests, responses and pushes; the board's
-  // land in B4. Field numbers below 16 are kept for the busiest arms.
+  // One arm per typed surface's requests, responses and pushes. Field
+  // numbers below 16 are kept for the busiest arms.
   oneof body {
+    hermes.board.v1.BoardRequest board_request = 2;
+    hermes.board.v1.BoardResponse board_response = 3;
+    // Pushes carry `req_id` 0.
+    hermes.board.v1.BoardPush board_push = 4;
     Error error = 15;
   }
 }

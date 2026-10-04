@@ -1,7 +1,8 @@
 //! Golden proto-JSON fixtures for the board contract (ADR-001 §1): each one
 //! decodes with the generated types (unknown fields are refused), survives a
 //! proto-JSON and a binary round trip unchanged, and every entity has one.
-//! The desktop and iOS clients decode the same files.
+//! `messages/` holds one wire `Envelope` per request, response and push arm,
+//! and one error. The desktop and iOS clients decode the same files.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -100,7 +101,7 @@ fn the_enum_fixture_lists_every_value() {
         serde_json::from_value(fixture[enum_name].clone())
             .unwrap_or_else(|e| panic!("enums.json {enum_name}: {e}"))
     };
-    let checks: [(&str, Vec<String>); 12] = [
+    let checks: [(&str, Vec<String>); 13] = [
         (
             "ColumnCategory",
             defined::<ColumnCategory>(|e| e.as_str_name()),
@@ -122,6 +123,10 @@ fn the_enum_fixture_lists_every_value() {
             defined::<ItemEventKind>(|e| e.as_str_name()),
         ),
         ("TemplateKind", defined::<TemplateKind>(|e| e.as_str_name())),
+        (
+            "BoardEventKind",
+            defined::<BoardEventKind>(|e| e.as_str_name()),
+        ),
     ];
     for (enum_name, values) in &checks {
         assert_eq!(&listed(enum_name), values, "{enum_name}");
@@ -131,4 +136,103 @@ fn the_enum_fixture_lists_every_value() {
         checks.len(),
         "a new enum needs its line above"
     );
+}
+
+fn message_dir() -> PathBuf {
+    fixture_dir().join("messages")
+}
+
+/// The fixture name prefix for an envelope: `request.<arm>`,
+/// `response.<arm>`, `push.<arm>` or `error`. The matches are exhaustive, so
+/// a new arm fails to compile until it is named here, and the test below
+/// then wants its fixture.
+fn arm_of(envelope: &bus::contract::wire::Envelope) -> String {
+    use bus::contract::wire::envelope::Body;
+    match envelope.body.as_ref().expect("a body") {
+        Body::BoardRequest(r) => format!(
+            "request.{}",
+            match r.request.as_ref().expect("a request") {
+                board_request::Request::BoardGet(_) => "board_get",
+                board_request::Request::ItemGet(_) => "item_get",
+                board_request::Request::ItemHistory(_) => "item_history",
+                board_request::Request::ItemQuery(_) => "item_query",
+                board_request::Request::ItemMoveCheck(_) => "item_move_check",
+                board_request::Request::ItemMove(_) => "item_move",
+                board_request::Request::BoardWatch(_) => "board_watch",
+                board_request::Request::BoardUnwatch(_) => "board_unwatch",
+            }
+        ),
+        Body::BoardResponse(r) => format!(
+            "response.{}",
+            match r.response.as_ref().expect("a response") {
+                board_response::Response::Board(_) => "board",
+                board_response::Response::Item(_) => "item",
+                board_response::Response::History(_) => "history",
+                board_response::Response::Items(_) => "items",
+                board_response::Response::MoveCheck(_) => "move_check",
+                board_response::Response::Moved(m) => match m.outcome.as_ref().expect("an outcome")
+                {
+                    move_result::Outcome::Done(_) => "moved.done",
+                    move_result::Outcome::Refused(_) => "moved.refused",
+                    move_result::Outcome::Conflict(_) => "moved.conflict",
+                },
+                board_response::Response::Unwatched(_) => "unwatched",
+            }
+        ),
+        Body::BoardPush(p) => format!(
+            "push.{}",
+            match p.push.as_ref().expect("a push") {
+                board_push::Push::BoardEvent(_) => "board_event",
+            }
+        ),
+        Body::Error(_) => "error".to_string(),
+    }
+}
+
+const ARMS: &[&str] = &[
+    "request.board_get",
+    "request.item_get",
+    "request.item_history",
+    "request.item_query",
+    "request.item_move_check",
+    "request.item_move",
+    "request.board_watch",
+    "request.board_unwatch",
+    "response.board",
+    "response.item",
+    "response.history",
+    "response.items",
+    "response.move_check",
+    "response.moved.done",
+    "response.moved.refused",
+    "response.moved.conflict",
+    "response.unwatched",
+    "push.board_event",
+    "error",
+];
+
+/// Every message fixture is an envelope that round-trips, its name starts
+/// with the arm it carries, and every arm has one.
+#[test]
+fn every_message_arm_has_a_fixture_that_round_trips() {
+    let mut covered = BTreeSet::new();
+    for entry in std::fs::read_dir(message_dir()).expect("messages dir") {
+        let path = entry.expect("entry").path();
+        let name = path
+            .file_stem()
+            .expect("stem")
+            .to_string_lossy()
+            .into_owned();
+        round_trip::<bus::contract::wire::Envelope>(&format!("messages/{name}"));
+        let envelope: bus::contract::wire::Envelope =
+            serde_json::from_str(&read(&format!("messages/{name}"))).expect("decodes");
+        let arm = arm_of(&envelope);
+        assert!(
+            name == arm || name.starts_with(&format!("{arm}.")),
+            "{name}.json carries {arm}"
+        );
+        covered.insert(arm);
+    }
+    let expected: BTreeSet<String> = ARMS.iter().map(|s| (*s).to_string()).collect();
+    assert_eq!(covered, expected);
 }

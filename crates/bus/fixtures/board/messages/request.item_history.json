@@ -1,0 +1,10 @@
+{
+  "reqId": "3",
+  "boardRequest": {
+    "itemHistory": {
+      "id": "H-017",
+      "after": "41",
+      "limit": 50
+    }
+  }
+}

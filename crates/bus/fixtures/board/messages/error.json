@@ -1,0 +1,7 @@
+{
+  "reqId": "6",
+  "error": {
+    "code": "forbidden",
+    "message": "this board request requires the control capability"
+  }
+}

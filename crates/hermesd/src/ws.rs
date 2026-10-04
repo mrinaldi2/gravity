@@ -21,6 +21,7 @@ use crate::browser::view::Viewer;
 
 mod admin;
 mod binary;
+mod board;
 mod browser;
 mod chat;
 mod commands;
@@ -107,6 +108,10 @@ struct Conn {
     /// None for the owner token; the issuing device otherwise. A ruling made
     /// from a device stays attributable after that device is revoked.
     device_id: Option<String>,
+    /// Binary frames (protobuf envelopes) to this client.
+    bin: mpsc::UnboundedSender<Vec<u8>>,
+    /// The boards this connection watches.
+    watch: board::Watch,
 }
 
 async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
@@ -193,6 +198,8 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
         viewer,
         caps,
         device_id,
+        bin: bin_tx,
+        watch: board::Watch::default(),
     };
 
     // Any frame counts as a sign of life, a ping or pong as much as a request.
@@ -221,8 +228,8 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
                 conn.dispatch(&req);
             }
             WsMessage::Binary(bytes) => {
-                if bytes.len() <= MAX_FRAME_BYTES && bin_tx.send(binary::reply(&bytes)).is_err() {
-                    break;
+                if bytes.len() <= MAX_FRAME_BYTES {
+                    conn.binary_frame(&bytes);
                 }
             }
             WsMessage::Close(_) => break,
