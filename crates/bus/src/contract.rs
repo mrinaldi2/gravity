@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 /// code mapping to and from them needs no dependency of its own.
 pub use pbjson_types;
 
-/// The board surface (H-017): entities now, requests and pushes in B4.
+/// The board surface (H-017): entities and requests; pushes come in B4.
 #[allow(clippy::all, clippy::pedantic, missing_docs)]
 pub mod board {
     include!(concat!(env!("OUT_DIR"), "/hermes.board.v1.rs"));
@@ -22,6 +22,11 @@ pub mod board {
 
     /// Bumped only on a breaking change to this surface.
     pub const VERSION: u32 = 1;
+
+    /// JSON Schemas of the `*Request` messages, by message name, generated
+    /// from the protos at build time; the MCP board tools are built on them.
+    pub const REQUEST_SCHEMAS: &str =
+        include_str!(concat!(env!("OUT_DIR"), "/board_requests.schema.json"));
 }
 
 /// What a WebSocket binary frame carries: an `Envelope` per frame.

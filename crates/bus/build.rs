@@ -1,13 +1,18 @@
 //! Generates the wire contract's Rust types from `proto/` (ADR-001 §1):
 //! protox compiles the files in pure Rust, prost emits the messages and
-//! pbjson their proto3 JSON (serde) form, used by fixtures and, later, MCP.
+//! pbjson their proto3 JSON (serde) form, used by fixtures and MCP; the
+//! request messages also get JSON Schemas for the MCP tools (`build_schema.rs`).
 
 use std::path::PathBuf;
 
 use prost::Message;
 
+#[path = "build_schema.rs"]
+mod schema;
+
 const FILES: &[&str] = &[
     "hermes/board/v1/board.proto",
+    "hermes/board/v1/requests.proto",
     "hermes/wire/v1/envelope.proto",
 ];
 
@@ -19,6 +24,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out = PathBuf::from(std::env::var("OUT_DIR")?);
     let descriptor_path = out.join("contract_descriptors.bin");
     std::fs::write(&descriptor_path, descriptors.encode_to_vec())?;
+    std::fs::write(
+        out.join("board_requests.schema.json"),
+        serde_json::to_string_pretty(&schema::request_schemas(&descriptors))?,
+    )?;
 
     prost_build::Config::new()
         // Well-known types with proto3 JSON support, so Timestamp and

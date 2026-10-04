@@ -54,7 +54,7 @@ pub(super) fn claim(tx: &Connection, id: &str, expected: u64) -> anyhow::Result<
 
 /// Run a versioned change inside the caller's transaction: claim the
 /// version, apply, then return the item. A conflict writes nothing.
-fn versioned(
+pub(super) fn versioned(
     tx: &Connection,
     id: &str,
     expected: u64,

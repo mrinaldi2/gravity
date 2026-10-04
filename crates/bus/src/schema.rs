@@ -11,6 +11,7 @@
 
 mod base;
 mod board;
+mod board_links;
 mod decisions;
 mod history;
 mod peers;
@@ -18,6 +19,7 @@ mod workers;
 
 use base::MIGRATION_1;
 use board::MIGRATION_BOARD_CORE;
+use board_links::MIGRATION_BOARD_LINKS;
 use decisions::MIGRATION_12;
 use history::{
     MIGRATION_10, MIGRATION_11, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6,
@@ -48,6 +50,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_18,
     MIGRATION_19,
     MIGRATION_BOARD_CORE,
+    MIGRATION_BOARD_LINKS,
 ];
 
 #[cfg(test)]

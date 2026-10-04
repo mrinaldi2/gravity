@@ -1,0 +1,158 @@
+// Board requests, contract version 1 (H-017 §4.1, H-020 §1.6, ADR-001).
+//
+// Bots send these as MCP tool arguments in proto3 JSON, and the MCP tool
+// schemas are generated from them: a field marked `optional`, a repeated
+// field or a list wrapper may be left out, every other field is required.
+// Enums also accept their short names ("doing", "reviewer.arch"). The
+// project comes from the caller's credentials, never from a bot's argument,
+// so MCP drops `project_id`; the WebSocket surface (B4) sends it.
+syntax = "proto3";
+
+package hermes.board.v1;
+
+import "hermes/board/v1/board.proto";
+
+// Platforms, where "unset" and "none" must differ.
+message PlatformList {
+  repeated Platform values = 1;
+}
+
+// The board: its columns with their WIP, and every card.
+message BoardGetRequest {
+  string project_id = 1;
+}
+
+// One item in full, with its links and history.
+message ItemGetRequest {
+  // The item id, e.g. "H-017".
+  string id = 1;
+}
+
+// Cards matching every filter given, in board order.
+message ItemQueryRequest {
+  string project_id = 1;
+  // Words to find in titles, descriptions and comments.
+  optional string text = 2;
+  // A column key, e.g. "doing".
+  optional string column = 3;
+  optional ItemType type = 4;
+  optional Platform platform = 5;
+  // A bot id or name.
+  optional string assignee = 6;
+  optional string label = 7;
+  optional bool blocked = 8;
+  optional bool stale = 9;
+}
+
+// A new item in the inbox. Its type's template fills the description.
+message ItemCreateRequest {
+  string project_id = 1;
+  ItemType type = 2;
+  string title = 3;
+  // Markdown; left out, the template's section headings.
+  optional string description = 4;
+  repeated Platform platforms = 5;
+  optional Size size = 6;
+  // P2 when left out.
+  optional Priority priority = 7;
+  repeated string labels = 8;
+  // The epic this belongs to.
+  optional string parent_id = 9;
+  repeated string acceptance_criteria = 10;
+}
+
+// Change an item's fields; never its column or rank.
+message ItemUpdateRequest {
+  string id = 1;
+  // The version you read; a stale one is refused with the current item.
+  uint64 expected_version = 2;
+  optional string title = 3;
+  optional string description = 4;
+  PlatformList platforms = 5;
+  optional Size size = 6;
+  optional Priority priority = 7;
+  StringList labels = 8;
+  optional string parent_id = 9;
+}
+
+// Move an item to another column; refused with every unmet guard.
+message ItemMoveRequest {
+  string id = 1;
+  // The target column's key, e.g. "review".
+  string to = 2;
+  uint64 expected_version = 3;
+  // Required for rework, rejections, cancels and unusual moves.
+  optional string reason = 4;
+  // Lead or owner only: go over a WIP limit, logged on the card.
+  optional string override_reason = 5;
+}
+
+// What stands between an item and each other column, for you.
+message ItemMoveCheckRequest {
+  string id = 1;
+}
+
+message ItemCommentRequest {
+  string id = 1;
+  string body = 2;
+  // The comment this answers.
+  optional string reply_to = 3;
+}
+
+// Link an item to a task, decision, artifact, branch, PR or other item.
+message ItemLinkRequest {
+  string id = 1;
+  LinkKind kind = 2;
+  // What it points at: a task id, an artifact path, a branch name, an item id.
+  string ref = 3;
+  optional string label = 4;
+}
+
+message ItemUnlinkRequest {
+  string id = 1;
+  LinkKind kind = 2;
+  string ref = 3;
+}
+
+// Flag an item blocked; it keeps its column.
+message ItemBlockRequest {
+  string id = 1;
+  uint64 expected_version = 2;
+  string reason = 3;
+  // The blocking item, when it is one.
+  optional string by = 4;
+}
+
+message ItemUnblockRequest {
+  string id = 1;
+  uint64 expected_version = 2;
+}
+
+// Lead: set or clear an item's assignee.
+message ItemAssignRequest {
+  string id = 1;
+  uint64 expected_version = 2;
+  // A bot id or name; left out, unassigned.
+  optional string bot = 3;
+}
+
+// Lead: place an item between two others in its column.
+message ItemRankRequest {
+  string id = 1;
+  uint64 expected_version = 2;
+  // The item it goes after; left out, the top.
+  optional string after = 3;
+  // The item it goes before; left out, the bottom.
+  optional string before = 4;
+}
+
+// Tester: record an acceptance criterion's result.
+message ItemCheckAcRequest {
+  string id = 1;
+  uint64 expected_version = 2;
+  // The criterion's index, from item_get.
+  uint32 index = 3;
+  VerificationResult result = 4;
+  // The machine it was checked on.
+  optional string machine = 5;
+}
