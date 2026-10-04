@@ -260,9 +260,16 @@ mod tests {
         cfg.browser.channel = Some("msedge".to_string());
         let root = tmp.path().join("bot");
         let entry = server(&cfg, &root).expect("server");
-        let npx = entry["command"].as_str().expect("command");
+        // On Windows `npx.cmd` runs through `cmd /c`, which shifts the args.
+        let (npx, package) = if cfg!(windows) {
+            assert_eq!(entry["command"], "cmd");
+            assert_eq!(entry["args"][0], "/c");
+            (entry["args"][1].as_str().expect("npx"), &entry["args"][3])
+        } else {
+            (entry["command"].as_str().expect("command"), &entry["args"][1])
+        };
         assert!(npx.starts_with(node.to_str().expect("utf8")), "{npx}");
-        assert_eq!(entry["args"][1], cfg.browser.package);
+        assert_eq!(*package, cfg.browser.package);
         let written: Value = serde_json::from_str(
             &std::fs::read_to_string(root.join("browser/playwright.json")).expect("config"),
         )
@@ -271,7 +278,7 @@ mod tests {
         assert_eq!(written["browser"]["launchOptions"]["headless"], true);
         assert_eq!(
             written["browser"]["userDataDir"],
-            root.join("browser/profile").to_str().expect("utf8")
+            root.join("browser").join("profile").to_str().expect("utf8")
         );
         assert_eq!(written["capabilities"], json!(["vision"]));
     }
