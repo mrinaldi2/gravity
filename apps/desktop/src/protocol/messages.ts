@@ -62,6 +62,10 @@ export type ServerReply =
       readonly capabilities: readonly string[];
       readonly grants: readonly Grant[];
       readonly device_id: string | null;
+      /** Typed contract versions per surface; absent from daemons before them. */
+      readonly contracts?: Readonly<Record<string, number>>;
+      /** Binary encodings the daemon accepts in WS binary frames ("proto"). */
+      readonly encodings?: readonly string[];
     })
   | (ReplyBase & {
       readonly type: "error";

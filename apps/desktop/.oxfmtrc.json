@@ -6,5 +6,5 @@
   "trailingComma": "all",
   "arrowParens": "always",
   "endOfLine": "lf",
-  "ignorePatterns": ["dist/**", "src-tauri/**"]
+  "ignorePatterns": ["dist/**", "src-tauri/**", "src/protocol/gen/**"]
 }

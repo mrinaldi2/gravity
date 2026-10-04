@@ -10,3 +10,14 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
+prost = "0.14"
+pbjson = "0.9"
+pbjson-types = "0.9"
+
+[build-dependencies]
+# The contract in proto/ is compiled at build time in pure Rust, so neither
+# protoc nor buf is needed to build the daemon.
+protox = "0.9"
+prost-build = "0.14"
+prost = "0.14"
+pbjson-build = "0.9"

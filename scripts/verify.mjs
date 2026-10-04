@@ -44,6 +44,14 @@ for (const file of files.stdout.split("\0").filter(Boolean)) {
   }
 }
 run("pnpm", ["--dir", "apps/desktop", "check"]);
+// The wire contract (proto/): buf lint plus generated TypeScript in step.
+// Rust is generated at build time, so the cargo gates above already cover it.
+run("pnpm", ["--dir", "apps/desktop", "proto:check"]);
+// Breaking changes against main, once main carries the protos.
+const mainHasProtos = spawnSync("git", ["cat-file", "-e", "origin/main:buf.yaml"]).status === 0;
+if (mainHasProtos) {
+  run(join("apps", "desktop", "node_modules", ".bin", windows ? "buf.cmd" : "buf"), ["breaking", "--against", ".git#ref=origin/main"]);
+}
 run("pnpm", ["--dir", "apps/desktop", "build"]);
 run("pnpm", ["--dir", "apps/marketing", "check"]);
 if (windows) {

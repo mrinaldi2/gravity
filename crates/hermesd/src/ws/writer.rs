@@ -11,10 +11,12 @@ use tokio::sync::{mpsc, watch};
 /// fails: replies and pushes in order, a ping every `ping_every`, and browser
 /// frames from the newest-wins slot only when nothing else is waiting. At
 /// most one frame is ever being written, so a slow link skips frames and the
-/// rest of the traffic waits behind one frame at most.
+/// rest of the traffic waits behind one frame at most. Binary protobuf
+/// envelopes (`binary`) are written as they come, like replies.
 pub(super) async fn write_out<S>(
     mut sink: S,
     mut out: mpsc::UnboundedReceiver<Value>,
+    mut binary: mpsc::UnboundedReceiver<Vec<u8>>,
     mut frames: watch::Receiver<Option<Value>>,
     ping_every: Duration,
 ) where
@@ -30,6 +32,7 @@ pub(super) async fn write_out<S>(
                 Some(v) => WsMessage::Text(v.to_string()),
                 None => break,
             },
+            Some(bytes) = binary.recv() => WsMessage::Binary(bytes),
             _ = ping.tick() => WsMessage::Ping(Vec::new()),
             changed = frames.changed(), if watching => {
                 if changed.is_err() {
@@ -74,7 +77,13 @@ mod tests {
         let (sink, mut link) = link::channel::<WsMessage>(0);
         let (out, out_rx) = mpsc::unbounded_channel();
         let (viewer, frames) = Viewer::new(out.clone());
-        let writer = tokio::spawn(write_out(sink, out_rx, frames, NEVER));
+        let writer = tokio::spawn(write_out(
+            sink,
+            out_rx,
+            mpsc::unbounded_channel().1,
+            frames,
+            NEVER,
+        ));
 
         for n in 0..1000 {
             assert!(viewer.frame(json!({ "type": "browser_frame", "n": n })));
@@ -114,7 +123,13 @@ mod tests {
         let (sink, mut link) = link::channel::<WsMessage>(8);
         let (out, out_rx) = mpsc::unbounded_channel();
         let (viewer, frames) = Viewer::new(out.clone());
-        let writer = tokio::spawn(write_out(sink, out_rx, frames, NEVER));
+        let writer = tokio::spawn(write_out(
+            sink,
+            out_rx,
+            mpsc::unbounded_channel().1,
+            frames,
+            NEVER,
+        ));
 
         viewer.frame(json!({ "type": "browser_frame" }));
         viewer.clear();
@@ -132,7 +147,13 @@ mod tests {
         let (sink, mut link) = link::channel::<WsMessage>(8);
         let (out, out_rx) = mpsc::unbounded_channel();
         let (viewer, frames) = Viewer::new(out.clone());
-        let writer = tokio::spawn(write_out(sink, out_rx, frames, Duration::from_secs(20)));
+        let writer = tokio::spawn(write_out(
+            sink,
+            out_rx,
+            mpsc::unbounded_channel().1,
+            frames,
+            Duration::from_secs(20),
+        ));
 
         tokio::time::sleep(Duration::from_secs(19)).await;
         assert!(link.try_recv().is_err(), "pinged early");

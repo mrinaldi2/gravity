@@ -1,0 +1,5 @@
+{
+  "code": "review.independent",
+  "text": "The reviewer can't be the assignee.",
+  "fix": "Pick another reviewer."
+}

@@ -1,0 +1,18 @@
+{
+  "projectId": "p1",
+  "kind": "TEMPLATE_KIND_ITEM_TYPE",
+  "name": "feature",
+  "version": 1,
+  "body": {
+    "sections": [
+      "Problem",
+      "Proposed behaviour",
+      "Out of scope"
+    ],
+    "required": [
+      "acceptance_criteria",
+      "platforms",
+      "size"
+    ]
+  }
+}

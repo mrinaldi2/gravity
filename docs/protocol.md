@@ -39,6 +39,29 @@ when bots can spawn temporary workers (`temporary` on bots, `repo` on projects,
 `set_project_repo`, `list_workers`, `cancel_worker`, the `workers_updated` push;
 see [workers](workers.md)), and `permission_profiles` when projects carry a permission profile and bots their extras (`set_project_permission_profile`, `set_bot_permission_extras`).
 
+`hello_ok.contracts` maps each typed surface to its contract version, e.g.
+`{"board": 1}`. Those surfaces are defined once in protobuf under
+`proto/hermes/<surface>/v1/` (ADR-001): Rust is generated at build time by
+`crates/bus/build.rs`, TypeScript by `pnpm --dir apps/desktop proto:gen` into
+`apps/desktop/src/protocol/gen/`, and Swift in the iOS repo from vendored copies.
+Golden proto-JSON fixtures live in `crates/bus/fixtures/<surface>/`. A client may
+send its own `"contracts"` map in `hello`. Within a version, changes follow
+protobuf's compatibility rules; when `buf breaking` fails, the version is bumped.
+
+`hello_ok.encodings` lists the binary encodings the daemon accepts, today
+`["proto"]`. Text frames stay this JSON protocol. A binary frame carries one
+`hermes.wire.v1.Envelope` (`req_id` plus a `body` oneof per typed surface) and
+is answered with an `Envelope` under the same `req_id`. No surface is served in
+binary yet, so every envelope is answered with an `Error` body.
+
+`contracts: {surface: N}` is the **highest** version each side speaks, and it
+stays an integer forever. A side that still serves older versions adds
+`contracts_min: {surface: M}` (absent means M = N). The effective version per
+surface is `min(client N, daemon N)`, and it must be at least both sides' M.
+If no version fits, that surface is unavailable (its UI is hidden with "update
+the app" or "update Hermes"); the connection itself is not refused. Only
+`protocol_version` refuses a connection.
+
 or `{ "type": "error", "req_id": "1", "code": "auth_failed" | "unsupported_version", "message": "..." }`
 followed by close.
 

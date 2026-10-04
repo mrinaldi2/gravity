@@ -8,6 +8,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "typecheck": "tsc --noEmit",
+    "proto:gen": "node scripts/proto.mjs",
+    "proto:check": "node scripts/proto.mjs --check",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "format": "oxfmt",
@@ -39,6 +41,9 @@
     "react-markdown": "^10.1.0"
   },
   "devDependencies": {
+    "@bufbuild/buf": "^1.73.0",
+    "@bufbuild/protobuf": "^2.16.0",
+    "@bufbuild/protoc-gen-es": "^2.16.0",
     "@ladle/react": "^5.1.1",
     "@playwright/test": "^1.62.1",
     "@posthog/rollup-plugin": "^1.5.1",

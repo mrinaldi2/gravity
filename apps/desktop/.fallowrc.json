@@ -12,5 +12,13 @@
       "implements": "ScriptedWebSocket",
       "members": ["*"]
     }
-  ]
+  ],
+  "ignoreExports": [
+    {
+      "file": "src/protocol/gen/**",
+      "exports": ["*"]
+    }
+  ],
+  "ignoreDependencies": ["@bufbuild/buf", "@bufbuild/protoc-gen-es", "@xterm/headless"],
+  "ignoreFindings": ["src/protocol/gen/**"]
 }

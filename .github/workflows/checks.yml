@@ -85,3 +85,42 @@ jobs:
       # deploy workflow relies on before publishing the Worker.
       - name: check
         run: pnpm check
+
+  contract:
+    name: wire contract (buf)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # buf breaking compares against main.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+
+      - name: Install desktop dependencies
+        working-directory: apps/desktop
+        run: pnpm install --frozen-lockfile
+
+      # buf lint, then the committed TypeScript in src/protocol/gen must match
+      # what buf generates from proto/. Rust is generated at build time and
+      # the fixtures are decoded by cargo test and vitest in the tests workflow.
+      - name: Lint and generation drift
+        working-directory: apps/desktop
+        run: pnpm proto:check
+
+      # A breaking change needs a contract version bump (ADR-001 §1).
+      - name: Breaking changes against main
+        run: |
+          if git cat-file -e origin/main:buf.yaml 2>/dev/null; then
+            apps/desktop/node_modules/.bin/buf breaking --against ".git#ref=origin/main"
+          else
+            echo "main has no protos yet; nothing to compare"
+          fi

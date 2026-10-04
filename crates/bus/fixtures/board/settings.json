@@ -1,0 +1,26 @@
+{
+  "projectId": "p1",
+  "key": "H",
+  "nextSeq": 22,
+  "staleAfterHours": 24,
+  "requiredMachines": {
+    "daemon": {
+      "values": [
+        "mac"
+      ]
+    },
+    "desktop": {
+      "values": [
+        "mac",
+        "win-pc"
+      ]
+    },
+    "ios": {
+      "values": [
+        "iphone"
+      ]
+    }
+  },
+  "homeDaemonId": "d-mac",
+  "version": "3"
+}

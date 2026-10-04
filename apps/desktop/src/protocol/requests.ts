@@ -22,6 +22,8 @@ export type ClientRequestBody =
       readonly client: string;
       /** Optional behaviours this client supports, e.g. `permission_cards`. */
       readonly features?: readonly string[];
+      /** The typed contract versions this client speaks (see contracts.ts). */
+      readonly contracts?: Readonly<Record<string, number>>;
     }
   | { readonly type: "list_projects" }
   | { readonly type: "create_project"; readonly name: string }

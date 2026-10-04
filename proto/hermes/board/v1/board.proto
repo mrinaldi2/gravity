@@ -1,0 +1,299 @@
+// The board surface, contract version 1 (H-017, H-020 §1.1, ADR-001 §1).
+//
+// The single source of truth: Rust (prost), TypeScript (protobuf-es) and
+// Swift (swift-protobuf) are generated from this file. Additive changes keep
+// the version; `buf breaking` failing means bump `hello_ok.contracts.board`.
+// Requests, responses and pushes join these entities in B4.
+syntax = "proto3";
+
+package hermes.board.v1;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+// The canonical category a column maps to. Guards and metrics key on it, so
+// renaming or splitting a column never changes the rules.
+enum ColumnCategory {
+  COLUMN_CATEGORY_UNSPECIFIED = 0;
+  COLUMN_CATEGORY_INBOX = 1;
+  COLUMN_CATEGORY_READY = 2;
+  COLUMN_CATEGORY_DOING = 3;
+  COLUMN_CATEGORY_REVIEW = 4;
+  COLUMN_CATEGORY_VERIFY = 5;
+  COLUMN_CATEGORY_APPROVAL = 6;
+  COLUMN_CATEGORY_DEPLOYING = 7;
+  COLUMN_CATEGORY_DONE = 8;
+  COLUMN_CATEGORY_CANCELLED = 9;
+}
+
+// What a column's WIP limit counts.
+enum WipScope {
+  WIP_SCOPE_UNSPECIFIED = 0;
+  WIP_SCOPE_COLUMN = 1;
+  WIP_SCOPE_PER_ASSIGNEE = 2;
+}
+
+// A bot's role in a project's way of working.
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_LEAD = 1;
+  ROLE_COACH = 2;
+  ROLE_DEVOPS = 3;
+  ROLE_REVIEWER_ARCH = 4;
+  ROLE_REVIEWER_UX = 5;
+  ROLE_TESTER = 6;
+  ROLE_DEV = 7;
+}
+
+enum ItemType {
+  ITEM_TYPE_UNSPECIFIED = 0;
+  ITEM_TYPE_EPIC = 1;
+  ITEM_TYPE_FEATURE = 2;
+  ITEM_TYPE_BUG = 3;
+  ITEM_TYPE_SPIKE = 4;
+  ITEM_TYPE_CHORE = 5;
+}
+
+// Where an item's change lands; decides who must verify it.
+enum Platform {
+  PLATFORM_UNSPECIFIED = 0;
+  PLATFORM_DESKTOP = 1;
+  PLATFORM_IOS = 2;
+  PLATFORM_DAEMON = 3;
+  PLATFORM_INFRA = 4;
+}
+
+// L is allowed only in the inbox: it must be split before it is ready.
+enum Size {
+  SIZE_UNSPECIFIED = 0;
+  SIZE_S = 1;
+  SIZE_M = 2;
+  SIZE_L = 3;
+}
+
+enum Priority {
+  PRIORITY_UNSPECIFIED = 0;
+  PRIORITY_P0 = 1;
+  PRIORITY_P1 = 2;
+  PRIORITY_P2 = 3;
+  PRIORITY_P3 = 4;
+}
+
+// A bot's part on one item, beyond the assignee.
+enum PersonRole {
+  PERSON_ROLE_UNSPECIFIED = 0;
+  PERSON_ROLE_REVIEWER = 1;
+  PERSON_ROLE_VERIFIER = 2;
+}
+
+enum VerificationResult {
+  VERIFICATION_RESULT_UNSPECIFIED = 0;
+  VERIFICATION_RESULT_PASS = 1;
+  VERIFICATION_RESULT_FAIL = 2;
+  VERIFICATION_RESULT_BLOCKED = 3;
+}
+
+enum LinkKind {
+  LINK_KIND_UNSPECIFIED = 0;
+  LINK_KIND_TASK = 1;
+  LINK_KIND_DECISION = 2;
+  LINK_KIND_ARTIFACT = 3;
+  LINK_KIND_BRANCH = 4;
+  LINK_KIND_PR = 5;
+  LINK_KIND_MEETING = 6;
+  LINK_KIND_ITEM_BLOCKS = 7;
+  LINK_KIND_ITEM_RELATES = 8;
+  LINK_KIND_ITEM_DUPLICATES = 9;
+}
+
+// What an item-history event records. Metrics are computed from these.
+enum ItemEventKind {
+  ITEM_EVENT_KIND_UNSPECIFIED = 0;
+  ITEM_EVENT_KIND_CREATED = 1;
+  ITEM_EVENT_KIND_MOVED = 2;
+  ITEM_EVENT_KIND_EDITED = 3;
+  ITEM_EVENT_KIND_COMMENTED = 4;
+  ITEM_EVENT_KIND_LINKED = 5;
+  ITEM_EVENT_KIND_ASSIGNED = 6;
+  ITEM_EVENT_KIND_BLOCKED = 7;
+  ITEM_EVENT_KIND_RANKED = 8;
+}
+
+enum TemplateKind {
+  TEMPLATE_KIND_UNSPECIFIED = 0;
+  TEMPLATE_KIND_ITEM_TYPE = 1;
+  TEMPLATE_KIND_MEETING_TYPE = 2;
+}
+
+// Machines, as a map value (map values cannot be repeated).
+message StringList {
+  repeated string values = 1;
+}
+
+// One project's board configuration.
+message BoardSettings {
+  string project_id = 1;
+  // Item id prefix: "H" gives "H-017".
+  string key = 2;
+  // The next item number; ids are never reused.
+  uint32 next_seq = 3;
+  uint32 stale_after_hours = 4;
+  // Machines that must verify each platform, keyed by the platform's wire
+  // name ("desktop"), since map keys cannot be enums.
+  map<string, StringList> required_machines = 5;
+  // The daemon that holds the board; linked computers forward to it.
+  string home_daemon_id = 6;
+  uint64 version = 7;
+}
+
+message BoardColumn {
+  string project_id = 1;
+  string key = 2;
+  string name = 3;
+  uint32 ord = 4;
+  ColumnCategory category = 5;
+  optional uint32 wip_limit = 6;
+  WipScope wip_scope = 7;
+  bool visible = 8;
+}
+
+message ProjectRole {
+  string project_id = 1;
+  Role role = 2;
+  string bot_id = 3;
+  // The machine a tester verifies on.
+  optional string machine = 4;
+}
+
+// Set while an item is blocked: a flag, not a column.
+message Blocked {
+  // The blocking item, when it is one.
+  optional string by = 1;
+  string reason = 2;
+  google.protobuf.Timestamp since = 3;
+}
+
+message AcceptanceCriterion {
+  uint32 idx = 1;
+  string text = 2;
+  bool checked = 3;
+  optional string checked_by = 4;
+  optional google.protobuf.Timestamp checked_at = 5;
+  // Where it was checked, for platform criteria.
+  optional string machine = 6;
+}
+
+message ItemPerson {
+  string bot_id = 1;
+  PersonRole role = 2;
+}
+
+message ItemVerification {
+  string machine = 1;
+  VerificationResult result = 2;
+  string by = 3;
+  google.protobuf.Timestamp at = 4;
+  optional string note = 5;
+}
+
+// A work item in full, as the item drawer shows it.
+message Item {
+  // "H-017"; immutable.
+  string id = 1;
+  uint32 seq = 2;
+  ItemType type = 3;
+  string title = 4;
+  // Markdown, filled from the type's template.
+  string description = 5;
+  repeated Platform platforms = 6;
+  optional Size size = 7;
+  Priority priority = 8;
+  // Fractional-index key: order within the backlog.
+  string rank = 9;
+  string column_key = 10;
+  ColumnCategory category = 11;
+  optional Blocked blocked = 12;
+  optional string assignee = 13;
+  optional string parent_id = 14;
+  optional string release_id = 15;
+  repeated string labels = 16;
+  repeated AcceptanceCriterion acceptance_criteria = 17;
+  repeated ItemPerson people = 18;
+  repeated ItemVerification verifications = 19;
+  string created_by = 20;
+  google.protobuf.Timestamp created_at = 21;
+  google.protobuf.Timestamp updated_at = 22;
+  google.protobuf.Timestamp state_entered_at = 23;
+  optional google.protobuf.Timestamp done_at = 24;
+  // Optimistic concurrency: every mutation names the version it read.
+  uint64 version = 25;
+}
+
+// The compact form a board column lists; the drawer fetches the Item.
+message ItemCard {
+  string id = 1;
+  ItemType type = 2;
+  string title = 3;
+  Priority priority = 4;
+  optional Size size = 5;
+  string rank = 6;
+  string column_key = 7;
+  optional string assignee = 8;
+  repeated Platform platforms = 9;
+  repeated string labels = 10;
+  bool blocked = 11;
+  bool stale = 12;
+  uint32 ac_checked = 13;
+  uint32 ac_total = 14;
+  uint64 version = 15;
+}
+
+message ItemLink {
+  string item_id = 1;
+  LinkKind kind = 2;
+  // What the link points at: a task id, a branch name, another item id…
+  string ref = 3;
+  optional string label = 4;
+  string created_by = 5;
+  google.protobuf.Timestamp at = 6;
+}
+
+message ItemComment {
+  string id = 1;
+  string item_id = 2;
+  string author = 3;
+  string body = 4;
+  optional string reply_to = 5;
+  google.protobuf.Timestamp at = 6;
+}
+
+// One append-only history entry.
+message ItemEvent {
+  int64 id = 1;
+  string item_id = 2;
+  google.protobuf.Timestamp at = 3;
+  // The actor as stored: `user`, `bot:<id>` or `device:<id>`.
+  string actor = 4;
+  ItemEventKind kind = 5;
+  optional string from = 6;
+  optional string to = 7;
+  optional string field = 8;
+  optional string note = 9;
+}
+
+message Template {
+  string project_id = 1;
+  TemplateKind kind = 2;
+  string name = 3;
+  uint32 version = 4;
+  // Sections and required fields; its shape is the template's own.
+  google.protobuf.Struct body = 5;
+}
+
+// A guard a move does not meet yet, with what would fix it. The UI shows these
+// texts as they are and never re-implements a rule.
+message Unmet {
+  string code = 1;
+  string text = 2;
+  optional string fix = 3;
+}

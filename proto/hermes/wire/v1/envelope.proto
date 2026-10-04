@@ -1,0 +1,22 @@
+// What a WebSocket binary frame carries (ADR-001 §1). Text frames stay the
+// legacy JSON protocol v2; typed surfaces travel in binary frames, which a
+// client uses only when `hello_ok.encodings` includes "proto".
+syntax = "proto3";
+
+package hermes.wire.v1;
+
+message Envelope {
+  // Correlates a response with its request, as `req_id` does in JSON frames.
+  uint64 req_id = 1;
+  // One arm per typed surface's requests, responses and pushes; the board's
+  // land in B4. Field numbers below 16 are kept for the busiest arms.
+  oneof body {
+    Error error = 15;
+  }
+}
+
+message Error {
+  // A stable code, as in JSON error frames ("unsupported", "invalid_request").
+  string code = 1;
+  string message = 2;
+}
