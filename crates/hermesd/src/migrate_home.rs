@@ -22,6 +22,10 @@
 //! The daemon must be stopped: `service install` stops the old agent first,
 //! and the migration checks both lock files before it moves anything.
 
+mod disk;
+mod preflight;
+#[cfg(test)]
+mod resume_tests;
 mod rollback;
 mod sql;
 mod state;
@@ -31,17 +35,16 @@ mod tests;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{bail, Context};
 
+pub use preflight::dry_run;
+use preflight::{daemon_stopped, preflight};
 pub use rollback::rollback;
 pub use state::{Action, State, Step, STATE_FILE};
 
 use crate::config::Config;
-
-/// Space kept free beyond the backup itself.
-const DISK_MARGIN: u64 = 512 * 1024 * 1024;
 
 /// What to migrate: the old home, the new one, and the user home whose
 /// `~/.claude/projects` holds the transcripts.
@@ -148,7 +151,7 @@ fn note_move(plan: &Plan, state: &mut State) {
 /// nothing after it runs and nothing more is saved.
 fn crash_point(_at: &str) -> anyhow::Result<()> {
     #[cfg(test)]
-    if tests::CRASH_AT.with(|at| at.borrow().as_deref() == Some(_at)) {
+    if resume_tests::CRASH_AT.with(|at| at.borrow().as_deref() == Some(_at)) {
         bail!("injected crash at {_at}");
     }
     Ok(())
@@ -187,114 +190,6 @@ pub fn refuse_unmigrated(cfg: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Everything a run would touch, and anything that would stop it.
-pub fn dry_run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<bool> {
-    let state = plan.state()?;
-    let mut blockers = preflight(plan, state.as_ref());
-    writeln!(
-        out,
-        "migrate {} -> {}",
-        plan.from.display(),
-        plan.to.display()
-    )?;
-    if let Some(state) = &state {
-        writeln!(out, "resuming; done so far: {:?}", state.steps)?;
-    }
-    let home = if state.as_ref().is_some_and(|s| s.done(Step::Move)) {
-        &plan.to
-    } else {
-        &plan.from
-    };
-    for (old, new) in steps::renamed_files() {
-        if home.join(&old).exists() {
-            writeln!(out, "rename    {} -> {}", old.display(), new.display())?;
-        }
-    }
-    let db = home.join("bus.sqlite");
-    if db.is_file() {
-        for (column, rows) in sql::count(&db, &plan.path_pairs())? {
-            writeln!(out, "rewrite   {column}: {rows} row(s)")?;
-        }
-    }
-    let transcripts = steps::transcript_dirs(plan)?;
-    let mut needed = steps::tree_size(&db) + DISK_MARGIN;
-    for (old, new) in &transcripts {
-        needed += steps::tree_size(old);
-        writeln!(out, "rename    {} -> {}", old.display(), new.display())?;
-    }
-    writeln!(
-        out,
-        "link      {} -> {}",
-        plan.from.display(),
-        plan.to.display()
-    )?;
-    match steps::free_bytes(home) {
-        Some(free) => {
-            writeln!(
-                out,
-                "disk      {} MB free, {} MB needed",
-                free >> 20,
-                needed >> 20
-            )?;
-            if free < needed && !state.as_ref().is_some_and(|s| s.done(Step::Backup)) {
-                blockers.push(format!(
-                    "not enough free disk for the backup ({} MB)",
-                    needed >> 20
-                ));
-            }
-        }
-        None => writeln!(
-            out,
-            "disk      free space unknown; backup needs {} MB",
-            needed >> 20
-        )?,
-    }
-    for blocker in &blockers {
-        writeln!(out, "blocked   {blocker}")?;
-    }
-    Ok(blockers.is_empty())
-}
-
-/// Reasons a run cannot start or resume.
-fn preflight(plan: &Plan, state: Option<&State>) -> Vec<String> {
-    let mut blockers = Vec::new();
-    if state.is_some_and(State::is_complete) {
-        blockers.push("already migrated".to_string());
-        return blockers;
-    }
-    let moved = state.is_some_and(|s| s.done(Step::Move));
-    if !moved {
-        if !plan.source_is_real_home() {
-            blockers.push(format!("{} holds no daemon home", plan.from.display()));
-        }
-        if let Ok(mut entries) = std::fs::read_dir(&plan.to) {
-            if entries.next().is_some() {
-                blockers.push(format!("{} exists and is not empty", plan.to.display()));
-            }
-        }
-    }
-    let home = if moved { &plan.to } else { &plan.from };
-    if home.exists() && daemon_stopped(home, Duration::ZERO).is_err() {
-        blockers.push(format!("a daemon is running against {}", home.display()));
-    }
-    blockers
-}
-
-/// Waits up to `wait` for both the old and the new daemon to let go of
-/// `home`. The locks are released again before anything moves.
-fn daemon_stopped(home: &Path, wait: Duration) -> anyhow::Result<()> {
-    let deadline = Instant::now() + wait;
-    loop {
-        // `lock` claims both the old and the new lock file.
-        let held = crate::home::lock(home).map(drop);
-        match held {
-            Ok(()) => return Ok(()),
-            Err(error) if Instant::now() >= deadline => return Err(error),
-            Err(_) => std::thread::sleep(Duration::from_millis(200)),
-        }
-    }
-}
-
 /// Runs (or resumes) the migration. Idempotent: completed steps are skipped.
 pub fn run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<State> {
     let mut state = match plan.state()? {
@@ -315,6 +210,10 @@ pub fn run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<State> {
         &plan.from
     };
     daemon_stopped(home, Duration::from_secs(30)).context("the daemon is still running")?;
+    #[cfg(windows)]
+    if !state.done(Step::Move) {
+        disk::probe_move(&plan.from)?;
+    }
     state.save()?;
     for step in Step::ALL {
         if state.done(step) {

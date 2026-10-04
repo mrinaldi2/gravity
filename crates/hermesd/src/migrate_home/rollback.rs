@@ -5,7 +5,12 @@ use std::time::Duration;
 
 use anyhow::{bail, Context};
 
-use super::{daemon_stopped, sql, steps, Action, Plan, Step, STATE_FILE};
+use super::{daemon_stopped, disk, sql, steps, Action, Plan, Step, STATE_FILE};
+
+fn is_real_dir(path: &std::path::Path) -> bool {
+    path.symlink_metadata()
+        .is_ok_and(|meta| meta.is_dir() && !meta.file_type().is_symlink())
+}
 
 /// Reverses a migration from its log, newest change first, and leaves the
 /// old home exactly where it was. The daemon must be stopped; after the new
@@ -28,6 +33,18 @@ pub fn rollback(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<()> {
                 sql::apply(&plan.to.join("bus.sqlite"), &plan.reversed(), false)?;
             }
             Action::Rename { from, to } => {
+                // Recreated by a process that kept writing to the old path
+                // (the Symlink step refuses to run over it): set aside,
+                // never merged into or deleted.
+                if from == &plan.from && is_real_dir(from) {
+                    let aside = disk::set_aside(from)?;
+                    writeln!(
+                        out,
+                        "{} was recreated after the move; moved it to {}, merge it by hand",
+                        from.display(),
+                        aside.display()
+                    )?;
+                }
                 if from.symlink_metadata().is_ok() {
                     bail!(
                         "cannot move {} back: {} exists",

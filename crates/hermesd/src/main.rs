@@ -185,6 +185,8 @@ async fn main() -> anyhow::Result<()> {
     // Before the port: two daemons on one home run two supervisors against one
     // database, and negotiation means a collision no longer stops the second.
     let _home_lock = hermesd::home::lock(&cfg.home)?;
+    #[cfg(unix)]
+    hermesd::holders::track_sessions_in(&cfg.home);
     let policy = hermesd::server::port_policy(&cfg, negotiate_port);
     let bound = hermesd::server::bind(&cfg.bind, cfg.port, policy).await?;
     cfg.port = bound.port();

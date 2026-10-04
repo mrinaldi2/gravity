@@ -185,8 +185,54 @@ pub fn stop_legacy(paths: &ServicePaths) -> anyhow::Result<Option<Legacy>> {
         return Ok(None);
     }
     tracing::info!(plist = %plist.display(), "stopping the pre-rename agent");
-    bootout(&plist)?;
+    let homes = [
+        paths.home.clone(),
+        paths.user_home.join(crate::brand::LEGACY_HOME_DIR_NAME),
+    ];
+    bootout_stopping_sessions(&plist, crate::brand::LEGACY_LAUNCHD_LABEL, &homes)?;
     Ok(Some(Legacy { plist }))
+}
+
+/// Boots the agent out, then stops the process groups its daemon started
+/// that still hold one of `homes`. Bot sessions do not die with the daemon:
+/// a detached child (an MCP server, a browser) outlives the terminal hangup,
+/// and the home migration would find it holding the home. Groups are read
+/// both from the daemon's process tree before the bootout and from the
+/// sessions it recorded (a 0.14 daemon records none). Anything else holding
+/// the home is left for the migration to report.
+fn bootout_stopping_sessions(plist: &Path, label: &str, homes: &[PathBuf]) -> anyhow::Result<()> {
+    let mut groups = agent_pid(label)
+        .map(crate::holders::descendant_groups)
+        .unwrap_or_default();
+    bootout(plist)?;
+    for home in homes.iter().filter(|home| home.is_dir()) {
+        groups.extend(crate::holders::recorded_sessions(home));
+        match crate::holders::stop_owned(home, &groups) {
+            Ok(stopped) if !stopped.is_empty() => {
+                tracing::info!(?stopped, home = %home.display(), "stopped bot session groups")
+            }
+            Ok(_) => {}
+            Err(error) => tracing::warn!(%error, "could not stop bot session groups"),
+        }
+    }
+    Ok(())
+}
+
+/// The PID launchd reports for a loaded agent, if it is running.
+fn agent_pid(label: &str) -> Option<u32> {
+    let target = format!("{}/{label}", gui_domain().ok()?);
+    let out = Command::new("launchctl")
+        .args(["print", &target])
+        .output()
+        .ok()?;
+    parse_agent_pid(&String::from_utf8_lossy(&out.stdout))
+}
+
+fn parse_agent_pid(print: &str) -> Option<u32> {
+    print
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("pid = "))
+        .and_then(|pid| pid.trim().parse().ok())
 }
 
 /// Loads the old agent again, after a failed migration was rolled back.
@@ -265,7 +311,9 @@ fn bootout(plist: &Path) -> anyhow::Result<()> {
 pub fn reload(paths: &ServicePaths) -> anyhow::Result<()> {
     let plist = paths.plist_path();
     tracing::info!(plist = %plist.display(), "restarting hermesd agent");
-    if let Err(e) = bootout(&plist) {
+    if let Err(e) =
+        bootout_stopping_sessions(&plist, LAUNCHD_LABEL, std::slice::from_ref(&paths.home))
+    {
         tracing::warn!(error = %e, "bootout failed; continuing to bootstrap");
     }
     bootstrap(&plist)?;

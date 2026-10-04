@@ -119,24 +119,6 @@ fn copy_tree(src: &Path, dst: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Bytes under `path`, following no links.
-pub fn tree_size(path: &Path) -> u64 {
-    let Ok(meta) = path.symlink_metadata() else {
-        return 0;
-    };
-    if !meta.is_dir() {
-        return meta.len();
-    }
-    std::fs::read_dir(path)
-        .map(|entries| {
-            entries
-                .flatten()
-                .map(|entry| tree_size(&entry.path()))
-                .sum()
-        })
-        .unwrap_or(0)
-}
-
 /// Claude Code's directories for anything that ran under the old home's
 /// `projects/`, paired with their names under the new home. Keyed by the same
 /// mangling the chat and activity readers use, under both the home as given
@@ -207,18 +189,56 @@ pub fn move_transcripts(plan: &Plan, state: &mut State) -> anyhow::Result<usize>
 
 /// Leaves `from` pointing at `to`, so paths written down before the move
 /// (bot memory, scripts, the previous release on rollback) still resolve.
+///
+/// A real directory at `from` means something wrote there by absolute path
+/// after the move; every path written down earlier would now reach it
+/// instead of the moved home. That fails the step, so the run rolls back.
 pub fn symlink(plan: &Plan, state: &mut State) -> anyhow::Result<()> {
-    if plan.from.symlink_metadata().is_ok() {
-        state.warn(format!(
-            "{} exists; no compatibility link made",
-            plan.from.display()
-        ));
-        return Ok(());
+    if let Ok(meta) = plan.from.symlink_metadata() {
+        let ours = meta.file_type().is_symlink()
+            && plan.from.canonicalize().ok() == plan.to.canonicalize().ok();
+        if !ours {
+            bail!(
+                "{} was recreated after the move (holding: {}); a process still \
+                 writes there. Stop it and retry",
+                plan.from.display(),
+                entries(&plan.from)
+            );
+        }
+        // Linked by a run killed before it could log the link.
+        if state
+            .actions
+            .iter()
+            .any(|a| matches!(a, Action::Symlink { .. }))
+        {
+            return Ok(());
+        }
+    } else {
+        make_link(&plan.to, &plan.from)?;
     }
-    make_link(&plan.to, &plan.from)?;
     state.record(Action::Symlink {
         path: plan.from.clone(),
     })
+}
+
+/// The first few names in `dir`, for an error message.
+fn entries(dir: &Path) -> String {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    let more = names.len().saturating_sub(10);
+    names.truncate(10);
+    match (names.is_empty(), more) {
+        (true, _) => "nothing".to_string(),
+        (false, 0) => names.join(", "),
+        (false, more) => format!("{}, and {more} more", names.join(", ")),
+    }
 }
 
 #[cfg(unix)]
@@ -313,20 +333,4 @@ fn find_worktrees(dir: &Path, depth: usize, found: &mut Vec<PathBuf>) {
             find_worktrees(&entry.path(), depth + 1, found);
         }
     }
-}
-
-/// Free bytes on the filesystem holding `path`, where that can be asked.
-#[cfg(unix)]
-pub fn free_bytes(path: &Path) -> Option<u64> {
-    use std::os::unix::ffi::OsStrExt;
-    let c = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
-    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
-    // SAFETY: `c` is a valid NUL-terminated path and `stat` a writable struct.
-    let rc = unsafe { libc::statvfs(c.as_ptr(), &mut stat) };
-    (rc == 0).then(|| stat.f_bavail as u64 * stat.f_frsize as u64)
-}
-
-#[cfg(windows)]
-pub fn free_bytes(_path: &Path) -> Option<u64> {
-    None
 }

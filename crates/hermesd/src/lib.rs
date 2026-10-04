@@ -16,6 +16,7 @@ pub mod db;
 pub mod decisions;
 pub mod delivery;
 pub mod events;
+pub mod holders;
 pub mod home;
 pub mod mcp;
 pub mod messaging;

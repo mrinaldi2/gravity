@@ -124,3 +124,13 @@ fn install_from_the_installed_path_skips_the_copy() {
     install(&p.bin_path(), &p).unwrap();
     assert!(p.bin_path().exists());
 }
+
+#[test]
+fn agent_pid_is_read_from_launchctl_print() {
+    let print = "gui/501/x = {\n\tactive count = 1\n\tpid = 4242\n\tstate = running\n}";
+    assert_eq!(parse_agent_pid(print), Some(4242));
+    assert_eq!(
+        parse_agent_pid("gui/501/x = {\n\tstate = not running\n}"),
+        None
+    );
+}
