@@ -39,6 +39,15 @@ when bots can spawn temporary workers (`temporary` on bots, `repo` on projects,
 `set_project_repo`, `list_workers`, `cancel_worker`, the `workers_updated` push;
 see [workers](workers.md)).
 
+`hello_ok.contracts` maps each typed surface to its contract version, e.g.
+`{"board": 1}`. Those surfaces are defined once as Rust types in
+`crates/bus/src/contract/`, exported as JSON Schema to `contract/<surface>.schema.json`
+(`cargo run -p bus --features schema --bin contract`) and generated into
+TypeScript (`apps/desktop/src/protocol/generated/`) and Swift; golden fixtures
+live in `crates/bus/fixtures/<surface>/`. A client may send its own
+`"contracts"` map in `hello`. An additive change keeps a surface's number; a
+breaking change bumps it.
+
 or `{ "type": "error", "req_id": "1", "code": "auth_failed" | "unsupported_version", "message": "..." }`
 followed by close.
 

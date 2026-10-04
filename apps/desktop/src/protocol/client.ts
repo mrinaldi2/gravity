@@ -14,6 +14,7 @@ import type { PushHandlerSets } from "./push";
 import { dispatchPush, emptyHandlers } from "./push";
 import type { ClientRequestBody, FireBody, RequestBody } from "./requests";
 import { isReply, parseServerMessage, replyIs } from "./wire";
+import { CONTRACTS } from "./contracts";
 
 interface PendingRequest {
   readonly resolve: (reply: ServerReply) => void;
@@ -254,6 +255,7 @@ export class DaemonClient implements DaemonApi {
         // This app shows permission cards, so the daemon may hold a bot's
         // prompt for it instead of leaving it to the terminal.
         features: ["permission_cards"],
+        contracts: CONTRACTS,
       });
       if (replyIs(reply, "error")) {
         throw new DaemonError(reply.code, reply.message);

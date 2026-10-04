@@ -85,3 +85,40 @@ jobs:
       # deploy workflow relies on before publishing the Worker.
       - name: check
         run: pnpm check
+
+  contract:
+    name: wire contract drift
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+
+      - name: Install desktop dependencies
+        working-directory: apps/desktop
+        run: pnpm install --frozen-lockfile
+
+      # The schema code builds only with `schema`, outside the default gates.
+      - name: Lint the contract crate
+        run: cargo clippy -p bus --features schema --all-targets -- -D warnings
+
+      # contract/*.schema.json must match the Rust types, and the generated
+      # TypeScript must match the schema.
+      - name: Schema is current
+        run: cargo run -q -p bus --features schema --bin contract -- --check
+
+      - name: TypeScript is current
+        working-directory: apps/desktop
+        run: pnpm contract:check

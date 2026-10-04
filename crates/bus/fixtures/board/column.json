@@ -1,0 +1,10 @@
+{
+  "project_id": "p1",
+  "key": "review",
+  "name": "Review",
+  "ord": 3,
+  "category": "review",
+  "wip_limit": 2,
+  "wip_scope": "column",
+  "visible": true
+}

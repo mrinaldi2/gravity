@@ -304,11 +304,23 @@ fn handshake(
         let _ = app.db.touch_device(id);
     }
     let cap_strs: Vec<&str> = caps.iter().map(|c| c.as_str()).collect();
+    // Per-surface contract versions (H-020 §1.4). Nothing is served by
+    // version yet; a client on another version is logged so the first
+    // breaking change has evidence of who still speaks the old one.
+    let contracts = bus::contract::versions();
+    if let Some(theirs) = req.get("contracts").and_then(Value::as_object) {
+        for (surface, version) in theirs {
+            if version.as_u64() != contracts.get(surface).map(|v| u64::from(*v)) {
+                tracing::info!(%surface, client = %version, "client speaks another contract version");
+            }
+        }
+    }
     let _ = out.send(json!({
         "type": "hello_ok", "req_id": req_id,
         "protocol_version": PROTOCOL_VERSION,
         "server_version": DAEMON_VERSION,
         "capabilities": crate::app::CAPABILITIES,
+        "contracts": contracts,
         "grants": cap_strs,
         "device_id": device_id,
         // The id peers learn, so a client paired with two daemons can tell

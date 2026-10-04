@@ -12,5 +12,6 @@
   "playwright": {
     "config": ["playwright.config.ts"],
     "entry": ["tests/visual/*.spec.ts"]
-  }
+  },
+  "ignore": ["src/protocol/generated/**"]
 }

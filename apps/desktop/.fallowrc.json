@@ -12,5 +12,11 @@
       "implements": "ScriptedWebSocket",
       "members": ["*"]
     }
+  ],
+  "ignoreExports": [
+    {
+      "file": "src/protocol/generated/**",
+      "exports": ["*"]
+    }
   ]
 }

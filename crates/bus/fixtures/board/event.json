@@ -1,0 +1,11 @@
+{
+  "id": 41,
+  "item_id": "H-017",
+  "at": "2026-10-04T09:12:33Z",
+  "actor": "bot:b-team-lead",
+  "kind": "moved",
+  "from": "ready",
+  "to": "doing",
+  "field": null,
+  "note": null
+}

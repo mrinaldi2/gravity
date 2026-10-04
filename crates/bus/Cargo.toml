@@ -10,3 +10,14 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
+schemars = { version = "1", features = ["chrono04"], optional = true }
+
+[features]
+# JSON Schema for the wire contract. Off in the daemon build, so schemars is
+# a build tool here, not something hermesd ships.
+schema = ["dep:schemars"]
+
+[[bin]]
+name = "contract"
+path = "src/bin/contract.rs"
+required-features = ["schema"]

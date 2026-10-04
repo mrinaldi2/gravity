@@ -31,6 +31,10 @@ run(python, ["-m", "unittest", "discover", "-s", "scripts", "-p", "test_notices.
 run("cargo", ["fmt", "--all", "--check"]);
 run("cargo", ["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]);
 run("cargo", ["test", "--workspace", "--all-targets"]);
+// The wire contract: schema code only builds with `schema`, and the committed
+// schema must match the Rust types.
+run("cargo", ["clippy", "-p", "bus", "--features", "schema", "--all-targets", "--", "-D", "warnings"]);
+run("cargo", ["run", "-q", "-p", "bus", "--features", "schema", "--bin", "contract", "--", "--check"]);
 
 const files = spawnSync("git", ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.rs", "*.css"], { encoding: "utf8" });
 if (files.status !== 0) {
@@ -44,6 +48,7 @@ for (const file of files.stdout.split("\0").filter(Boolean)) {
   }
 }
 run("pnpm", ["--dir", "apps/desktop", "check"]);
+run("pnpm", ["--dir", "apps/desktop", "contract:check"]);
 run("pnpm", ["--dir", "apps/desktop", "build"]);
 run("pnpm", ["--dir", "apps/marketing", "check"]);
 if (windows) {

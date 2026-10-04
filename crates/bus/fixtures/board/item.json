@@ -1,0 +1,70 @@
+{
+  "id": "H-017",
+  "seq": 17,
+  "type": "feature",
+  "title": "Board and dashboard",
+  "description": "## Problem\nWork is tracked in a markdown file.",
+  "platforms": [
+    "daemon",
+    "desktop"
+  ],
+  "size": "M",
+  "priority": "P1",
+  "rank": "a0V",
+  "column_key": "doing",
+  "category": "doing",
+  "blocked": {
+    "by": "H-016",
+    "reason": "Needs the contract scaffold",
+    "since": "2026-10-04T09:12:33Z"
+  },
+  "assignee": "b-desktop-dev",
+  "parent_id": null,
+  "release_id": null,
+  "labels": [
+    "dashboard"
+  ],
+  "acceptance_criteria": [
+    {
+      "idx": 0,
+      "text": "Cards move between columns",
+      "checked": true,
+      "checked_by": "b-tester",
+      "checked_at": "2026-10-04T09:12:33Z",
+      "machine": "mac"
+    },
+    {
+      "idx": 1,
+      "text": "A refused move says why",
+      "checked": false,
+      "checked_by": null,
+      "checked_at": null,
+      "machine": null
+    }
+  ],
+  "people": [
+    {
+      "bot_id": "b-architect",
+      "role": "reviewer"
+    },
+    {
+      "bot_id": "b-tester",
+      "role": "verifier"
+    }
+  ],
+  "verifications": [
+    {
+      "machine": "mac",
+      "result": "pass",
+      "by": "b-tester",
+      "at": "2026-10-04T09:12:33Z",
+      "note": null
+    }
+  ],
+  "created_by": "user",
+  "created_at": "2026-10-04T09:12:33Z",
+  "updated_at": "2026-10-04T09:12:33Z",
+  "state_entered_at": "2026-10-04T09:12:33Z",
+  "done_at": null,
+  "version": 7
+}

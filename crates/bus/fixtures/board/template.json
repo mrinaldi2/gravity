@@ -1,0 +1,18 @@
+{
+  "project_id": "p1",
+  "kind": "item_type",
+  "name": "feature",
+  "version": 1,
+  "body": {
+    "sections": [
+      "Problem",
+      "Proposed behaviour",
+      "Out of scope"
+    ],
+    "required": [
+      "acceptance_criteria",
+      "platforms",
+      "size"
+    ]
+  }
+}

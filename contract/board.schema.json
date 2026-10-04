@@ -1,0 +1,853 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "AcceptanceCriterion": {
+      "properties": {
+        "checked": {
+          "type": "boolean"
+        },
+        "checked_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checked_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "idx": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "machine": {
+          "description": "Where it was checked, for platform criteria.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "idx",
+        "text",
+        "checked"
+      ],
+      "type": "object"
+    },
+    "Blocked": {
+      "description": "Set while an item is blocked: a flag, not a column.",
+      "properties": {
+        "by": {
+          "description": "The blocking item, when it is one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reason",
+        "since"
+      ],
+      "type": "object"
+    },
+    "BoardColumn": {
+      "properties": {
+        "category": {
+          "$ref": "#/definitions/ColumnCategory"
+        },
+        "key": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ord": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "visible": {
+          "type": "boolean"
+        },
+        "wip_limit": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "wip_scope": {
+          "$ref": "#/definitions/WipScope"
+        }
+      },
+      "required": [
+        "project_id",
+        "key",
+        "name",
+        "ord",
+        "category",
+        "wip_scope",
+        "visible"
+      ],
+      "type": "object"
+    },
+    "BoardSettings": {
+      "description": "One project's board configuration.",
+      "properties": {
+        "home_daemon_id": {
+          "description": "The daemon that holds the board; linked computers forward to it.",
+          "type": "string"
+        },
+        "key": {
+          "description": "Item id prefix: \"H\" gives \"H-017\".",
+          "type": "string"
+        },
+        "next_seq": {
+          "description": "The next item number; ids are never reused.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "required_machines": {
+          "additionalProperties": false,
+          "description": "Machines that must verify each platform, e.g. `{\"desktop\": [\"mac\", \"win-pc\"]}`.",
+          "properties": {
+            "daemon": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "desktop": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "infra": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "ios": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "stale_after_hours": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "key",
+        "next_seq",
+        "stale_after_hours",
+        "required_machines",
+        "home_daemon_id",
+        "version"
+      ],
+      "type": "object"
+    },
+    "ColumnCategory": {
+      "description": "The canonical category a column maps to. Guards and metrics key on it, so\nrenaming or splitting a column never changes the rules.",
+      "enum": [
+        "inbox",
+        "ready",
+        "doing",
+        "review",
+        "verify",
+        "approval",
+        "deploying",
+        "done",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "Item": {
+      "description": "A work item in full, as the item drawer shows it.",
+      "properties": {
+        "acceptance_criteria": {
+          "items": {
+            "$ref": "#/definitions/AcceptanceCriterion"
+          },
+          "type": "array"
+        },
+        "assignee": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "blocked": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Blocked"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "category": {
+          "$ref": "#/definitions/ColumnCategory"
+        },
+        "column_key": {
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "created_by": {
+          "type": "string"
+        },
+        "description": {
+          "description": "Markdown, filled from the type's template.",
+          "type": "string"
+        },
+        "done_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "\"H-017\"; immutable.",
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "parent_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "people": {
+          "items": {
+            "$ref": "#/definitions/ItemPerson"
+          },
+          "type": "array"
+        },
+        "platforms": {
+          "items": {
+            "$ref": "#/definitions/Platform"
+          },
+          "type": "array"
+        },
+        "priority": {
+          "$ref": "#/definitions/Priority"
+        },
+        "rank": {
+          "description": "Fractional-index key: order within the backlog.",
+          "type": "string"
+        },
+        "release_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "seq": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Size"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state_entered_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/ItemType"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "verifications": {
+          "items": {
+            "$ref": "#/definitions/ItemVerification"
+          },
+          "type": "array"
+        },
+        "version": {
+          "description": "Optimistic concurrency: every mutation names the version it read.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "seq",
+        "type",
+        "title",
+        "description",
+        "platforms",
+        "priority",
+        "rank",
+        "column_key",
+        "category",
+        "labels",
+        "acceptance_criteria",
+        "people",
+        "verifications",
+        "created_by",
+        "created_at",
+        "updated_at",
+        "state_entered_at",
+        "version"
+      ],
+      "type": "object"
+    },
+    "ItemCard": {
+      "description": "The compact form a board column lists; the drawer fetches the [`Item`].",
+      "properties": {
+        "ac_checked": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ac_total": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "assignee": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "blocked": {
+          "type": "boolean"
+        },
+        "column_key": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "platforms": {
+          "items": {
+            "$ref": "#/definitions/Platform"
+          },
+          "type": "array"
+        },
+        "priority": {
+          "$ref": "#/definitions/Priority"
+        },
+        "rank": {
+          "type": "string"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Size"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stale": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/ItemType"
+        },
+        "version": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "title",
+        "priority",
+        "rank",
+        "column_key",
+        "platforms",
+        "labels",
+        "blocked",
+        "stale",
+        "ac_checked",
+        "ac_total",
+        "version"
+      ],
+      "type": "object"
+    },
+    "ItemComment": {
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "item_id": {
+          "type": "string"
+        },
+        "reply_to": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "item_id",
+        "author",
+        "body",
+        "at"
+      ],
+      "type": "object"
+    },
+    "ItemEvent": {
+      "description": "One append-only history entry.",
+      "properties": {
+        "actor": {
+          "description": "The actor as stored: `user`, `bot:<id>` or `device:<id>`.",
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "field": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "from": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "item_id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/definitions/ItemEventKind"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "item_id",
+        "at",
+        "actor",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ItemEventKind": {
+      "description": "What an item-history event records. Metrics are computed from these.",
+      "enum": [
+        "created",
+        "moved",
+        "edited",
+        "commented",
+        "linked",
+        "assigned",
+        "blocked",
+        "ranked"
+      ],
+      "type": "string"
+    },
+    "ItemLink": {
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "created_by": {
+          "type": "string"
+        },
+        "item_id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/definitions/LinkKind"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ref": {
+          "description": "What the link points at: a task id, a branch name, another item id…",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "kind",
+        "ref",
+        "created_by",
+        "at"
+      ],
+      "type": "object"
+    },
+    "ItemPerson": {
+      "properties": {
+        "bot_id": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/definitions/PersonRole"
+        }
+      },
+      "required": [
+        "bot_id",
+        "role"
+      ],
+      "type": "object"
+    },
+    "ItemType": {
+      "enum": [
+        "epic",
+        "feature",
+        "bug",
+        "spike",
+        "chore"
+      ],
+      "type": "string"
+    },
+    "ItemVerification": {
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "machine": {
+          "type": "string"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "result": {
+          "$ref": "#/definitions/VerificationResult"
+        }
+      },
+      "required": [
+        "machine",
+        "result",
+        "by",
+        "at"
+      ],
+      "type": "object"
+    },
+    "LinkKind": {
+      "enum": [
+        "task",
+        "decision",
+        "artifact",
+        "branch",
+        "pr",
+        "meeting",
+        "item:blocks",
+        "item:relates",
+        "item:duplicates"
+      ],
+      "type": "string"
+    },
+    "PersonRole": {
+      "description": "A bot's part on one item, beyond the assignee.",
+      "enum": [
+        "reviewer",
+        "verifier"
+      ],
+      "type": "string"
+    },
+    "Platform": {
+      "description": "Where an item's change lands; decides who must verify it.",
+      "enum": [
+        "desktop",
+        "ios",
+        "daemon",
+        "infra"
+      ],
+      "type": "string"
+    },
+    "Priority": {
+      "enum": [
+        "P0",
+        "P1",
+        "P2",
+        "P3"
+      ],
+      "type": "string"
+    },
+    "ProjectRole": {
+      "properties": {
+        "bot_id": {
+          "type": "string"
+        },
+        "machine": {
+          "description": "The machine a tester verifies on.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/definitions/Role"
+        }
+      },
+      "required": [
+        "project_id",
+        "role",
+        "bot_id"
+      ],
+      "type": "object"
+    },
+    "Role": {
+      "description": "A bot's role in a project's way of working.",
+      "enum": [
+        "lead",
+        "coach",
+        "devops",
+        "reviewer.arch",
+        "reviewer.ux",
+        "tester",
+        "dev"
+      ],
+      "type": "string"
+    },
+    "Size": {
+      "description": "L is allowed only in the inbox: it must be split before it is ready.",
+      "enum": [
+        "S",
+        "M",
+        "L"
+      ],
+      "type": "string"
+    },
+    "Template": {
+      "properties": {
+        "body": {
+          "description": "Sections and required fields; its shape is the template's own."
+        },
+        "kind": {
+          "$ref": "#/definitions/TemplateKind"
+        },
+        "name": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "project_id",
+        "kind",
+        "name",
+        "version",
+        "body"
+      ],
+      "type": "object"
+    },
+    "TemplateKind": {
+      "enum": [
+        "item_type",
+        "meeting_type"
+      ],
+      "type": "string"
+    },
+    "Unmet": {
+      "description": "A guard a move does not meet yet, with what would fix it. The UI shows these\ntexts as they are and never re-implements a rule.",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "fix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "text"
+      ],
+      "type": "object"
+    },
+    "VerificationResult": {
+      "enum": [
+        "pass",
+        "fail",
+        "blocked"
+      ],
+      "type": "string"
+    },
+    "WipScope": {
+      "description": "What a column's WIP limit counts.",
+      "enum": [
+        "column",
+        "per_assignee"
+      ],
+      "type": "string"
+    }
+  },
+  "description": "Every board entity, so one schema (and the generated TypeScript and\nSwift) names them all. Not a message on the wire.",
+  "properties": {
+    "card": {
+      "$ref": "#/definitions/ItemCard"
+    },
+    "column": {
+      "$ref": "#/definitions/BoardColumn"
+    },
+    "comment": {
+      "$ref": "#/definitions/ItemComment"
+    },
+    "event": {
+      "$ref": "#/definitions/ItemEvent"
+    },
+    "item": {
+      "$ref": "#/definitions/Item"
+    },
+    "link": {
+      "$ref": "#/definitions/ItemLink"
+    },
+    "role": {
+      "$ref": "#/definitions/ProjectRole"
+    },
+    "settings": {
+      "$ref": "#/definitions/BoardSettings"
+    },
+    "template": {
+      "$ref": "#/definitions/Template"
+    },
+    "unmet": {
+      "$ref": "#/definitions/Unmet"
+    }
+  },
+  "required": [
+    "settings",
+    "column",
+    "role",
+    "item",
+    "card",
+    "link",
+    "comment",
+    "event",
+    "template",
+    "unmet"
+  ],
+  "title": "BoardContract",
+  "type": "object",
+  "x-contract": {
+    "name": "board",
+    "version": 1
+  }
+}

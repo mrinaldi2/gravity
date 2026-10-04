@@ -88,6 +88,8 @@ async fn set_config_requires_the_control_capability() {
         .request(json!({"type": "hello", "protocol_version": 2, "token": token}))
         .await;
     assert_eq!(hello["type"], "hello_ok");
+    // Each typed surface advertises its contract version (H-020 §1.4).
+    assert_eq!(hello["contracts"]["board"], 1, "{hello}");
 
     // Reading the config is fine on a read grant; writing it is not.
     let read = ro.request(json!({"type": "get_config"})).await;

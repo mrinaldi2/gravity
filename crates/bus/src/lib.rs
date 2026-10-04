@@ -4,6 +4,7 @@
 //! daemon and (via `docs/protocol.md`) the desktop client.
 
 pub mod avatar;
+pub mod contract;
 pub mod envelope;
 pub mod names;
 pub mod schema;

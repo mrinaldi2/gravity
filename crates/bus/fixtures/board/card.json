@@ -1,0 +1,22 @@
+{
+  "id": "H-017",
+  "type": "feature",
+  "title": "Board and dashboard",
+  "priority": "P1",
+  "size": "M",
+  "rank": "a0V",
+  "column_key": "doing",
+  "assignee": "b-desktop-dev",
+  "platforms": [
+    "daemon",
+    "desktop"
+  ],
+  "labels": [
+    "dashboard"
+  ],
+  "blocked": true,
+  "stale": false,
+  "ac_checked": 1,
+  "ac_total": 2,
+  "version": 7
+}
