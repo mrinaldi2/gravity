@@ -8,10 +8,10 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context;
 
-use super::super::sequence::{Host, Identity};
-use super::super::stage::remove_if_present;
 use super::reap::{reap, stop_daemon};
-use super::task::{task_name, task_name_in, write_task_files};
+use super::sequence::{Host, Identity};
+use super::stage::remove_if_present;
+use super::task::{task_name, task_name_for, task_name_in, write_task_files};
 use super::ServicePaths;
 
 /// The Task Scheduler calls an install makes, plus the version and health
@@ -24,10 +24,10 @@ pub(super) trait Schtasks {
     /// that interval reports success while IgnoreNew drops it.
     fn wait_ended(&self, name: &str) -> anyhow::Result<()>;
     fn version_of(&self, binary: &Path) -> anyhow::Result<String> {
-        super::super::stage::version_of(binary)
+        super::stage::version_of(binary)
     }
     fn wait_healthy(&self, home: &Path, port: u16, version: &str) -> anyhow::Result<()> {
-        super::super::sequence::wait_healthy(home, port, version)
+        super::sequence::wait_healthy(home, port, version)
     }
 }
 
@@ -80,7 +80,7 @@ impl<'a, S: Schtasks> TaskScheduler<'a, S> {
         for home in homes {
             let marker = home.join(crate::brand::legacy_daemon_file("-task.xml"));
             if marker.is_file() && !legacy.iter().any(|(_, known)| *known == home) {
-                let name = task_name_in(crate::brand::LEGACY_WINDOWS_TASK, &home)?;
+                let name = legacy_name(&schtasks, &home)?;
                 legacy.push((name, home));
             }
         }
@@ -143,6 +143,29 @@ impl<'a, S: Schtasks> TaskScheduler<'a, S> {
             }
         }
     }
+}
+
+/// The pre-rename task for `home`, named from its resolved path as 0.14
+/// did. Once the home has moved (an install that died after the migration),
+/// `home` is a junction that resolves to the new home; the task is then
+/// found under the path it had before.
+fn legacy_name(schtasks: &impl Schtasks, home: &Path) -> anyhow::Result<String> {
+    let label = crate::brand::LEGACY_WINDOWS_TASK;
+    let resolved = task_name_in(label, home)?;
+    if schtasks.exists(&resolved) {
+        return Ok(resolved);
+    }
+    let unresolved = format!(r"\\?\{}", std::path::absolute(home)?.display());
+    let before = task_name_for(
+        label,
+        &crate::permissions::user_sid()?,
+        &unresolved.to_lowercase(),
+    );
+    Ok(if schtasks.exists(&before) {
+        before
+    } else {
+        resolved
+    })
 }
 
 impl<S: Schtasks> Host for TaskScheduler<'_, S> {
