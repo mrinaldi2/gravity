@@ -28,6 +28,8 @@ pub(super) struct Worker {
     pub turn_started: Option<Instant>,
     /// Paths a file change item touches, by item id, for its approval card.
     pub file_changes: HashMap<String, Vec<String>>,
+    /// The thread's model, which token usage updates do not name.
+    pub model: String,
 }
 
 pub(super) fn run(
@@ -59,6 +61,7 @@ pub(super) fn run(
         completed_turns: 0,
         turn_started: None,
         file_changes: HashMap::new(),
+        model: String::new(),
     };
     let result = worker.initialize();
     match result {
@@ -202,6 +205,9 @@ impl Worker {
             }
             result => result?,
         };
+        if let Some(model) = reply.get("model").and_then(Value::as_str) {
+            self.model = model.to_string();
+        }
         self.thread = reply
             .pointer("/thread/id")
             .and_then(Value::as_str)
@@ -358,6 +364,16 @@ impl Worker {
                 self.hook("PostToolUse", None);
             }
             "serverRequest/resolved" => self.resolved(params.get("requestId")),
+            "model/rerouted" => {
+                if let Some(model) = params.get("toModel").and_then(Value::as_str) {
+                    self.model = model.to_string();
+                }
+            }
+            "thread/tokenUsage/updated" | "account/rateLimits/updated" => {
+                if let Some(report) = crate::usage::codex::parse(method, params, &self.model) {
+                    let _ = self.events.send(SessionEvent::Usage(report));
+                }
+            }
             "error" => {
                 if let Some(message) = params.pointer("/error/message").and_then(Value::as_str) {
                     self.output(&format!("\n[Codex] {message}\n"));

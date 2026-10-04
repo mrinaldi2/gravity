@@ -62,11 +62,28 @@ pub(super) async fn consume(
                     key,
                 });
             }
+            SessionEvent::Usage(report) => sup.on_usage(&bot_id, &report),
         }
     }
 }
 
 impl Supervisor {
+    /// Writes what a runtime reported about its usage into the ledger.
+    fn on_usage(&self, bot_id: &str, report: &crate::usage::codex::Report) {
+        let cfg = &self.inner.cfg.usage;
+        if !cfg.enabled {
+            return;
+        }
+        let db = &self.inner.db;
+        let result = db.get_bot(bot_id).and_then(|bot| match bot {
+            Some(bot) => crate::usage::codex::record(db, cfg, &bot, report, chrono::Utc::now()),
+            None => Ok(()),
+        });
+        if let Err(e) = result {
+            tracing::debug!(bot_id, error = %e, "recording runtime usage failed");
+        }
+    }
+
     /// Hands the owner's answer to the session that asked.
     pub fn answer_runtime_permission(
         &self,

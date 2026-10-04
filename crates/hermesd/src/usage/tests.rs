@@ -8,9 +8,10 @@ use bus::Bot;
 use crate::chat::usage_lines::{self, Tokens};
 use crate::db::{Db, UsageMinute};
 
-use super::{ingest_file, UsageConfig};
+use super::{codex, ingest_file, UsageConfig};
 
 const STREAMED: &str = include_str!("fixtures/streamed.jsonl");
+const CODEX: &str = include_str!("fixtures/codex_app_server.jsonl");
 
 struct Fixture {
     db: Db,
@@ -210,4 +211,161 @@ fn usage_tables_arrive_at_schema_version_24() {
         db.get_meta("schema_version").unwrap().as_deref(),
         Some("24")
     );
+}
+
+/// Every usage report in the Codex fixture, as the worker would forward it.
+fn codex_reports(model: &str) -> Vec<codex::Report> {
+    CODEX
+        .lines()
+        .filter_map(|line| {
+            let v: serde_json::Value = serde_json::from_str(line).unwrap();
+            codex::parse(v["method"].as_str().unwrap(), &v["params"], model)
+        })
+        .collect()
+}
+
+fn record_codex(f: &Fixture, reports: &[codex::Report], cfg: &UsageConfig) {
+    let at = chrono::DateTime::parse_from_rfc3339("2026-10-04T09:00:30Z")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    for report in reports {
+        codex::record(&f.db, cfg, &f.bot, report, at).unwrap();
+    }
+}
+
+#[test]
+fn codex_notifications_parse_into_reports() {
+    let reports = codex_reports("gpt-6.1-sol");
+    // Three token updates and two account updates; the other limit id and
+    // the non-usage notifications are skipped.
+    assert_eq!(reports.len(), 5, "{reports:?}");
+    let codex::Report::Tokens {
+        thread_id,
+        model,
+        total,
+        last,
+    } = &reports[0]
+    else {
+        panic!("{:?}", reports[0]);
+    };
+    assert_eq!(
+        (thread_id.as_str(), model.as_str()),
+        ("thr_1", "gpt-6.1-sol")
+    );
+    assert_eq!(total, last);
+    // Cached tokens are carved out of the input count.
+    assert_eq!(
+        *last,
+        Tokens {
+            input: 9077,
+            cache_write: 0,
+            cache_write_1h: 0,
+            cache_read: 158464,
+            output: 88,
+            reasoning: 32,
+        }
+    );
+    let codex::Report::Limits(windows) = &reports[1] else {
+        panic!("{:?}", reports[1]);
+    };
+    assert_eq!(windows.len(), 2);
+    assert_eq!((windows[0].window, windows[0].used_percent), ("5h", 13.0));
+    assert_eq!(
+        (windows[1].window, windows[1].used_percent),
+        ("weekly", 17.0)
+    );
+    assert_eq!(
+        windows[1].resets_at.unwrap().to_rfc3339(),
+        "2026-09-01T17:39:10+00:00"
+    );
+}
+
+#[test]
+fn a_weekly_only_account_reports_its_window_as_primary() {
+    let params = serde_json::json!({ "rateLimits": {
+        "limitId": "codex",
+        "primary": { "usedPercent": 15.0, "windowDurationMins": 10080, "resetsAt": 1789810691 },
+        "secondary": null
+    }});
+    let Some(codex::Report::Limits(windows)) =
+        codex::parse("account/rateLimits/updated", &params, "")
+    else {
+        panic!("no limits");
+    };
+    assert_eq!(windows.len(), 1);
+    assert_eq!(
+        (windows[0].window, windows[0].used_percent),
+        ("weekly", 15.0)
+    );
+}
+
+#[test]
+fn codex_tokens_count_the_growth_of_the_thread_total() {
+    let f = fixture();
+    record_codex(&f, &codex_reports("gpt-6.1-sol"), &UsageConfig::default());
+    let rows = rows(&f);
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let r = &rows[0];
+    assert_eq!(
+        (r.provider.as_str(), r.model.as_str()),
+        ("codex", "gpt-6.1-sol")
+    );
+    assert_eq!(r.minute, "2026-10-04T09:00:00Z");
+    // Turn 1 once (its repeat adds nothing), then turn 2's growth.
+    assert_eq!(
+        (r.input, r.cache_write, r.cache_read, r.output, r.reasoning),
+        (9077 + 3122, 1200, 333744, 428, 216)
+    );
+    // No built-in price for Codex models: tokens count at zero units.
+    assert_eq!(r.units, 0.0);
+}
+
+#[test]
+fn a_resumed_thread_replaying_its_total_counts_nothing_again() {
+    let f = fixture();
+    let reports = codex_reports("gpt-6.1-sol");
+    record_codex(&f, &reports, &UsageConfig::default());
+    // A restarted session resumes the thread and reports the same total.
+    record_codex(&f, &reports[3..4], &UsageConfig::default());
+    assert_eq!(rows(&f)[0].output, 428);
+}
+
+#[test]
+fn configured_codex_prices_apply() {
+    let f = fixture();
+    let cfg: UsageConfig = toml::from_str(
+        r#"
+        [prices."gpt-6"]
+        input = 1.0
+        cache_write = 1.0
+        cache_write_1h = 1.0
+        cache_read = 0.1
+        output = 10.0
+        "#,
+    )
+    .unwrap();
+    record_codex(&f, &codex_reports("gpt-6.1-sol")[..1], &cfg);
+    let units = (9077.0 + 158464.0 * 0.1 + 88.0 * 10.0) / 1e6;
+    assert!((rows(&f)[0].units - units).abs() < 1e-12);
+}
+
+#[test]
+fn codex_windows_are_observed_and_sparse_updates_keep_the_rest() {
+    let f = fixture();
+    record_codex(&f, &codex_reports("gpt-6.1-sol"), &UsageConfig::default());
+    let windows = f.db.provider_windows("codex").unwrap();
+    assert_eq!(windows.len(), 2, "{windows:?}");
+    let five = &windows[0];
+    assert_eq!(
+        (five.window.as_str(), five.used_percent),
+        ("5h", Some(14.0))
+    );
+    assert_eq!(five.source, "observed");
+    // The last update left the weekly window out; it keeps 17%.
+    let weekly = &windows[1];
+    assert_eq!(
+        (weekly.window.as_str(), weekly.used_percent),
+        ("weekly", Some(17.0))
+    );
+    assert!(f.db.provider_windows("claude").unwrap().is_empty());
 }

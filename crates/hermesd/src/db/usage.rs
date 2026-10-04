@@ -1,6 +1,8 @@
-//! The usage ledger (migration 24): per-minute token totals per bot, and
-//! how far each transcript has been counted. See [`crate::usage`].
+//! The usage ledger (migration 24): per-minute token totals per bot, how
+//! far each transcript has been counted, and each provider's account
+//! windows. See [`crate::usage`].
 
+use chrono::{DateTime, Utc};
 use rusqlite::{params, OptionalExtension};
 
 use super::Db;
@@ -30,6 +32,22 @@ pub struct UsageCursor {
     pub offset: u64,
     /// Recently counted message ids and what was counted for each.
     pub seen_json: String,
+}
+
+/// One account window of a provider (`5h` or `weekly`), as last observed or
+/// estimated.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProviderWindow {
+    pub provider: String,
+    pub window: String,
+    pub used_percent: Option<f64>,
+    pub resets_at: Option<DateTime<Utc>>,
+    /// `observed` (the provider said so), `estimated` (computed from units
+    /// and a calibrated capacity) or `reported` (a peer's figure).
+    pub source: String,
+    /// Cost units the window holds, calibrated at observed readings.
+    pub capacity_estimate: Option<f64>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl Db {
@@ -136,5 +154,65 @@ impl Db {
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
+    }
+
+    pub fn provider_window(
+        &self,
+        provider: &str,
+        window: &str,
+    ) -> anyhow::Result<Option<ProviderWindow>> {
+        Ok(self
+            .provider_windows(provider)?
+            .into_iter()
+            .find(|w| w.window == window))
+    }
+
+    /// A provider's windows, `5h` before `weekly`.
+    pub fn provider_windows(&self, provider: &str) -> anyhow::Result<Vec<ProviderWindow>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT provider, window, used_percent, resets_at, source, capacity_estimate,
+                    updated_at
+             FROM provider_window WHERE provider = ?1 ORDER BY window",
+        )?;
+        let rows = stmt
+            .query_map([provider], |r| {
+                Ok(ProviderWindow {
+                    provider: r.get(0)?,
+                    window: r.get(1)?,
+                    used_percent: r.get(2)?,
+                    resets_at: r.get::<_, Option<String>>(3)?.map(|s| super::parse_ts(&s)),
+                    source: r.get(4)?,
+                    capacity_estimate: r.get(5)?,
+                    updated_at: super::parse_ts(&r.get::<_, String>(6)?),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Writes a window's reading. The capacity estimate is kept unless
+    /// `w` carries one: a reading alone never forgets the calibration.
+    pub fn put_provider_window(&self, w: &ProviderWindow) -> anyhow::Result<()> {
+        self.lock().execute(
+            "INSERT INTO provider_window(provider, window, used_percent, resets_at, source,
+                 capacity_estimate, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(provider, window) DO UPDATE SET
+                 used_percent = excluded.used_percent, resets_at = excluded.resets_at,
+                 source = excluded.source,
+                 capacity_estimate = COALESCE(excluded.capacity_estimate, capacity_estimate),
+                 updated_at = excluded.updated_at",
+            params![
+                w.provider,
+                w.window,
+                w.used_percent,
+                w.resets_at.map(super::ts),
+                w.source,
+                w.capacity_estimate,
+                super::ts(w.updated_at),
+            ],
+        )?;
+        Ok(())
     }
 }

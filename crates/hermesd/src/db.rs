@@ -14,7 +14,7 @@ pub use decisions_list::DecisionFilter;
 pub use routines::RoutineLimits;
 pub use runs::NewRun;
 pub use signals::NewSignal;
-pub use usage::{UsageCursor, UsageMinute};
+pub use usage::{ProviderWindow, UsageCursor, UsageMinute};
 pub use workers::NewWorker;
 
 pub mod agent_talk;

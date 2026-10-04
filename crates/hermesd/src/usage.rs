@@ -2,6 +2,9 @@
 //! `usage_minute` (H-023 G1). Each scan reads what every local Claude Code
 //! bot appended since the last one; the chat pane's tailer only follows
 //! chats someone has open, so this keeps its own cursors.
+//!
+//! Codex bots report their tokens and the account's windows live, through
+//! their App Server connection; see [`codex`] (G2).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,6 +15,7 @@ use chrono::Utc;
 
 use crate::app::AppState;
 
+pub mod codex;
 mod ledger;
 mod prices;
 #[cfg(test)]

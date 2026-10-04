@@ -70,7 +70,7 @@ pub fn ingest_file(db: &Db, cfg: &UsageConfig, bot: &Bot, path: &Path) -> anyhow
 }
 
 /// The start of `at`'s minute, as stored.
-fn minute(at: DateTime<Utc>) -> String {
+pub(super) fn minute(at: DateTime<Utc>) -> String {
     at.with_second(0)
         .and_then(|t| t.with_nanosecond(0))
         .unwrap_or(at)

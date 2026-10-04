@@ -68,6 +68,9 @@ pub enum SessionEvent {
     PermissionGone {
         key: u64,
     },
+    /// Tokens or account windows the runtime reported, for the usage
+    /// ledger (Codex App Server notifications).
+    Usage(crate::usage::codex::Report),
 }
 
 /// The owner's answer to a runtime's permission request.
