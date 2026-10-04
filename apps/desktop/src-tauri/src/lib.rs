@@ -186,6 +186,7 @@ pub fn run() {
             shortcut::set_toggle_window_shortcut,
             daemon::daemon_health,
             daemon::install_local_daemon,
+            daemon::migration::home_migration_summary,
             daemon::local_daemon_is_managed,
             daemon::restart_local_daemon,
             daemon::local_daemon_port,

@@ -247,6 +247,22 @@ pub fn apply(db: &Path, pairs: &[(String, String)], migrated: bool) -> anyhow::R
     Ok(changed)
 }
 
+/// Bots the daemon runs here: live and not linked from a peer.
+pub fn live_bots(db: &Path) -> anyhow::Result<usize> {
+    let conn = Connection::open_with_flags(db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let mut filters = vec!["1"];
+    for (column, filter) in [
+        ("deleted_at", "deleted_at IS NULL"),
+        ("peer_id", "peer_id IS NULL"),
+    ] {
+        if has_column(&conn, "bot", column)? {
+            filters.push(filter);
+        }
+    }
+    let sql = format!("SELECT COUNT(*) FROM bot WHERE {}", filters.join(" AND "));
+    Ok(conn.query_row(&sql, [], |r| r.get::<_, i64>(0))? as usize)
+}
+
 /// Whether `meta.home_migrated` is set in the database at `db`.
 pub fn is_marked(db: &Path) -> anyhow::Result<bool> {
     let conn = Connection::open_with_flags(db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;

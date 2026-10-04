@@ -75,6 +75,19 @@ pub fn dry_run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<bool> {
             needed >> 20
         )?,
     }
+    // One line for whoever confirms the run (the desktop app shows it).
+    let bots = if db.is_file() {
+        sql::live_bots(&db)?
+    } else {
+        0
+    };
+    writeln!(
+        out,
+        "summary   Moves {} to {}, restarts {bots} bot(s), takes about 30 s, needs {} MB.",
+        plan.from.display(),
+        plan.to.display(),
+        needed >> 20
+    )?;
     for blocker in &blockers {
         writeln!(out, "blocked   {blocker}")?;
     }

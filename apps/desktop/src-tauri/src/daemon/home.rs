@@ -47,6 +47,42 @@ fn default_home(user_home: &Path) -> PathBuf {
     home
 }
 
+/// Mirrors `hermesd`'s `migrate_home::pending` for the default home: a real
+/// `~/.gravity` holding a database, or a run that stopped partway. Installing
+/// the service then moves the home and restarts every bot, so the app asks
+/// first. A home set by environment is migrated by hand, never by install.
+pub(crate) fn migration_pending(user_home: &Path) -> bool {
+    if ["THEHERMES_HOME", "GRAVITY_HOME"]
+        .iter()
+        .any(|name| std::env::var_os(name).is_some())
+    {
+        return false;
+    }
+    migration_pending_in(user_home)
+}
+
+fn migration_pending_in(user_home: &Path) -> bool {
+    let (home, legacy) = (
+        user_home.join(HOME_DIR_NAME),
+        user_home.join(LEGACY_HOME_DIR_NAME),
+    );
+    let state = [&home, &legacy]
+        .iter()
+        .map(|dir| dir.join("migrate-home.json"))
+        .find(|path| path.is_file());
+    if let Some(state) = state {
+        let completed = std::fs::read_to_string(state)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .is_some_and(|value| !value["completed_at"].is_null());
+        return !completed;
+    }
+    legacy
+        .symlink_metadata()
+        .is_ok_and(|meta| meta.is_dir() && !meta.file_type().is_symlink())
+        && legacy.join("bus.sqlite").is_file()
+}
+
 /// `hermesd<suffix>` in `home`, or `gravityd<suffix>` when only the
 /// pre-rename file is there.
 pub(crate) fn daemon_file(home: &Path, suffix: &str) -> PathBuf {
@@ -116,6 +152,25 @@ mod tests {
         assert_eq!(daemon_file(&root, ".port"), root.join("gravityd.port"));
         std::fs::write(root.join("hermesd.port"), "2\n").expect("new port");
         assert_eq!(daemon_file(&root, ".port"), root.join("hermesd.port"));
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn a_real_old_home_or_an_unfinished_run_is_a_pending_migration() {
+        let root = temp("pending");
+        assert!(!migration_pending_in(&root));
+        let legacy = root.join(".gravity");
+        std::fs::create_dir_all(&legacy).expect("old home");
+        assert!(!migration_pending_in(&root), "no database, nothing to move");
+        std::fs::write(legacy.join("bus.sqlite"), b"db").expect("db");
+        assert!(migration_pending_in(&root));
+
+        let new = root.join(".thehermes");
+        std::fs::rename(&legacy, &new).expect("moved");
+        std::fs::write(new.join("migrate-home.json"), r#"{"completed_at":null}"#).expect("state");
+        assert!(migration_pending_in(&root));
+        std::fs::write(new.join("migrate-home.json"), r#"{"completed_at":"now"}"#).expect("state");
+        assert!(!migration_pending_in(&root));
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 

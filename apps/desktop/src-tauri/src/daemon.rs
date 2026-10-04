@@ -52,15 +52,25 @@ fn sidecar_path_for_exe(exe: &Path) -> Result<PathBuf, String> {
 }
 
 mod home;
+pub(crate) mod migration;
 
 #[cfg(test)]
 use home::managed_markers;
-use home::{daemon_file, managed_daemon_is_installed};
+use home::{daemon_file, managed_daemon_is_installed, migration_pending};
 pub(crate) use home::{daemon_home, user_home};
 
 /// Runs the bundled sidecar's own `service <action>`, the same code path the
 /// CLI uses.
 fn run_bundled_service(action: &str, failure: &str) -> Result<(), String> {
+    let out = run_sidecar(&["service", action])?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("{failure}: {}", stderr.trim()));
+    }
+    Ok(())
+}
+
+fn run_sidecar(args: &[&str]) -> Result<std::process::Output, String> {
     let sidecar = sidecar_path()?;
     let mut command = std::process::Command::new(&sidecar);
     #[cfg(windows)]
@@ -68,15 +78,10 @@ fn run_bundled_service(action: &str, failure: &str) -> Result<(), String> {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    let out = command
-        .args(["service", action])
+    command
+        .args(args)
         .output()
-        .map_err(|err| format!("failed to run {}: {err}", sidecar.display()))?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("{failure}: {}", stderr.trim()));
-    }
-    Ok(())
+        .map_err(|err| format!("failed to run {}: {err}", sidecar.display()))
 }
 
 fn install_bundled_local_daemon() -> Result<(), String> {
@@ -130,17 +135,31 @@ fn reject_daemon_downgrade(current_version: Option<&str>) -> Result<(), String> 
     Ok(())
 }
 
+/// A migrating install moves the home and restarts every bot, so it runs
+/// only once the user confirmed the summary from [`home_migration_summary`].
+/// A headless `hermesd service install` asks nothing.
 #[tauri::command]
-pub fn install_local_daemon(current_version: Option<String>) -> Result<(), String> {
+pub fn install_local_daemon(
+    current_version: Option<String>,
+    confirmed_migration: Option<bool>,
+) -> Result<(), String> {
     reject_daemon_downgrade(current_version.as_deref())?;
+    if confirmed_migration != Some(true) && migration_pending(&user_home()?) {
+        return Err(
+            "updating the Hermes service moves your data to its new home; confirm it in the app first"
+                .to_string(),
+        );
+    }
     install_bundled_local_daemon()
 }
 
 /// Updates an app-managed launchd daemon, but never creates a local service
-/// for a machine that only connects to a remote daemon.
+/// for a machine that only connects to a remote daemon. An update that would
+/// migrate the home is left for the relaunched app, which asks first.
 pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
     let home = daemon_home()?;
-    if !managed_daemon_is_installed(&home, &user_home()?) {
+    let user_home = user_home()?;
+    if !managed_daemon_is_installed(&home, &user_home) || migration_pending(&user_home) {
         return Ok(());
     }
     install_bundled_local_daemon()

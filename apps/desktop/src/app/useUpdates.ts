@@ -4,6 +4,7 @@ import { captureException } from "../analytics";
 import { isLocalEndpoint } from "../protocol/connection";
 import type { ConnectionStatus, Endpoint } from "../protocol/connection";
 import { installLocalDaemon, probeDaemon } from "../setup";
+import { InstallCancelled } from "./homeMigration";
 import { isTauri } from "../tauri";
 import { checkForAppUpdate } from "../updater";
 import { compareVersions } from "../version";
@@ -123,6 +124,9 @@ export function useUpdates(addToast: AddToast, status: ConnectionStatus, endpoin
             label: "Update Hermes service",
             run: () => {
               installLocalDaemon(health.version).catch((error: unknown) => {
+                if (error instanceof InstallCancelled) {
+                  return;
+                }
                 captureException(error, "daemon_update");
                 const body = error instanceof Error ? error.message : "update failed";
                 addToast("error", "Couldn't update the Hermes service", body, { sticky: true });

@@ -80,6 +80,8 @@ fn a_dry_run_lists_the_work_and_changes_nothing() {
     assert!(out.contains("bot.instructions: 1 row(s)"), "{out}");
     assert!(out.contains(&claude_project_key(&f.new_ws)), "{out}");
     assert!(!out.contains("gravity-old"), "{out}");
+    assert!(out.contains("restarts 1 bot(s)"), "{out}");
+    assert!(out.contains("summary   Moves "), "{out}");
     assert!(f.plan.from.join("gravityd.toml").exists());
     assert!(!f.plan.to.exists());
     assert!(!f.plan.from.join(STATE_FILE).exists());
