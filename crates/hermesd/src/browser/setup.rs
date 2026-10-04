@@ -266,7 +266,10 @@ mod tests {
             assert_eq!(entry["args"][0], "/c");
             (entry["args"][1].as_str().expect("npx"), &entry["args"][3])
         } else {
-            (entry["command"].as_str().expect("command"), &entry["args"][1])
+            (
+                entry["command"].as_str().expect("command"),
+                &entry["args"][1],
+            )
         };
         assert!(npx.starts_with(node.to_str().expect("utf8")), "{npx}");
         assert_eq!(*package, cfg.browser.package);
