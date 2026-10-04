@@ -202,6 +202,11 @@ pub const INTERIM_SETTINGS_FILE: &str = "bot-settings.json";
 /// `brand::daemon_file`; once both branches land this can derive from it.)
 pub const CONFIG_FILES: [&str; 2] = ["gravityd.toml", "hermesd.toml"];
 
+/// The daemon home's folder name on either side of `migrate-home`. For one
+/// release the old name stays as a symlink to the new home, and the guard
+/// protects paths spelled through it too (CE-006 G1).
+pub const HOME_NAMES: [&str; 2] = [".gravity", ".thehermes"];
+
 /// The configured args without a hand-applied `--settings <file>` (the
 /// pre-H-031 setup), and that file's contents. Two `--settings` would fight;
 /// the profile's file carries the old one's rules instead.
