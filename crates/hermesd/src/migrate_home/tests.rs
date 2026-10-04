@@ -260,3 +260,40 @@ fn a_junction_survives_shell_characters_in_the_path() {
     assert!(steps::remove_link(&target).is_err());
     assert!(target.is_dir());
 }
+
+/// A live bot whose workspace the rewrite missed (here an upper-case
+/// spelling) would start under the old transcript key. The Database step
+/// fails instead, naming it, and the run can be rolled back. Windows
+/// compares paths loosely, so there the rewrite takes the variant.
+#[test]
+fn a_workspace_left_under_the_old_home_fails_the_database_step() {
+    let f = fixture();
+    let variant = f.old_ws.to_string_lossy().replace(".gravity", ".GRAVITY");
+    let conn = rusqlite::Connection::open(f.plan.from.join("bus.sqlite")).expect("conn");
+    for (id, name, deleted) in [("c", "shouty", None), ("d", "gone", Some("then"))] {
+        conn.execute(
+            "INSERT INTO bot(id, project_id, name, workspace_path, created_at, deleted_at)
+             VALUES (?1, 'p', ?2, ?3, 'now', ?4)",
+            rusqlite::params![id, name, variant, deleted],
+        )
+        .expect("bot");
+    }
+    drop(conn);
+
+    let result = run(&f.plan, &mut Vec::new());
+    if cfg!(windows) {
+        result.expect("migrated");
+        return;
+    }
+    let error = format!("{:#}", result.expect_err("stale workspace"));
+    assert!(error.contains("step Database"), "{error}");
+    assert!(error.contains("shouty"), "{error}");
+    assert!(!error.contains("gone"), "{error}");
+    // Nothing committed: the database still says not migrated.
+    assert!(!is_migrated(&f.plan.to));
+    rollback(&f.plan, &mut Vec::new()).expect("rollback");
+    assert_eq!(
+        workspace_path(&f.plan.from.join("bus.sqlite")),
+        f.old_ws.to_string_lossy()
+    );
+}

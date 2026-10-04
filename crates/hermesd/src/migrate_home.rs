@@ -94,6 +94,14 @@ impl Plan {
                 pairs.push(resolved);
             }
         }
+        // Git Bash and MSYS tools (and agents using them) write `/c/Users/…`.
+        if cfg!(windows) {
+            let msys: Vec<_> = pairs
+                .iter()
+                .filter_map(|(from, to)| Some((sql::msys_spelling(from)?, sql::msys_spelling(to)?)))
+                .collect();
+            pairs.extend(msys);
+        }
         pairs
     }
 
