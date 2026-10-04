@@ -153,7 +153,8 @@ fn an_interrupted_run_resumes_after_its_last_finished_step() {
     state
         .actions
         .retain(|action| !matches!(action, Action::Symlink { .. }));
-    std::fs::remove_file(&f.plan.from).expect("drop link");
+    // A junction on Windows, which `remove_file` refuses.
+    steps::remove_link(&f.plan.from).expect("drop link");
     state.save().expect("save");
 
     let state = run(&f.plan, &mut Vec::new()).expect("resume");
@@ -228,4 +229,27 @@ fn a_transcript_dir_already_under_the_new_name_is_merged() {
     assert!(early.join("s2.jsonl").exists());
     assert!(early.join("memory").is_dir());
     assert!(state.warnings.is_empty(), "{:?}", state.warnings);
+}
+
+/// cmd.exe runs `mklink`, so a user name with `&` or `^` must not split it,
+/// and removing the junction must leave its target alone.
+#[cfg(windows)]
+#[test]
+fn a_junction_survives_shell_characters_in_the_path() {
+    let root = tempfile::tempdir().expect("temporary dir");
+    let target = root.path().join("Test&User^1");
+    std::fs::create_dir(&target).expect("target");
+    std::fs::write(target.join("bus.sqlite"), b"db").expect("file");
+    let link = root.path().join("old&home");
+
+    steps::make_link(&target, &link).expect("junction");
+    assert!(link.symlink_metadata().expect("link").file_type().is_symlink());
+    assert_eq!(std::fs::read(link.join("bus.sqlite")).expect("through"), b"db");
+
+    steps::remove_link(&link).expect("remove junction");
+    assert!(link.symlink_metadata().is_err());
+    assert!(target.join("bus.sqlite").is_file());
+    // A real directory is never taken for a link.
+    assert!(steps::remove_link(&target).is_err());
+    assert!(target.is_dir());
 }

@@ -27,6 +27,30 @@ pub fn renamed_files() -> Vec<(PathBuf, PathBuf)> {
     files
 }
 
+/// Renames the home directory. On Windows a file anywhere under it that
+/// another process has open (an antivirus scan of the backup just written,
+/// the search indexer) fails the rename for a moment, so it is retried
+/// briefly; a program working in the home still fails it.
+pub fn move_home(from: &Path, to: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            match std::fs::rename(from, to) {
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::PermissionDenied
+                        && std::time::Instant::now() < deadline =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                }
+                result => return result,
+            }
+        }
+    }
+    #[cfg(not(windows))]
+    std::fs::rename(from, to)
+}
+
 /// Moves `from` to `to` and records it. A destination that already exists is
 /// never overwritten.
 pub fn rename(state: &mut State, from: &Path, to: &Path) -> anyhow::Result<()> {
@@ -206,11 +230,16 @@ fn make_link(target: &Path, link: &Path) -> anyhow::Result<()> {
 /// A directory junction: unlike a symlink it needs neither administrator
 /// rights nor developer mode.
 #[cfg(windows)]
-fn make_link(target: &Path, link: &Path) -> anyhow::Result<()> {
+pub(super) fn make_link(target: &Path, link: &Path) -> anyhow::Result<()> {
+    use std::os::windows::process::CommandExt;
+    // Quoted for cmd.exe itself: argument quoting only covers spaces, and a
+    // `&` or `^` in the user name would otherwise split the command.
     let out = std::process::Command::new("cmd.exe")
-        .args(["/C", "mklink", "/J"])
-        .arg(link)
-        .arg(target)
+        .raw_arg(format!(
+            "/C mklink /J \"{}\" \"{}\"",
+            link.display(),
+            target.display()
+        ))
         .output()
         .context("running mklink")?;
     anyhow::ensure!(
@@ -225,8 +254,9 @@ pub fn remove_link(path: &Path) -> anyhow::Result<()> {
     let Ok(meta) = path.symlink_metadata() else {
         return Ok(());
     };
-    // A junction reports as a directory; removing it never touches the target.
-    if meta.file_type().is_symlink() || cfg!(windows) {
+    // A junction reports as a symlink too. Windows removes a directory link
+    // with `remove_dir`, which never touches the target.
+    if meta.file_type().is_symlink() {
         if std::fs::remove_file(path).is_err() {
             std::fs::remove_dir(path)?;
         }

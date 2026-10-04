@@ -308,7 +308,7 @@ fn run_step(plan: &Plan, state: &mut State, step: Step) -> anyhow::Result<()> {
             }
             // The state file moves with the home; record the step's action
             // only once it has.
-            std::fs::rename(&plan.from, &plan.to).with_context(|| {
+            steps::move_home(&plan.from, &plan.to).with_context(|| {
                 format!("moving {} to {}", plan.from.display(), plan.to.display())
             })?;
             state.steps.push(Step::Move);
