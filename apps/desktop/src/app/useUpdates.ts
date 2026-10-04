@@ -42,7 +42,7 @@ export function useUpdates(addToast: AddToast, status: ConnectionStatus, endpoin
       addToast(
         "info",
         "Update available",
-        `Version ${version} is ready. Updating relaunches the app and refreshes a daemon it manages on this machine, stopping that daemon's running bots.`,
+        `Version ${version} is ready. Updating relaunches the app and updates the Hermes service on this computer, stopping its running bots.`,
         {
           sticky: true,
           action: {
@@ -99,10 +99,10 @@ export function useUpdates(addToast: AddToast, status: ConnectionStatus, endpoin
         const appIsOlder = appOrder === "older";
         addToast(
           "error",
-          appIsOlder ? "App too old to connect" : "Incompatible daemon version",
+          appIsOlder ? "Update needed" : "Hermes service version not compatible",
           appIsOlder
-            ? `The daemon runs ${health.version}, which is newer than this app (${appVersion}). Update Gravity to connect without downgrading the daemon.`
-            : `The daemon runs ${health.version}, which is not compatible with this app (${appVersion}). Reinstall matching app and daemon versions.`,
+            ? `The Hermes service runs ${health.version}, which is newer than this app (${appVersion}). Update The Hermes to connect without downgrading the service.`
+            : `The Hermes service runs ${health.version}, which is not compatible with this app (${appVersion}). Reinstall matching versions of the app and the service.`,
           { sticky: true },
         );
         return;
@@ -113,19 +113,19 @@ export function useUpdates(addToast: AddToast, status: ConnectionStatus, endpoin
       prompted.current.add(promptKey);
       addToast(
         stranded ? "error" : "info",
-        stranded ? "Daemon too old to connect" : "Daemon update available",
+        stranded ? "Hermes service update needed" : "Hermes service update available",
         stranded
-          ? `The daemon runs ${health.version} and speaks an older protocol, so this app (${appVersion}) cannot talk to it. Updating restarts the daemon and stops running bots.`
-          : `The daemon runs ${health.version}; this app bundles ${appVersion}. Updating restarts the daemon and stops running bots.`,
+          ? `The Hermes service runs ${health.version} and speaks an older protocol, so this app (${appVersion}) cannot talk to it. Updating restarts the service and stops running bots.`
+          : `The Hermes service runs ${health.version}; this app bundles ${appVersion}. Updating restarts the service and stops running bots.`,
         {
           sticky: true,
           action: {
-            label: "Update daemon",
+            label: "Update Hermes service",
             run: () => {
               installLocalDaemon(health.version).catch((error: unknown) => {
                 captureException(error, "daemon_update");
-                const body = error instanceof Error ? error.message : "daemon update failed";
-                addToast("error", "Daemon update failed", body, { sticky: true });
+                const body = error instanceof Error ? error.message : "update failed";
+                addToast("error", "Couldn't update the Hermes service", body, { sticky: true });
               });
             },
           },

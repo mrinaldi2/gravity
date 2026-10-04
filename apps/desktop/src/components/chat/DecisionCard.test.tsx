@@ -42,14 +42,14 @@ describe("DecisionCard", () => {
       items: [{ decision_id: "d1", ruling_text: "Wait a week" }],
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Open in the Control Center" }));
+    await userEvent.click(screen.getByRole("button", { name: "Open in Decisions" }));
     expect(onOpenDecision).toHaveBeenCalledWith("d1");
   });
 
   it("shows the ruling and no answers once settled", async () => {
     const client = daemon(decision());
     render(<DecisionCard client={client} decisionId="d1" title="Start the ads?" connected />);
-    await screen.findByText(/Waiting on you/);
+    await screen.findByText(/· Open$/);
     act(() => {
       client.emit("decision_update", {
         type: "decision_update",
@@ -67,7 +67,7 @@ describe("DecisionCard", () => {
     const client = daemon(decision());
     client.grants = ["read", "control"];
     render(<DecisionCard client={client} decisionId="d1" title="Start the ads?" connected />);
-    await screen.findByText(/Waiting on you/);
+    await screen.findByText(/· Open$/);
     expect(screen.queryByRole("textbox", { name: "Another answer" })).not.toBeInTheDocument();
   });
 });

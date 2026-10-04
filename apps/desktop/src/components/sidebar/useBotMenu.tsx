@@ -23,9 +23,9 @@ export function useBotMenu({
     items: [{ label: pinned ? "Unpin" : "Pin to top", onSelect: onTogglePin }],
     deletion: canControl
       ? {
-          label: "Delete",
-          title: "Delete bot",
-          body: `Delete “${bot.name}”? Its session is stopped and the bot is archived along with its conversations.`,
+          label: "Delete bot",
+          title: `Delete ${bot.name}?`,
+          body: "Its session is stopped and the bot is archived along with its conversations.",
           confirmLabel: "Delete bot",
           onConfirm: onDelete,
         }

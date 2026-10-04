@@ -9,8 +9,8 @@ import { stubLocalStorage } from "./test/spies";
 let daemon: FakeDaemon;
 let storage: Map<string, string>;
 
-const UNREAD_KEY = "gravity.unread";
-const LAST_USED_BOT_KEY = "gravity.last-used-bot";
+const UNREAD_KEY = "hermes.unread";
+const LAST_USED_BOT_KEY = "hermes.last-used-bot";
 const AT = "2024-05-01T09:00:00.000Z";
 
 vi.mock("./components/TerminalPane", () => ({
@@ -207,7 +207,7 @@ describe("App state", () => {
     render(<App />);
     daemon.setStatus("connected");
     await waitFor(() => {
-      expect(screen.getByText("Failed to load daemon state")).toBeInTheDocument();
+      expect(screen.getByText("Couldn't load your projects and bots")).toBeInTheDocument();
     });
     expect(screen.getByText("daemon busy")).toBeInTheDocument();
   });
@@ -302,7 +302,7 @@ describe("App state", () => {
     // The header shows routine states through the dot alone, so the label is
     // the only place the push surfaces.
     await waitFor(() => {
-      expect(screen.getByLabelText("working \u2014 thinking")).toBeInTheDocument();
+      expect(screen.getByLabelText("Working \u2014 thinking")).toBeInTheDocument();
     });
   });
 
@@ -371,7 +371,7 @@ describe("App state", () => {
       detail: "wants to run rm",
     });
     await waitFor(() => {
-      expect(screen.getByText("alice is waiting for approval")).toBeInTheDocument();
+      expect(screen.getByText("alice needs approval")).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole("button", { name: "View" }));

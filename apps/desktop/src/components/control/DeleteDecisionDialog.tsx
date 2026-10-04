@@ -15,7 +15,7 @@ export default function DeleteDecisionDialog(props: DeleteDecisionDialogProps): 
     <ConfirmDialog
       title="Delete this decision?"
       body={`"${decision.title}" and its thread are removed for good. Bots that were already told keep the message.`}
-      confirmLabel="Delete"
+      confirmLabel="Delete decision"
       onCancel={props.onCancel}
       onConfirm={() => props.onConfirm(decision.id)}
     />

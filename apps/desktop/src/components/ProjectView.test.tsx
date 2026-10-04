@@ -64,7 +64,7 @@ describe("ProjectView", () => {
     const { onDelete } = renderView({ bots: [fx.bot(), fx.bot({ id: "b2", name: "bob" })] });
 
     await user.click(screen.getByRole("button", { name: "Delete project" }));
-    const dialog = screen.getByRole("dialog", { name: "Delete project" });
+    const dialog = screen.getByRole("dialog", { name: /^Delete .+\?$/ });
     expect(within(dialog).getByText(/2 bots are stopped and archived/)).toBeInTheDocument();
     expect(onDelete).not.toHaveBeenCalled();
 

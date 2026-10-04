@@ -138,7 +138,7 @@ export default function BotHistory({
         <ConfirmDialog
           title={`Revert to ${fmtTimestamp(confirming.created_at)}?`}
           body={`The ${confirming.field} goes back to what it was before this change. The current ${confirming.field} is kept in History.`}
-          confirmLabel="Revert"
+          confirmLabel="Revert change"
           onConfirm={() => {
             setConfirming(null);
             void revert(confirming);

@@ -63,7 +63,7 @@ export default function LinkedChat({
     [client, conversationId],
   );
 
-  const machine = bot.peer?.name ?? "another machine";
+  const machine = bot.peer?.name ?? "another computer";
   return (
     <div className="chat-pane">
       <div className="chat-scroll">

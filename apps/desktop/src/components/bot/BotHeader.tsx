@@ -1,20 +1,8 @@
 import type { ReactElement, ReactNode } from "react";
 import type { Bot, BotState } from "../../protocol/entities";
 import BotAvatar from "../BotAvatar";
+import { botStateTitle, BOT_STATE_LABEL } from "./botStates";
 import { InfoPanelIcon } from "./icons";
-
-const STATE_LABEL: Readonly<Record<BotState, string>> = {
-  starting: "starting",
-  ready: "ready",
-  working: "working",
-  waiting_for_user: "waiting for you",
-  waiting_for_approval: "waiting for approval",
-  rate_limited: "rate limited",
-  auth_failed: "auth failed",
-  crashed: "crashed",
-  stopping: "stopping",
-  stopped: "stopped",
-};
 
 /* States the dot alone explains; anything else — a new one included — still
    earns words in the header. */
@@ -38,8 +26,8 @@ interface BotHeaderProps {
 export default function BotHeader(props: BotHeaderProps): ReactElement {
   const { bot, canControl, infoPanelCollapsed, onToggleInfoPanel } = props;
   const infoPanelAction = infoPanelCollapsed ? "Expand bot info" : "Collapse bot info";
-  const stateLabel = STATE_LABEL[bot.state];
-  const stateTitle = bot.state_reason ? `${stateLabel} — ${bot.state_reason}` : stateLabel;
+  const stateLabel = BOT_STATE_LABEL[bot.state];
+  const stateTitle = botStateTitle(bot);
   return (
     <header className="view-header" data-tauri-drag-region="deep">
       <div className="view-header-main">
@@ -54,7 +42,7 @@ export default function BotHeader(props: BotHeaderProps): ReactElement {
       </div>
       <div className="view-header-actions">
         {/* Bots are always-on, so there is no start or stop here; Restart
-            and Clear chat (in `actions`) bring a running bot back. The
+            and Clear conversation (in `actions`) bring a running bot back. The
             terminal is the user's whenever they hold `control`; only
             read-only connections need a badge. */}
         {canControl ? null : <span className="readonly-badge">Read-only</span>}

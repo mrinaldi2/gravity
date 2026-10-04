@@ -49,7 +49,7 @@ export default function BotRuntimePicker({
   return (
     <div className="field bot-runtime">
       <label className="field-label" htmlFor="bot-runtime">
-        Bot runtime
+        Engine
       </label>
       <select
         id="bot-runtime"
@@ -66,7 +66,7 @@ export default function BotRuntimePicker({
         <option value="codex_cli">Codex CLI</option>
       </select>
       <span className="field-hint">
-        Changing runtime interrupts the current turn. Both use the same workspace and saved facts;
+        Changing engine interrupts the current turn. Both use the same workspace and saved facts;
         each keeps its own conversation history. Install and sign in to the selected CLI first.
       </span>
       <div className="panel-actions">
@@ -78,7 +78,7 @@ export default function BotRuntimePicker({
             void save();
           }}
         >
-          {saving ? "Switching…" : "Change runtime"}
+          {saving ? "Switching…" : "Change engine"}
         </button>
       </div>
     </div>

@@ -104,8 +104,8 @@ cat <<EOF
 Open http://localhost:$WEB_PORT/ — the page connects to this daemon on its own.
 To point it somewhere else, override it from the browser console:
 
-  localStorage.setItem('gravity.connection', JSON.stringify({host:'127.0.0.1',port:$DAEMON_PORT}));
-  localStorage.setItem('gravity.device-token', '$TOKEN');
+  localStorage.setItem('hermes.connection', JSON.stringify({host:'127.0.0.1',port:$DAEMON_PORT}));
+  localStorage.setItem('hermes.device-token', '$TOKEN');
   location.reload();
 
 EOF

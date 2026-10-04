@@ -134,7 +134,7 @@ export default function ShortcutSettings(): ReactElement {
     <div className="settings-section">
       <div className="settings-row">
         <div className="settings-row-text">
-          <div className="settings-row-label">Show or hide Gravity</div>
+          <div className="settings-row-label">Show or hide Hermes</div>
           <div className="settings-row-help">
             Works from any app. Click the field, then press a combination of two or more modifiers
             and a key, such as {example}. Backspace clears it.

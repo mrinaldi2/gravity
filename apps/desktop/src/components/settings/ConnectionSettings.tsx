@@ -10,8 +10,8 @@ const STATUS_LABEL: Readonly<Record<ConnectionStatus, string>> = {
   connected: "Connected",
   connecting: "Connecting…",
   disconnected: "Disconnected",
-  auth_failed: "Authentication failed",
-  version_mismatch: "Daemon version mismatch",
+  auth_failed: "Token rejected",
+  version_mismatch: "Update needed",
 };
 
 interface ConnectionSettingsProps {
@@ -50,9 +50,9 @@ export default function ConnectionSettings(props: ConnectionSettingsProps): Reac
           <div className="settings-row-label">Status</div>
           <div className="settings-row-help">
             {STATUS_LABEL[status]}
-            {status === "connected" && !canControl ? " · read-only (no control grant)" : ""}
+            {status === "connected" && !canControl ? " · read-only (no control access)" : ""}
             {status === "connected" && client.serverVersion.length > 0
-              ? ` · daemon ${client.serverVersion}`
+              ? ` · Hermes service ${client.serverVersion}`
               : ""}
           </div>
         </div>
@@ -69,13 +69,14 @@ export default function ConnectionSettings(props: ConnectionSettingsProps): Reac
         }}
       >
         <div className="settings-row-text">
-          <div className="settings-row-label">Daemon address</div>
+          <div className="settings-row-label">Computer address</div>
           <div className="settings-row-help">
-            The machine running hermesd. Use a Tailscale hostname to attach from another machine.
+            The computer running the Hermes service. Use a Tailscale hostname to connect to another
+            computer.
           </div>
           <div className="settings-inline-fields">
             <input
-              aria-label="Daemon host"
+              aria-label="Computer host"
               placeholder="Host (e.g. mini.tailnet.ts.net)"
               value={host}
               onChange={(event) => {
@@ -83,7 +84,7 @@ export default function ConnectionSettings(props: ConnectionSettingsProps): Reac
               }}
             />
             <input
-              aria-label="Daemon port"
+              aria-label="Computer port"
               placeholder="Port"
               inputMode="numeric"
               className="settings-port"
@@ -105,14 +106,14 @@ export default function ConnectionSettings(props: ConnectionSettingsProps): Reac
 
       <div className="settings-row">
         <div className="settings-row-text">
-          <div className="settings-row-label">Grants</div>
+          <div className="settings-row-label">Access</div>
           <div className="settings-row-help">
             {client.grants.length > 0 ? client.grants.join(", ") : "None (not connected)"}
           </div>
         </div>
       </div>
 
-      <h3 className="settings-subhead">Daemon</h3>
+      <h3 className="settings-subhead">Hermes service</h3>
       <DaemonSettings
         client={client}
         connected={connected}

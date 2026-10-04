@@ -37,7 +37,7 @@ describe("SetupScreen", () => {
     const onConnect = vi.fn<() => void>();
     render(<SetupScreen onConnect={onConnect} />);
     await waitFor(() => {
-      expect(screen.getByText(/Connecting to the daemon/)).toBeInTheDocument();
+      expect(screen.getByText(/Connecting to the Hermes service/)).toBeInTheDocument();
     });
     expect(onConnect).toHaveBeenCalledWith({ method: "local", endpoint: DEFAULT_ENDPOINT });
   });
@@ -70,8 +70,8 @@ describe("SetupScreen", () => {
     probeDaemon.mockResolvedValue(null);
     installLocalDaemon.mockReturnValue(new Promise(() => undefined));
     render(<SetupScreen onConnect={vi.fn<() => void>()} />);
-    expect(await screen.findByText(/daemon starts when you sign in/)).toBeInTheDocument();
-    expect(screen.getByText("Installing the daemon on this computer…")).toBeInTheDocument();
+    expect(await screen.findByText(/Hermes service starts when you sign in/)).toBeInTheDocument();
+    expect(screen.getByText("Installing the Hermes service on this computer…")).toBeInTheDocument();
     expect(screen.queryByText(/on this Mac|launchd|LaunchAgents/)).not.toBeInTheDocument();
   });
 
@@ -123,7 +123,7 @@ describe("SetupScreen", () => {
     expect(await screen.findByText("bundled daemon not found")).toBeInTheDocument();
 
     probeDaemon.mockResolvedValue(HEALTH);
-    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => {
       expect(onConnect).toHaveBeenCalledWith({ method: "local", endpoint: DEFAULT_ENDPOINT });
     });
@@ -139,7 +139,7 @@ describe("SetupScreen", () => {
 
     installLocalDaemon.mockResolvedValue(undefined);
     probeDaemon.mockResolvedValueOnce(null).mockResolvedValue(HEALTH);
-    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => {
       expect(onConnect).toHaveBeenCalledWith({ method: "local", endpoint: DEFAULT_ENDPOINT });
     });
@@ -152,10 +152,10 @@ describe("SetupScreen", () => {
     const onConnect = vi.fn<(connection: unknown) => void>();
     render(<SetupScreen onConnect={onConnect} />);
     await userEvent.click(
-      await screen.findByRole("button", { name: "Connect to a different daemon" }),
+      await screen.findByRole("button", { name: "Connect to another computer" }),
     );
-    await userEvent.clear(screen.getByLabelText("Daemon host"));
-    await userEvent.type(screen.getByLabelText("Daemon host"), "mini.ts.net");
+    await userEvent.clear(screen.getByLabelText("Computer host"));
+    await userEvent.type(screen.getByLabelText("Computer host"), "mini.ts.net");
     await userEvent.type(screen.getByLabelText("Device token"), "  tok-123 ");
     await userEvent.click(screen.getByRole("button", { name: "Connect" }));
     expect(onConnect).toHaveBeenCalledWith({
@@ -163,7 +163,7 @@ describe("SetupScreen", () => {
       endpoint: { host: "mini.ts.net", port: DEFAULT_ENDPOINT.port },
       token: "tok-123",
     });
-    expect(screen.getByText(/Connecting to the daemon/)).toBeInTheDocument();
+    expect(screen.getByText(/Connecting to the Hermes service/)).toBeInTheDocument();
   });
 
   it("omits the token when the fallback form leaves it blank", async () => {
@@ -172,7 +172,7 @@ describe("SetupScreen", () => {
     const onConnect = vi.fn<(connection: unknown) => void>();
     render(<SetupScreen onConnect={onConnect} />);
     await userEvent.click(
-      await screen.findByRole("button", { name: "Connect to a different daemon" }),
+      await screen.findByRole("button", { name: "Connect to another computer" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Connect" }));
     expect(onConnect).toHaveBeenCalledWith({
@@ -186,11 +186,11 @@ describe("SetupScreen", () => {
     installLocalDaemon.mockRejectedValue(new Error("bundled daemon not found"));
     render(<SetupScreen onConnect={vi.fn<() => void>()} />);
     await userEvent.click(
-      await screen.findByRole("button", { name: "Connect to a different daemon" }),
+      await screen.findByRole("button", { name: "Connect to another computer" }),
     );
-    await userEvent.clear(screen.getByLabelText("Daemon host"));
+    await userEvent.clear(screen.getByLabelText("Computer host"));
     expect(screen.getByRole("button", { name: "Connect" })).toBeDisabled();
-    await userEvent.type(screen.getByLabelText("Daemon host"), "mini");
+    await userEvent.type(screen.getByLabelText("Computer host"), "mini");
     expect(screen.getByRole("button", { name: "Connect" })).toBeEnabled();
   });
 
@@ -199,7 +199,7 @@ describe("SetupScreen", () => {
     installLocalDaemon.mockRejectedValue(new Error("bundled daemon not found"));
     render(<SetupScreen onConnect={vi.fn<() => void>()} />);
     await userEvent.click(
-      await screen.findByRole("button", { name: "Connect to a different daemon" }),
+      await screen.findByRole("button", { name: "Connect to another computer" }),
     );
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(await screen.findByText("bundled daemon not found")).toBeInTheDocument();

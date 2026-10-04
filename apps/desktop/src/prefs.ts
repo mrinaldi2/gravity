@@ -3,6 +3,7 @@
 // panes (e.g. terminals) restyle live when a setting changes.
 
 import { useSyncExternalStore } from "react";
+import { readStored, writeStored } from "./storage";
 
 export interface Prefs {
   /** Terminal font size in px. */
@@ -28,7 +29,7 @@ export const DEFAULT_PREFS: Prefs = {
 export const MIN_TERMINAL_FONT_SIZE = 9;
 export const MAX_TERMINAL_FONT_SIZE = 24;
 
-const PREFS_KEY = "gravity.prefs";
+const PREFS_KEY = "prefs";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -71,7 +72,7 @@ function prefsFrom(value: unknown): Prefs {
 
 function loadPrefs(): Prefs {
   try {
-    const raw = localStorage.getItem(PREFS_KEY);
+    const raw = readStored(PREFS_KEY);
     if (raw === null) {
       return DEFAULT_PREFS;
     }
@@ -108,7 +109,7 @@ export function updatePrefs(patch: Partial<Prefs>): void {
   }
   current = next;
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(current));
+    writeStored(PREFS_KEY, JSON.stringify(current));
   } catch {
     // localStorage unavailable; prefs are session-only
   }

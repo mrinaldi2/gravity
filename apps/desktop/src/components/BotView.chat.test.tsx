@@ -86,7 +86,7 @@ describe("BotView with chat", () => {
   it("opens a result's file in the Files panel", async () => {
     renderView(chatDaemon());
     await userEvent.click(await screen.findByRole("button", { name: "report.md" }));
-    expect(screen.getByRole("button", { name: "Files" })).toHaveClass("tab-active");
+    expect(screen.getByRole("button", { name: "Artifacts" })).toHaveClass("tab-active");
     expect(await screen.findByText("Report body")).toBeInTheDocument();
   });
 

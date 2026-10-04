@@ -17,11 +17,11 @@ export type ConnectionStatus =
   | "version_mismatch";
 
 const STATUS_LABEL: Readonly<Record<ConnectionStatus, string>> = {
-  connected: "connected",
-  connecting: "connecting…",
-  disconnected: "disconnected",
-  auth_failed: "auth failed",
-  version_mismatch: "version mismatch",
+  connected: "Connected",
+  connecting: "Connecting…",
+  disconnected: "Disconnected",
+  auth_failed: "Token rejected",
+  version_mismatch: "Update needed",
 };
 
 /** Human-readable form of a status, for the footer and the empty pane. */

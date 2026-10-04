@@ -71,10 +71,10 @@ describe("DaemonSettings", () => {
 
     expect(await screen.findByText("50123 (not 49777)")).toBeInTheDocument();
     expect(screen.getByText(/Port 49777 was unavailable at startup/)).toHaveTextContent(
-      /Gravity is using 50123 for the app and bot bus/,
+      /Hermes is using 50123 for the app and bot bus/,
     );
     expect(screen.getByText(/operating-system reservation/)).toHaveTextContent(
-      /choose an available port in gravityd.toml and restart the daemon/,
+      /choose an available port in gravityd.toml and restart the Hermes service/,
     );
   });
 
@@ -98,7 +98,7 @@ describe("DaemonSettings", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(onToast).toHaveBeenCalledWith("info", "Daemon updated", expect.any(String));
+      expect(onToast).toHaveBeenCalledWith("info", "Settings saved", expect.any(String));
     });
     const sent = daemon.requests.find((r) => r.body.type === "set_config");
     expect(sent?.body).toEqual({ type: "set_config", auto_compact_window: 300_000 });
@@ -151,7 +151,7 @@ describe("DaemonSettings", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
-      expect(onToast).toHaveBeenCalledWith("error", "Update failed", "forbidden");
+      expect(onToast).toHaveBeenCalledWith("error", "Couldn't save the setting", "forbidden");
     });
   });
 
@@ -183,22 +183,24 @@ describe("DaemonSettings", () => {
     invoke.mockResolvedValue(null);
     const { onToast } = renderPane(baseDaemon(), true, true);
 
-    await user.click(await screen.findByRole("button", { name: "Restart" }));
+    await user.click(await screen.findByRole("button", { name: "Restart Hermes service" }));
     expect(screen.getByText(/any in-flight turn is gone/)).toBeInTheDocument();
     expect(invoke).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Restart daemon" }));
+    await user.click(
+      screen.getAllByRole("button", { name: "Restart Hermes service" }).at(-1) as HTMLElement,
+    );
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("restart_local_daemon");
     });
-    expect(onToast).toHaveBeenCalledWith("info", "Daemon restarting", expect.any(String));
+    expect(onToast).toHaveBeenCalledWith("info", "Hermes service restarting", expect.any(String));
   });
 
   it("leaves the daemon alone when the warning is dismissed", async () => {
     const user = userEvent.setup();
     const { onToast } = renderPane(baseDaemon(), true, true);
 
-    await user.click(await screen.findByRole("button", { name: "Restart" }));
+    await user.click(await screen.findByRole("button", { name: "Restart Hermes service" }));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByText(/any in-flight turn is gone/)).not.toBeInTheDocument();
@@ -211,13 +213,15 @@ describe("DaemonSettings", () => {
     invoke.mockRejectedValue("no app-managed daemon is installed on this machine");
     const { onToast } = renderPane(baseDaemon(), true, true);
 
-    await user.click(await screen.findByRole("button", { name: "Restart" }));
-    await user.click(screen.getByRole("button", { name: "Restart daemon" }));
+    await user.click(await screen.findByRole("button", { name: "Restart Hermes service" }));
+    await user.click(
+      screen.getAllByRole("button", { name: "Restart Hermes service" }).at(-1) as HTMLElement,
+    );
 
     await waitFor(() => {
       expect(onToast).toHaveBeenCalledWith(
         "error",
-        "Restart failed",
+        "Couldn't restart the Hermes service",
         "no app-managed daemon is installed on this machine",
       );
     });
@@ -228,6 +232,8 @@ describe("DaemonSettings", () => {
       throw new Error("no daemon");
     });
     renderPane(daemon, true, true);
-    expect(await screen.findByRole("button", { name: "Restart" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Restart Hermes service" }),
+    ).toBeInTheDocument();
   });
 });

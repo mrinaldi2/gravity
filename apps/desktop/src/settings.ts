@@ -1,6 +1,7 @@
 import type { Endpoint } from "./protocol/connection";
+import { readStored, removeStored, writeStored } from "./storage";
 
-const STORAGE_KEY = "gravity.connection";
+const STORAGE_KEY = "connection";
 
 export const DEFAULT_ENDPOINT: Endpoint = { host: "127.0.0.1", port: 49777 };
 
@@ -29,7 +30,7 @@ function devEndpoint(): Endpoint | undefined {
 /** Loads the daemon endpoint from localStorage (a laptop can point at a Tailscale host). */
 export function loadEndpoint(): Endpoint {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = readStored(STORAGE_KEY);
     if (raw === null) {
       return devEndpoint() ?? DEFAULT_ENDPOINT;
     }
@@ -51,13 +52,13 @@ export function loadEndpoint(): Endpoint {
 
 export function saveEndpoint(endpoint: Endpoint): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(endpoint));
+    writeStored(STORAGE_KEY, JSON.stringify(endpoint));
   } catch {
     // localStorage unavailable; setting is session-only
   }
 }
 
-const DEVICE_TOKEN_KEY = "gravity.device-token";
+const DEVICE_TOKEN_KEY = "device-token";
 
 /**
  * A device-scoped token entered during remote setup. Preferred over the local
@@ -66,7 +67,7 @@ const DEVICE_TOKEN_KEY = "gravity.device-token";
 export function loadDeviceToken(): string {
   const fallback = envString("VITE_GRAVITY_DEV_TOKEN") ?? "";
   try {
-    return localStorage.getItem(DEVICE_TOKEN_KEY) ?? fallback;
+    return readStored(DEVICE_TOKEN_KEY) ?? fallback;
   } catch {
     return fallback;
   }
@@ -75,21 +76,21 @@ export function loadDeviceToken(): string {
 export function saveDeviceToken(token: string): void {
   try {
     if (token.length === 0) {
-      localStorage.removeItem(DEVICE_TOKEN_KEY);
+      removeStored(DEVICE_TOKEN_KEY);
     } else {
-      localStorage.setItem(DEVICE_TOKEN_KEY, token);
+      writeStored(DEVICE_TOKEN_KEY, token);
     }
   } catch {
     // localStorage unavailable; token is session-only
   }
 }
 
-const SETUP_KEY = "gravity.setup-complete";
+const SETUP_KEY = "setup-complete";
 
 /** True once this install has connected to a daemon at least once. */
 export function loadSetupComplete(): boolean {
   try {
-    const raw = localStorage.getItem(SETUP_KEY);
+    const raw = readStored(SETUP_KEY);
     if (raw === null) {
       // A dev build points at its own daemon already, so skip the wizard.
       return devEndpoint() !== undefined;
@@ -102,18 +103,18 @@ export function loadSetupComplete(): boolean {
 
 export function markSetupComplete(): void {
   try {
-    localStorage.setItem(SETUP_KEY, "true");
+    writeStored(SETUP_KEY, "true");
   } catch {
     // localStorage unavailable; the wizard may show again next launch
   }
 }
 
-const PINNED_KEY = "gravity.pinned-bots";
+const PINNED_KEY = "pinned-bots";
 
 /** Loads the pinned bot ids, most recently pinned last, in display order. */
 export function loadPinnedBotIds(): readonly string[] {
   try {
-    const raw = localStorage.getItem(PINNED_KEY);
+    const raw = readStored(PINNED_KEY);
     if (raw === null) {
       return [];
     }
@@ -129,18 +130,18 @@ export function loadPinnedBotIds(): readonly string[] {
 
 export function savePinnedBotIds(ids: readonly string[]): void {
   try {
-    localStorage.setItem(PINNED_KEY, JSON.stringify(ids));
+    writeStored(PINNED_KEY, JSON.stringify(ids));
   } catch {
     // localStorage unavailable; pins are session-only
   }
 }
 
-const LAST_USED_BOT_KEY = "gravity.last-used-bot";
+const LAST_USED_BOT_KEY = "last-used-bot";
 
 /** Loads the bot that was open when the app was last used. */
 export function loadLastUsedBotId(): string | undefined {
   try {
-    const botId = localStorage.getItem(LAST_USED_BOT_KEY);
+    const botId = readStored(LAST_USED_BOT_KEY);
     return botId === null || botId.length === 0 ? undefined : botId;
   } catch {
     return undefined;
@@ -149,13 +150,13 @@ export function loadLastUsedBotId(): string | undefined {
 
 export function saveLastUsedBotId(botId: string): void {
   try {
-    localStorage.setItem(LAST_USED_BOT_KEY, botId);
+    writeStored(LAST_USED_BOT_KEY, botId);
   } catch {
     // localStorage unavailable; selection is session-only
   }
 }
 
-const BOT_INFO_PANEL_KEY = "gravity.bot-info-panel";
+const BOT_INFO_PANEL_KEY = "bot-info-panel";
 
 export interface BotInfoPanelSettings {
   readonly collapsed: boolean;
@@ -172,7 +173,7 @@ export const MIN_BOT_INFO_PANEL_WIDTH = 280;
 /** Loads the bot inspector layout shared by every bot view. */
 export function loadBotInfoPanel(): BotInfoPanelSettings {
   try {
-    const raw = localStorage.getItem(BOT_INFO_PANEL_KEY);
+    const raw = readStored(BOT_INFO_PANEL_KEY);
     if (raw === null) {
       return DEFAULT_BOT_INFO_PANEL;
     }
@@ -194,13 +195,13 @@ export function loadBotInfoPanel(): BotInfoPanelSettings {
 
 export function saveBotInfoPanel(settings: BotInfoPanelSettings): void {
   try {
-    localStorage.setItem(BOT_INFO_PANEL_KEY, JSON.stringify(settings));
+    writeStored(BOT_INFO_PANEL_KEY, JSON.stringify(settings));
   } catch {
     // localStorage unavailable; layout is session-only
   }
 }
 
-const UNREAD_KEY = "gravity.unread";
+const UNREAD_KEY = "unread";
 
 /**
  * One bot's badge state. `seenAt` is how far the user has caught up: the epoch
@@ -235,7 +236,7 @@ function entryFrom(value: unknown): UnreadEntry | undefined {
  */
 export function loadUnread(): UnreadState {
   try {
-    const raw = localStorage.getItem(UNREAD_KEY);
+    const raw = readStored(UNREAD_KEY);
     if (raw === null) {
       return {};
     }
@@ -259,7 +260,7 @@ export function loadUnread(): UnreadState {
 
 export function saveUnread(state: UnreadState): void {
   try {
-    localStorage.setItem(UNREAD_KEY, JSON.stringify(state));
+    writeStored(UNREAD_KEY, JSON.stringify(state));
   } catch {
     // localStorage unavailable; badges are session-only
   }

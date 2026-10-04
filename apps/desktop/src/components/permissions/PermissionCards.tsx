@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { KeyboardEvent, ReactElement } from "react";
 import type { PermissionAnswer, PermissionRequest } from "../../protocol/chat";
+import { toolDisplayName } from "../../toolNames";
 import { errText, fmtTimestamp } from "../../util";
 import CodeBlock from "../chat/CodeBlock";
 import type { Permissions } from "./usePermissions";
@@ -26,7 +27,7 @@ export default function PermissionCards({
     return null;
   }
   return (
-    <div className="permission-cards" aria-label="Waiting for your permission">
+    <div className="permission-cards" aria-label="Permission requests">
       {permissions.pending.map((request) => (
         <PermissionCard
           key={request.id}
@@ -62,7 +63,7 @@ function PermissionHead({
   return (
     <div className="permission-head">
       <span className="permission-label">
-        {botName === undefined ? "Wants to run" : `${botName} wants to run`}
+        {`${botName ?? "A bot"} wants to run ${toolDisplayName(request.tool)}`}
       </span>
       {botName === undefined || onOpenBot === undefined ? null : (
         <button
@@ -182,9 +183,10 @@ function PermissionCard({
           type="button"
           className="btn"
           disabled={!canAnswer || busy}
+          title="For the rest of this bot's session"
           onClick={() => void answer("allow_session")}
         >
-          Allow for this session <kbd>S</kbd>
+          Allow for session <kbd>S</kbd>
         </button>
         <button
           type="button"

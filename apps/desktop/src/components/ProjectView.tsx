@@ -165,7 +165,7 @@ export default function ProjectView(props: ProjectViewProps): ReactElement {
 
       {confirming ? (
         <ConfirmDialog
-          title="Delete project"
+          title={`Delete ${project.name}?`}
           body={deletionBody(project, bots.length)}
           confirmLabel="Delete project"
           onConfirm={() => {

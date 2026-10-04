@@ -66,17 +66,17 @@ describe("Composer", () => {
   it("will not save an empty ruling, but an option alone will do", async () => {
     const user = userEvent.setup();
     renderComposer();
-    expect(screen.getByRole("button", { name: /Save ruling/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Save as draft/ })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "pick start" }));
-    expect(screen.getByRole("button", { name: /Save ruling/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Save as draft/ })).toBeEnabled();
     // Asking still needs a question.
     expect(screen.getByRole("button", { name: "Ask in thread" })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "pick start" }));
-    expect(screen.getByRole("button", { name: /Save ruling/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Save as draft/ })).toBeDisabled();
     await user.type(screen.getByLabelText("Your ruling"), "Start today.");
-    expect(screen.getByRole("button", { name: /Save ruling/ })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Save as draft/ })).toBeEnabled();
   });
 
   it("hands the words to the view", async () => {
@@ -87,7 +87,7 @@ describe("Composer", () => {
     await user.click(screen.getByRole("button", { name: "Ask in thread" }));
     expect(spies.onAsk).toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: /Save ruling/ }));
+    await user.click(screen.getByRole("button", { name: /Save as draft/ }));
     expect(spies.onSave).toHaveBeenCalled();
   });
 
@@ -132,7 +132,7 @@ describe("Composer", () => {
   it("is inert for a read-only client", () => {
     renderComposer({ canControl: false });
     expect(screen.getByLabelText("Your ruling")).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Save ruling/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Save as draft/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Ask in thread" })).toBeDisabled();
   });
 });

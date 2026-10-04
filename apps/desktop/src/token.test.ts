@@ -19,7 +19,7 @@ describe("readClientToken", () => {
     inTauri();
     vi.stubGlobal("localStorage", {
       getItem: (key: string): string | null =>
-        key === "gravity.device-token" ? "remote-device-token" : null,
+        key === "hermes.device-token" ? "remote-device-token" : null,
     });
     await expect(readClientToken()).resolves.toBe("remote-device-token");
     expect(invoke).not.toHaveBeenCalled();

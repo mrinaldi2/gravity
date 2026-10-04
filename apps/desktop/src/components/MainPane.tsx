@@ -22,7 +22,7 @@ interface MainPaneProps {
   readonly onSetProjectLead: (projectId: string, botId: string | null) => Promise<void>;
   readonly onSetProjectRepo: (projectId: string, repo: ProjectRepo | null) => Promise<void>;
   readonly onDeleteProject: (projectId: string) => Promise<void>;
-  /** Every bot's permission prompts, answered in the Control Center. */
+  /** Every bot's permission requests, answered in Decisions. */
   readonly permissions?: Permissions;
   readonly onOpenBot?: (botId: string) => void;
 }
@@ -39,7 +39,7 @@ function WelcomeState({ daemon, onCreateProject }: EmptyStateProps): ReactElemen
     <div className="empty-pane" data-tauri-drag-region="deep">
       <div className="empty-state">
         <img className="empty-art-hero" src={heroArt} alt="" draggable={false} />
-        <h1>Welcome to Gravity</h1>
+        <h1>Welcome to The Hermes</h1>
         <p>Projects hold your bots. Create one to get started.</p>
         {daemon.canControl ? <NewProjectForm onCreate={onCreateProject} /> : null}
       </div>
@@ -58,11 +58,11 @@ function EmptyState(props: EmptyStateProps): ReactElement {
     <div className="empty-pane" data-tauri-drag-region="deep">
       <div className="empty-state">
         <img className="empty-art-quiet" src={quietArt} alt="" draggable={false} />
-        <h1>Gravity</h1>
+        <h1>The Hermes</h1>
         <p>Select a bot from the sidebar, or create one to get started.</p>
         {connected ? null : (
           <p className={`conn-hint conn-${status}`}>
-            {`Daemon: ${connectionStatusLabel(status)} (${endpoint.host}:${endpoint.port})`}
+            {`Hermes service: ${connectionStatusLabel(status)} (${endpoint.host}:${endpoint.port})`}
           </p>
         )}
       </div>

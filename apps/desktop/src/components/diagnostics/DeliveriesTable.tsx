@@ -48,7 +48,7 @@ export default function DeliveriesTable(props: DeliveriesTableProps): ReactEleme
                     onRetry(delivery.id);
                   }}
                 >
-                  Retry
+                  Retry delivery
                 </button>
               ) : null}
             </td>

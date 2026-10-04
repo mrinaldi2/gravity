@@ -93,7 +93,7 @@ function subscribe(ref: MutableRefObject<PushDeps>): Array<() => void> {
     }),
     client.on("approval_pending", (push) => {
       const deps = ref.current;
-      deps.addToast("warn", `${deps.botName(push.bot_id)} is waiting for approval`, push.detail, {
+      deps.addToast("warn", `${deps.botName(push.bot_id)} needs approval`, push.detail, {
         action: {
           label: "View",
           run: () => {

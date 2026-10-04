@@ -1,6 +1,6 @@
 //! On-device dictation for the chat composer. The operating system's own
 //! speech recognizer turns the microphone into text, so audio never goes to
-//! Gravity or a third party: Apple's Speech framework on macOS, set to
+//! Hermes or a third party: Apple's Speech framework on macOS, set to
 //! recognize on the device whenever the Mac supports it, and SAPI's
 //! in-process recognizer on Windows, which always runs on the PC.
 //!

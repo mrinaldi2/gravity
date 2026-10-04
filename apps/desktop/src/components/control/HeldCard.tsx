@@ -20,10 +20,10 @@ export default function HeldCard({ decision, canControl, onResume }: HeldCardPro
   return (
     <div className="cc-held">
       {until === undefined ? (
-        <span>Held. {decision.raised_by.name} was told.</span>
+        <span>On hold. {decision.raised_by.name} was told.</span>
       ) : (
         <span>
-          Held until <strong>{fmtDay(until)}</strong>. {decision.raised_by.name} was told.
+          On hold until <strong>{fmtDay(until)}</strong>. {decision.raised_by.name} was told.
         </span>
       )}
       <button

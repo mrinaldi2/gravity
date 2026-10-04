@@ -56,7 +56,7 @@ describe("InfoPanel", () => {
   it("shows the bot metadata", () => {
     renderPanel(new FakeDaemon());
     expect(screen.getByText("/tmp/alice")).toBeInTheDocument();
-    expect(screen.getByText("ready — idle")).toBeInTheDocument();
+    expect(screen.getByText("Idle — idle")).toBeInTheDocument();
   });
 
   it("opens the bot workspace folder", async () => {
@@ -70,7 +70,7 @@ describe("InfoPanel", () => {
 
   it("omits the reason when there is none", () => {
     renderPanel(new FakeDaemon(), { bot: fx.bot({ state_reason: "" }) });
-    expect(screen.getByText("ready")).toBeInTheDocument();
+    expect(screen.getByText("Idle")).toBeInTheDocument();
   });
 
   it("shows the bot's current instructions rather than an empty box", () => {

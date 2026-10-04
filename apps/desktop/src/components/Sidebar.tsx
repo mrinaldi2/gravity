@@ -55,8 +55,8 @@ export default function Sidebar(props: SidebarProps): ReactElement {
           <button
             type="button"
             className="sidebar-add"
-            title="New Project"
-            aria-label="New Project"
+            title="New project"
+            aria-label="New project"
             onClick={() => {
               setCreatingProject(true);
             }}

@@ -4,8 +4,8 @@
 <dict>
   <!-- Dictation in the chat composer. Merged into the app's Info.plist by the Tauri bundler. -->
   <key>NSMicrophoneUsageDescription</key>
-  <string>Gravity listens while you dictate a message to a bot in the chat.</string>
+  <string>Hermes listens while you dictate a message to a bot in the chat.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
-  <string>Gravity turns your dictation into text on this Mac, for messages to your bots.</string>
+  <string>Hermes turns your dictation into text on this Mac, for messages to your bots.</string>
 </dict>
 </plist>

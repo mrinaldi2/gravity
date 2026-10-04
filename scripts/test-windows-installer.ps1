@@ -4,10 +4,10 @@ param([Parameter(Mandatory = $true)][string]$Installer)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $installerPath = (Resolve-Path -LiteralPath $Installer).Path
-$uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Gravity'
-$productKey = 'HKCU:\Software\mikolajczuk\Gravity'
+$uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\The Hermes'
+$productKey = 'HKCU:\Software\mikolajczuk\The Hermes'
 if ((Test-Path -LiteralPath $uninstallKey) -or (Test-Path -LiteralPath $productKey)) {
-    throw 'Installer smoke test requires a clean Gravity installation registry.'
+    throw 'Installer smoke test requires a clean The Hermes installation registry.'
 }
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('gravity-installer-smoke-' + [guid]::NewGuid())
 $installDir = Join-Path $testRoot 'app with spaces'
@@ -108,7 +108,7 @@ try {
         }
         if (Test-Path -LiteralPath $productKey) {
             $registeredDir = (Get-Item -LiteralPath $productKey).GetValue('')
-            if ($registeredDir -ne $installDir) { throw 'Another Gravity install replaced test registration.' }
+            if ($registeredDir -ne $installDir) { throw 'Another The Hermes install replaced test registration.' }
             Remove-Item -LiteralPath $productKey -Recurse -Force
         }
         if (Test-Path -LiteralPath $testRoot) {

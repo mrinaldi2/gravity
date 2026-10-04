@@ -4,7 +4,8 @@ import type { ReactElement } from "react";
 import type { DaemonApi } from "../protocol/api";
 import type { Bot, NotifyLevel } from "../protocol/entities";
 import { revealBotWorkspace } from "../reveal";
-import { errText } from "../util";
+import { errText, fmtTimestamp } from "../util";
+import { botStateTitle } from "./bot/botStates";
 import BotAvatar from "./BotAvatar";
 import { BOT_ICONS } from "./botIcons";
 import BotHistory from "./bot/BotHistory";
@@ -145,12 +146,9 @@ export default function InfoPanel({
           </dt>
           <dd className="mono">{bot.workspace_path}</dd>
           <dt>State</dt>
-          <dd>
-            {bot.state}
-            {bot.state_reason.length > 0 ? ` — ${bot.state_reason}` : ""}
-          </dd>
+          <dd>{botStateTitle(bot)}</dd>
           <dt>Created</dt>
-          <dd>{bot.created_at}</dd>
+          <dd>{fmtTimestamp(bot.created_at)}</dd>
           {bot.created_by_bot_id != null && bot.created_by_bot_id.length > 0 ? (
             <>
               <dt>Origin</dt>
@@ -224,7 +222,7 @@ export default function InfoPanel({
         <textarea
           rows={10}
           disabled={!canControl}
-          placeholder="Standing instructions for this bot."
+          placeholder="Instructions for this bot."
           value={draft.instructions}
           onChange={(event) => {
             set("instructions", event.target.value);

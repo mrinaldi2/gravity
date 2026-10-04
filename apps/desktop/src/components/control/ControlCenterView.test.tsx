@@ -104,7 +104,7 @@ describe("ControlCenterView", () => {
     expect(rows[0]).toHaveTextContent("Urgent one");
     expect(rows[0]).toHaveTextContent("6h left");
     expect(rows[0]).toHaveTextContent("raised 5h ago");
-    expect(screen.getByText("2 waiting on you · 1 urgent")).toBeInTheDocument();
+    expect(screen.getByText("2 open decisions · 1 urgent")).toBeInTheDocument();
   });
 
   it("saves a picked option on its own, with its label as the words", async () => {
@@ -115,7 +115,7 @@ describe("ControlCenterView", () => {
     }));
     const { daemon } = seeded;
     renderView(seeded);
-    await screen.findByRole("button", { name: /Save ruling/ });
+    await screen.findByRole("button", { name: /Save as draft/ });
     await userEvent.keyboard("1");
     await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
     await waitFor(() => {
@@ -136,7 +136,7 @@ describe("ControlCenterView", () => {
     }));
     const { daemon } = seeded;
     renderView(seeded);
-    const save = await screen.findByRole("button", { name: /Save ruling/ });
+    const save = await screen.findByRole("button", { name: /Save as draft/ });
     expect(save).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: /Start today/ }));
     await userEvent.type(screen.getByLabelText("Your ruling"), "Let it fire.");
@@ -152,7 +152,7 @@ describe("ControlCenterView", () => {
     });
     // The draft is provisional and the header offers to publish it.
     expect(await screen.findByText("bots can't see this yet")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Publish 1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Publish rulings 1/ })).toBeInTheDocument();
   });
 
   it("publishes every draft from the tray with the asker always told", async () => {
@@ -168,7 +168,7 @@ describe("ControlCenterView", () => {
       results: [{ decision_id: "d1", notified: ["auction"], skipped: [] }],
     }));
     renderView(seeded);
-    await userEvent.click(await screen.findByRole("button", { name: /Publish 1/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /Publish rulings 1/ }));
     const tray = screen.getByText("Ready to publish").closest(".cc-tray");
     if (!(tray instanceof HTMLElement)) {
       throw new Error("no tray");
@@ -230,7 +230,7 @@ describe("ControlCenterView", () => {
     });
     expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
     // The held one folds away and comes back on request.
-    const held = screen.getByRole("button", { name: /Held/ });
+    const held = screen.getByRole("button", { name: /On hold/ });
     expect(screen.queryByRole("button", { name: /^First/ })).not.toBeInTheDocument();
     await userEvent.click(held);
     expect(screen.getByRole("button", { name: /First/ })).toHaveTextContent("until 20 Sep");
@@ -294,8 +294,8 @@ describe("ControlCenterView", () => {
       published_at: new Date(NOW - 3 * 3_600_000).toISOString(),
     });
     renderView(seed([settled]));
-    expect(await screen.findByText("Nothing is waiting on you.")).toBeInTheDocument();
-    expect(screen.getByText("1 rulings in the registry · ⌘2")).toBeInTheDocument();
+    expect(await screen.findByText("Nothing needs you.")).toBeInTheDocument();
+    expect(screen.getByText("1 settled decision · ⌘2")).toBeInTheDocument();
   });
 
   it("walks the ledger with the arrows and opens the highlighted ruling with ↩", async () => {
@@ -372,7 +372,7 @@ describe("ControlCenterView", () => {
   it("keeps a read-only device looking, not ruling", async () => {
     renderView(seed([open()]), { canControl: false });
     expect(await screen.findByLabelText("Your ruling")).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Save ruling/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Save as draft/ })).toBeDisabled();
   });
 
   it("appends a bot's answer to the thread as it arrives", async () => {

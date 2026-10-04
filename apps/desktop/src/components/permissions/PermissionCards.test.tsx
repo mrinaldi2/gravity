@@ -85,7 +85,7 @@ describe("PermissionCards", () => {
       reason: "keep the cache",
     });
 
-    const session = await screen.findByRole("button", { name: /Allow for this session/ });
+    const session = await screen.findByRole("button", { name: /Allow for session/ });
     session.focus();
     await userEvent.keyboard("s");
     expect(client.requests.at(-1)?.body).toMatchObject({

@@ -27,7 +27,7 @@ export function usePaletteActions(deps: PaletteDeps): readonly PaletteAction[] {
       })),
       {
         id: "open-control-center",
-        label: "Control center",
+        label: "Decisions",
         hint: "open view",
         run: (): void => {
           select({ kind: "control" });

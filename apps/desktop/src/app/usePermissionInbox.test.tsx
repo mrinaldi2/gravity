@@ -73,7 +73,7 @@ describe("usePermissionInbox", () => {
     });
     expect(addToast).toHaveBeenCalledWith(
       "warn",
-      "bob needs your permission",
+      "bob wants to run Bash",
       "Bash: rm -rf build",
       expect.objectContaining({ action: expect.objectContaining({ label: "Answer" }) }),
     );
@@ -96,7 +96,7 @@ describe("PermissionCards from many bots", () => {
         onOpenBot={onOpenBot}
       />,
     );
-    expect(screen.getByText("bob wants to run")).toBeInTheDocument();
+    expect(screen.getByText("bob wants to run Bash")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Open bob" }));
     expect(onOpenBot).toHaveBeenCalledWith("b2");
   });

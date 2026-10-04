@@ -87,7 +87,7 @@ export default function SetupScreen(props: SetupScreenProps): ReactElement {
       await installLocalDaemon();
     } catch (error) {
       captureException(error, "setup_install", { phase: "install" });
-      const message = error instanceof Error ? error.message : "daemon install failed";
+      const message = error instanceof Error ? error.message : "the install failed";
       if (alive.current) {
         setPhase({ kind: "error", message });
       }
@@ -122,7 +122,7 @@ export default function SetupScreen(props: SetupScreenProps): ReactElement {
     setPhase({
       kind: "error",
       message:
-        `The daemon was installed but never answered on ${
+        `Couldn't reach the Hermes service. It was installed but never answered on ${
           result.ports.length > 1 ? `ports ${ports}` : `port ${ports}`
         }.` + (tail.length > 0 ? `\n\n${tail}` : ""),
     });
@@ -145,19 +145,19 @@ export default function SetupScreen(props: SetupScreenProps): ReactElement {
   return (
     <div className="setup-screen">
       <div className="setup-panel">
-        <h1 className="setup-title">Gravity</h1>
+        <h1 className="setup-title">The Hermes</h1>
         {phase.kind === "probing" ? (
-          <p className="setup-note">Looking for a daemon on this computer…</p>
+          <p className="setup-note">Looking for the Hermes service on this computer…</p>
         ) : null}
         {phase.kind === "connecting" ? (
-          <p className="setup-note">Connecting to the daemon…</p>
+          <p className="setup-note">Connecting to the Hermes service…</p>
         ) : null}
         {phase.kind === "installing" ? (
           <>
-            <p className="setup-note">Installing the daemon on this computer…</p>
+            <p className="setup-note">Installing the Hermes service on this computer…</p>
             <p className="setup-detail">
-              The daemon starts when you sign in and keeps running in the background after you close
-              Gravity.
+              The Hermes service starts when you sign in and keeps running in the background after
+              you close the app.
             </p>
             {phase.waited > 0 ? (
               <p className="setup-detail">
@@ -177,7 +177,7 @@ export default function SetupScreen(props: SetupScreenProps): ReactElement {
                   void findOrInstallDaemon();
                 }}
               >
-                Retry
+                Try again
               </button>
               <button
                 type="button"
@@ -186,7 +186,7 @@ export default function SetupScreen(props: SetupScreenProps): ReactElement {
                   setPhase({ kind: "manual", previousError: phase.message });
                 }}
               >
-                Connect to a different daemon
+                Connect to another computer
               </button>
             </div>
           </>
@@ -238,11 +238,11 @@ function ManualConnectForm(props: ManualConnectFormProps): ReactElement {
       }}
     >
       <p className="setup-detail">
-        Point Gravity at a daemon running on another computer or server on your tailnet. A device
-        token is only needed when the daemon is on another machine.
+        Connect to the Hermes service on another computer or server on your tailnet. A device token
+        is only needed when the service runs on another computer.
       </p>
       <input
-        aria-label="Daemon host"
+        aria-label="Computer host"
         placeholder="Host (e.g. mini.tailnet.ts.net)"
         value={host}
         onChange={(event) => {
@@ -250,7 +250,7 @@ function ManualConnectForm(props: ManualConnectFormProps): ReactElement {
         }}
       />
       <input
-        aria-label="Daemon port"
+        aria-label="Computer port"
         placeholder="Port"
         inputMode="numeric"
         value={port}

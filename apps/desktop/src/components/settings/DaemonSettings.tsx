@@ -115,10 +115,10 @@ function RestartRow({ onToast }: RestartRowProps): ReactElement {
     setRestarting(true);
     try {
       await restartLocalDaemon();
-      onToast("info", "Daemon restarting", "The app reconnects once it is back up.");
+      onToast("info", "Hermes service restarting", "The app reconnects once it is back up.");
     } catch (error) {
       captureException(error, "daemon_restart");
-      onToast("error", "Restart failed", errText(error));
+      onToast("error", "Couldn't restart the Hermes service", errText(error));
     } finally {
       setRestarting(false);
     }
@@ -128,9 +128,10 @@ function RestartRow({ onToast }: RestartRowProps): ReactElement {
     <>
       <div className="settings-row">
         <div className="settings-row-text">
-          <div className="settings-row-label">Restart daemon</div>
+          <div className="settings-row-label">Restart Hermes service</div>
           <div className="settings-row-help">
-            Bounces hermesd on this machine. Every bot session running right now is killed mid-turn.
+            Restarts the Hermes service on this computer. Every bot session running right now is
+            killed mid-turn.
           </div>
         </div>
         <button
@@ -141,14 +142,14 @@ function RestartRow({ onToast }: RestartRowProps): ReactElement {
             setConfirming(true);
           }}
         >
-          {restarting ? "Restarting…" : "Restart"}
+          {restarting ? "Restarting…" : "Restart Hermes service"}
         </button>
       </div>
       {confirming ? (
         <ConfirmDialog
-          title="Restart the daemon?"
-          body="Every bot session running right now is killed mid-turn and loses whatever work it had not written to disk. The daemon comes back within a few seconds and the supervisor resumes the bots, but any in-flight turn is gone."
-          confirmLabel="Restart daemon"
+          title="Restart the Hermes service?"
+          body="Every bot session running right now is killed mid-turn and loses whatever work it had not written to disk. The service comes back within a few seconds and resumes the bots, but any in-flight turn is gone."
+          confirmLabel="Restart Hermes service"
           onConfirm={() => {
             void restart();
           }}
@@ -168,7 +169,9 @@ function DaemonLaunchConfig({ config }: { readonly config: DaemonConfig }): Reac
       <div className="settings-row">
         <div className="settings-row-text">
           <div className="settings-row-label">Bind addresses</div>
-          <div className="settings-row-help">Change in gravityd.toml and restart the daemon.</div>
+          <div className="settings-row-help">
+            Change in gravityd.toml and restart the Hermes service.
+          </div>
         </div>
         <span className="settings-value">{config.bind.join(", ")}</span>
       </div>
@@ -179,11 +182,11 @@ function DaemonLaunchConfig({ config }: { readonly config: DaemonConfig }): Reac
           <div className="settings-row-help">Also serves the bot bus at /mcp.</div>
           {negotiated ? (
             <div className="settings-row-error">
-              Port {config.configured_port} was unavailable at startup. Gravity is using{" "}
+              Port {config.configured_port} was unavailable at startup. Hermes is using{" "}
               {config.port} for the app and bot bus. Another process or an operating-system
               reservation can block a port. To use a fixed port, choose an available port in
-              gravityd.toml and restart the daemon. Remote clients and MCP URL allowlists must use
-              the active port.
+              gravityd.toml and restart the Hermes service. Remote clients and MCP URL allowlists
+              must use the active port.
             </div>
           ) : null}
         </div>
@@ -196,8 +199,10 @@ function DaemonLaunchConfig({ config }: { readonly config: DaemonConfig }): Reac
 
       <div className="settings-row">
         <div className="settings-row-text">
-          <div className="settings-row-label">Runtime</div>
-          <div className="settings-row-help">The agent runtime bots are spawned with.</div>
+          <div className="settings-row-label">Session runner</div>
+          <div className="settings-row-help">
+            How the Hermes service starts bot sessions. Set in gravityd.toml.
+          </div>
         </div>
         <span className="settings-value">{config.runtime}</span>
       </div>
@@ -250,9 +255,9 @@ export default function DaemonSettings(props: DaemonSettingsProps): ReactElement
       setDraft(
         reply.config.auto_compact_window === null ? "" : String(reply.config.auto_compact_window),
       );
-      onToast("info", "Daemon updated", "The auto-compact window applies when a bot restarts.");
+      onToast("info", "Settings saved", "The auto-compact window applies when a bot restarts.");
     } catch (err) {
-      onToast("error", "Update failed", errText(err));
+      onToast("error", "Couldn't save the setting", errText(err));
     } finally {
       setSaving(false);
     }

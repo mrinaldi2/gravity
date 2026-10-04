@@ -45,7 +45,7 @@ describe("BotView", () => {
 
   it("shows the bot state without a read-only badge for control connections", () => {
     renderView({ bot: fx.bot({ state: "waiting_for_approval" }) });
-    expect(screen.getByText("waiting for approval")).toBeInTheDocument();
+    expect(screen.getAllByText("Needs approval").length).toBeGreaterThan(0);
     expect(screen.queryByText("Read-only")).not.toBeInTheDocument();
   });
 
@@ -108,7 +108,7 @@ describe("BotView", () => {
     expect(panel).not.toHaveClass("bot-info-panel-collapsed");
     expect(name).toHaveValue("Ada");
     await waitFor(() => {
-      expect(storage.get("gravity.bot-info-panel")).toBe(
+      expect(storage.get("hermes.bot-info-panel")).toBe(
         JSON.stringify({ collapsed: false, width: 360 }),
       );
     });
@@ -134,7 +134,7 @@ describe("BotView", () => {
   });
 
   it("restores the saved inspector layout", () => {
-    storage.set("gravity.bot-info-panel", JSON.stringify({ collapsed: true, width: 420 }));
+    storage.set("hermes.bot-info-panel", JSON.stringify({ collapsed: true, width: 420 }));
     renderView();
 
     expect(screen.getByRole("complementary", { name: "Bot info" })).toHaveClass(

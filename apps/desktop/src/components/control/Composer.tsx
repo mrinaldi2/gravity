@@ -115,7 +115,7 @@ export default function Composer({
             disabled={!canControl || busy || !ready}
             onClick={onSave}
           >
-            Save ruling <span className="cc-hint">⌘↩</span>
+            Save as draft <span className="cc-hint">⌘↩</span>
           </button>
         </div>
       </div>

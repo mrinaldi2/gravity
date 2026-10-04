@@ -16,7 +16,7 @@ interface WaitingListProps {
   readonly botName: (botId: string) => string | undefined;
 }
 
-/** "3 waiting on you · 1 urgent · 2 answered, unpublished" */
+/** "3 open decisions · 1 urgent · 2 drafts" */
 function summaryText(waiting: readonly Decision[]): string {
   if (waiting.length === 0) {
     return "Nothing open";
@@ -24,9 +24,9 @@ function summaryText(waiting: readonly Decision[]): string {
   const urgent = waiting.filter((item) => item.priority === "urgent").length;
   const drafts = waiting.filter((item) => item.state === "answered").length;
   return [
-    `${waiting.length} waiting on you`,
+    `${waiting.length} open ${waiting.length === 1 ? "decision" : "decisions"}`,
     urgent > 0 ? ` · ${urgent} urgent` : "",
-    drafts > 0 ? ` · ${drafts} answered, unpublished` : "",
+    drafts > 0 ? ` · ${drafts} ${drafts === 1 ? "draft" : "drafts"}` : "",
   ].join("");
 }
 
@@ -34,9 +34,11 @@ function Empty({ settledCount }: { readonly settledCount: number }): ReactElemen
   return (
     <div className="cc-empty">
       <div className="cc-empty-ring" />
-      <div className="cc-empty-title">Nothing is waiting on you.</div>
+      <div className="cc-empty-title">Nothing needs you.</div>
       <div className="cc-empty-body">Bots will raise the next decision here.</div>
-      <div className="cc-empty-foot">{settledCount} rulings in the registry · ⌘2</div>
+      <div className="cc-empty-foot">
+        {settledCount} settled {settledCount === 1 ? "decision" : "decisions"} · ⌘2
+      </div>
     </div>
   );
 }
@@ -73,7 +75,7 @@ function HeldSection({
         onClick={onToggleHeld}
       >
         <span className={`cc-chevron ${heldOpen ? "cc-chevron-open" : ""}`}>›</span>
-        <span>Held</span>
+        <span>On hold</span>
         <span className="cc-count">{held.length}</span>
         <span className="cc-held-hint">come back on their own</span>
       </button>

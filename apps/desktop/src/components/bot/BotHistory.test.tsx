@@ -92,7 +92,9 @@ describe("BotHistory", () => {
 
     await user.click(await screen.findByRole("button", { name: "Revert" }));
     expect(daemon.requests.some((r) => r.body.type === "revert_bot_revision")).toBe(false);
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Revert" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Revert change" }),
+    );
 
     await waitFor(() => {
       expect(onBotUpdated).toHaveBeenCalled();
@@ -111,7 +113,9 @@ describe("BotHistory", () => {
     await open(user);
 
     await user.click(await screen.findByRole("button", { name: "Revert" }));
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Revert" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Revert change" }),
+    );
     await waitFor(() => {
       expect(onToast).toHaveBeenCalledWith("error", "Revert failed", "gone");
     });

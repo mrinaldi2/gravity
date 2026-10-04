@@ -15,7 +15,7 @@ const SIDE_TABS: readonly SideTab[] = ["info", "tasks", "files", "commands", "me
 const SIDE_LABEL: Readonly<Record<SideTab, string>> = {
   info: "Info",
   tasks: "Tasks",
-  files: "Files",
+  files: "Artifacts",
   commands: "Commands",
   memory: "Memory",
 };

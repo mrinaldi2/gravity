@@ -38,7 +38,7 @@ export default function SidebarFooter(props: SidebarFooterProps): ReactElement {
           {endpoint.host}:{endpoint.port} · {connectionStatusLabel(status)}
         </span>
         {status === "connected" && !canControl ? (
-          <span className="readonly-badge" title="This connection lacks the control grant">
+          <span className="readonly-badge" title="This connection has no control access">
             read-only
           </span>
         ) : null}

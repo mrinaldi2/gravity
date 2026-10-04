@@ -16,8 +16,8 @@ describe("TasksPanel", () => {
     expect(within(upcoming).getByText("Routine nightly-report")).toBeInTheDocument();
     expect(within(upcoming).queryByText("Routine paused")).not.toBeInTheDocument();
     const done = screen.getByRole("region", { name: "Done" });
-    expect(within(done).getByText("done")).toBeInTheDocument();
-    expect(within(done).getByText("expired")).toBeInTheDocument();
+    expect(within(done).getAllByText("Done")).toHaveLength(2);
+    expect(within(done).getByText("Expired")).toBeInTheDocument();
   });
 
   it("shows a finished task's result when opened", async () => {

@@ -62,7 +62,9 @@ function renderPane(endpoint: Endpoint): void {
 describe("ConnectionSettings", () => {
   it("offers the restart for the app-managed daemon on this machine", async () => {
     renderPane(LOCAL);
-    expect(await screen.findByRole("button", { name: "Restart" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Restart Hermes service" }),
+    ).toBeInTheDocument();
   });
 
   it("hides the restart for a remote daemon", async () => {

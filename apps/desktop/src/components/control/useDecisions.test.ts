@@ -134,7 +134,7 @@ describe("loading", () => {
     await waitFor(() => {
       expect(onToast).toHaveBeenCalledWith(
         "warn",
-        "The registry is larger than this view loads",
+        "There are more settled decisions than this view loads",
         expect.stringContaining("10000 records per list"),
       );
     });

@@ -104,7 +104,7 @@ function Block(props: BlockProps): ReactElement {
     case "completed":
       return (
         <div className="chat-card chat-completed">
-          <div className="chat-card-label">Completed task</div>
+          <div className="chat-card-label">Task completed</div>
           <ChatMarkdown>{item.result}</ChatMarkdown>
           {item.artifacts.length === 0 ? null : (
             <div className="chat-files">

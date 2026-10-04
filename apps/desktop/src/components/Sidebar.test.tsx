@@ -19,7 +19,7 @@ describe("Sidebar", () => {
 
   it("makes the header a window drag strip", () => {
     renderSidebar();
-    const header = screen.getByRole("button", { name: "New Project" }).closest(".sidebar-header");
+    const header = screen.getByRole("button", { name: "New project" }).closest(".sidebar-header");
     expect(header).toHaveAttribute("data-tauri-drag-region", "deep");
   });
 
@@ -91,7 +91,7 @@ describe("Sidebar", () => {
   it("offers the same menu from the label's right-click and the ⋯ button", async () => {
     const user = userEvent.setup();
     renderSidebar();
-    const entries = ["New Bot", "Project settings", "Open folder", "Delete project"];
+    const entries = ["New bot", "Project settings", "Open folder", "Delete project"];
 
     await user.pointer({ keys: "[MouseRight]", target: screen.getByText("Acme") });
     expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(entries);
@@ -108,7 +108,7 @@ describe("Sidebar", () => {
     await user.click(screen.getByRole("button", { name: "Project menu" }));
     await user.click(screen.getByRole("menuitem", { name: "Delete project" }));
 
-    const dialog = screen.getByRole("dialog", { name: "Delete project" });
+    const dialog = screen.getByRole("dialog", { name: /^Delete .+\?$/ });
     await user.click(within(dialog).getByRole("button", { name: "Delete project" }));
 
     expect(props.onDeleteProject).toHaveBeenCalledWith("p1");
@@ -122,7 +122,7 @@ describe("Sidebar", () => {
     await user.click(screen.getByRole("menuitem", { name: "Delete project" }));
     expect(props.onDeleteProject).not.toHaveBeenCalled();
 
-    const dialog = screen.getByRole("dialog", { name: "Delete project" });
+    const dialog = screen.getByRole("dialog", { name: /^Delete .+\?$/ });
     await user.click(within(dialog).getByRole("button", { name: "Delete project" }));
 
     expect(props.onDeleteProject).toHaveBeenCalledWith("p1");
@@ -141,7 +141,7 @@ describe("Sidebar", () => {
 
   it("hides creation controls without the control grant", () => {
     renderSidebar({ canControl: false });
-    expect(screen.queryByTitle("New Project")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("New project")).not.toBeInTheDocument();
     expect(screen.queryByTitle("New bot")).not.toBeInTheDocument();
     expect(screen.getByText("read-only")).toBeInTheDocument();
   });
@@ -150,7 +150,7 @@ describe("Sidebar", () => {
     const user = userEvent.setup();
     const props = renderSidebar();
 
-    await user.click(screen.getByTitle("New Project"));
+    await user.click(screen.getByTitle("New project"));
     await user.click(screen.getByRole("button", { name: "Create" }));
     expect(props.onCreateProject).not.toHaveBeenCalled();
 
@@ -175,9 +175,9 @@ describe("Sidebar", () => {
     const props = renderSidebar();
 
     await user.pointer({ keys: "[MouseRight]", target: screen.getByText("alice") });
-    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete bot" }));
 
-    expect(screen.getByRole("dialog", { name: "Delete bot" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Delete alice?" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete bot" }));
 
     expect(props.onDeleteBot).toHaveBeenCalledWith("b1");
@@ -189,7 +189,7 @@ describe("Sidebar", () => {
     const props = renderSidebar();
 
     await user.pointer({ keys: "[MouseRight]", target: screen.getByText("alice") });
-    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete bot" }));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByRole("dialog", { name: "Delete bot" })).not.toBeInTheDocument();
@@ -201,7 +201,7 @@ describe("Sidebar", () => {
     renderSidebar();
 
     await user.pointer({ keys: "[MouseRight]", target: screen.getByText("alice") });
-    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete bot" })).toBeInTheDocument();
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menuitem", { name: "Delete" })).not.toBeInTheDocument();
@@ -226,7 +226,7 @@ describe("Sidebar", () => {
 
     const tile = screen.getByText("bob").closest("button");
     expect(tile).toHaveClass("pin-tile");
-    expect(store.get("gravity.pinned-bots")).toBe(JSON.stringify(["b2"]));
+    expect(store.get("hermes.pinned-bots")).toBe(JSON.stringify(["b2"]));
 
     await user.click(screen.getByText("bob"));
     expect(props.onSelect).toHaveBeenCalledWith({ kind: "bot", botId: "b2" });
@@ -237,7 +237,7 @@ describe("Sidebar", () => {
   });
 
   it("restores pinned bots in their pinned order", () => {
-    stubLocalStorage({ "gravity.pinned-bots": JSON.stringify(["b2", "b1"]) });
+    stubLocalStorage({ "hermes.pinned-bots": JSON.stringify(["b2", "b1"]) });
     renderSidebar({
       bots: [fx.bot(), fx.bot({ id: "b2", name: "bob" })],
       unreadBots: { b2: 4 },
@@ -258,9 +258,9 @@ describe("Sidebar", () => {
 
   it("renders each connection status label", () => {
     renderSidebar({ status: "connecting" });
-    expect(screen.getByText(/connecting…/)).toBeInTheDocument();
+    expect(screen.getByText(/Connecting…/)).toBeInTheDocument();
     renderSidebar({ status: "auth_failed" });
-    expect(screen.getByText(/auth failed/)).toBeInTheDocument();
+    expect(screen.getByText(/Token rejected/)).toBeInTheDocument();
   });
 
   it("badges the control center quietly when nothing is urgent", () => {
@@ -283,7 +283,7 @@ describe("Sidebar", () => {
     renderSidebar();
     expect(document.querySelector(".control-row-count")).toBeNull();
     expect(
-      screen.getByTitle("Decisions and permission prompts waiting on you"),
+      screen.getByTitle("Decisions and permission requests waiting for you"),
     ).toBeInTheDocument();
   });
 });

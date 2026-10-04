@@ -39,10 +39,10 @@ describe("BotRuntimePicker", () => {
     }));
     daemon.capabilities = ["bot_runtime"];
     const updated = setup(daemon);
-    expect(screen.getByRole("button", { name: "Change runtime" })).toBeDisabled();
-    await user.selectOptions(screen.getByLabelText("Bot runtime"), "codex_cli");
+    expect(screen.getByRole("button", { name: "Change engine" })).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText("Engine"), "codex_cli");
     expect(daemon.requests).toHaveLength(0);
-    await user.click(screen.getByRole("button", { name: "Change runtime" }));
+    await user.click(screen.getByRole("button", { name: "Change engine" }));
     await waitFor(() => {
       expect(updated).toHaveBeenCalledWith(expect.objectContaining({ runtime: "codex_cli" }));
     });
@@ -60,7 +60,7 @@ describe("BotRuntimePicker", () => {
     daemon.capabilities = ["bot_runtime"];
     setup(daemon, connected, control);
     expect(screen.getByRole("combobox")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Change runtime" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Change engine" })).toBeDisabled();
   });
   it("reports failed switches and lets the user retry", async () => {
     const user = userEvent.setup();
@@ -80,10 +80,10 @@ describe("BotRuntimePicker", () => {
       />,
     );
     await user.selectOptions(screen.getByRole("combobox"), "codex_cli");
-    await user.click(screen.getByRole("button", { name: "Change runtime" }));
+    await user.click(screen.getByRole("button", { name: "Change engine" }));
     await waitFor(() => {
       expect(toast).toHaveBeenCalledWith("error", "Runtime update failed", "CLI unavailable");
     });
-    expect(screen.getByRole("button", { name: "Change runtime" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Change engine" })).toBeEnabled();
   });
 });

@@ -64,7 +64,7 @@ describe("DiagnosticsSettings", () => {
     });
     expect(screen.getByText("timeout")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Retry" }));
+    await user.click(screen.getByRole("button", { name: "Retry delivery" }));
     await waitFor(() => {
       expect(onToast).toHaveBeenCalledWith("info", "Delivery retried", expect.any(String));
     });
@@ -75,7 +75,7 @@ describe("DiagnosticsSettings", () => {
     await waitFor(() => {
       expect(screen.getByText("alice")).toBeInTheDocument();
     });
-    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry delivery" })).not.toBeInTheDocument();
   });
 
   it("prepends deliveries pushed by the daemon", async () => {

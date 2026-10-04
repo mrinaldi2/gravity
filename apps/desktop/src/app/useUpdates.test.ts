@@ -107,7 +107,7 @@ describe("useUpdates", () => {
     await waitFor(() => {
       expect(addToast).toHaveBeenCalledWith(
         "error",
-        "Daemon not updated",
+        "Couldn't update the Hermes service",
         expect.stringContaining("no such file"),
         expect.objectContaining({
           sticky: true,
@@ -117,8 +117,9 @@ describe("useUpdates", () => {
     });
     expect(invoke).not.toHaveBeenCalledWith("relaunch_app");
 
-    const relaunch = addToast.mock.calls.find((call) => call[1] === "Daemon not updated")?.[3]
-      ?.action;
+    const relaunch = addToast.mock.calls.find(
+      (call) => call[1] === "Couldn't update the Hermes service",
+    )?.[3]?.action;
     relaunch?.run();
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("relaunch_app");
@@ -193,11 +194,11 @@ describe("useUpdates", () => {
     await waitFor(() => {
       expect(addToast).toHaveBeenCalledWith(
         "info",
-        "Daemon update available",
+        "Hermes service update available",
         expect.stringContaining("0.4.0"),
         expect.objectContaining({
           sticky: true,
-          action: expect.objectContaining({ label: "Update daemon" }),
+          action: expect.objectContaining({ label: "Update Hermes service" }),
         }),
       );
     });
@@ -243,16 +244,18 @@ describe("useUpdates", () => {
     await waitFor(() => {
       expect(addToast).toHaveBeenCalledWith(
         "error",
-        "Daemon too old to connect",
+        "Hermes service update needed",
         expect.stringContaining("0.6.0"),
         expect.objectContaining({
           sticky: true,
-          action: expect.objectContaining({ label: "Update daemon" }),
+          action: expect.objectContaining({ label: "Update Hermes service" }),
         }),
       );
     });
 
-    addToast.mock.calls.find((call) => call[1] === "Daemon too old to connect")?.[3]?.action?.run();
+    addToast.mock.calls
+      .find((call) => call[1] === "Hermes service update needed")?.[3]
+      ?.action?.run();
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("install_local_daemon", { currentVersion: "0.6.0" });
     });
@@ -271,7 +274,7 @@ describe("useUpdates", () => {
     await waitFor(() => {
       expect(addToast).toHaveBeenCalledWith(
         "error",
-        "App too old to connect",
+        "Update needed",
         expect.stringContaining("without downgrading"),
         { sticky: true },
       );

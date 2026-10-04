@@ -22,7 +22,7 @@ export default function ControlCenterRow({
   const tooltip =
     urgent || counts.due_soon > 0
       ? `${counts.urgent} urgent, ${counts.due_soon} due within a day`
-      : "Decisions and permission prompts waiting on you";
+      : "Decisions and permission requests waiting for you";
 
   return (
     <div className="sidebar-control">
@@ -33,7 +33,7 @@ export default function ControlCenterRow({
         onClick={onSelect}
       >
         <span className="control-row-ring" />
-        <span className="control-row-name">Control center</span>
+        <span className="control-row-name">Decisions</span>
         {counts.total > 0 ? (
           <span className="control-row-count">
             {urgent ? <span className="control-row-dot" /> : null}

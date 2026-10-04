@@ -4,6 +4,7 @@ import type { Permissions } from "../components/permissions/usePermissions";
 import type { DaemonApi } from "../protocol/api";
 import type { PendingCounts } from "../protocol/decisions";
 import type { Bot } from "../protocol/entities";
+import { toolDisplayName } from "../toolNames";
 import type { Selection } from "./selection";
 import { usePendingDecisions } from "./usePendingDecisions";
 import type { AddToast } from "./useToasts";
@@ -50,7 +51,7 @@ export function usePermissionInbox({
           return;
         }
         const name = bots.find((bot) => bot.id === request.bot_id)?.name ?? "A bot";
-        addToast("warn", `${name} needs your permission`, request.summary, {
+        addToast("warn", `${name} wants to run ${toolDisplayName(request.tool)}`, request.summary, {
           action: { label: "Answer", run: () => select({ kind: "control" }) },
         });
       }),

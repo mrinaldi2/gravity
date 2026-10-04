@@ -76,7 +76,7 @@ describe("App actions", () => {
 
     // renderApp waits for the seeded project row, which a fresh daemon lacks.
     await waitFor(() => {
-      expect(screen.getByText("Welcome to Gravity")).toBeInTheDocument();
+      expect(screen.getByText("Welcome to The Hermes")).toBeInTheDocument();
     });
     // The post-create refresh must see what the daemon just made.
     daemon
@@ -109,13 +109,13 @@ describe("App actions", () => {
 
   it("creates a project and a bot through the sidebar", async () => {
     const user = userEvent.setup();
-    const newBot = fx.bot({ id: "b2", name: "New Bot", dir_name: "new-bot" });
+    const newBot = fx.bot({ id: "b2", name: "New bot", dir_name: "new-bot" });
     daemon
       .onRequest("create_project", () => ({ type: "project", req_id: "1", project: fx.project() }))
       .onRequest("create_bot", () => ({ type: "bot", req_id: "1", bot: newBot }));
     await renderApp();
 
-    await user.click(screen.getByTitle("New Project"));
+    await user.click(screen.getByTitle("New project"));
     await user.type(screen.getByPlaceholderText("Project name"), "Beta");
     await user.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => {
@@ -128,9 +128,9 @@ describe("App actions", () => {
     }));
 
     await user.click(screen.getByRole("button", { name: "Project menu" }));
-    await user.click(screen.getByRole("menuitem", { name: "New Bot" }));
+    await user.click(screen.getByRole("menuitem", { name: "New bot" }));
     await waitFor(() => {
-      expect(screen.getByText("New Bot", { selector: ".view-title" })).toBeInTheDocument();
+      expect(screen.getByText("New bot", { selector: ".view-title" })).toBeInTheDocument();
     });
     const creation = daemon.requests.find((request) => request.body.type === "create_bot");
     expect(creation?.body).toEqual({ type: "create_bot", project_id: "p1" });
@@ -146,7 +146,7 @@ describe("App actions", () => {
       keys: "[MouseRight]",
       target: screen.getByText("alice", { selector: ".bot-row-name" }),
     });
-    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete bot" }));
     await user.click(screen.getByRole("button", { name: "Delete bot" }));
 
     await waitFor(() => {
@@ -165,7 +165,7 @@ describe("App actions", () => {
       keys: "[MouseRight]",
       target: screen.getByText("alice", { selector: ".bot-row-name" }),
     });
-    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete bot" }));
     await user.click(screen.getByRole("button", { name: "Delete bot" }));
 
     await waitFor(() => {
@@ -180,7 +180,7 @@ describe("App actions", () => {
     });
     await renderApp();
 
-    await user.click(screen.getByTitle("New Project"));
+    await user.click(screen.getByTitle("New project"));
     await user.type(screen.getByPlaceholderText("Project name"), "Acme");
     await user.click(screen.getByRole("button", { name: "Create" }));
 
@@ -256,7 +256,7 @@ describe("App actions", () => {
     await renderApp();
 
     await user.click(screen.getByTitle("Connection settings"));
-    const host = screen.getByLabelText("Daemon host");
+    const host = screen.getByLabelText("Computer host");
     await user.clear(host);
     await user.type(host, "mini");
     await user.click(screen.getByRole("button", { name: "Connect" }));

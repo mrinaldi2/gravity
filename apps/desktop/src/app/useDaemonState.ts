@@ -72,7 +72,7 @@ export function useDaemonState(client: DaemonApi, addToast: AddToast): DaemonSta
       unread.clearFor(selectionRef.current);
     } catch (error) {
       captureException(error, "daemon_state_load");
-      addToast("error", "Failed to load daemon state", errText(error));
+      addToast("error", "Couldn't load your projects and bots", errText(error));
     }
     // Both apis expose stable callbacks.
   }, [addToast, client, entities, selectionRef, unread]);

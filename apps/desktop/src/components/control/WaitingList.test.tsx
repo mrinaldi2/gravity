@@ -56,9 +56,7 @@ function renderList(over: Partial<Parameters<typeof WaitingList>[0]> = {}): {
 describe("WaitingList", () => {
   it("counts the urgent and the unpublished in the summary", () => {
     renderList();
-    expect(
-      screen.getByText("2 waiting on you · 1 urgent · 1 answered, unpublished"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("2 open decisions · 1 urgent · 1 draft")).toBeInTheDocument();
   });
 
   it("marks what is urgent and how long it has", () => {
@@ -111,9 +109,9 @@ describe("WaitingList", () => {
   it("shows the empty state when nothing is waiting", () => {
     renderList({ waiting: [], held: [] });
 
-    expect(screen.getByText("Nothing is waiting on you.")).toBeInTheDocument();
+    expect(screen.getByText("Nothing needs you.")).toBeInTheDocument();
     expect(screen.getByText("Bots will raise the next decision here.")).toBeInTheDocument();
-    expect(screen.getByText("12 rulings in the registry · ⌘2")).toBeInTheDocument();
+    expect(screen.getByText("12 settled decisions · ⌘2")).toBeInTheDocument();
   });
 
   it("selects the row that was clicked", async () => {

@@ -43,13 +43,13 @@ describe("prefs", () => {
     updatePrefs({ toggleWindowShortcut: "Super+Shift+KeyG" });
     expect(getPrefs().toggleWindowShortcut).toBe("Super+Shift+KeyG");
 
-    stubLocalStorage({ "gravity.prefs": JSON.stringify({ toggleWindowShortcut: 7 }) });
+    stubLocalStorage({ "hermes.prefs": JSON.stringify({ toggleWindowShortcut: 7 }) });
     reloadPrefsForTest();
     expect(getPrefs().toggleWindowShortcut).toBe("");
   });
 
   it("survives malformed stored json", () => {
-    stubLocalStorage({ "gravity.prefs": "{nope" });
+    stubLocalStorage({ "hermes.prefs": "{nope" });
     reloadPrefsForTest();
     expect(getPrefs()).toEqual(DEFAULT_PREFS);
   });

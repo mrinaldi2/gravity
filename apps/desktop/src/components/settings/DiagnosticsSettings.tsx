@@ -52,7 +52,7 @@ export default function DiagnosticsSettings(props: DiagnosticsSettingsProps): Re
         onToast("info", "Delivery retried", "The delivery was re-queued.");
         await load();
       } catch (err) {
-        onToast("error", "Retry failed", errText(err));
+        onToast("error", "Couldn't retry the delivery", errText(err));
       }
     },
     [client, load, onToast],

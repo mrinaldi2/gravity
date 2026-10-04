@@ -15,8 +15,8 @@ interface DecisionCardProps {
 }
 
 const STATE_LABEL: Readonly<Record<Decision["state"], string>> = {
-  open: "Waiting on you",
-  answered: "Answered, not yet published",
+  open: "Open",
+  answered: "Draft",
   held: "On hold",
   settled: "Settled",
   withdrawn: "Withdrawn",
@@ -139,7 +139,7 @@ export default function DecisionCard(props: DecisionCardProps): ReactElement {
             props.onOpenDecision?.(decisionId);
           }}
         >
-          Open in the Control Center
+          Open in Decisions
         </button>
       )}
     </div>

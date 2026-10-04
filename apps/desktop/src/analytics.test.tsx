@@ -175,7 +175,7 @@ describe("analytics", () => {
       </AnalyticsProvider>,
     );
 
-    expect(screen.getByText("Gravity stopped unexpectedly")).toBeInTheDocument();
+    expect(screen.getByText("The Hermes stopped unexpectedly")).toBeInTheDocument();
     consoleError.mockRestore();
   });
 });

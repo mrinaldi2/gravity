@@ -4,17 +4,17 @@
 !macro GRAVITY_SERVICE ACTION
   Push $0
   Push $1
-  DetailPrint "Gravity background daemon: ${ACTION}"
+  DetailPrint "Hermes service: ${ACTION}"
   nsExec::ExecToStack /TIMEOUT=60000 '"$INSTDIR\hermesd.exe" service ${ACTION}'
   Pop $0
   Pop $1
   ${If} $0 != 0
     DetailPrint "$1"
-    MessageBox MB_OK|MB_ICONSTOP "Gravity could not ${ACTION} its background daemon.$\r$\n$\r$\n$1" /SD IDOK
+    MessageBox MB_OK|MB_ICONSTOP "The Hermes could not ${ACTION} the Hermes service.$\r$\n$\r$\n$1" /SD IDOK
     Pop $1
     Pop $0
     SetErrorLevel 1
-    Abort "Gravity background daemon ${ACTION} failed."
+    Abort "Hermes service ${ACTION} failed."
   ${EndIf}
   Pop $1
   Pop $0

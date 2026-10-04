@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { useScrollSelectedIntoView } from "../../hooks/useScrollSelectedIntoView";
 import type { Bot, BotActivity } from "../../protocol/entities";
 import { fmtShortTime } from "../../util";
+import { botStateTitle } from "../bot/botStates";
 import BotAvatar from "../BotAvatar";
 import { useBotMenu } from "./useBotMenu";
 
@@ -55,7 +56,7 @@ export default function BotRow({
         className={`row bot-row ${selected ? "row-selected" : ""}`}
         onClick={onClick}
         onContextMenu={menu.onContextMenu}
-        title={bot.state_reason.length > 0 ? `${bot.state}: ${bot.state_reason}` : bot.state}
+        title={botStateTitle(bot)}
       >
         <span className="bot-row-avatar">
           <BotAvatar avatar={bot.avatar} name={bot.name} id={bot.id} size="lg" />
@@ -67,7 +68,7 @@ export default function BotRow({
             <span className="bot-row-name">{bot.name}</span>
             {bot.temporary === true ? (
               <span className="bot-row-tag" title="Temporary worker: removed when its task closes">
-                worker
+                Worker
               </span>
             ) : null}
             {activity !== undefined ? (

@@ -7,10 +7,10 @@ import { errText, fmtTimestamp } from "../../util";
 import ChatMarkdown from "../chat/ChatMarkdown";
 
 const STATE_LABEL: Readonly<Record<BotTask["state"], string>> = {
-  open: "open",
-  done: "done",
-  cancelled: "cancelled",
-  expired: "expired",
+  open: "Open",
+  done: "Done",
+  cancelled: "Cancelled",
+  expired: "Expired",
 };
 
 function counterpart(task: BotTask): string {

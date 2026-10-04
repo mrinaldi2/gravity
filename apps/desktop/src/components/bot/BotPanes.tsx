@@ -32,7 +32,7 @@ interface BotPanesProps {
 /** Why the owner cannot write to a bot right now, or null when they can. */
 function writeBlockedReason(connected: boolean, canControl: boolean, bot: Bot): string | null {
   if (!connected) {
-    return "Not connected to the daemon";
+    return "Not connected to the Hermes service";
   }
   if (!canControl) {
     return "Read-only connection";
@@ -42,7 +42,7 @@ function writeBlockedReason(connected: boolean, canControl: boolean, bot: Bot): 
 
 /** Where a linked bot runs, said above its chat. */
 function machineNote(bot: Bot): string {
-  const machine = bot.peer?.name ?? "another machine";
+  const machine = bot.peer?.name ?? "another computer";
   const offline =
     bot.peer?.online === false ? " It is offline, so its chat loads once it is back." : "";
   return `${bot.name} runs on ${machine}; its chat is read from there.${offline}`;

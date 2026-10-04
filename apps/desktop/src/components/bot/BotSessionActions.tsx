@@ -29,7 +29,7 @@ const COPY: Readonly<Record<Action, Copy>> = {
     title: (name) => `Restart ${name}?`,
     body: (name) =>
       `${name}'s session restarts and picks its conversation back up. If it was in the middle of something, it is told what it was doing and which tasks are open, so it carries on. Its files, memory and tasks are kept.`,
-    confirm: "Restart",
+    confirm: "Restart bot",
     done: (name) => `${name} is restarting and will pick up where it left off.`,
   },
   clear: {
@@ -70,7 +70,13 @@ export default function BotSessionActions({
         copy.done(bot.name),
       );
     } catch (error) {
-      onToast("error", action === "restart" ? "Restart failed" : "Clear failed", errText(error));
+      onToast(
+        "error",
+        action === "restart"
+          ? `Couldn't restart ${bot.name}`
+          : `Couldn't clear ${bot.name}'s conversation`,
+        errText(error),
+      );
     } finally {
       setBusy(false);
     }
@@ -87,7 +93,7 @@ export default function BotSessionActions({
           setConfirming("restart");
         }}
       >
-        Restart
+        Restart bot
       </button>
       <button
         type="button"
@@ -98,7 +104,7 @@ export default function BotSessionActions({
           setConfirming("clear");
         }}
       >
-        Clear chat
+        Clear conversation
       </button>
       {open === null || confirming === null ? null : (
         <ConfirmDialog

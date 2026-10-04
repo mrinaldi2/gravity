@@ -201,7 +201,7 @@ jobs:
       - name: Verify packaged notices
         run: |
           python3 scripts/check-packaged-notices.py \
-            --app apps/desktop/src-tauri/target/release/bundle/macos/Gravity.app \
+            --app "apps/desktop/src-tauri/target/release/bundle/macos/The Hermes.app" \
             --daemon "dist/hermesd-$VERSION-aarch64-apple-darwin.tar.gz"
 
       - uses: actions/upload-artifact@v4
@@ -327,7 +327,7 @@ jobs:
           ### Desktop app (this is all most people need)
 
           On a Mac, download the DMG attached to this release,
-          open it and drag **Gravity** to Applications. On Windows, run the
+          open it and drag **The Hermes** to Applications. On Windows, run the
           `x64-setup.exe` installer; it installs for the current user only.
           The app bundles the daemon: on first launch a setup wizard offers to
           run bots on this machine (installs the bundled daemon as a background
@@ -335,7 +335,7 @@ jobs:
           daemon with a device token. Builds configured with updater signing offer app updates
           and can update the local daemon to match.
 
-          Gravity keeps its state under `~/.gravity` and serves on port
+          The Hermes keeps its state under `~/.gravity` and serves on port
           `49777`. A daemon already answering there stops the install: it
           refuses to start rather than run a second one against the same state.
 
@@ -356,7 +356,7 @@ jobs:
 
           > **Note:** this build is not notarized. Gatekeeper will block the
           > first launch on another machine — clear the quarantine flag once:
-          > `xattr -cr "/Applications/Gravity.app"`
+          > `xattr -cr "/Applications/The Hermes.app"`
           EOF
           fi
           cat >> notes.md <<'EOF'
@@ -366,7 +366,7 @@ jobs:
           EOF
           sed -i "s/VERSION/$VERSION/g" notes.md
           gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "Gravity $VERSION" \
+            --title "The Hermes $VERSION" \
             --notes-file notes.md \
             --generate-notes --draft
           # Expose latest.json only after every release asset has uploaded.

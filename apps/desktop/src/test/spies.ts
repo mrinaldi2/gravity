@@ -33,6 +33,9 @@ export function stubLocalStorage(
     setItem: (key: string, value: string): void => {
       store.set(key, value);
     },
+    removeItem: (key: string): void => {
+      store.delete(key);
+    },
   });
   return store;
 }

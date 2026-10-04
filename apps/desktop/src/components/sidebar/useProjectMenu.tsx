@@ -33,7 +33,7 @@ export function useProjectMenu({
 }: ProjectMenuOptions): RowMenuApi {
   return useRowMenu({
     items: [
-      ...(canControl ? [{ label: "New Bot", onSelect: onCreateBot }] : []),
+      ...(canControl ? [{ label: "New bot", onSelect: onCreateBot }] : []),
       { label: "Project settings", onSelect: onOpenSettings },
       {
         label: "Open folder",
@@ -45,7 +45,7 @@ export function useProjectMenu({
     deletion: canControl
       ? {
           label: "Delete project",
-          title: "Delete project",
+          title: `Delete ${project.name}?`,
           body: deletionBody(project, bots.length),
           confirmLabel: "Delete project",
           onConfirm: onDelete,

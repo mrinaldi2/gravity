@@ -12,7 +12,7 @@ interface ControlHeaderProps {
 }
 
 const TABS: readonly { readonly id: ControlTab; readonly label: string }[] = [
-  { id: "waiting", label: "Waiting" },
+  { id: "waiting", label: "Open" },
   { id: "settled", label: "Settled" },
   { id: "tags", label: "Tags" },
 ];
@@ -58,7 +58,7 @@ export default function ControlHeader({
             disabled={!canControl}
             onClick={onToggleTray}
           >
-            <span>Publish</span> <span className="cc-btn-green-count">{draftCount}</span>
+            <span>Publish rulings</span> <span className="cc-btn-green-count">{draftCount}</span>
             <span className="cc-hint">⌘⇧P</span>
           </button>
         ) : null}

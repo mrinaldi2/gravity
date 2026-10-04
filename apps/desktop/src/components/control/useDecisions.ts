@@ -117,7 +117,7 @@ export function useDecisions(client: DaemonApi, connected: boolean, onToast: Toa
       if (replies.some((reply) => !reply.complete)) {
         onToast(
           "warn",
-          "The registry is larger than this view loads",
+          "There are more settled decisions than this view loads",
           `Showing the first ${MAX_PAGES * PAGE} records per list. Narrow by tag, or search from a bot with list_decisions.`,
         );
       }

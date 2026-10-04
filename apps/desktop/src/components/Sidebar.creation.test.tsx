@@ -17,7 +17,7 @@ describe("Sidebar bot creation", () => {
     });
 
     await user.click(screen.getAllByRole("button", { name: "Project menu" })[0]);
-    await user.click(screen.getByRole("menuitem", { name: "New Bot" }));
+    await user.click(screen.getByRole("menuitem", { name: "New bot" }));
 
     expect(props.onCreateBot).toHaveBeenCalledWith("p1");
     expect(screen.queryByPlaceholderText("Bot name")).not.toBeInTheDocument();
@@ -36,11 +36,11 @@ describe("Sidebar bot creation", () => {
     renderSidebar({ onCreateBot });
 
     await user.click(screen.getByRole("button", { name: "Project menu" }));
-    await user.click(screen.getByRole("menuitem", { name: "New Bot" }));
+    await user.click(screen.getByRole("menuitem", { name: "New bot" }));
     expect(screen.getByRole("status")).toHaveTextContent("Creating bot");
 
     await user.click(screen.getByRole("button", { name: "Project menu" }));
-    await user.click(screen.getByRole("menuitem", { name: "New Bot" }));
+    await user.click(screen.getByRole("menuitem", { name: "New bot" }));
     expect(onCreateBot).toHaveBeenCalledTimes(1);
 
     for (const resolve of inFlight) {

@@ -38,7 +38,7 @@ export default function DraftCard({
   return (
     <div className="cc-draft">
       <div className="cc-card-label">
-        <span className="cc-card-label-accent">Draft ruling</span>
+        <span className="cc-card-label-accent">Draft</span>
         <span className="cc-card-label-note">bots can&apos;t see this yet</span>
         <span className="cc-card-label-actions">
           <button type="button" className="cc-link" disabled={!canControl} onClick={onEdit}>

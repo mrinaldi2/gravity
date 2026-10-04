@@ -147,7 +147,7 @@ fn reject_daemon_downgrade(current_version: Option<&str>) -> Result<(), String> 
         .map_err(|err| format!("refusing to replace daemon with unknown version: {err}"))?;
     if current > bundled {
         return Err(format!(
-            "refusing to downgrade daemon from {current} to {bundled}; update Gravity instead"
+            "refusing to downgrade the Hermes service from {current} to {bundled}; update The Hermes instead"
         ));
     }
     Ok(())
@@ -275,11 +275,11 @@ mod tests {
 
     #[test]
     fn discovers_the_renamed_sidecar_next_to_the_app_binary() {
-        let exe = Path::new("/Applications/Gravity.app/Contents/MacOS/Gravity");
+        let exe = Path::new("/Applications/The Hermes.app/Contents/MacOS/The Hermes");
         assert_eq!(
             sidecar_path_for_exe(exe).expect("sidecar path"),
             PathBuf::from(format!(
-                "/Applications/Gravity.app/Contents/MacOS/hermesd{}",
+                "/Applications/The Hermes.app/Contents/MacOS/hermesd{}",
                 std::env::consts::EXE_SUFFIX
             ))
         );

@@ -16,7 +16,7 @@ export const Levels: Story = () => (
         id: 2,
         level: "warn",
         title: "Read-only",
-        body: "This connection lacks the control grant.",
+        body: "This connection has no control access.",
       },
       { id: 3, level: "error", title: "Copy failed", body: "Clipboard permission was denied." },
     ]}

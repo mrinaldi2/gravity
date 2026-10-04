@@ -70,7 +70,7 @@ describe("ShortcutSettings", () => {
 
   it("clears the shortcut from the Clear button or Backspace", async () => {
     stubLocalStorage({
-      "gravity.prefs": JSON.stringify({ toggleWindowShortcut: "Super+Shift+KeyG" }),
+      "hermes.prefs": JSON.stringify({ toggleWindowShortcut: "Super+Shift+KeyG" }),
     });
     reloadPrefsForTest();
     const user = userEvent.setup();
@@ -97,7 +97,7 @@ describe("ShortcutSettings", () => {
 
   it("keeps the old shortcut and shows the refusal when the shell rejects", async () => {
     stubLocalStorage({
-      "gravity.prefs": JSON.stringify({ toggleWindowShortcut: "Super+Shift+KeyG" }),
+      "hermes.prefs": JSON.stringify({ toggleWindowShortcut: "Super+Shift+KeyG" }),
     });
     reloadPrefsForTest();
     applyToggleWindowShortcut.mockRejectedValue(new Error("already in use"));

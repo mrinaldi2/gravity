@@ -70,7 +70,7 @@ describe("SettingsOverlay", () => {
     renderOverlay();
     expect(screen.getByRole("dialog", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Connection" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Daemon host")).toBeInTheDocument();
+    expect(screen.getByLabelText("Computer host")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Connection" })).toHaveFocus();
   });
 

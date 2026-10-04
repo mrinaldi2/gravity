@@ -21,9 +21,11 @@ describe("BotSessionActions", () => {
     render(
       <BotSessionActions client={client} bot={fx.bot()} connected canControl onToast={onToast} />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Restart" }));
+    await userEvent.click(screen.getByRole("button", { name: "Restart bot" }));
     expect(screen.getByText(/picks its conversation back up/)).toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole("button", { name: "Restart" }).at(-1) as HTMLElement);
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Restart bot" }).at(-1) as HTMLElement,
+    );
     expect(client.requests.at(-1)?.body).toEqual({ type: "restart_bot", bot_id: "b1" });
     expect(onToast).toHaveBeenCalledWith("info", "Restarting", expect.stringContaining("pick up"));
   });
@@ -34,9 +36,11 @@ describe("BotSessionActions", () => {
     render(
       <BotSessionActions client={client} bot={fx.bot()} connected canControl onToast={onToast} />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Clear chat" }));
-    expect(screen.getByText(/its memory \(FACTS.md\) and its tasks are kept/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Clear conversation" }));
+    expect(screen.getByText(/its memory \(FACTS.md\) and its tasks are kept/)).toBeInTheDocument();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Clear conversation" }).at(-1) as HTMLElement,
+    );
     expect(client.requests.at(-1)?.body).toEqual({ type: "clear_bot_session", bot_id: "b1" });
     expect(onToast).toHaveBeenCalledWith("info", "Conversation cleared", expect.any(String));
   });
@@ -49,12 +53,14 @@ describe("BotSessionActions", () => {
     render(
       <BotSessionActions client={client} bot={fx.bot()} connected canControl onToast={onToast} />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "Clear chat" }));
+    await userEvent.click(screen.getByRole("button", { name: "Clear conversation" }));
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(client.requests.some((r) => r.body.type === "clear_bot_session")).toBe(false);
-    await userEvent.click(screen.getByRole("button", { name: "Restart" }));
-    await userEvent.click(screen.getAllByRole("button", { name: "Restart" }).at(-1) as HTMLElement);
-    expect(onToast).toHaveBeenCalledWith("error", "Restart failed", "peer is offline");
+    await userEvent.click(screen.getByRole("button", { name: "Restart bot" }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Restart bot" }).at(-1) as HTMLElement,
+    );
+    expect(onToast).toHaveBeenCalledWith("error", "Couldn't restart alice", "peer is offline");
   });
 
   it("is hidden from read-only connections and older daemons", () => {

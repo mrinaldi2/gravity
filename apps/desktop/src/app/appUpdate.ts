@@ -18,8 +18,8 @@ async function install(updateLocalDaemon: boolean, addToast: AddToast): Promise<
   captureException(new Error(daemonError), "daemon_update");
   addToast(
     "error",
-    "Daemon not updated",
-    `The app updated but its local daemon did not: ${daemonError}`,
+    "Couldn't update the Hermes service",
+    `The app updated but the Hermes service on this computer did not: ${daemonError}`,
     {
       sticky: true,
       action: {

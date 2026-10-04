@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { useScrollSelectedIntoView } from "../../hooks/useScrollSelectedIntoView";
 import type { Bot } from "../../protocol/entities";
+import { botStateTitle } from "../bot/botStates";
 import BotAvatar from "../BotAvatar";
 import { useBotMenu } from "./useBotMenu";
 
@@ -35,7 +36,7 @@ function PinnedBot({
         className={`pin-tile ${selected ? "pin-tile-selected" : ""}`}
         onClick={onClick}
         onContextMenu={menu.onContextMenu}
-        title={bot.state_reason.length > 0 ? `${bot.state}: ${bot.state_reason}` : bot.state}
+        title={botStateTitle(bot)}
       >
         <span className="pin-avatar">
           <BotAvatar avatar={bot.avatar} name={bot.name} id={bot.id} size="lg" />

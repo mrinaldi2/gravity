@@ -71,7 +71,7 @@ const UPDATE_HELP: Readonly<Record<"idle" | "checking" | "current", string>> = {
 function updateHelp(update: UpdateState, updateLocalDaemon: boolean): string {
   if (update.kind === "available") {
     if (updateLocalDaemon) {
-      return `Version ${update.version} is ready. Installing restarts the app, daemon, and running bots.`;
+      return `Version ${update.version} is ready. Installing restarts the app, the Hermes service and running bots.`;
     }
     return `Version ${update.version} is ready. Installing relaunches the app.`;
   }
@@ -140,11 +140,15 @@ export default function AboutSettings(props: AboutSettingsProps): ReactElement {
     setDaemonUpdating(true);
     try {
       await installLocalDaemon(localDaemonVersion);
-      addToast("info", "Daemon updated", "The local daemon is restarting.");
+      addToast(
+        "info",
+        "Hermes service updated",
+        "The Hermes service on this computer is restarting.",
+      );
     } catch (error) {
       captureException(error, "daemon_update");
-      const body = error instanceof Error ? error.message : "daemon update failed";
-      addToast("error", "Daemon update failed", body, { sticky: true });
+      const body = error instanceof Error ? error.message : "update failed";
+      addToast("error", "Couldn't update the Hermes service", body, { sticky: true });
     } finally {
       setDaemonUpdating(false);
     }
@@ -154,15 +158,17 @@ export default function AboutSettings(props: AboutSettingsProps): ReactElement {
     <div className="settings-section">
       <div className="settings-row">
         <div className="settings-row-text">
-          <div className="settings-row-label">Gravity</div>
-          <div className="settings-row-help">Desktop app version.</div>
+          <div className="settings-row-label">The Hermes</div>
+          <div className="settings-row-help">
+            Desktop app version. Based on Gravity by P. Mikołajczuk.
+          </div>
         </div>
         <span className="settings-value">{appVersion ?? "dev (browser)"}</span>
       </div>
 
       <div className="settings-row">
         <div className="settings-row-text">
-          <div className="settings-row-label">Daemon</div>
+          <div className="settings-row-label">Hermes service</div>
           <div className="settings-row-help">The hermesd this app is connected to.</div>
         </div>
         <div className="settings-row-control">
@@ -180,7 +186,7 @@ export default function AboutSettings(props: AboutSettingsProps): ReactElement {
                 void updateDaemon();
               }}
             >
-              {daemonUpdating ? "Updating…" : "Update daemon"}
+              {daemonUpdating ? "Updating…" : "Update Hermes service"}
             </button>
           ) : null}
         </div>

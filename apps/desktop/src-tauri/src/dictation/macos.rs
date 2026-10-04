@@ -60,7 +60,7 @@ fn authorize() -> Result<(), String> {
     if status == SFSpeechRecognizerAuthorizationStatus::Authorized {
         Ok(())
     } else {
-        Err("Speech recognition is off for Gravity. Turn it on in System Settings › Privacy & Security › Speech Recognition.".to_string())
+        Err("Speech recognition is off for Hermes. Turn it on in System Settings › Privacy & Security › Speech Recognition.".to_string())
     }
 }
 
