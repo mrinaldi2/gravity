@@ -266,3 +266,30 @@
   max-width: 260px;
   overflow-wrap: anywhere;
 }
+
+/* ---------- permission profile and extras (H-031) ---------- */
+
+.radio-row,
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.radio-row input,
+.checkbox-row input {
+  margin-top: 3px;
+}
+
+.radio-row .field-hint,
+.checkbox-row .field-hint {
+  display: block;
+}
+
+fieldset.field {
+  border: none;
+  margin: 0;
+  padding: 0;
+}

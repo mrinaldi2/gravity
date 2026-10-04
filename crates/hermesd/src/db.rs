@@ -29,6 +29,7 @@ mod decisions_tests;
 mod deliveries;
 mod devices;
 mod peers;
+mod permissions;
 mod project_links;
 mod project_repos;
 mod projects;

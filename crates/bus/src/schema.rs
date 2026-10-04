@@ -8,6 +8,7 @@ mod base;
 mod decisions;
 mod history;
 mod peers;
+mod permissions;
 mod workers;
 
 use base::MIGRATION_1;
@@ -17,6 +18,7 @@ use history::{
     MIGRATION_7, MIGRATION_8, MIGRATION_9,
 };
 use peers::{MIGRATION_14, MIGRATION_15, MIGRATION_16};
+use permissions::MIGRATION_PERMISSIONS;
 use workers::{MIGRATION_18, MIGRATION_19};
 
 pub const MIGRATIONS: &[&str] = &[
@@ -40,4 +42,5 @@ pub const MIGRATIONS: &[&str] = &[
     "ALTER TABLE bot ADD COLUMN user_chrome INTEGER NOT NULL DEFAULT 0;",
     MIGRATION_18,
     MIGRATION_19,
+    MIGRATION_PERMISSIONS,
 ];

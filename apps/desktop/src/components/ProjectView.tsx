@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
 import type { DaemonApi } from "../protocol/api";
-import type { Bot, Project, ProjectRepo } from "../protocol/entities";
+import type { Bot, NotifyLevel, Project, ProjectRepo } from "../protocol/entities";
 import ConfirmDialog from "./overlay/ConfirmDialog";
+import ProjectPermissionsForm from "./ProjectPermissionsForm";
 import ProjectRepoForm from "./ProjectRepoForm";
 import WorkersPanel from "./WorkersPanel";
 
@@ -16,6 +17,7 @@ interface ProjectViewProps {
   readonly onSetLead: (projectId: string, botId: string | null) => Promise<void>;
   readonly onSetRepo: (projectId: string, repo: ProjectRepo | null) => Promise<void>;
   readonly onDelete: (projectId: string) => Promise<void>;
+  readonly onToast: (level: NotifyLevel, title: string, body: string) => void;
 }
 
 /** How deleting this project is described before it happens. */
@@ -30,7 +32,7 @@ export function deletionBody(project: Project, botCount: number): string {
 /** Project settings: the name, what it holds, and deletion. */
 export default function ProjectView(props: ProjectViewProps): ReactElement {
   const { client, project, bots, connected, canControl } = props;
-  const { onRename, onSetLead, onSetRepo, onDelete } = props;
+  const { onRename, onSetLead, onSetRepo, onDelete, onToast } = props;
   const [name, setName] = useState(project.name);
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -142,6 +144,14 @@ export default function ProjectView(props: ProjectViewProps): ReactElement {
         repo={project.repo ?? null}
         disabled={!connected || !canControl}
         onSave={(repo) => onSetRepo(project.id, repo)}
+      />
+
+      <ProjectPermissionsForm
+        key={`${project.id}:${project.permission_profile ?? "standard"}`}
+        client={client}
+        project={project}
+        connected={connected}
+        onToast={onToast}
       />
 
       {canControl ? (

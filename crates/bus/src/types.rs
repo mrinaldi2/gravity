@@ -8,6 +8,7 @@ mod decisions;
 mod entities;
 mod enums;
 mod peers;
+mod permissions;
 mod revisions;
 mod workers;
 
@@ -16,6 +17,7 @@ pub use decisions::*;
 pub use entities::*;
 pub use enums::*;
 pub use peers::*;
+pub use permissions::*;
 pub use revisions::*;
 pub use workers::*;
 

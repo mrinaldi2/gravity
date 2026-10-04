@@ -32,6 +32,7 @@ mod links;
 mod messaging;
 mod peers;
 mod permissions;
+mod profiles;
 mod project_repo;
 mod routines;
 mod runtime;

@@ -75,7 +75,7 @@ pub fn settings(daemon_port: u16, bot_token_env: &str) -> serde_json::Value {
         // them unattended so bot-to-bot traffic flows without approval stops.
         "crossSessionInbound": "accept",
         // Artifacts access is granted at spawn time (`artifacts_allow_rules`
-        // via `--allowedTools`), never here: allow rules in a folder's
+        // in the generated `--settings` file), never here: allow rules in a folder's
         // settings.json make Claude Code's trust dialog warn about
         // pre-approved permissions.
         "permissions": {

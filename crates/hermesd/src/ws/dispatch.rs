@@ -65,6 +65,9 @@ const APPROVE_ONLY: &[&str] = &[
     "update_decision",
     "delete_decision",
     "publish_decisions",
+    // How much bots may do without asking is the owner's call (H-031).
+    "set_project_permission_profile",
+    "set_bot_permission_extras",
 ];
 
 /// Capability required for each request type.
@@ -159,6 +162,8 @@ impl Conn {
             "delete_tag" => self.delete_tag(&req_id, req),
             "set_project_lead" => self.set_project_lead(&req_id, req),
             "set_project_repo" => self.set_project_repo(&req_id, req),
+            "set_project_permission_profile" => self.set_project_permission_profile(&req_id, req),
+            "set_bot_permission_extras" => self.set_bot_permission_extras(&req_id, req),
             "list_workers" => self.list_workers(&req_id, req),
             "cancel_worker" => self.cancel_worker(&req_id, req),
             "list_peers" => self.list_peers(&req_id),

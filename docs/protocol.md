@@ -37,7 +37,7 @@ the owner can click and type into a watched bot browser (`browser_input`), and `
 can be restarted or cleared (`restart_bot`, `clear_bot_session`), and `workers`
 when bots can spawn temporary workers (`temporary` on bots, `repo` on projects,
 `set_project_repo`, `list_workers`, `cancel_worker`, the `workers_updated` push;
-see [workers](workers.md)).
+see [workers](workers.md)), and `permission_profiles` when projects carry a permission profile and bots their extras (`set_project_permission_profile`, `set_bot_permission_extras`).
 
 or `{ "type": "error", "req_id": "1", "code": "auth_failed" | "unsupported_version", "message": "..." }`
 followed by close.
@@ -88,6 +88,8 @@ Codes: `auth_failed`, `unsupported_version`, `not_found`, `invalid_request`,
 | `list_workers` | `project_id` | `workers`: `{ project_id, workers: [Worker], running_here, max_workers_here }`, queued and running oldest first, then recently finished. Requires `read` |
 | `cancel_worker` | `worker_id, reason?` | `worker`: a queued spawn is dropped; a running worker is told to stop, in the owner's name, and retires. `conflict` once it has finished |
 | `set_project_repo` | `project_id, url \| null, branch?` (default `main`) | `project`: the shared git repository workers check out and push to; `url: null` clears it. Bots' prompts are rewritten for their next start |
+| `set_project_permission_profile` | `project_id, profile` (`standard` \| `trusted` \| `full`) | `project` (`permission_profile`). **approve** grant. What the project's bots may do without asking (H-031); its local bots restart to pick it up |
+| `set_bot_permission_extras` | `bot_id, extras: [publish \| daemon_restart \| app_restart \| install \| release_main]` | `bot` (`permission_extras`). **approve** grant. Replaces the bot's extras, which apply in Trusted and Full (`release_main`, pushing and merging to `main`, in every profile); the bot restarts |
 | `delete_project` | `project_id` | `ok` — archives the project and every bot in it; see Semantics |
 | `list_bots` | `project_id?` | `bots` |
 | `list_bot_activity` | `project_id?` | `bot_activity` — one preview line per bot; see Semantics |

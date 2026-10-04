@@ -22,10 +22,9 @@ impl Supervisor {
         let token = self.inner.secrets.bot_token(bot_id)?;
         let workspace = std::path::PathBuf::from(&bot.workspace_path);
         let bot_root = workspace.parent().map(|p| p.to_path_buf());
-        let artifacts = self
-            .inner
-            .db
-            .get_project(&bot.project_id)?
+        let project = self.inner.db.get_project(&bot.project_id)?;
+        let artifacts = project
+            .as_ref()
             .map(|p| crate::paths::artifacts_dir(&self.inner.cfg, &p.dir_name));
 
         // Refresh the cooperative settings so existing bots pick up current
@@ -77,7 +76,19 @@ impl Supervisor {
         // resumes the workspace's session, so a daemon restart is invisible to
         // the bot and to whoever was talking to it.
         let resume = bot.runtime == bus::BotRuntime::ClaudeCode && self.wants_resume(bot_id);
-        let mut claude_args = self.inner.cfg.claude_args.clone();
+        // The permission profile (H-031): a generated `--settings` file and mode.
+        let stored = crate::bot_permissions::Stored::load(&self.inner.db, &bot)?;
+        let mut claude_args = crate::bot_permissions::BotStart {
+            cfg: &self.inner.cfg,
+            profile: stored.profile,
+            extras: &stored.extras,
+            project_name: project.as_ref().map_or("", |p| p.name.as_str()),
+            bot_root: bot_root.as_deref().unwrap_or(&workspace),
+            workspace: &workspace,
+            artifacts: artifacts.as_deref(),
+            repo_url: stored.repo_url.as_deref(),
+        }
+        .claude_args(&self.inner.cfg.claude_args)?;
         if resume {
             claude_args.push("--continue".to_string());
         }
@@ -117,18 +128,6 @@ impl Supervisor {
                 claude_args.push(content);
             }
         }
-        // The shared artifacts directory sits outside the workspace, so the
-        // session needs it as an additional working directory, plus permission
-        // rules granted here at spawn so the folder's own settings never have
-        // to pre-approve anything.
-        if let Some(artifacts) = &artifacts {
-            claude_args.push("--add-dir".to_string());
-            claude_args.push(artifacts.display().to_string());
-            // One argument per rule: the flag is variadic, and joining them
-            // would split a rule again on any comma in the artifacts path.
-            claude_args.push("--allowedTools".to_string());
-            claude_args.extend(crate::paths::artifacts_allow_rules(artifacts));
-        }
 
         let mut env = crate::brand::bot_token_vars(token);
         if let Some(window) = self.inner.auto_compact.effective(&self.inner.cfg) {
@@ -157,6 +156,8 @@ impl Supervisor {
                     port: self.inner.cfg.port,
                     artifacts,
                     browser,
+                    profile: stored.profile,
+                    trusted_paths: self.inner.cfg.trusted_paths.clone(),
                 }
             }),
             bot_id: bot.id.clone(),
@@ -384,8 +385,7 @@ impl Supervisor {
         );
         self.set_state(bot_id, BotState::Crashed, &reason);
         // Only the first crash of a streak notifies: the reconciler retries
-        // forever, and a bot that cannot start would otherwise toast on every
-        // attempt.
+        // forever, and a bot that cannot start would toast on every attempt.
         if crashes == 1 {
             let title = format!("{} crashed", self.bot_name(bot_id));
             self.inner.events.push(Push::notice("error", title, reason));

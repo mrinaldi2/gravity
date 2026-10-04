@@ -16,6 +16,8 @@ fn native_codex_initializes_and_resumes_without_a_model_request() {
         claude_bin: "unused".into(),
         claude_args: Vec::new(),
         codex: Some(CodexSpec {
+            profile: bus::PermissionProfile::Standard,
+            trusted_paths: Vec::new(),
             bin: std::env::var("CODEX_BINARY").expect("CODEX_BINARY"),
             args: Vec::new(),
             port: 1,
@@ -71,6 +73,8 @@ async fn native_terminal_renders_the_official_codex_interface() {
         claude_bin: "unused".into(),
         claude_args: Vec::new(),
         codex: Some(CodexSpec {
+            profile: bus::PermissionProfile::Standard,
+            trusted_paths: Vec::new(),
             bin: std::env::var("CODEX_BINARY").unwrap(),
             args: vec!["-c".into(), "model_provider=\"gravity_test\"".into(), "-c".into(), format!("model_providers.gravity_test={{name=\"Local test\",base_url=\"{}\",wire_api=\"responses\",requires_openai_auth=false}}", endpoint.trim())],
             port: 1,

@@ -40,6 +40,7 @@ pub const CAPABILITIES: &[&str] = &[
     "bot_commands",
     "restart_bot",
     "workers",
+    "permission_profiles",
 ];
 
 pub struct AppState {
