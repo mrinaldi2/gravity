@@ -189,12 +189,16 @@ fn hard_deny(input: &SettingsInput<'_>) -> Vec<String> {
         "Edit(~/.claude/settings.json)".to_string(),
         "Edit(~/.claude/settings.local.json)".to_string(),
         "Edit(~/.claude.json)".to_string(),
-        format!("Edit({home}/gravityd.toml)"),
         format!("Edit({home}/bot-settings.json)"),
         format!("Edit({home}/projects/**/.claude/settings.json)"),
         format!("Edit({home}/projects/**/.claude/settings.local.json)"),
         format!("Edit({home}/projects/**/settings.gen.json)"),
     ];
+    deny.extend(
+        super::CONFIG_FILES
+            .iter()
+            .map(|name| format!("Edit({home}/{name})")),
+    );
     deny.extend(STATIC_DENY.iter().map(|r| (*r).to_string()));
     deny
 }

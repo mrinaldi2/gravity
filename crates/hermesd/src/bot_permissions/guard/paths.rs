@@ -87,19 +87,55 @@ pub fn real(path: &Path) -> PathBuf {
 
 impl GuardContext {
     /// The paths no tool call may touch.
-    pub(super) fn protected(&self) -> Vec<PathBuf> {
-        let lexical = [
+    pub(in crate::bot_permissions) fn protected(&self) -> Vec<PathBuf> {
+        let mut lexical = vec![
             self.home.join("secrets"),
-            self.home.join("gravityd.toml"),
             self.home.join("bot-settings.json"),
             self.user_home.join(".ssh"),
             self.user_home.join(".claude.json"),
             self.user_home.join(".claude").join("settings.json"),
             self.user_home.join(".claude").join("settings.local.json"),
         ];
+        lexical.extend(
+            crate::bot_permissions::CONFIG_FILES
+                .iter()
+                .map(|name| self.home.join(name)),
+        );
+        // The same paths spelled through a sibling link to the home
+        // (`~/.gravity` → `~/.thehermes` after the move).
+        let aliases: Vec<PathBuf> = self
+            .home_links()
+            .iter()
+            .flat_map(|link| {
+                lexical
+                    .iter()
+                    .filter_map(|p| p.strip_prefix(&self.home).ok())
+                    .map(|rest| link.join(rest))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        lexical.extend(aliases);
         let mut all: Vec<PathBuf> = lexical.iter().map(|p| real(p)).collect();
         all.extend(lexical);
         all
+    }
+
+    /// The home's other names beside it that are symlinks to it.
+    fn home_links(&self) -> Vec<PathBuf> {
+        let Some(parent) = self.home.parent() else {
+            return Vec::new();
+        };
+        let home = real(&self.home);
+        crate::bot_permissions::HOME_NAMES
+            .iter()
+            .map(|name| parent.join(name))
+            .filter(|link| *link != self.home)
+            .filter(|link| {
+                link.symlink_metadata()
+                    .is_ok_and(|m| m.file_type().is_symlink())
+            })
+            .filter(|link| real(link) == home)
+            .collect()
     }
 
     /// Any of these in a path makes it protected wherever it lives.
@@ -176,24 +212,28 @@ impl GuardContext {
     }
 
     /// `~/.gravity/sec*/x` reaches the secrets: the literal part before the
-    /// first wildcard is a prefix of a protected path. A wildcard at the
-    /// start of a name never matches a dot file.
+    /// first wildcard is a prefix of a protected path. The folder part of
+    /// that prefix is read both as spelled and resolved like a plain path,
+    /// so a glob through a symlink (`~/.gravity` → `~/.thehermes`) is judged
+    /// by where it lands (CE-006 G1). A wildcard at the start of a name never
+    /// matches a dot file.
     fn glob_reaches_protected(&self, expanded: &str, scope: &Scope) -> Option<String> {
         let at = expanded.find(WILD)?;
         let (prefix, wild) = expanded.split_at(at);
+        let (folder, partial) = match prefix.rfind('/') {
+            Some(i) => (&prefix[..=i], &prefix[i + 1..]),
+            None => ("", prefix),
+        };
         let protected = self.protected();
         let dirs: Vec<PathBuf> = if prefix.starts_with('/') {
-            vec![PathBuf::new()]
+            vec![PathBuf::from("/")]
         } else {
             scope.dirs.clone()
         };
-        dirs.iter().find_map(|dir| {
-            let base = if prefix.is_empty() || prefix.ends_with('/') {
-                format!("{}/", normalize(&dir.join(prefix)).display())
-            } else {
-                normalize(&dir.join(prefix)).display().to_string()
-            };
-            let base = base.replace("//", "/");
+        let mut folders: Vec<PathBuf> = dirs.iter().map(|d| normalize(&d.join(folder))).collect();
+        folders.extend(self.candidates(if folder.is_empty() { "." } else { folder }, scope));
+        folders.iter().find_map(|dir| {
+            let base = format!("{}/{partial}", dir.display()).replace("//", "/");
             protected.iter().find_map(|p| {
                 let p = p.display().to_string();
                 let rest = p.strip_prefix(&base)?;
