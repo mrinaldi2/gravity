@@ -138,6 +138,16 @@ pub fn within(path: &Path, root: &Path) -> bool {
         .is_some_and(|rest| rest.is_empty() || rest.starts_with('/') || root.is_empty())
 }
 
+/// The null device as the shell spells it: `/dev/null` everywhere, and on
+/// Windows also `NUL` in any case and `\\.\NUL`.
+pub fn is_null_device(word: &str) -> bool {
+    word == "/dev/null"
+        || (cfg!(windows)
+            && ["nul", r"\\.\nul", "//./nul"]
+                .iter()
+                .any(|null| word.eq_ignore_ascii_case(null)))
+}
+
 /// Where a separator ends the folder part of a word: `/`, and on Windows `\`.
 fn last_separator(text: &str) -> Option<usize> {
     if cfg!(windows) {
@@ -353,6 +363,10 @@ impl GuardContext {
 
     fn may_change_one(&self, word: &str, scope: &Scope) -> Result<(), PathBuf> {
         let expanded = self.expand(word, scope);
+        // Resolved, Windows would read `/dev/null` as `C:\dev\null`.
+        if is_null_device(&expanded) {
+            return Ok(());
+        }
         if let Some(at) = expanded.find(WILD) {
             let (prefix, wild) = expanded.split_at(at);
             // A computed path that may start anywhere.

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use serde_json::json;
 
 use super::super::guard::{decide, paths, GuardContext};
+use super::guard_cases::bash;
 use super::guard_worktrees::{link_home, spelled};
 
 #[test]
@@ -32,6 +33,18 @@ fn path_keys_fold_every_windows_spelling() {
         std::path::Path::new(r"C:\Users\me\.gravity\secrets-old"),
         std::path::Path::new("/Users/me/.gravity/secrets"),
     ));
+}
+
+#[test]
+fn the_null_device_is_harmless_in_every_spelling() {
+    for target in ["/dev/null", "NUL", "nul", r"'\\.\NUL'"] {
+        let command = format!("ls > {target}");
+        assert_eq!(bash(&command), None, "{command} was blocked");
+        let command = format!("cargo build 2>{target}");
+        assert_eq!(bash(&command), None, "{command} was blocked");
+    }
+    assert!(bash("ls > /dev/nullx").is_some());
+    assert!(bash("ls > /etc/null").is_some());
 }
 
 /// The secrets behind the moved home's junction, in each spelling.
