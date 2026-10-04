@@ -41,7 +41,7 @@ use serde_json::{json, Value};
 mod commands;
 mod full;
 mod git;
-mod paths;
+pub(super) mod paths;
 mod targets;
 mod words;
 

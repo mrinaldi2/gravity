@@ -85,6 +85,68 @@ pub fn real(path: &Path) -> PathBuf {
     normalize(path)
 }
 
+/// A path as text the guard compares by prefix. On Windows one file has
+/// many spellings: `\` or `/`, a `\\?\` prefix (what `canonicalize`
+/// returns), a drive letter or none, any case. All of them become one
+/// lower-case, `/`-separated spelling without prefix or drive; folding
+/// drives together can only make a protected match wider.
+pub fn key(path: &Path) -> String {
+    let text = path.display().to_string();
+    if !cfg!(windows) {
+        return text;
+    }
+    let mut text = text.replace('\\', "/").to_lowercase();
+    for verbatim in ["//?/unc/", "//./unc/"] {
+        if let Some(rest) = text.strip_prefix(verbatim) {
+            text = format!("//{rest}");
+        }
+    }
+    for verbatim in ["//?/", "//./"] {
+        if let Some(rest) = text.strip_prefix(verbatim) {
+            text = rest.to_string();
+        }
+    }
+    let bytes = text.as_bytes();
+    if bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic() {
+        text.drain(..2);
+    }
+    // Git Bash's `/c/Users/…` is `C:\Users\…`; resolved from a cwd it
+    // reads as `C:\c\Users\…`.
+    let bytes = text.as_bytes();
+    if bytes.len() >= 2
+        && bytes[0] == b'/'
+        && bytes[1].is_ascii_alphabetic()
+        && matches!(bytes.get(2), None | Some(b'/'))
+    {
+        text.drain(..2);
+    }
+    let unc = text.starts_with("//");
+    while text.contains("//") {
+        text = text.replace("//", "/");
+    }
+    if unc {
+        text.insert(0, '/');
+    }
+    text
+}
+
+/// Whether `path` is `root` or inside it, compared by [`key`].
+pub fn within(path: &Path, root: &Path) -> bool {
+    let (path, root) = (key(path), key(root));
+    let root = root.trim_end_matches('/');
+    path.strip_prefix(root)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/') || root.is_empty())
+}
+
+/// Where a separator ends the folder part of a word: `/`, and on Windows `\`.
+fn last_separator(text: &str) -> Option<usize> {
+    if cfg!(windows) {
+        text.rfind(['/', '\\'])
+    } else {
+        text.rfind('/')
+    }
+}
+
 impl GuardContext {
     /// The paths no tool call may touch.
     pub(in crate::bot_permissions) fn protected(&self) -> Vec<PathBuf> {
@@ -149,12 +211,12 @@ impl GuardContext {
         let text = path.display().to_string().replace('\\', "/");
         self.protected()
             .into_iter()
-            .find(|p| path.starts_with(p))
+            .find(|p| path.starts_with(p) || within(path, p))
             .map(|p| p.display().to_string())
             .or_else(|| {
                 Self::PROTECTED_NAMES
                     .iter()
-                    .find(|name| text.contains(*name))
+                    .find(|name| key(Path::new(&text)).contains(&key(Path::new(name))))
                     .map(|name| (*name).to_string())
             })
     }
@@ -206,7 +268,7 @@ impl GuardContext {
         self.candidates(&expanded, scope).iter().find_map(|dir| {
             protected
                 .iter()
-                .find(|p| p.starts_with(dir) && *p != dir)
+                .find(|p| (p.starts_with(dir) || within(p, dir)) && key(p) != key(dir))
                 .map(|p| p.display().to_string())
         })
     }
@@ -220,12 +282,13 @@ impl GuardContext {
     fn glob_reaches_protected(&self, expanded: &str, scope: &Scope) -> Option<String> {
         let at = expanded.find(WILD)?;
         let (prefix, wild) = expanded.split_at(at);
-        let (folder, partial) = match prefix.rfind('/') {
+        let (folder, partial) = match last_separator(prefix) {
             Some(i) => (&prefix[..=i], &prefix[i + 1..]),
             None => ("", prefix),
         };
         let protected = self.protected();
-        let dirs: Vec<PathBuf> = if prefix.starts_with('/') {
+        let rooted = Path::new(prefix).has_root() || Path::new(prefix).is_absolute();
+        let dirs: Vec<PathBuf> = if rooted {
             vec![PathBuf::from("/")]
         } else {
             scope.dirs.clone()
@@ -233,12 +296,12 @@ impl GuardContext {
         let mut folders: Vec<PathBuf> = dirs.iter().map(|d| normalize(&d.join(folder))).collect();
         folders.extend(self.candidates(if folder.is_empty() { "." } else { folder }, scope));
         folders.iter().find_map(|dir| {
-            let base = format!("{}/{partial}", dir.display()).replace("//", "/");
+            let base = format!("{}/{partial}", key(dir)).replace("//", "/");
+            let base = key(Path::new(&base));
             protected.iter().find_map(|p| {
-                let p = p.display().to_string();
-                let rest = p.strip_prefix(&base)?;
+                let rest = key(p).strip_prefix(&base)?.to_string();
                 let hidden = base.ends_with('/') && rest.starts_with('.') && !wild.starts_with('.');
-                (!hidden).then(|| p.clone())
+                (!hidden).then(|| p.display().to_string())
             })
         })
     }
@@ -303,12 +366,12 @@ impl GuardContext {
             {
                 return Err(PathBuf::from(&expanded));
             }
-            let parent = match prefix.rfind('/') {
+            let parent = match last_separator(prefix) {
                 Some(0) => "/",
                 Some(i) => &prefix[..i],
                 None => ".",
             };
-            let partial = &prefix[prefix.rfind('/').map_or(0, |i| i + 1)..];
+            let partial = &prefix[last_separator(prefix).map_or(0, |i| i + 1)..];
             for dir in self.candidates(parent, scope) {
                 let reach = if partial.is_empty() {
                     dir

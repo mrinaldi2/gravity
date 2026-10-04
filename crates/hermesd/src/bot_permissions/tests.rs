@@ -8,6 +8,8 @@ use super::*;
 
 mod bypass_table;
 mod guard_cases;
+#[cfg(windows)]
+mod guard_windows;
 mod guard_worktrees;
 mod locks;
 

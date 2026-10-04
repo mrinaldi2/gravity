@@ -1,7 +1,6 @@
 //! The guard's verdicts on worktrees, inline code and the moved home.
 
-#[cfg(unix)]
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
@@ -115,7 +114,7 @@ fn the_inline_code_deny_says_report_it() {
 /// `~/.thehermes`. A glob spelled through the old name must still be judged
 /// by where it lands. The fake home lives under `target/`, not a temp dir:
 /// the guard treats the temp dirs as writable, which would hide a miss.
-#[cfg(unix)]
+/// On Windows the link is a junction, as `migrate-home` makes it.
 #[test]
 fn a_glob_through_the_old_home_link_is_denied_before_and_after_the_move() {
     let target = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target");
@@ -136,7 +135,7 @@ fn a_glob_through_the_old_home_link_is_denied_before_and_after_the_move() {
     std::fs::write(old.join("secrets/tok"), "dummy").expect("write");
     std::fs::write(old.join("gravityd.toml"), "").expect("write");
 
-    let g = old.display().to_string();
+    let g = spelled(&old);
     let denied = [
         format!("cat {g}/sec*/tok"),
         format!("cat {g}/secret?/tok"),
@@ -218,9 +217,38 @@ fn a_glob_through_the_old_home_link_is_denied_before_and_after_the_move() {
     // The move: rename the home and the config, leave the old name as a link.
     std::fs::rename(&old, &new).expect("move home");
     std::fs::rename(new.join("gravityd.toml"), new.join("hermesd.toml")).expect("rename config");
-    std::os::unix::fs::symlink(&new, &old).expect("link");
+    link_home(&new, &old);
     let after = check(&new, "after the move");
     // Defence in depth: the old name's lexical forms are protected too.
     assert!(after.protected().contains(&old.join("secrets")));
     assert!(after.protected().contains(&old.join("hermesd.toml")));
+}
+
+/// A path as a shell word: on Windows without `\\?\` and with `/`, the
+/// way Git Bash reads it.
+pub(super) fn spelled(path: &Path) -> String {
+    let text = path.display().to_string();
+    if cfg!(windows) {
+        text.trim_start_matches(r"\\?\").replace('\\', "/")
+    } else {
+        text
+    }
+}
+
+/// `old` made a link to the moved home `new`: a junction on Windows.
+pub(super) fn link_home(new: &Path, old: &Path) {
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(new, old).expect("link");
+    #[cfg(windows)]
+    {
+        let status = std::process::Command::new("cmd.exe")
+            .args(["/d", "/c", "mklink", "/J"])
+            // mklink takes no `\\?\` prefix.
+            .arg(spelled(old).replace('/', "\\"))
+            .arg(spelled(new).replace('/', "\\"))
+            .stdout(std::process::Stdio::null())
+            .status()
+            .expect("mklink");
+        assert!(status.success(), "mklink /J failed");
+    }
 }
