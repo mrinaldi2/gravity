@@ -5,16 +5,17 @@ use std::time::Duration;
 use anyhow::Context;
 
 mod host;
-mod legacy;
 mod process_tree;
 mod reap;
+#[path = "../sequence.rs"]
+mod sequence;
+#[path = "../stage.rs"]
+mod stage;
 mod task;
-mod upgrade;
 
-use host::{Host, TaskScheduler};
-pub use legacy::{remove_legacy, restart_legacy, stop_legacy, Legacy};
-use task::{run_task, stop, task_exists, task_name};
-use upgrade::{remove_if_present, upgrade, with_suffix};
+use host::{Schtasks, System, TaskScheduler};
+use sequence::{HomeMigration, Host, Layout, Migration};
+use stage::{remove_if_present, same_path, with_suffix};
 
 pub const SERVICE_LABEL: &str = crate::brand::WINDOWS_TASK;
 const DEFAULT_CONFIG: &str = include_str!("../../../../../ops/hermesd.example.toml");
@@ -64,72 +65,72 @@ impl ServicePaths {
     }
 }
 
-fn same_path(a: &Path, b: &Path) -> bool {
-    let normal = |p: &Path| p.to_string_lossy().replace('/', "\\").to_lowercase();
-    normal(a) == normal(b)
+/// Where an install puts things, with the daemon running from `old_home` now.
+fn layout(paths: &ServicePaths, old_home: &Path) -> Layout {
+    Layout {
+        from_bin: old_home.join("bin/hermesd.exe"),
+        bin: paths.bin_path(),
+        // The pre-rename binary a task from before the rename ran; the new
+        // launcher starts `hermesd.exe`.
+        leftovers: vec![paths.legacy_bin_path()],
+        port_file: crate::home::runtime_port_path(&paths.home),
+        dirs: vec![paths.home.join("bin"), paths.log_dir()],
+        config: paths.config_path(),
+        default_config: DEFAULT_CONFIG,
+    }
 }
 
-/// Installs `source` as the managed daemon and starts it; see [`upgrade`].
+/// `service install`: installs `source` and starts it, moving the home first
+/// when `migration` is given; see [`sequence`] for the order and the
+/// rollback. Whatever ran before keeps running if anything fails.
 pub fn install_and_start(
     source: &Path,
     paths: &ServicePaths,
     configured_port: u16,
+    migration: Option<&crate::migrate_home::Plan>,
 ) -> anyhow::Result<()> {
-    std::fs::create_dir_all(&paths.home)?;
-    upgrade(source, paths, &TaskScheduler::new(paths, configured_port)?)
+    let old_home = migration.map_or_else(|| paths.home.clone(), |plan| plan.from.clone());
+    let host = TaskScheduler::new(paths, &old_home, configured_port, System)?;
+    install_with(source, paths, &old_home, migration, &host)
 }
 
-/// Restarts the managed daemon, first reinstalling its binary from `bundled`
-/// when the task outlived it: the launcher then has nothing to start.
-fn restart_with(paths: &ServicePaths, bundled: &Path, host: &impl Host) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        paths.plist_path().is_file(),
-        "no managed daemon is installed"
-    );
-    if !paths.bin_path().is_file() {
-        tracing::warn!(
-            binary = %paths.bin_path().display(),
-            source = %bundled.display(),
-            "managed daemon binary is missing; reinstalling it"
-        );
-        return upgrade(bundled, paths, host);
-    }
-    host.stop()?;
-    host.start()
-}
-
-/// `service restart`. Run by the app's bundled sidecar, so a missing managed
-/// binary is reinstalled from the copy that ships with the app.
-pub fn restart(paths: &ServicePaths, configured_port: u16) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        paths.plist_path().is_file(),
-        "no managed daemon is installed"
-    );
-    let bundled = std::env::current_exe().context("locating the bundled daemon")?;
-    restart_with(
-        paths,
-        &bundled,
-        &TaskScheduler::new(paths, configured_port)?,
+fn install_with<S: Schtasks>(
+    source: &Path,
+    paths: &ServicePaths,
+    old_home: &Path,
+    migration: Option<&crate::migrate_home::Plan>,
+    host: &TaskScheduler<'_, S>,
+) -> anyhow::Result<()> {
+    let migration = migration.map(HomeMigration);
+    sequence::upgrade(
+        source,
+        &layout(paths, old_home),
+        host,
+        migration.as_ref().map(|m| m as &dyn Migration),
     )
 }
 
+/// `service restart`. Run by the app's bundled sidecar, so a missing managed
+/// binary is reinstalled from the copy that ships with the app. Never
+/// migrates the home.
+pub fn restart(paths: &ServicePaths, configured_port: u16) -> anyhow::Result<()> {
+    let bundled = std::env::current_exe().context("locating the bundled daemon")?;
+    let host = TaskScheduler::new(paths, &paths.home, configured_port, System)?;
+    sequence::restart(&bundled, &layout(paths, &paths.home), &host)
+}
+
+/// Removes the tasks (current and pre-rename) and the managed binaries.
+/// Daemon state is deliberately left in place.
 pub fn uninstall(paths: &ServicePaths) -> anyhow::Result<()> {
-    match stop_legacy(paths) {
-        Ok(Some(legacy)) => remove_legacy(paths, legacy)?,
-        Ok(None) => {}
-        Err(error) => tracing::warn!(%error, "could not stop the pre-rename task"),
-    }
     // The app may be removed after the user already uninstalled its daemon.
-    if !paths.plist_path().is_file() {
+    if !paths.home.is_dir() {
         return Ok(());
     }
-    let name = task_name(paths)?;
-    if task_exists(&name) {
-        run_task(&["/change", "/tn", &name, "/disable"])?;
-    }
-    stop(paths)?;
-    if task_exists(&name) {
-        run_task(&["/delete", "/tn", &name, "/f"])?;
+    let host = TaskScheduler::new(paths, &paths.home, 0, System)?;
+    for id in host.installed() {
+        host.disable(id)?;
+        host.stop(id)?;
+        host.remove(id)?;
     }
     for path in [
         paths.plist_path(),

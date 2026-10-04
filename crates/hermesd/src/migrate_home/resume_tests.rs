@@ -12,7 +12,7 @@ thread_local! {
     pub(super) static CRASH_AT: RefCell<Option<String>> = const { RefCell::new(None) };
 }
 
-fn crash_at(point: Option<&str>) {
+pub(crate) fn crash_at(point: Option<&str>) {
     CRASH_AT.with(|at| *at.borrow_mut() = point.map(str::to_string));
 }
 

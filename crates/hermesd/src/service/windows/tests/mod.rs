@@ -3,6 +3,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use super::reap::{reap, stop_daemon};
+use super::sequence::Identity;
 use super::task::{quote, render_task, run_task, task_name_for, task_name_in};
 use super::*;
 
@@ -145,7 +146,7 @@ fn legacy_homes_cover_an_explicit_home_and_the_default() {
     assert_eq!(default.legacy_homes().len(), 1);
 }
 
-/// `stop_legacy` moves the home right after this returns, so the process
+/// The migration moves the home right after a stop returns, so the process
 /// must be gone, not merely told to go.
 #[test]
 fn stopping_a_daemon_waits_for_it_to_exit() {
@@ -197,11 +198,14 @@ fn the_legacy_task_is_disabled_while_stopped_and_enabled_on_restart() {
     };
 
     let paths = ServicePaths::new(home.clone(), root.path().join("user"));
-    let legacy = stop_legacy(&paths).expect("stop").expect("found");
+    let host = TaskScheduler::new(&paths, &home, 0, host::System).expect("host");
+    assert_eq!(host.installed(), [Identity::Legacy]);
+    host.disable(Identity::Legacy).expect("disable");
+    host.stop(Identity::Legacy).expect("stop");
     let stopped = state(&name);
-    restart_legacy(&paths, &legacy).expect("restart");
+    host.start(Identity::Legacy).expect("restart");
     let restarted = state(&name);
-    remove_legacy(&paths, legacy).expect("remove");
+    host.remove(Identity::Legacy).expect("remove");
 
     assert!(stopped.contains("Disabled"), "{stopped}");
     assert!(!restarted.contains("Disabled"), "{restarted}");

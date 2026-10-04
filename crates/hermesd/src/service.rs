@@ -1,15 +1,24 @@
 //! `hermesd service` — installs the daemon as a launchd user agent.
 //!
-//! Everything is user-domain so no sudo is ever needed: the binary is copied
-//! to `<home>/bin/hermesd`, the agent plist goes to
+//! Everything is user-domain so no sudo is ever needed: the binary is staged
+//! and swapped into `<home>/bin/hermesd`, the agent plist goes to
 //! `~/Library/LaunchAgents`, and logs live under `<home>/logs`. The desktop
 //! app drives the same code path by running its bundled sidecar with
-//! `service install`, so GUI and CLI installs are identical.
+//! `service install`, so GUI and CLI installs are identical. The order of an
+//! install, shared with Windows, is in [`sequence`].
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use anyhow::Context;
+
+mod launchd;
+mod reap;
+mod sequence;
+mod stage;
+
+use launchd::{Launchctl, Launchd, System};
+use sequence::{HomeMigration, Host, Layout, Migration};
+use stage::{remove_if_present, with_suffix};
 
 pub const LAUNCHD_LABEL: &str = crate::brand::LAUNCHD_LABEL;
 pub const SERVICE_LABEL: &str = LAUNCHD_LABEL;
@@ -46,8 +55,9 @@ impl ServicePaths {
         self.launch_agents.join(format!("{LAUNCHD_LABEL}.plist"))
     }
 
-    /// The agent releases before the rename installed. [`stop_legacy`]
-    /// unloads and deletes it, so the old and new agents never both run.
+    /// The agent releases before the rename installed. An install stops it
+    /// before the migration and deletes it once the new agent is healthy,
+    /// so the two never both run.
     pub fn legacy_plist_path(&self) -> PathBuf {
         self.launch_agents
             .join(format!("{}.plist", crate::brand::LEGACY_LAUNCHD_LABEL))
@@ -119,245 +129,104 @@ fn render_plist(binary: &Path, log_dir: &Path, user_home: &Path) -> String {
     )
 }
 
-/// Stages the installation on disk: binary, default config (kept if present),
-/// and the agent plist. Does not touch launchd — see [`reload`].
-pub fn install(source: &Path, paths: &ServicePaths) -> anyhow::Result<()> {
-    let bin_path = paths.bin_path();
-    let bin_dir = bin_path.parent().context("binary path has no parent")?;
-    std::fs::create_dir_all(bin_dir).with_context(|| format!("creating {}", bin_dir.display()))?;
-    std::fs::create_dir_all(paths.log_dir())?;
-    std::fs::create_dir_all(&paths.launch_agents)?;
-
-    let config_path = paths.config_path();
-    if !config_path.exists() {
-        std::fs::write(&config_path, DEFAULT_CONFIG)
-            .with_context(|| format!("writing {}", config_path.display()))?;
+/// Where an install puts things, with the daemon running from `old_home` now.
+fn layout(paths: &ServicePaths, old_home: &Path) -> Layout {
+    Layout {
+        from_bin: old_home.join("bin").join("hermesd"),
+        bin: paths.bin_path(),
+        // The plist points launchd at the new name, so the old binary is
+        // dead weight once the new daemon answers.
+        leftovers: vec![paths.legacy_bin_path()],
+        port_file: paths.runtime_port_path(),
+        dirs: vec![paths.home.join("bin"), paths.log_dir()],
+        config: paths.config_path(),
+        default_config: DEFAULT_CONFIG,
     }
+}
 
-    // A rename atomically replaces the destination even while the old binary
-    // is executing, which a plain overwrite of a running file would not.
-    if source != bin_path {
-        let staged = bin_dir.join("hermesd.new");
-        std::fs::copy(source, &staged)
-            .with_context(|| format!("copying {} to {}", source.display(), staged.display()))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755))?;
-        }
-        std::fs::rename(&staged, &bin_path)?;
+fn launchd(paths: &ServicePaths, old_home: PathBuf, port: u16) -> Launchd<'_, System> {
+    Launchd {
+        paths,
+        old_home,
+        port,
+        launchctl: System,
     }
-    // The plist below points launchd at the new name, so the old binary is
-    // dead weight; unlinking it is safe even while it still runs.
-    remove_if_present(&paths.legacy_bin_path())?;
+}
 
-    let plist_path = paths.plist_path();
-    std::fs::write(
-        &plist_path,
-        render_plist(&bin_path, &paths.log_dir(), &paths.user_home),
+/// `service install`: installs `source` and starts it, moving the home first
+/// when `migration` is given; see [`sequence`] for the order and the
+/// rollback. Whatever ran before keeps running if anything fails.
+pub fn install_and_start(
+    source: &Path,
+    paths: &ServicePaths,
+    configured_port: u16,
+    migration: Option<&crate::migrate_home::Plan>,
+) -> anyhow::Result<()> {
+    let old_home = migration.map_or_else(|| paths.home.clone(), |plan| plan.from.clone());
+    install_with(
+        source,
+        paths,
+        migration,
+        &launchd(paths, old_home, configured_port),
     )
-    .with_context(|| format!("writing {}", plist_path.display()))?;
+}
+
+fn install_with<L: Launchctl>(
+    source: &Path,
+    paths: &ServicePaths,
+    migration: Option<&crate::migrate_home::Plan>,
+    host: &Launchd<'_, L>,
+) -> anyhow::Result<()> {
+    let migration = migration.map(HomeMigration);
+    sequence::upgrade(
+        source,
+        &layout(paths, &host.old_home),
+        host,
+        migration.as_ref().map(|m| m as &dyn Migration),
+    )?;
     tracing::info!(
-        version = env!("CARGO_PKG_VERSION"),
-        binary = %bin_path.display(),
-        plist = %plist_path.display(),
+        binary = %paths.bin_path().display(),
+        plist = %paths.plist_path().display(),
         logs = %paths.log_dir().display(),
-        "hermesd install staged"
+        "hermesd installed and healthy"
     );
     Ok(())
 }
 
-/// The agent a release before the rename installed, once stopped.
-pub struct Legacy {
-    plist: PathBuf,
+/// `service restart`. Run by the app's bundled sidecar, so a missing managed
+/// binary is reinstalled from the copy that ships with the app. Never
+/// migrates the home.
+pub fn restart(paths: &ServicePaths, configured_port: u16) -> anyhow::Result<()> {
+    let bundled = std::env::current_exe().context("locating the bundled daemon")?;
+    let host = launchd(paths, paths.home.clone(), configured_port);
+    sequence::restart(&bundled, &layout(paths, &paths.home), &host)
 }
 
-/// Unloads the agent installed under [`crate::brand::LEGACY_LAUNCHD_LABEL`],
-/// if there is one. `launchctl bootout` returns once the process has exited.
-///
-/// Runs before the home migration and before the new agent is loaded: both
-/// agents would otherwise start a daemon and fight over the port. The plist
-/// stays until [`remove_legacy`], so a failed migration can put the old agent
-/// back with [`restart_legacy`].
-pub fn stop_legacy(paths: &ServicePaths) -> anyhow::Result<Option<Legacy>> {
-    let plist = paths.legacy_plist_path();
-    if !plist.exists() {
-        return Ok(None);
-    }
-    tracing::info!(plist = %plist.display(), "stopping the pre-rename agent");
-    let homes = [
-        paths.home.clone(),
-        paths.user_home.join(crate::brand::LEGACY_HOME_DIR_NAME),
-    ];
-    bootout_stopping_sessions(&plist, crate::brand::LEGACY_LAUNCHD_LABEL, &homes)?;
-    Ok(Some(Legacy { plist }))
-}
-
-/// Boots the agent out, then stops the process groups its daemon started
-/// that still hold one of `homes`. Bot sessions do not die with the daemon:
-/// a detached child (an MCP server, a browser) outlives the terminal hangup,
-/// and the home migration would find it holding the home. Groups are read
-/// both from the daemon's process tree before the bootout and from the
-/// sessions it recorded (a 0.14 daemon records none). Anything else holding
-/// the home is left for the migration to report.
-fn bootout_stopping_sessions(plist: &Path, label: &str, homes: &[PathBuf]) -> anyhow::Result<()> {
-    let mut groups = agent_pid(label)
-        .map(crate::holders::descendant_groups)
-        .unwrap_or_default();
-    bootout(plist)?;
-    for home in homes.iter().filter(|home| home.is_dir()) {
-        groups.extend(crate::holders::recorded_sessions(home));
-        match crate::holders::stop_owned(home, &groups) {
-            Ok(stopped) if !stopped.is_empty() => {
-                tracing::info!(?stopped, home = %home.display(), "stopped bot session groups")
-            }
-            Ok(_) => {}
-            Err(error) => tracing::warn!(%error, "could not stop bot session groups"),
-        }
-    }
-    Ok(())
-}
-
-/// The PID launchd reports for a loaded agent, if it is running.
-fn agent_pid(label: &str) -> Option<u32> {
-    let target = format!("{}/{label}", gui_domain().ok()?);
-    let out = Command::new("launchctl")
-        .args(["print", &target])
-        .output()
-        .ok()?;
-    parse_agent_pid(&String::from_utf8_lossy(&out.stdout))
-}
-
-fn parse_agent_pid(print: &str) -> Option<u32> {
-    print
-        .lines()
-        .find_map(|line| line.trim().strip_prefix("pid = "))
-        .and_then(|pid| pid.trim().parse().ok())
-}
-
-/// Loads the old agent again, after a failed migration was rolled back.
-pub fn restart_legacy(_paths: &ServicePaths, legacy: &Legacy) -> anyhow::Result<()> {
-    bootstrap(&legacy.plist)
-}
-
-/// Deletes the old agent's plist once the new one is about to replace it.
-pub fn remove_legacy(_paths: &ServicePaths, legacy: Legacy) -> anyhow::Result<()> {
-    remove_if_present(&legacy.plist)
-}
-
-/// Removes the agent plist and the managed binary. Daemon state (database,
-/// config, secrets, bot workspaces) is deliberately left in place.
+/// Removes the agents (current and pre-rename) and the managed binary.
+/// Daemon state (database, config, secrets, bot workspaces) is deliberately
+/// left in place.
 pub fn uninstall(paths: &ServicePaths) -> anyhow::Result<()> {
-    match stop_legacy(paths) {
-        Ok(Some(legacy)) => remove_legacy(paths, legacy)?,
-        Ok(None) => {}
-        Err(e) => tracing::warn!(error = %e, "could not stop the pre-rename agent"),
-    }
-    tracing::info!(plist = %paths.plist_path().display(), "stopping hermesd agent");
-    if let Err(e) = bootout(&paths.plist_path()) {
-        tracing::warn!(error = %e, "bootout failed; removing files anyway");
+    let host = launchd(paths, paths.home.clone(), 0);
+    for id in host.installed() {
+        if let Err(error) = host.stop(id) {
+            tracing::warn!(%error, ?id, "could not stop the agent; removing it anyway");
+        }
+        host.remove(id)?;
     }
     // The published port goes with the service: state is kept, but nothing
     // should keep pointing clients at a port this machine no longer serves.
+    let bin = paths.bin_path();
     for path in [
-        paths.plist_path(),
-        paths.bin_path(),
+        with_suffix(&bin, ".new"),
+        with_suffix(&bin, ".old"),
+        with_suffix(&paths.plist_path(), ".old"),
+        bin,
         paths.legacy_bin_path(),
         paths.runtime_port_path(),
     ] {
         remove_if_present(&path)?;
     }
     Ok(())
-}
-
-fn remove_if_present(path: &Path) -> anyhow::Result<()> {
-    if path.exists() {
-        std::fs::remove_file(path).with_context(|| format!("removing {}", path.display()))?;
-        tracing::info!(path = %path.display(), "removed");
-    }
-    Ok(())
-}
-
-fn gui_domain() -> anyhow::Result<String> {
-    let out = Command::new("id")
-        .arg("-u")
-        .output()
-        .context("running id -u")?;
-    let uid = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    anyhow::ensure!(!uid.is_empty(), "could not determine uid");
-    Ok(format!("gui/{uid}"))
-}
-
-/// Stops the agent, logging launchctl's own verdict rather than discarding it.
-fn bootout(plist: &Path) -> anyhow::Result<()> {
-    let domain = gui_domain()?;
-    let out = Command::new("launchctl")
-        .args(["bootout", &domain])
-        .arg(plist)
-        .output()
-        .context("running launchctl bootout")?;
-    // A failure here is normal on a first install: nothing is loaded yet.
-    tracing::info!(
-        %domain,
-        status = out.status.code().unwrap_or(-1),
-        stderr = %String::from_utf8_lossy(&out.stderr).trim(),
-        "launchctl bootout"
-    );
-    Ok(())
-}
-
-/// (Re)starts the agent: bootout is best-effort (the agent may not be
-/// loaded), bootstrap must succeed.
-pub fn reload(paths: &ServicePaths) -> anyhow::Result<()> {
-    let plist = paths.plist_path();
-    tracing::info!(plist = %plist.display(), "restarting hermesd agent");
-    if let Err(e) =
-        bootout_stopping_sessions(&plist, LAUNCHD_LABEL, std::slice::from_ref(&paths.home))
-    {
-        tracing::warn!(error = %e, "bootout failed; continuing to bootstrap");
-    }
-    bootstrap(&plist)?;
-    tracing::info!(label = LAUNCHD_LABEL, "hermesd agent started");
-    Ok(())
-}
-
-fn bootstrap(plist: &Path) -> anyhow::Result<()> {
-    let domain = gui_domain()?;
-    let out = Command::new("launchctl")
-        .args(["bootstrap", &domain])
-        .arg(plist)
-        .output()
-        .context("running launchctl bootstrap")?;
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    if !out.status.success() {
-        tracing::error!(
-            %domain,
-            status = out.status.code().unwrap_or(-1),
-            stderr = %stderr.trim(),
-            "launchctl bootstrap failed"
-        );
-    }
-    anyhow::ensure!(
-        out.status.success(),
-        "launchctl bootstrap failed: {}",
-        stderr.trim()
-    );
-    Ok(())
-}
-
-/// `service install`: stages the installation, then (re)starts the agent.
-pub fn install_and_start(
-    source: &Path,
-    paths: &ServicePaths,
-    _configured_port: u16,
-) -> anyhow::Result<()> {
-    install(source, paths)?;
-    reload(paths)
-}
-
-/// `service restart`.
-pub fn restart(paths: &ServicePaths, _configured_port: u16) -> anyhow::Result<()> {
-    reload(paths)
 }
 
 /// Prints a human-readable status line per component and returns whether the

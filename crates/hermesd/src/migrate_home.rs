@@ -27,13 +27,15 @@ mod disk;
 mod files;
 mod preflight;
 #[cfg(test)]
-mod resume_tests;
+pub(crate) mod resume_tests;
 mod rollback;
+#[cfg(test)]
+mod settings_tests;
 mod sql;
 mod state;
 mod steps;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -41,7 +43,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context};
 
-pub use preflight::dry_run;
+pub use preflight::{blockers_before_stop, dry_run};
 use preflight::{daemon_stopped, preflight};
 pub use rollback::rollback;
 pub use state::{Action, State, Step, STATE_FILE};

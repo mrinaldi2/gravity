@@ -37,36 +37,6 @@ fn migrate_home(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Before `service install`: stops the pre-rename service and migrates the
-/// default home when it still needs it. A failed migration is rolled back
-/// and the old service started again, so the machine is never left without
-/// a daemon. Returns whether the home moved.
-fn install_migrating(cfg: &Config, paths: &hermesd::service::ServicePaths) -> anyhow::Result<bool> {
-    use hermesd::{migrate_home as migrate, service};
-    let legacy = service::stop_legacy(paths)?;
-    let pending = migrate::pending(cfg)?;
-    if let Some(plan) = &pending {
-        let mut out = std::io::stdout();
-        if let Err(error) = migrate::run(plan, &mut out) {
-            let undone = migrate::rollback(plan, &mut out);
-            if let (Ok(()), Some(legacy)) = (&undone, &legacy) {
-                service::restart_legacy(paths, legacy)?;
-            }
-            return Err(match undone {
-                Ok(()) => error.context("home migration failed and was rolled back"),
-                Err(rollback) => error.context(format!(
-                    "home migration failed, and so did its rollback ({rollback:#}); \
-                     see migrate-home.json in the home"
-                )),
-            });
-        }
-    }
-    if let Some(legacy) = legacy {
-        service::remove_legacy(paths, legacy)?;
-    }
-    Ok(pending.is_some())
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -143,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
             // used to run the install.
             if args.iter().any(|a| a == "--help" || a == "-h") {
                 println!(
-                    "usage: hermesd service <install [--binary <path>]|uninstall|restart|status>"
+                    "usage: hermesd service <install [--binary <path>] [--no-migrate]|uninstall|restart|status>"
                 );
                 return Ok(());
             }
@@ -151,14 +121,25 @@ async fn main() -> anyhow::Result<()> {
                 Some("install") => {
                     let source =
                         flag_value(&args, "--binary").map_or_else(std::env::current_exe, Ok)?;
-                    if install_migrating(&cfg, &paths)? {
-                        cfg = Config::load(config_path.as_deref())?;
+                    // `--no-migrate` (the app's launch-time repair) reinstalls
+                    // the binary only; moving the home needs the user's yes.
+                    let pending = hermesd::migrate_home::pending(&cfg)?;
+                    if args.iter().any(|a| a == "--no-migrate") {
+                        if let Some(plan) = &pending {
+                            anyhow::bail!(
+                                "{} still has to move to {}; run `hermesd service install` \
+                                 without --no-migrate to move it",
+                                plan.from.display(),
+                                plan.to.display()
+                            );
+                        }
                     }
-                    let paths = hermesd::service::ServicePaths::new(
-                        cfg.home.clone(),
-                        cfg.user_home.clone(),
-                    );
-                    hermesd::service::install_and_start(&source, &paths, cfg.port)?;
+                    hermesd::service::install_and_start(
+                        &source,
+                        &paths,
+                        cfg.port,
+                        pending.as_ref(),
+                    )?;
                     println!(
                         "hermesd installed to {} and running ({})",
                         paths.bin_path().display(),

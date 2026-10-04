@@ -12,6 +12,22 @@ const DISK_MARGIN: u64 = 512 * 1024 * 1024;
 
 /// Everything a run would touch, and anything that would stop it.
 pub fn dry_run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<bool> {
+    Ok(report(plan, out)?.is_empty())
+}
+
+/// What would stop a run, apart from the daemon it is about to stop:
+/// `service install` checks this before it stops anything. Processes other
+/// than the daemon holding the home can only be told apart from the
+/// daemon's own once it has stopped; the run checks them then.
+pub fn blockers_before_stop(plan: &Plan) -> anyhow::Result<Vec<String>> {
+    let mut blockers = report(plan, &mut std::io::sink())?;
+    blockers.retain(|blocker| !blocker.starts_with(DAEMON_RUNNING));
+    Ok(blockers)
+}
+
+const DAEMON_RUNNING: &str = "a daemon is running against";
+
+fn report(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<Vec<String>> {
     let state = plan.state()?;
     let mut blockers = preflight(plan, state.as_ref());
     writeln!(
@@ -91,7 +107,7 @@ pub fn dry_run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<bool> {
     for blocker in &blockers {
         writeln!(out, "blocked   {blocker}")?;
     }
-    Ok(blockers.is_empty())
+    Ok(blockers)
 }
 
 /// Reasons a run cannot start or resume.
@@ -114,7 +130,7 @@ pub(super) fn preflight(plan: &Plan, state: Option<&State>) -> Vec<String> {
     }
     let home = if moved { &plan.to } else { &plan.from };
     if home.exists() && daemon_stopped(home, Duration::ZERO).is_err() {
-        blockers.push(format!("a daemon is running against {}", home.display()));
+        blockers.push(format!("{DAEMON_RUNNING} {}", home.display()));
     } else if !moved && plan.source_is_real_home() {
         blockers.extend(holder_blockers(plan));
     }
