@@ -48,6 +48,14 @@ live in `crates/bus/fixtures/<surface>/`. A client may send its own
 `"contracts"` map in `hello`. An additive change keeps a surface's number; a
 breaking change bumps it.
 
+`contracts: {surface: N}` is the **highest** version each side speaks, and it
+stays an integer forever. A side that still serves older versions adds
+`contracts_min: {surface: M}` (absent means M = N). The effective version per
+surface is `min(client N, daemon N)`, and it must be at least both sides' M.
+If no version fits, that surface is unavailable (its UI is hidden with "update
+the app" or "update Hermes"); the connection itself is not refused. Only
+`protocol_version` refuses a connection.
+
 or `{ "type": "error", "req_id": "1", "code": "auth_failed" | "unsupported_version", "message": "..." }`
 followed by close.
 
