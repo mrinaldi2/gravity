@@ -5,7 +5,12 @@
 export type PermissionProfile = "standard" | "trusted" | "full";
 
 /** A power one bot gets on top of its project's profile. */
-export type PermissionExtra = "publish" | "daemon_restart" | "app_restart" | "install";
+export type PermissionExtra =
+  | "publish"
+  | "daemon_restart"
+  | "app_restart"
+  | "install"
+  | "release_main";
 
 export interface Project {
   readonly id: string;

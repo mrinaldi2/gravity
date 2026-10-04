@@ -8,7 +8,8 @@
 //!   Claude settings files, the daemon config or a bot's generated settings;
 //! - `rm`, `rmdir`, `mv`, `unlink` or an output redirect aimed outside the
 //!   bot's own directory, the project's artifacts or the trusted paths;
-//! - a forced `git push`, in any spelling;
+//! - a forced `git push` or a remote branch deletion, in any spelling, and
+//!   any push or merge to `main` unless the bot holds `release_main`;
 //! - `pkill`/`killall`, and `simctl` against `all` or `booted` (CE-001).
 //!
 //! Hooks run in every permission mode, so this is the boundary that still
@@ -20,6 +21,8 @@ use serde_json::{json, Value};
 
 use super::shell::{self, Words};
 
+mod git;
+
 /// What the guard knows about the bot it guards, passed on its command line.
 pub struct GuardContext {
     /// The daemon's home (`~/.gravity`).
@@ -28,6 +31,8 @@ pub struct GuardContext {
     /// Where destructive commands may act: the bot's directory, the
     /// project's artifacts, the trusted paths and the temp dirs.
     pub writable: Vec<PathBuf>,
+    /// The bot holds `release_main`: it may push and merge to `main`.
+    pub allow_main: bool,
 }
 
 impl GuardContext {
@@ -176,7 +181,10 @@ fn simple_command(words: &Words, cwd: &Path, ctx: &GuardContext) -> Option<Strin
                 target.display()
             ))
         }
-        "git" => git(rest),
+        "git" => git::git(rest, &[cwd.to_path_buf()], ctx, &|script| {
+            bash(script, cwd, ctx)
+        }),
+        "gh" => git::gh(rest, ctx),
         "xcrun" if rest.first().is_some_and(|w| w == "simctl") => simctl(&rest[1..]),
         "simctl" => simctl(rest),
         _ => None,
@@ -217,31 +225,6 @@ fn redirect_outside(words: &Words, cwd: &Path, ctx: &GuardContext) -> Option<Str
     ))
 }
 
-fn git(rest: &[String]) -> Option<String> {
-    // Skip global options before the subcommand (`-C dir`, `-c k=v`, …).
-    let mut i = 0;
-    while let Some(w) = rest.get(i) {
-        if w == "-C" || w == "-c" {
-            i += 2;
-        } else if w.starts_with('-') {
-            i += 1;
-        } else {
-            break;
-        }
-    }
-    if rest.get(i).map(String::as_str) != Some("push") {
-        return None;
-    }
-    let forced = rest[i + 1..].iter().any(|w| {
-        w.starts_with("--force")
-            || w == "--mirror"
-            || (w.starts_with('-') && !w.starts_with("--") && w.contains('f'))
-            || (w.starts_with('+') && w.len() > 1)
-    });
-    forced
-        .then(|| "forced pushes rewrite shared history; push normally or ask the owner".to_string())
-}
-
 fn simctl(rest: &[String]) -> Option<String> {
     rest.iter().any(|w| w == "booted" || w == "all").then(|| {
         "address only your own simulator, by its UDID (never `booted` or `all`)".to_string()
@@ -261,7 +244,7 @@ pub fn verdict(reason: Option<String>) -> Option<Value> {
     })
 }
 
-/// `hermesd guard --home H --user-home U [--writable P]…`: read one tool call
+/// `hermesd guard --home H --user-home U [--writable P]… [--allow-main]`: read one tool call
 /// on stdin and print a deny when it must not run. Never fails the call on
 /// its own errors: a broken guard must not wedge every bot.
 pub fn run(args: &[String]) -> i32 {
@@ -285,6 +268,7 @@ pub fn run(args: &[String]) -> i32 {
         home,
         user_home,
         writable,
+        allow_main: args.iter().any(|a| a == "--allow-main"),
     };
     let mut input = String::new();
     if std::io::Read::read_to_string(&mut std::io::stdin(), &mut input).is_err() {

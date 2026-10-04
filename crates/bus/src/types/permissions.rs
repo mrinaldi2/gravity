@@ -49,14 +49,18 @@ pub enum PermissionExtra {
     AppRestart,
     /// Install a build into /Applications or its own simulator (testers).
     Install,
+    /// Push and merge to `main` (DevOps only). Every other bot is denied
+    /// that, by rule and by the guard, in every profile.
+    ReleaseMain,
 }
 
 impl PermissionExtra {
-    pub const ALL: [PermissionExtra; 4] = [
+    pub const ALL: [PermissionExtra; 5] = [
         Self::Publish,
         Self::DaemonRestart,
         Self::AppRestart,
         Self::Install,
+        Self::ReleaseMain,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -65,6 +69,7 @@ impl PermissionExtra {
             Self::DaemonRestart => "daemon_restart",
             Self::AppRestart => "app_restart",
             Self::Install => "install",
+            Self::ReleaseMain => "release_main",
         }
     }
 

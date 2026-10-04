@@ -257,6 +257,7 @@ fn ctx() -> GuardContext {
             PathBuf::from("/Users/me/Developer"),
             PathBuf::from("/tmp"),
         ],
+        allow_main: false,
     }
 }
 
@@ -290,6 +291,95 @@ fn forced_pushes_are_caught_in_any_spelling() {
     ] {
         assert_eq!(bash(command), None, "{command} was blocked");
     }
+}
+
+/// CE-003 decision: only the bot with `release_main` reaches `main`.
+#[test]
+fn main_is_reserved_for_release_main() {
+    for command in [
+        "git push origin main",
+        "git -C . push origin HEAD:main",
+        "git push origin feat:refs/heads/main",
+        "git push origin 'refs/heads/*:refs/heads/*'",
+        "git push --all origin",
+        "git push --delete origin feat",
+        "git push -d origin feat",
+        "git push origin :feat",
+        "git push origin tag v1 main",
+        "git -c alias.p='push --force' p",
+        "git config alias.p 'push origin main'",
+        "gh pr merge 12 --squash",
+        "gh api -X PUT repos/me/x/pulls/12/merge",
+    ] {
+        assert!(bash(command).is_some(), "{command} was let through");
+    }
+    for command in [
+        "git push origin feat/main-menu",
+        "git push -u origin H-031-fixes",
+        "git push origin tag v1",
+        "git push -o ci.skip origin feat",
+        "git config --get alias.st",
+        "gh pr create --base main --title x --body y",
+        "gh pr view 12",
+    ] {
+        assert_eq!(bash(command), None, "{command} was blocked");
+    }
+    // On main with no refspec, the current branch is what git pushes.
+    let repo = tempfile::tempdir().expect("tmp");
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo.path())
+            .args(args)
+            .output()
+            .expect("git")
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&[
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "x",
+    ]);
+    let push = |command: &str, ctx: &GuardContext| {
+        decide(
+            &json!({
+                "tool_name": "Bash",
+                "tool_input": { "command": command },
+                "cwd": repo.path().display().to_string()
+            }),
+            ctx,
+        )
+    };
+    assert!(push("git push", &ctx()).is_some());
+    assert!(push("git push origin HEAD", &ctx()).is_some());
+    let release = GuardContext {
+        allow_main: true,
+        ..ctx()
+    };
+    for command in ["git push", "git push origin main", "gh pr merge 12"] {
+        assert_eq!(
+            push(command, &release),
+            None,
+            "{command} was blocked for release_main"
+        );
+    }
+    assert!(push("git push -f origin main", &release).is_some());
+    git(&["switch", "-q", "-c", "feat"]);
+    assert_eq!(push("git push", &ctx()), None);
+    // The rules fail fast for everyone but release_main.
+    let deny = rules(&input(PermissionProfile::Trusted, &[]), "deny");
+    assert!(deny.contains(&"Bash(git push * main)".to_string()));
+    let devops = rules(
+        &input(PermissionProfile::Trusted, &[PermissionExtra::ReleaseMain]),
+        "deny",
+    );
+    assert!(!devops.iter().any(|r| r.contains("main")));
 }
 
 #[test]

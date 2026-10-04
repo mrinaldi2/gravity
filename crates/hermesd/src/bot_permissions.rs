@@ -85,6 +85,9 @@ impl BotStart<'_> {
             parts.push("--writable".to_string());
             parts.push(quote(&dir.display().to_string()));
         }
+        if self.extras.contains(&PermissionExtra::ReleaseMain) {
+            parts.push("--allow-main".to_string());
+        }
         parts.join(" ")
     }
 

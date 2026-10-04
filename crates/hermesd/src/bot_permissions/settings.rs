@@ -60,6 +60,10 @@ pub fn generate(input: &SettingsInput<'_>) -> Value {
     if !input.extras.contains(&PermissionExtra::DaemonRestart) {
         deny.push("Bash(launchctl *)".to_string());
     }
+    if !input.extras.contains(&PermissionExtra::ReleaseMain) {
+        // These fail fast; the guard is the real check (`git -C . push`).
+        deny.extend(MAIN_DENY.iter().map(|r| (*r).to_string()));
+    }
     if input.extras.contains(&PermissionExtra::Publish) {
         // DevOps may run its scripts but never rewrite them.
         for script in ["serve.sh", "publish.sh"] {
@@ -210,6 +214,14 @@ const STATIC_DENY: &[&str] = &[
     "mcp__claude_ai_Kaggle",
 ];
 
+/// Pushes to `main`, for every bot without `release_main`.
+const MAIN_DENY: &[&str] = &[
+    "Bash(git push * main)",
+    "Bash(git push * HEAD:main)",
+    "Bash(git push * *:main)",
+    "Bash(gh pr merge*)",
+];
+
 /// Routine build, test and housekeeping commands that skip the classifier in
 /// Trusted and Full. Wildcarded interpreters and `pnpm run` would be dropped
 /// by auto mode anyway, so they are not listed.
@@ -260,6 +272,8 @@ fn extra_allow(extra: PermissionExtra, workspace: &Path) -> Vec<String> {
             "Bash(scripts/dev.sh *)".to_string(),
             "Bash(./scripts/dev.sh *)".to_string(),
         ],
+        // Lifts the main denies above; nothing to allow without review.
+        PermissionExtra::ReleaseMain => Vec::new(),
         PermissionExtra::Install => {
             if cfg!(windows) {
                 vec![

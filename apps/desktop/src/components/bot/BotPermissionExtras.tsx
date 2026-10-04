@@ -29,6 +29,11 @@ const EXTRAS: readonly {
   },
   { id: "app_restart", label: "Restart its dev app", help: "Run scripts/dev.sh." },
   { id: "install", label: "Install builds", help: "Into Applications or its own simulator." },
+  {
+    id: "release_main",
+    label: "Release to main",
+    help: "Push and merge to main, in every profile. Give it to DevOps only.",
+  },
 ];
 
 /**
@@ -85,7 +90,7 @@ export default function BotPermissionExtras({
       ))}
       <span className="field-hint">
         {owner
-          ? "Used in the Trusted and Full profiles. Changing them restarts the bot."
+          ? "Used in the Trusted and Full profiles (Release to main in every profile). Changing them restarts the bot."
           : "Only the owner can change these."}
       </span>
     </fieldset>
