@@ -110,12 +110,12 @@ fn legacy_task(moving: &Moving) -> (ServicePaths, FakeSchtasks) {
     (paths, schtasks)
 }
 
-/// Runs the install; returns its result, the tasks and the calls.
-fn install_moving(
-    moving: &Moving,
-    paths: &ServicePaths,
-    schtasks: FakeSchtasks,
-) -> (anyhow::Result<()>, Vec<(String, bool, bool)>, Vec<String>) {
+/// An install's result, the tasks it left (label, enabled, running) and the
+/// calls it made.
+type Outcome = (anyhow::Result<()>, Vec<(String, bool, bool)>, Vec<String>);
+
+/// Runs the install.
+fn install_moving(moving: &Moving, paths: &ServicePaths, schtasks: FakeSchtasks) -> Outcome {
     let plan = moving.plan();
     let host = TaskScheduler::new(paths, &plan.from, 0, schtasks).unwrap();
     let result = install_with(&moving.source, paths, &plan.from, Some(plan), &host);
