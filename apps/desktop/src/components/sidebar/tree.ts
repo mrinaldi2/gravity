@@ -17,6 +17,4 @@ export interface SidebarTreeProps {
   readonly onDeleteBot: (botId: string) => Promise<void>;
   readonly onDeleteProject: (projectId: string) => Promise<void>;
   readonly onTogglePin: (botId: string) => void;
-  /** Shows each project's Conversations row; needs a daemon that serves them. */
-  readonly showConversations?: boolean;
 }

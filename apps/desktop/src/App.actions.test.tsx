@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { FakeDaemon } from "./test/fakeDaemon";
 import * as fx from "./test/fixtures";
+import { stubLocalStorage } from "./test/spies";
 
 let daemon: FakeDaemon;
 
@@ -57,6 +58,29 @@ describe("App actions", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("opens the project window on the Dashboard, then on the tab last used", async () => {
+    const user = userEvent.setup();
+    stubLocalStorage();
+    await renderApp();
+
+    await user.click(screen.getByRole("button", { name: "Acme" }));
+    expect(screen.getByRole("tab", { name: "Dashboard", selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Dashboard is coming soon" })).toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "6", metaKey: true }));
+    });
+    expect(screen.getByRole("tab", { name: "Settings", selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Danger zone" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Conversations" }));
+    expect(screen.getByText("Conversations need a newer Hermes service.")).toBeInTheDocument();
+
+    await user.click(screen.getByText("alice", { selector: ".bot-row-name" }));
+    await user.click(screen.getByRole("button", { name: "Project" }));
+    expect(screen.getByRole("tab", { name: "Conversations", selected: true })).toBeInTheDocument();
   });
 
   it("walks a fresh daemon through creating the first project", async () => {

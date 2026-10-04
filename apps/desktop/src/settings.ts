@@ -1,3 +1,5 @@
+import { isProjectTab } from "./app/selection";
+import type { ProjectTab } from "./app/selection";
 import type { Endpoint } from "./protocol/connection";
 import { readStored, removeStored, writeStored } from "./storage";
 
@@ -153,6 +155,26 @@ export function saveLastUsedBotId(botId: string): void {
     writeStored(LAST_USED_BOT_KEY, botId);
   } catch {
     // localStorage unavailable; selection is session-only
+  }
+}
+
+const PROJECT_TAB_KEY = "project-tab.";
+
+/** The tab a project window was last showing, so it reopens there. */
+export function loadProjectTab(projectId: string): ProjectTab | undefined {
+  try {
+    const tab = readStored(PROJECT_TAB_KEY + projectId);
+    return tab !== null && isProjectTab(tab) ? tab : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function saveProjectTab(projectId: string, tab: ProjectTab): void {
+  try {
+    writeStored(PROJECT_TAB_KEY + projectId, tab);
+  } catch {
+    // localStorage unavailable; the window reopens on the Dashboard
   }
 }
 

@@ -1,19 +1,5 @@
 /* Conversations between a project's bots: the pairs, and each pair's chat. */
 
-.conversations-row {
-  color: var(--text-dim);
-  font-size: 13px;
-}
-
-.conversations-row .icon {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.3;
-  stroke-linejoin: round;
-}
-
 .conversations-view {
   display: flex;
   flex: 1;

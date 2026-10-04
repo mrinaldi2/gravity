@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import type { MutableRefObject } from "react";
 import type { Bot, Project } from "../protocol/entities";
-import { saveLastUsedBotId } from "../settings";
+import { loadProjectTab, saveLastUsedBotId, saveProjectTab } from "../settings";
 import type { Selection } from "./selection";
 import { useInitialBot } from "./useInitialBot";
 import { useLatestRef } from "./useLatestRef";
@@ -16,6 +16,14 @@ export interface SelectionApi {
   readonly select: (next: Selection) => void;
   /** Opens a bot by id. */
   readonly selectBot: (botId: string) => void;
+}
+
+/** Fills in a project window's tab: the one it last showed, else the Dashboard. */
+function withProjectTab(selection: Selection): Selection {
+  if (selection.kind !== "project" || selection.tab !== undefined) {
+    return selection;
+  }
+  return { ...selection, tab: loadProjectTab(selection.projectId) ?? "dashboard" };
 }
 
 /**
@@ -33,11 +41,15 @@ export function useSelection(
   const selectionRef = useLatestRef(selection);
 
   const select = useCallback(
-    (next: Selection): void => {
+    (requested: Selection): void => {
+      const next = withProjectTab(requested);
       setSelection(next);
       unread.clearFor(next);
       if (next.kind === "bot") {
         saveLastUsedBotId(next.botId);
+      }
+      if (next.kind === "project" && next.tab !== undefined) {
+        saveProjectTab(next.projectId, next.tab);
       }
     },
     [unread],

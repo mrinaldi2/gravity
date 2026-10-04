@@ -104,13 +104,7 @@
   background: var(--bg-hover);
 }
 
-.project-header-selected,
-.project-header-selected:hover {
-  background: var(--bg-active);
-}
-
-.project-header:hover .project-name,
-.project-header-selected .project-name {
+.project-header:hover .project-name {
   color: var(--text);
 }
 
