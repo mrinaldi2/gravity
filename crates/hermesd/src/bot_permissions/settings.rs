@@ -258,17 +258,15 @@ fn artifacts_allow(artifacts: Option<&Path>) -> Vec<String> {
 fn extra_allow(extra: PermissionExtra, workspace: &Path) -> Vec<String> {
     match extra {
         PermissionExtra::Publish => {
-            let serve = workspace.join("serve");
+            // As Git Bash spells the command on Windows: `/`, never `\`.
+            let serve = format!("{}/serve", workspace.display()).replace('\\', "/");
             let mut rules = Vec::new();
             for action in ["start", "stop", "status"] {
                 rules.push(format!("Bash(serve/serve.sh {action})"));
-                rules.push(format!(
-                    "Bash({} {action})",
-                    serve.join("serve.sh").display()
-                ));
+                rules.push(format!("Bash({serve}/serve.sh {action})"));
             }
             rules.push("Bash(serve/publish.sh *)".to_string());
-            rules.push(format!("Bash({} *)", serve.join("publish.sh").display()));
+            rules.push(format!("Bash({serve}/publish.sh *)"));
             rules
         }
         PermissionExtra::DaemonRestart => daemon_restart_allow(),
