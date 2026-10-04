@@ -16,6 +16,10 @@ use super::model::{
 /// The label a card carries while it sits over a WIP limit by override.
 pub const WIP_OVERRIDE_LABEL: &str = "wip-override";
 
+/// The override a returned item gets automatically when it puts its
+/// assignee over the limit (H-017 rev 2.1 §1.3).
+pub const RETURNED_OVER_WIP: &str = "returned: rework over WIP";
+
 /// Who is acting, as the guards see it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Who {
@@ -122,6 +126,8 @@ pub enum Rule {
     /// Out of owner testing or deploying (cancelling included), into
     /// deploying, and into Done other than by `Finish`.
     Release,
+    /// Ready → Inbox, to un-refine.
+    Unrefine,
     /// Any → Cancelled.
     Cancel,
     /// Anything else: the owner, with a reason.
@@ -136,6 +142,7 @@ pub fn rule(from: Cat, to: Cat) -> Rule {
         (Approval | Deploying, _) => Rule::Release,
         (_, Cancelled) => Rule::Cancel,
         (Inbox, Ready) => Rule::Refine,
+        (Ready, Inbox) => Rule::Unrefine,
         (Ready, Doing) => Rule::Start,
         (Doing, Review) => Rule::Submit,
         (Review, Verify) => Rule::Approve,
@@ -146,6 +153,11 @@ pub fn rule(from: Cat, to: Cat) -> Rule {
         (_, Deploying | Done) => Rule::Release,
         _ => Rule::Unlisted,
     }
+}
+
+/// Work sent back for rework: never refused for WIP, and placed first.
+pub fn is_return(rule: Rule) -> bool {
+    matches!(rule, Rule::Rework | Rule::Reject)
 }
 
 pub(crate) fn unmet(code: &str, text: impl Into<String>, fix: Option<&str>) -> Unmet {
@@ -193,7 +205,9 @@ pub fn evaluate(item: &Item, mv: &Move<'_>, who: &Who, ctx: &Context) -> Vec<Unm
         ));
     }
     conditions(rule, item, mv, who, ctx, &mut out);
-    out.extend(wip(item, mv, who, ctx));
+    if !is_return(rule) {
+        out.extend(wip(item, mv, who, ctx));
+    }
     out
 }
 
@@ -204,7 +218,7 @@ fn refused(rule: Rule, item: &Item, who: &Who) -> Option<&'static str> {
     }
     let assignee = who.is(item.assignee.as_deref());
     let (ok, who_may) = match rule {
-        Rule::Refine | Rule::Cancel => (who.leads(), "the lead or the owner"),
+        Rule::Refine | Rule::Unrefine | Rule::Cancel => (who.leads(), "the lead or the owner"),
         Rule::Start => (
             who.leads() || assignee,
             "the lead, or the assignee the lead picked",

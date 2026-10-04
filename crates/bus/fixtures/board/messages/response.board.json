@@ -1,0 +1,86 @@
+{
+  "reqId": "1",
+  "boardResponse": {
+    "board": {
+      "settings": {
+        "projectId": "p1",
+        "key": "H",
+        "nextSeq": 22,
+        "staleAfterHours": 24,
+        "requiredMachines": {
+          "daemon": {
+            "values": [
+              "mac"
+            ]
+          },
+          "desktop": {
+            "values": [
+              "mac",
+              "win-pc"
+            ]
+          },
+          "ios": {
+            "values": [
+              "iphone"
+            ]
+          }
+        },
+        "homeDaemonId": "d-mac",
+        "version": "3"
+      },
+      "columns": [
+        {
+          "projectId": "p1",
+          "key": "review",
+          "name": "Review",
+          "ord": 3,
+          "category": "COLUMN_CATEGORY_REVIEW",
+          "wipLimit": 2,
+          "wipScope": "WIP_SCOPE_COLUMN",
+          "visible": true
+        },
+        {
+          "projectId": "p1",
+          "key": "done",
+          "name": "Done",
+          "ord": 7,
+          "category": "COLUMN_CATEGORY_DONE",
+          "wipScope": "WIP_SCOPE_COLUMN",
+          "visible": true
+        }
+      ],
+      "cards": [
+        {
+          "id": "H-017",
+          "type": "ITEM_TYPE_FEATURE",
+          "title": "Board and dashboard",
+          "priority": "PRIORITY_P1",
+          "size": "SIZE_M",
+          "rank": "a0V",
+          "columnKey": "doing",
+          "assignee": "b-desktop-dev",
+          "platforms": [
+            "PLATFORM_DAEMON",
+            "PLATFORM_DESKTOP"
+          ],
+          "labels": [
+            "dashboard"
+          ],
+          "blocked": true,
+          "stale": false,
+          "acChecked": 1,
+          "acTotal": 2,
+          "version": "7"
+        }
+      ],
+      "roles": [
+        {
+          "projectId": "p1",
+          "role": "ROLE_REVIEWER_ARCH",
+          "botId": "b-architect"
+        }
+      ],
+      "seq": "12"
+    }
+  }
+}

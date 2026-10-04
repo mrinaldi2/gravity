@@ -53,6 +53,17 @@ const ROWS: &[Row] = &[
         ],
     },
     Row {
+        rule: "Ready → Inbox: lead or owner un-refines, with a reason",
+        from: Cat::Ready,
+        to: Cat::Inbox,
+        ok: |c| {
+            c.who = bot("lead", LEAD);
+            c.reason = Some("needs a spec");
+        },
+        bad: |c| c.reason = None,
+        expect: &["reason.required"],
+    },
+    Row {
         rule: "Ready → Doing (lead): assignee set, not an epic, task linked",
         from: Cat::Ready,
         to: Cat::Doing,
@@ -130,6 +141,25 @@ const ROWS: &[Row] = &[
             c.reason = Some("tests missing");
         },
         bad: |c| c.reason = Some("  "),
+        expect: &["reason.required"],
+    },
+    Row {
+        rule: "Review → Doing over WIP: a return is never refused for WIP (rev 2.1)",
+        from: Cat::Review,
+        to: Cat::Doing,
+        ok: |c| {
+            c.who = bot("arch", &[Role::ReviewerArch]);
+            c.reason = Some("tests missing");
+            c.wip_limit = Some(1);
+            c.ctx.load.insert(
+                "doing".into(),
+                ColumnLoad {
+                    items: 4,
+                    assignee_items: 2,
+                },
+            );
+        },
+        bad: |c| c.reason = None,
         expect: &["reason.required"],
     },
     Row {

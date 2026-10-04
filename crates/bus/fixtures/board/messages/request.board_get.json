@@ -1,0 +1,8 @@
+{
+  "reqId": "1",
+  "boardRequest": {
+    "boardGet": {
+      "projectId": "p1"
+    }
+  }
+}

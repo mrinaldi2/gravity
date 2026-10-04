@@ -25,6 +25,7 @@ pub(super) fn conditions(
         Rule::Rework => need_reason("Say what needs rework."),
         Rule::Reject => need_reason("Name the failing acceptance criterion or machine."),
         Rule::Cancel => need_reason("Say why it is cancelled."),
+        Rule::Unrefine => need_reason("Say what it needs before it is ready again."),
         Rule::Unlisted => need_reason("This isn't a usual move; say why."),
         Rule::Refine => definition_of_ready(item, ctx, out),
         Rule::Start => {
@@ -124,7 +125,7 @@ fn definition_of_ready(item: &Item, ctx: &Context, out: &mut Vec<Unmet>) {
             "description" => (
                 item.description
                     .lines()
-                    .all(|l| l.trim().is_empty() || l.starts_with('#')),
+                    .all(|l| l.trim().is_empty() || l.starts_with('#') || is_hint(l)),
                 "Describe what and why.",
             ),
             // Templates are editable; a field this build doesn't know blocks nothing.
@@ -150,7 +151,14 @@ fn definition_of_ready(item: &Item, ctx: &Context, out: &mut Vec<Unmet>) {
     }
 }
 
-/// True when the description has a `## <heading…>` section with text under it.
+/// A template hint (`<!-- … -->` on one line), which doesn't fill a section.
+fn is_hint(line: &str) -> bool {
+    let line = line.trim();
+    line.starts_with("<!--") && line.ends_with("-->")
+}
+
+/// True when the description has a `## <heading…>` section with text under
+/// it, hints aside.
 pub(crate) fn section_filled(description: &str, heading: &str) -> bool {
     let heading = heading.to_lowercase();
     let mut inside = false;
@@ -161,7 +169,7 @@ pub(crate) fn section_filled(description: &str, heading: &str) -> bool {
                 .trim()
                 .to_lowercase()
                 .starts_with(&heading);
-        } else if inside && !line.trim().is_empty() {
+        } else if inside && !line.trim().is_empty() && !is_hint(line) {
             return true;
         }
     }

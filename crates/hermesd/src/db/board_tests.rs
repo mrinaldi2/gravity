@@ -5,6 +5,7 @@ use crate::board::model::*;
 
 use super::board_edit::ItemEdit;
 use super::board_items::{NewItem, Write};
+use super::MoveTo;
 use super::{Actor, Db};
 
 pub(super) const OWNER: Actor<'static> = Actor::User;
@@ -161,6 +162,13 @@ fn a_stale_version_is_refused_with_the_current_item() {
     );
 }
 
+fn to(column: &str) -> MoveTo<'_> {
+    MoveTo {
+        column,
+        ..MoveTo::default()
+    }
+}
+
 #[test]
 fn moves_record_where_from_and_stamp_done() {
     let (db, p) = board();
@@ -173,9 +181,11 @@ fn moves_record_where_from_and_stamp_done() {
         db.move_item(
             &item.id,
             item.version,
-            "doing",
-            Some("picked up"),
-            false,
+            &MoveTo {
+                column: "doing",
+                note: Some("picked up"),
+                ..MoveTo::default()
+            },
             &bot,
         )
         .unwrap(),
@@ -185,7 +195,7 @@ fn moves_record_where_from_and_stamp_done() {
         (ColumnCategory::Doing, None)
     );
     let finished = done(
-        db.move_item(&item.id, moved.version, "done", None, false, &bot)
+        db.move_item(&item.id, moved.version, &to("done"), &bot)
             .unwrap(),
     );
     assert!(finished.done_at.is_some());
@@ -196,7 +206,7 @@ fn moves_record_where_from_and_stamp_done() {
     );
     assert_eq!(last.actor, "bot:b1");
     assert!(db
-        .move_item(&item.id, finished.version, "nowhere", None, false, &bot)
+        .move_item(&item.id, finished.version, &to("nowhere"), &bot)
         .is_err());
     assert_eq!(
         db.get_item(&item.id).unwrap().unwrap().version,

@@ -15,6 +15,7 @@ use super::board::{
     from_json, from_json_list, from_text, item_template, parse_at, settings_in, to_json_list,
     to_text,
 };
+use super::board_tx::BoardTx;
 use super::{ts, Actor, Db};
 use crate::board::{defaults, rank};
 
@@ -181,6 +182,20 @@ pub(super) fn rank_last(
     rank::between(last.as_deref(), None).ok_or_else(|| anyhow::anyhow!("no rank after {last:?}"))
 }
 
+/// The rank before the first card in a column.
+pub(super) fn rank_first(
+    conn: &Connection,
+    project_id: &str,
+    column_key: &str,
+) -> anyhow::Result<String> {
+    let first: Option<String> = conn.query_row(
+        "SELECT min(rank) FROM item WHERE project_id = ?1 AND column_key = ?2",
+        params![project_id, column_key],
+        |r| r.get(0),
+    )?;
+    rank::between(None, first.as_deref()).ok_or_else(|| anyhow::anyhow!("no rank before {first:?}"))
+}
+
 /// Active columns flag an item that has sat in them too long.
 fn is_active(category: ColumnCategory) -> bool {
     matches!(
@@ -192,11 +207,10 @@ fn is_active(category: ColumnCategory) -> bool {
     )
 }
 
-impl Db {
+impl BoardTx<'_> {
     pub fn create_item(&self, new: &NewItem<'_>, actor: &Actor<'_>) -> anyhow::Result<Item> {
-        let mut conn = self.lock();
-        let tx = conn.transaction()?;
-        let settings = settings_in(&tx, new.project_id)?
+        let tx = self.conn;
+        let settings = settings_in(tx, new.project_id)?
             .ok_or_else(|| anyhow::anyhow!("this project has no board"))?;
         let inbox: String = tx.query_row(
             "SELECT key FROM board_column WHERE project_id = ?1 AND category = 'inbox'
@@ -212,14 +226,14 @@ impl Db {
         )?;
         let item_type = to_text(&new.item_type);
         let description = if new.description.trim().is_empty() {
-            item_template(&tx, new.project_id, item_type)?
+            item_template(tx, new.project_id, item_type)?
                 .map(|t| defaults::description_skeleton(&t))
                 .unwrap_or_default()
         } else {
             new.description.to_string()
         };
         let at = ts(now());
-        let rank = rank_last(&tx, new.project_id, &inbox)?;
+        let rank = rank_last(tx, new.project_id, &inbox)?;
         tx.execute(
             &format!(
                 "INSERT INTO item(id, project_id, seq, type, title, description, platforms, size,
@@ -253,7 +267,7 @@ impl Db {
             )?;
         }
         record(
-            &tx,
+            tx,
             &id,
             actor,
             Event {
@@ -264,11 +278,12 @@ impl Db {
                 note: None,
             },
         )?;
-        let item = item_in(&tx, &id)?.expect("just inserted");
-        tx.commit()?;
+        let item = item_in(tx, &id)?.expect("just inserted");
         Ok(item)
     }
+}
 
+impl Db {
     pub fn get_item(&self, id: &str) -> anyhow::Result<Option<Item>> {
         Ok(item_in(&self.lock(), id)?)
     }
@@ -293,49 +308,7 @@ impl Db {
         filter: &str,
         arg: Option<&str>,
     ) -> anyhow::Result<Vec<ItemCard>> {
-        let conn = self.lock();
-        let stale_after = settings_in(&conn, project_id)?.map_or(24, |s| s.stale_after_hours);
-        let stale_before = now() - Duration::hours(i64::from(stale_after));
-        let sql = format!(
-            "SELECT i.id, i.type, i.title, i.priority, i.size, i.rank, i.column_key, i.assignee,
-                    i.platforms, i.labels, i.blocked_since IS NOT NULL, i.category,
-                    i.state_entered_at, i.version,
-                    (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id AND a.checked),
-                    (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id)
-             FROM item i JOIN board_column c ON c.project_id = i.project_id AND c.key = i.column_key
-             WHERE i.project_id = ?1 {filter}
-             ORDER BY c.ord, i.rank"
-        );
-        let mut stmt = conn.prepare(&sql)?;
-        let map = |r: &rusqlite::Row<'_>| -> rusqlite::Result<ItemCard> {
-            let category: ColumnCategory = from_text(r.get(11)?)?;
-            Ok(ItemCard {
-                id: r.get(0)?,
-                item_type: from_text(r.get(1)?)?,
-                title: r.get(2)?,
-                priority: from_text(r.get(3)?)?,
-                size: r.get::<_, Option<String>>(4)?.map(from_text).transpose()?,
-                rank: r.get(5)?,
-                column_key: r.get(6)?,
-                assignee: r.get(7)?,
-                platforms: from_json_list(r.get(8)?)?,
-                labels: from_json(r.get(9)?)?,
-                blocked: r.get(10)?,
-                stale: is_active(category) && parse_at(r.get(12)?) < stale_before,
-                version: r.get(13)?,
-                ac_checked: r.get(14)?,
-                ac_total: r.get(15)?,
-            })
-        };
-        let cards = match arg {
-            Some(arg) => stmt
-                .query_map(params![project_id, arg], map)?
-                .collect::<Result<_, _>>()?,
-            None => stmt
-                .query_map(params![project_id], map)?
-                .collect::<Result<_, _>>()?,
-        };
-        Ok(cards)
+        cards_in(&self.lock(), project_id, filter, arg)
     }
 
     /// An item's history, oldest first.
@@ -362,4 +335,56 @@ impl Db {
             .collect::<Result<_, _>>()?;
         Ok(rows)
     }
+}
+
+/// The cards of a project matching `filter` (SQL over `i`, the item, with
+/// `arg` as `?2`), in column then rank order.
+pub(super) fn cards_in(
+    conn: &Connection,
+    project_id: &str,
+    filter: &str,
+    arg: Option<&str>,
+) -> anyhow::Result<Vec<ItemCard>> {
+    let stale_after = settings_in(conn, project_id)?.map_or(24, |s| s.stale_after_hours);
+    let stale_before = now() - Duration::hours(i64::from(stale_after));
+    let sql = format!(
+        "SELECT i.id, i.type, i.title, i.priority, i.size, i.rank, i.column_key, i.assignee,
+                i.platforms, i.labels, i.blocked_since IS NOT NULL, i.category,
+                i.state_entered_at, i.version,
+                (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id AND a.checked),
+                (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id)
+         FROM item i JOIN board_column c ON c.project_id = i.project_id AND c.key = i.column_key
+         WHERE i.project_id = ?1 {filter}
+         ORDER BY c.ord, i.rank"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let map = |r: &rusqlite::Row<'_>| -> rusqlite::Result<ItemCard> {
+        let category: ColumnCategory = from_text(r.get(11)?)?;
+        Ok(ItemCard {
+            id: r.get(0)?,
+            item_type: from_text(r.get(1)?)?,
+            title: r.get(2)?,
+            priority: from_text(r.get(3)?)?,
+            size: r.get::<_, Option<String>>(4)?.map(from_text).transpose()?,
+            rank: r.get(5)?,
+            column_key: r.get(6)?,
+            assignee: r.get(7)?,
+            platforms: from_json_list(r.get(8)?)?,
+            labels: from_json(r.get(9)?)?,
+            blocked: r.get(10)?,
+            stale: is_active(category) && parse_at(r.get(12)?) < stale_before,
+            version: r.get(13)?,
+            ac_checked: r.get(14)?,
+            ac_total: r.get(15)?,
+        })
+    };
+    let cards = match arg {
+        Some(arg) => stmt
+            .query_map(params![project_id, arg], map)?
+            .collect::<Result<_, _>>()?,
+        None => stmt
+            .query_map(params![project_id], map)?
+            .collect::<Result<_, _>>()?,
+    };
+    Ok(cards)
 }

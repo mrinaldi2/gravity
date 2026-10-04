@@ -3,7 +3,7 @@
 // The single source of truth: Rust (prost), TypeScript (protobuf-es) and
 // Swift (swift-protobuf) are generated from this file. Additive changes keep
 // the version; `buf breaking` failing means bump `hello_ok.contracts.board`.
-// Requests, responses and pushes join these entities in B4.
+// Requests, responses and pushes are in requests.proto.
 syntax = "proto3";
 
 package hermes.board.v1;

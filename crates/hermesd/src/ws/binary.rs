@@ -1,37 +1,59 @@
 //! Binary WebSocket frames: one protobuf `Envelope` each (ADR-001 §1). Typed
-//! surfaces ride here while text frames stay the JSON protocol v2. No surface
-//! is served yet (the board's requests arrive in B4), so every envelope is
-//! answered with an error naming why.
+//! surfaces ride here while text frames stay the JSON protocol v2. A request
+//! is answered under its own `req_id`; pushes carry `req_id` 0. Anything a
+//! client may not send is answered with an `Error` naming why.
 
+use bus::contract::board::{BoardPush, BoardRequest, BoardResponse};
 use bus::contract::wire::{envelope::Body, Envelope, Error};
 use prost::Message;
 
-/// The reply to one binary frame.
-pub(super) fn reply(frame: &[u8]) -> Vec<u8> {
-    let (req_id, code, message) = match Envelope::decode(frame) {
-        Err(e) => (
-            0,
-            "invalid_request",
-            format!("not a protobuf Envelope: {e}"),
-        ),
-        Ok(Envelope { req_id, body: None }) => {
-            (req_id, "invalid_request", "empty envelope".to_string())
-        }
+/// A request the daemon serves, or the error frame to answer instead.
+pub(super) enum Frame {
+    Board(u64, BoardRequest),
+    Refused(Vec<u8>),
+}
+
+pub(super) fn decode(frame: &[u8]) -> Frame {
+    let (req_id, message) = match Envelope::decode(frame) {
+        Err(e) => (0, format!("not a protobuf Envelope: {e}")),
         Ok(Envelope {
             req_id,
-            body: Some(Body::Error(_)),
+            body: Some(Body::BoardRequest(request)),
+        }) => return Frame::Board(req_id, request),
+        Ok(Envelope { req_id, body: None }) => (req_id, "empty envelope".to_string()),
+        Ok(Envelope {
+            req_id,
+            body: Some(Body::Error(_) | Body::BoardResponse(_) | Body::BoardPush(_)),
         }) => (
             req_id,
-            "invalid_request",
-            "clients do not send errors".to_string(),
+            "clients send requests, not errors, responses or pushes".to_string(),
         ),
     };
-    Envelope {
+    Frame::Refused(error(req_id, "invalid_request", message))
+}
+
+pub(super) fn response(req_id: u64, response: BoardResponse) -> Vec<u8> {
+    encode(req_id, Body::BoardResponse(response))
+}
+
+pub(super) fn push(push: BoardPush) -> Vec<u8> {
+    encode(0, Body::BoardPush(push))
+}
+
+pub(super) fn error(req_id: u64, code: &str, message: String) -> Vec<u8> {
+    encode(
         req_id,
-        body: Some(Body::Error(Error {
+        Body::Error(Error {
             code: code.to_string(),
             message,
-        })),
+        }),
+    )
+}
+
+fn encode(req_id: u64, body: Body) -> Vec<u8> {
+    Envelope {
+        req_id,
+        body: Some(body),
     }
     .encode_to_vec()
 }
@@ -40,8 +62,11 @@ pub(super) fn reply(frame: &[u8]) -> Vec<u8> {
 mod tests {
     use super::*;
 
-    fn error_of(bytes: &[u8]) -> (u64, String) {
-        let envelope = Envelope::decode(bytes).expect("the reply decodes");
+    fn error_of(frame: Frame) -> (u64, String) {
+        let Frame::Refused(bytes) = frame else {
+            panic!("expected a refusal");
+        };
+        let envelope = Envelope::decode(bytes.as_slice()).expect("the reply decodes");
         match envelope.body {
             Some(Body::Error(e)) => (envelope.req_id, e.code),
             other => panic!("expected an error, got {other:?}"),
@@ -51,7 +76,7 @@ mod tests {
     #[test]
     fn garbage_is_refused_without_a_request_id() {
         assert_eq!(
-            error_of(&reply(&[0xff, 0xff, 0xff])),
+            error_of(decode(&[0xff, 0xff, 0xff])),
             (0, "invalid_request".into())
         );
     }
@@ -63,6 +88,26 @@ mod tests {
             body: None,
         }
         .encode_to_vec();
-        assert_eq!(error_of(&reply(&request)), (42, "invalid_request".into()));
+        assert_eq!(error_of(decode(&request)), (42, "invalid_request".into()));
+    }
+
+    #[test]
+    fn a_client_may_not_send_a_push() {
+        let request = Envelope {
+            req_id: 7,
+            body: Some(Body::BoardPush(BoardPush::default())),
+        }
+        .encode_to_vec();
+        assert_eq!(error_of(decode(&request)), (7, "invalid_request".into()));
+    }
+
+    #[test]
+    fn a_board_request_is_served() {
+        let request = Envelope {
+            req_id: 9,
+            body: Some(Body::BoardRequest(BoardRequest::default())),
+        }
+        .encode_to_vec();
+        assert!(matches!(decode(&request), Frame::Board(9, _)));
     }
 }

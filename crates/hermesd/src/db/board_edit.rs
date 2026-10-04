@@ -6,11 +6,12 @@
 
 use crate::board::model::{ColumnCategory, Item, ItemEventKind, Platform, Priority, Size};
 use bus::now;
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use super::board::{from_text, to_json_list, to_text};
-use super::board_items::{item_in, rank_last, record, Event, Write};
-use super::{ts, Actor, Db};
+use super::board_items::{item_in, rank_first, rank_last, record, Event, Write};
+use super::board_tx::BoardTx;
+use super::{ts, Actor};
 use crate::board::guards::WIP_OVERRIDE_LABEL;
 use crate::board::rank;
 
@@ -26,8 +27,20 @@ pub struct ItemEdit<'a> {
     pub parent_id: Option<Option<&'a str>>,
 }
 
+/// Where a move puts an item.
+#[derive(Clone, Copy, Default)]
+pub struct MoveTo<'a> {
+    pub column: &'a str,
+    /// What the history event says.
+    pub note: Option<&'a str>,
+    /// Flags the card for as long as it sits in the column it went over in.
+    pub wip_override: bool,
+    /// The top of the column rather than the bottom (returned work first).
+    pub first: bool,
+}
+
 /// Take the item's next version, or say why not.
-fn claim(tx: &Transaction<'_>, id: &str, expected: u64) -> anyhow::Result<Option<Item>> {
+pub(super) fn claim(tx: &Connection, id: &str, expected: u64) -> anyhow::Result<Option<Item>> {
     let claimed = tx.execute(
         "UPDATE item SET version = version + 1, updated_at = ?3 WHERE id = ?1 AND version = ?2",
         params![id, expected, ts(now())],
@@ -39,22 +52,19 @@ fn claim(tx: &Transaction<'_>, id: &str, expected: u64) -> anyhow::Result<Option
     Ok(Some(current))
 }
 
-/// Run a versioned change: claim the version, apply, then return the item.
+/// Run a versioned change inside the caller's transaction: claim the
+/// version, apply, then return the item. A conflict writes nothing.
 fn versioned(
-    db: &Db,
+    tx: &Connection,
     id: &str,
     expected: u64,
-    apply: impl FnOnce(&Transaction<'_>) -> anyhow::Result<()>,
+    apply: impl FnOnce(&Connection) -> anyhow::Result<()>,
 ) -> anyhow::Result<Write<Item>> {
-    let mut conn = db.lock();
-    let tx = conn.transaction()?;
-    if let Some(current) = claim(&tx, id, expected)? {
+    if let Some(current) = claim(tx, id, expected)? {
         return Ok(Write::Conflict(Box::new(current)));
     }
-    apply(&tx)?;
-    let item = item_in(&tx, id)?.expect("claimed above");
-    tx.commit()?;
-    Ok(Write::Done(item))
+    apply(tx)?;
+    Ok(Write::Done(item_in(tx, id)?.expect("claimed above")))
 }
 
 fn edited(
@@ -79,7 +89,7 @@ fn edited(
     )
 }
 
-impl Db {
+impl BoardTx<'_> {
     pub fn update_item(
         &self,
         id: &str,
@@ -87,7 +97,7 @@ impl Db {
         edit: &ItemEdit<'_>,
         actor: &Actor<'_>,
     ) -> anyhow::Result<Write<Item>> {
-        versioned(self, id, expected, |tx| {
+        versioned(self.conn, id, expected, |tx| {
             let before = item_in(tx, id)?.expect("claimed");
             if let Some(title) = edit.title.filter(|t| *t != before.title) {
                 tx.execute(
@@ -161,65 +171,15 @@ impl Db {
     }
 
     /// Put an item into another column, last in its rank order. Entering a
-    /// done column stamps `done_at`; leaving one clears it. `wip_override`
-    /// flags the card for as long as it sits in the column it went over in.
+    /// done column stamps `done_at`; leaving one clears it.
     pub fn move_item(
         &self,
         id: &str,
         expected: u64,
-        to_column: &str,
-        note: Option<&str>,
-        wip_override: bool,
+        to: &MoveTo<'_>,
         actor: &Actor<'_>,
     ) -> anyhow::Result<Write<Item>> {
-        versioned(self, id, expected, |tx| {
-            let before = item_in(tx, id)?.expect("claimed");
-            let project_id: String = tx.query_row(
-                "SELECT project_id FROM item WHERE id = ?1",
-                params![id],
-                |r| r.get(0),
-            )?;
-            let category: ColumnCategory = tx
-                .query_row(
-                    "SELECT category FROM board_column WHERE project_id = ?1 AND key = ?2",
-                    params![project_id, to_column],
-                    |r| from_text(r.get(0)?),
-                )
-                .optional()?
-                .ok_or_else(|| anyhow::anyhow!("no column {to_column}"))?;
-            let rank = rank_last(tx, &project_id, to_column)?;
-            let at = ts(now());
-            let done_at = matches!(category, ColumnCategory::Done).then_some(at.clone());
-            tx.execute(
-                "UPDATE item SET column_key = ?2, category = ?3, rank = ?4, state_entered_at = ?5,
-                                 done_at = ?6 WHERE id = ?1",
-                params![id, to_column, to_text(&category), rank, at, done_at],
-            )?;
-            let mut labels = before.labels.clone();
-            labels.retain(|l| l != WIP_OVERRIDE_LABEL);
-            if wip_override {
-                labels.push(WIP_OVERRIDE_LABEL.to_string());
-            }
-            if labels != before.labels {
-                tx.execute(
-                    "UPDATE item SET labels = ?2 WHERE id = ?1",
-                    params![id, serde_json::to_string(&labels)?],
-                )?;
-            }
-            record(
-                tx,
-                id,
-                actor,
-                Event {
-                    kind: ItemEventKind::Moved,
-                    from: Some(&before.column_key),
-                    to: Some(to_column),
-                    field: None,
-                    note,
-                },
-            )?;
-            Ok(())
-        })
+        versioned(self.conn, id, expected, |tx| move_in(tx, id, to, actor))
     }
 
     /// Place an item between two neighbours in its column (either may be
@@ -232,7 +192,7 @@ impl Db {
         before_id: Option<&str>,
         actor: &Actor<'_>,
     ) -> anyhow::Result<Write<Item>> {
-        versioned(self, id, expected, |tx| {
+        versioned(self.conn, id, expected, |tx| {
             let rank_of = |other: Option<&str>| -> anyhow::Result<Option<String>> {
                 other
                     .map(|o| {
@@ -275,7 +235,7 @@ impl Db {
         assignee: Option<&str>,
         actor: &Actor<'_>,
     ) -> anyhow::Result<Write<Item>> {
-        versioned(self, id, expected, |tx| {
+        versioned(self.conn, id, expected, |tx| {
             let before = item_in(tx, id)?.expect("claimed");
             tx.execute(
                 "UPDATE item SET assignee = ?2 WHERE id = ?1",
@@ -305,7 +265,7 @@ impl Db {
         block: Option<(Option<&str>, &str)>,
         actor: &Actor<'_>,
     ) -> anyhow::Result<Write<Item>> {
-        versioned(self, id, expected, |tx| {
+        versioned(self.conn, id, expected, |tx| {
             match block {
                 Some((by, reason)) => {
                     tx.execute(
@@ -347,4 +307,70 @@ impl Db {
             Ok(())
         })
     }
+}
+
+/// The write half of a move, inside the caller's transaction; the caller has
+/// already claimed the item's version.
+pub(super) fn move_in(
+    tx: &Connection,
+    id: &str,
+    to: &MoveTo<'_>,
+    actor: &Actor<'_>,
+) -> anyhow::Result<()> {
+    let MoveTo {
+        column: to_column,
+        note,
+        wip_override,
+        first,
+    } = *to;
+    let before = item_in(tx, id)?.expect("claimed");
+    let project_id: String = tx.query_row(
+        "SELECT project_id FROM item WHERE id = ?1",
+        params![id],
+        |r| r.get(0),
+    )?;
+    let category: ColumnCategory = tx
+        .query_row(
+            "SELECT category FROM board_column WHERE project_id = ?1 AND key = ?2",
+            params![project_id, to_column],
+            |r| from_text(r.get(0)?),
+        )
+        .optional()?
+        .ok_or_else(|| anyhow::anyhow!("no column {to_column}"))?;
+    let rank = if first {
+        rank_first(tx, &project_id, to_column)?
+    } else {
+        rank_last(tx, &project_id, to_column)?
+    };
+    let at = ts(now());
+    let done_at = matches!(category, ColumnCategory::Done).then_some(at.clone());
+    tx.execute(
+        "UPDATE item SET column_key = ?2, category = ?3, rank = ?4, state_entered_at = ?5,
+                             done_at = ?6 WHERE id = ?1",
+        params![id, to_column, to_text(&category), rank, at, done_at],
+    )?;
+    let mut labels = before.labels.clone();
+    labels.retain(|l| l != WIP_OVERRIDE_LABEL);
+    if wip_override {
+        labels.push(WIP_OVERRIDE_LABEL.to_string());
+    }
+    if labels != before.labels {
+        tx.execute(
+            "UPDATE item SET labels = ?2 WHERE id = ?1",
+            params![id, serde_json::to_string(&labels)?],
+        )?;
+    }
+    record(
+        tx,
+        id,
+        actor,
+        Event {
+            kind: ItemEventKind::Moved,
+            from: Some(&before.column_key),
+            to: Some(to_column),
+            field: None,
+            note,
+        },
+    )?;
+    Ok(())
 }

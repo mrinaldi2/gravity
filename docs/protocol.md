@@ -51,8 +51,33 @@ protobuf's compatibility rules; when `buf breaking` fails, the version is bumped
 `hello_ok.encodings` lists the binary encodings the daemon accepts, today
 `["proto"]`. Text frames stay this JSON protocol. A binary frame carries one
 `hermes.wire.v1.Envelope` (`req_id` plus a `body` oneof per typed surface) and
-is answered with an `Envelope` under the same `req_id`. No surface is served in
-binary yet, so every envelope is answered with an `Error` body.
+is answered with an `Envelope` under the same `req_id`; pushes carry `req_id` 0.
+A request refused before its service answers (no grant, unknown item or
+project, bad arguments, an envelope a client may not send) is answered with an
+`Error` body: `forbidden`, `not_found`, `no_board`, `invalid_request` or
+`internal`.
+
+The board (`proto/hermes/board/v1/requests.proto`, H-020 §1.5) is the first
+typed surface:
+
+| Request | Grant | Response |
+|---|---|---|
+| `board_get {project_id}` | read | `board`: settings (with `home_daemon_id`), columns, cards, roles, `seq`. A project's first `board_get` enables its board, which needs control; with read only it is `no_board`. |
+| `board_watch {project_id}` / `board_unwatch` | read | `board` (as `board_get`) / `unwatched` |
+| `item_get {id}` | read | `item`: the item, links, comments, the first 100 history events and `history_next` |
+| `item_history {id, after?, limit}` | read | `history`: events oldest first, `next` cursor |
+| `item_query {project_id, text?, column_keys, assignee?, types, priorities, platforms, blocked?}` | read | `items`: matching cards |
+| `item_move_check {id}` | read | `move_check`: every other column with its unmet guards |
+| `item_move {id, to, expected_version, reason?, override_reason?}` | control | `moved`: `done` (the item), `refused` (unmet guards) or `conflict` (the current item) |
+
+`board_watch` answers with the snapshot the pushes continue from, and no push
+for that project is sent before it. Each committed board change is then pushed
+to the connections watching its project as `board_event {project_id, seq, kind,
+item_id, card?, from_column?}`, where `seq` rises by one per change in that
+project. A client applies pushes with `seq` above its snapshot's and refetches
+`board_get` when a push's `seq` is not the last one plus one (a lower number
+means the daemon restarted) or its kind is `columns_changed`,
+`settings_changed` or `resync` (sent when the connection fell behind).
 
 `contracts: {surface: N}` is the **highest** version each side speaks, and it
 stays an integer forever. A side that still serves older versions adds

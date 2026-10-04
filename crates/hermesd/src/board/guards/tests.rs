@@ -131,7 +131,8 @@ fn rules_cover_every_category_pair() {
     assert_eq!(rule(Cat::Approval, Cat::Cancelled), Rule::Release);
     assert_eq!(rule(Cat::Deploying, Cat::Cancelled), Rule::Release);
     assert_eq!(rule(Cat::Verify, Cat::Cancelled), Rule::Cancel);
-    assert_eq!(rule(Cat::Ready, Cat::Inbox), Rule::Unlisted);
+    assert_eq!(rule(Cat::Ready, Cat::Inbox), Rule::Unrefine);
+    assert_eq!(rule(Cat::Verify, Cat::Review), Rule::Unlisted);
 }
 
 #[test]
@@ -212,6 +213,22 @@ fn dor_sections_come_from_the_description() {
     assert_eq!(run(&c, Cat::Ready), ["dor.expected_actual"]);
     c.item.description.push_str("crashes\n");
     assert!(run(&c, Cat::Ready).is_empty());
+    c.item.description = "## Steps to reproduce\n\n<!-- Numbered steps -->\n\n## Expected\n\nworks\n\n## Actual\n\ncrashes\n".into();
+    assert_eq!(
+        run(&c, Cat::Ready),
+        ["dor.steps_to_reproduce"],
+        "a hint doesn't fill a section"
+    );
+    c.item.description = crate::board::defaults::description_skeleton(&serde_json::json!({
+        "sections": ["Steps to reproduce", "Expected", "Actual"]
+    }));
+    assert_eq!(
+        run(&c, Cat::Ready),
+        ["dor.steps_to_reproduce", "dor.expected_actual"],
+        "a fresh template fills nothing"
+    );
+    c.item.description =
+        "## Steps to reproduce\n\n1. open\n\n## Expected\n\nworks\n\n## Actual\n\ncrashes\n".into();
     c.ctx.ready.push("a_field_from_the_future".into());
     assert!(
         run(&c, Cat::Ready).is_empty(),
