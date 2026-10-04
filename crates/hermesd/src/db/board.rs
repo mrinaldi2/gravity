@@ -203,45 +203,11 @@ impl Db {
     }
 
     pub fn board_columns(&self, project_id: &str) -> anyhow::Result<Vec<BoardColumn>> {
-        let conn = self.lock();
-        let rows = conn
-            .prepare(
-                "SELECT project_id, key, name, ord, category, wip_limit, wip_scope, visible
-                 FROM board_column WHERE project_id = ?1 ORDER BY ord",
-            )?
-            .query_map(params![project_id], |r| {
-                Ok(BoardColumn {
-                    project_id: r.get(0)?,
-                    key: r.get(1)?,
-                    name: r.get(2)?,
-                    ord: r.get(3)?,
-                    category: from_text(r.get(4)?)?,
-                    wip_limit: r.get(5)?,
-                    wip_scope: from_text(r.get(6)?)?,
-                    visible: r.get(7)?,
-                })
-            })?
-            .collect::<Result<_, _>>()?;
-        Ok(rows)
+        Ok(columns_in(&self.lock(), project_id)?)
     }
 
     pub fn project_roles(&self, project_id: &str) -> anyhow::Result<Vec<ProjectRole>> {
-        let conn = self.lock();
-        let rows = conn
-            .prepare(
-                "SELECT project_id, role, bot_id, machine FROM project_role
-                 WHERE project_id = ?1 ORDER BY role, bot_id",
-            )?
-            .query_map(params![project_id], |r| {
-                Ok(ProjectRole {
-                    project_id: r.get(0)?,
-                    role: from_text(r.get(1)?)?,
-                    bot_id: r.get(2)?,
-                    machine: r.get(3)?,
-                })
-            })?
-            .collect::<Result<_, _>>()?;
-        Ok(rows)
+        Ok(roles_in(&self.lock(), project_id)?)
     }
 
     /// Give a bot a role (or update a tester's machine).
@@ -348,4 +314,47 @@ pub(super) fn item_template(
 /// When an item entered its column, for the stale flag.
 pub(super) fn parse_at(text: String) -> chrono::DateTime<chrono::Utc> {
     parse_ts(&text)
+}
+
+pub(super) fn columns_in(
+    conn: &Connection,
+    project_id: &str,
+) -> rusqlite::Result<Vec<BoardColumn>> {
+    let rows = conn
+        .prepare(
+            "SELECT project_id, key, name, ord, category, wip_limit, wip_scope, visible
+             FROM board_column WHERE project_id = ?1 ORDER BY ord",
+        )?
+        .query_map(params![project_id], |r| {
+            Ok(BoardColumn {
+                project_id: r.get(0)?,
+                key: r.get(1)?,
+                name: r.get(2)?,
+                ord: r.get(3)?,
+                category: from_text(r.get(4)?)?,
+                wip_limit: r.get(5)?,
+                wip_scope: from_text(r.get(6)?)?,
+                visible: r.get(7)?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(rows)
+}
+
+pub(super) fn roles_in(conn: &Connection, project_id: &str) -> rusqlite::Result<Vec<ProjectRole>> {
+    let rows = conn
+        .prepare(
+            "SELECT project_id, role, bot_id, machine FROM project_role
+             WHERE project_id = ?1 ORDER BY role, bot_id",
+        )?
+        .query_map(params![project_id], |r| {
+            Ok(ProjectRole {
+                project_id: r.get(0)?,
+                role: from_text(r.get(1)?)?,
+                bot_id: r.get(2)?,
+                machine: r.get(3)?,
+            })
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(rows)
 }

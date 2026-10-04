@@ -8,8 +8,9 @@ use chrono::{DateTime, Duration, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 
 pub use crate::actor::Actor;
-pub use board_edit::ItemEdit;
+pub use board_edit::{ItemEdit, MoveTo};
 pub use board_items::{NewItem, Write};
+pub use board_tx::BoardTx;
 pub use decisions::NewDecision;
 pub use decisions_edit::DecisionEdit;
 pub use decisions_list::DecisionFilter;
@@ -28,6 +29,7 @@ mod board_notes;
 mod board_schema_tests;
 #[cfg(test)]
 mod board_tests;
+mod board_tx;
 mod bot_runtime;
 mod bots;
 mod conversations;

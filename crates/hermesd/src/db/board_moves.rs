@@ -1,19 +1,21 @@
-//! Board storage, part 5: what the move guards read. The guarded move itself
-//! is `move_item` (part 3), which re-checks the version it is given.
+//! Board storage, part 5: what the guards read, inside a `BoardTx` so they
+//! see exactly the state the write commits against.
 
 use std::collections::BTreeMap;
 
 use crate::board::guards::{Blocker, ColumnLoad, Context};
-use crate::board::model::{Item, ItemLink};
+use crate::board::model::{BoardColumn, Item, ItemLink, ProjectRole};
 use rusqlite::{params, OptionalExtension};
 
+use super::board::{columns_in, roles_in, settings_in};
 use super::board::{from_text, item_template, parse_at};
-use super::Db;
+use super::board_items::item_in;
+use super::board_tx::BoardTx;
 
-impl Db {
+impl BoardTx<'_> {
     pub fn item_project(&self, id: &str) -> anyhow::Result<Option<String>> {
         Ok(self
-            .lock()
+            .conn
             .query_row(
                 "SELECT project_id FROM item WHERE id = ?1",
                 params![id],
@@ -23,7 +25,7 @@ impl Db {
     }
 
     pub fn item_links(&self, item_id: &str) -> anyhow::Result<Vec<ItemLink>> {
-        let conn = self.lock();
+        let conn = self.conn;
         let rows = conn
             .prepare(
                 "SELECT item_id, kind, ref, label, created_by, at FROM item_link
@@ -45,7 +47,7 @@ impl Db {
 
     /// The items linked as blocking this one, and where each stands.
     pub fn blockers_of(&self, item_id: &str) -> anyhow::Result<Vec<Blocker>> {
-        let conn = self.lock();
+        let conn = self.conn;
         let rows = conn
             .prepare(
                 "SELECT i.id, i.category FROM item_link l JOIN item i ON i.id = l.item_id
@@ -67,7 +69,7 @@ impl Db {
         project_id: &str,
         item: &Item,
     ) -> anyhow::Result<BTreeMap<String, ColumnLoad>> {
-        let conn = self.lock();
+        let conn = self.conn;
         let rows = conn
             .prepare(
                 "SELECT column_key, count(*), coalesce(sum(assignee IS ?3), 0) FROM item
@@ -88,10 +90,9 @@ impl Db {
 
     /// Everything the guards need about `item` besides the item.
     pub fn move_context(&self, project_id: &str, item: &Item) -> anyhow::Result<Context> {
-        let settings = self
-            .board_settings(project_id)?
+        let settings = settings_in(self.conn, project_id)?
             .ok_or_else(|| anyhow::anyhow!("this project has no board"))?;
-        let template = item_template(&self.lock(), project_id, item.item_type.as_str())?;
+        let template = item_template(self.conn, project_id, item.item_type.as_str())?;
         let ready = template
             .as_ref()
             .and_then(|body| body["ready"].as_array())
@@ -109,5 +110,17 @@ impl Db {
             required_machines: settings.required_machines,
             load: self.column_loads(project_id, item)?,
         })
+    }
+
+    pub fn item(&self, id: &str) -> anyhow::Result<Option<Item>> {
+        Ok(item_in(self.conn, id)?)
+    }
+
+    pub fn columns(&self, project_id: &str) -> anyhow::Result<Vec<BoardColumn>> {
+        Ok(columns_in(self.conn, project_id)?)
+    }
+
+    pub fn roles(&self, project_id: &str) -> anyhow::Result<Vec<ProjectRole>> {
+        Ok(roles_in(self.conn, project_id)?)
     }
 }

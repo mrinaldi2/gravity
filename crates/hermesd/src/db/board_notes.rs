@@ -8,9 +8,10 @@ use rusqlite::params;
 
 use super::board::to_text;
 use super::board_items::{record, Event};
-use super::{ts, Actor, Db};
+use super::board_tx::BoardTx;
+use super::{ts, Actor};
 
-impl Db {
+impl BoardTx<'_> {
     /// Comments are not versioned: two people may comment at once.
     pub fn add_item_comment(
         &self,
@@ -19,8 +20,7 @@ impl Db {
         reply_to: Option<&str>,
         actor: &Actor<'_>,
     ) -> anyhow::Result<ItemComment> {
-        let mut conn = self.lock();
-        let tx = conn.transaction()?;
+        let tx = self.conn;
         let comment = ItemComment {
             id: new_id(),
             item_id: item_id.to_string(),
@@ -34,7 +34,7 @@ impl Db {
             params![comment.id, item_id, comment.author, body, reply_to, ts(comment.at)],
         )?;
         record(
-            &tx,
+            tx,
             item_id,
             actor,
             Event {
@@ -45,7 +45,6 @@ impl Db {
                 note: None,
             },
         )?;
-        tx.commit()?;
         Ok(comment)
     }
 
@@ -58,8 +57,7 @@ impl Db {
         label: Option<&str>,
         actor: &Actor<'_>,
     ) -> anyhow::Result<ItemLink> {
-        let mut conn = self.lock();
-        let tx = conn.transaction()?;
+        let tx = self.conn;
         let link = ItemLink {
             item_id: item_id.to_string(),
             kind,
@@ -74,7 +72,7 @@ impl Db {
         )?;
         if added == 1 {
             record(
-                &tx,
+                tx,
                 item_id,
                 actor,
                 Event {
@@ -86,7 +84,6 @@ impl Db {
                 },
             )?;
         }
-        tx.commit()?;
         Ok(link)
     }
 }

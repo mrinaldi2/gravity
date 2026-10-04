@@ -212,3 +212,91 @@ fn a_bot_of_another_project_is_turned_away() {
     assert!(item_move(&b.db, &req, &stranger).is_err());
     assert!(item_move_check(&b.db, &item.id, &stranger).is_err());
 }
+
+#[test]
+fn returned_work_goes_over_wip_first_and_flagged() {
+    let b = board();
+    let arch =
+        b.db.create_bot(
+            &b.project,
+            "Architect",
+            "",
+            "",
+            "",
+            "/tmp/x",
+            "architect",
+            None,
+        )
+        .unwrap()
+        .id;
+    b.db.set_project_role(&crate::board::model::ProjectRole {
+        project_id: b.project.clone(),
+        role: crate::board::model::Role::ReviewerArch,
+        bot_id: arch.clone(),
+        machine: None,
+    })
+    .unwrap();
+    let dev = b.as_bot(&b.dev);
+    let first = b.ready_for_dev("First");
+    let first = done(b.moved(&first, "doing", &dev, None));
+    b.link(&first, LinkKind::Branch, &dev);
+    let first = done(b.moved(&first, "review", &dev, None));
+    let second = b.ready_for_dev("Second");
+    let second = done(b.moved(&second, "doing", &dev, None));
+
+    let req = MoveRequest {
+        id: &first.id,
+        to: "doing",
+        expected_version: first.version,
+        reason: Some("tests missing"),
+        override_reason: None,
+    };
+    let back = done(item_move(&b.db, &req, &b.as_bot(&arch)).unwrap());
+    assert!(back.labels.contains(&WIP_OVERRIDE_LABEL.to_string()));
+    assert!(back.rank < second.rank, "returned work is listed first");
+    let event = b.db.item_events(&first.id).unwrap().pop().unwrap();
+    assert_eq!(
+        event.note.as_deref(),
+        Some("tests missing · returned: rework over WIP")
+    );
+    let third = b.ready_for_dev("Third");
+    assert_eq!(
+        codes(b.moved(&third, "doing", &dev, None)),
+        ["wip.full"],
+        "an assignee over the limit can't pull"
+    );
+}
+
+#[test]
+fn concurrent_moves_never_both_take_the_last_wip_slot() {
+    for _ in 0..20 {
+        let b = board();
+        let items = [b.ready_for_dev("One"), b.ready_for_dev("Two")];
+        let gate = std::sync::Barrier::new(2);
+        let outcomes: Vec<Moved> = std::thread::scope(|s| {
+            let runs: Vec<_> = items
+                .iter()
+                .map(|item| {
+                    let (b, gate) = (&b, &gate);
+                    s.spawn(move || {
+                        gate.wait();
+                        b.moved(item, "doing", &b.as_bot(&b.dev), None)
+                    })
+                })
+                .collect();
+            runs.into_iter().map(|r| r.join().unwrap()).collect()
+        });
+        let moved = outcomes
+            .iter()
+            .filter(|o| matches!(o, Moved::Done(_)))
+            .count();
+        assert_eq!(moved, 1, "{outcomes:?}");
+        let doing =
+            b.db.board_cards(&b.project)
+                .unwrap()
+                .into_iter()
+                .filter(|c| c.column_key == "doing")
+                .count();
+        assert_eq!(doing, 1);
+    }
+}

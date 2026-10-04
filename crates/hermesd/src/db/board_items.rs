@@ -15,6 +15,7 @@ use super::board::{
     from_json, from_json_list, from_text, item_template, parse_at, settings_in, to_json_list,
     to_text,
 };
+use super::board_tx::BoardTx;
 use super::{ts, Actor, Db};
 use crate::board::{defaults, rank};
 
@@ -181,6 +182,20 @@ pub(super) fn rank_last(
     rank::between(last.as_deref(), None).ok_or_else(|| anyhow::anyhow!("no rank after {last:?}"))
 }
 
+/// The rank before the first card in a column.
+pub(super) fn rank_first(
+    conn: &Connection,
+    project_id: &str,
+    column_key: &str,
+) -> anyhow::Result<String> {
+    let first: Option<String> = conn.query_row(
+        "SELECT min(rank) FROM item WHERE project_id = ?1 AND column_key = ?2",
+        params![project_id, column_key],
+        |r| r.get(0),
+    )?;
+    rank::between(None, first.as_deref()).ok_or_else(|| anyhow::anyhow!("no rank before {first:?}"))
+}
+
 /// Active columns flag an item that has sat in them too long.
 fn is_active(category: ColumnCategory) -> bool {
     matches!(
@@ -192,11 +207,10 @@ fn is_active(category: ColumnCategory) -> bool {
     )
 }
 
-impl Db {
+impl BoardTx<'_> {
     pub fn create_item(&self, new: &NewItem<'_>, actor: &Actor<'_>) -> anyhow::Result<Item> {
-        let mut conn = self.lock();
-        let tx = conn.transaction()?;
-        let settings = settings_in(&tx, new.project_id)?
+        let tx = self.conn;
+        let settings = settings_in(tx, new.project_id)?
             .ok_or_else(|| anyhow::anyhow!("this project has no board"))?;
         let inbox: String = tx.query_row(
             "SELECT key FROM board_column WHERE project_id = ?1 AND category = 'inbox'
@@ -212,14 +226,14 @@ impl Db {
         )?;
         let item_type = to_text(&new.item_type);
         let description = if new.description.trim().is_empty() {
-            item_template(&tx, new.project_id, item_type)?
+            item_template(tx, new.project_id, item_type)?
                 .map(|t| defaults::description_skeleton(&t))
                 .unwrap_or_default()
         } else {
             new.description.to_string()
         };
         let at = ts(now());
-        let rank = rank_last(&tx, new.project_id, &inbox)?;
+        let rank = rank_last(tx, new.project_id, &inbox)?;
         tx.execute(
             &format!(
                 "INSERT INTO item(id, project_id, seq, type, title, description, platforms, size,
@@ -253,7 +267,7 @@ impl Db {
             )?;
         }
         record(
-            &tx,
+            tx,
             &id,
             actor,
             Event {
@@ -264,11 +278,12 @@ impl Db {
                 note: None,
             },
         )?;
-        let item = item_in(&tx, &id)?.expect("just inserted");
-        tx.commit()?;
+        let item = item_in(tx, &id)?.expect("just inserted");
         Ok(item)
     }
+}
 
+impl Db {
     pub fn get_item(&self, id: &str) -> anyhow::Result<Option<Item>> {
         Ok(item_in(&self.lock(), id)?)
     }
