@@ -159,6 +159,23 @@ decision cites, so the reason behind a ruling stays readable. A project may
 name a lead bot, which is told about every decision raised there; it cannot
 answer for the owner. See the [protocol](protocol.md#the-decision-registry).
 
+## Board
+
+A project's backlog lives on its board (H-017): items move through columns
+whose categories the guards key on. One pure function, `board::guards`,
+decides every move, and each guarded change runs as one `BEGIN IMMEDIATE`
+transaction (`Db::board_tx`) that reads the item, the caller's roles and the
+column loads, checks the version, runs the guard and writes, so nothing changes
+between the check and the write.
+
+Bots work the board over MCP (`item_create`, `item_move`, `board_get`, …). The
+tool schemas are generated from the request messages in
+`proto/hermes/board/v1/requests.proto`, `tools/list` shows only what a bot's
+board roles allow, and a refusal lists every unmet guard with its fix.
+`send_message(kind=task)`, `raise_decision` and `complete_task` take an `item`:
+the task or decision is linked to the item, artifacts land on it, and a task's
+completion, cancellation or expiry is written to the item's history.
+
 ## Routines and signals
 
 A routine belongs to one bot and combines a prompt with a cron, interval, or

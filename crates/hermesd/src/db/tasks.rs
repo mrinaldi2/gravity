@@ -251,10 +251,17 @@ impl Db {
     /// path sends exactly-once, and stops two closers racing to overwrite each
     /// other's outcome.
     pub fn try_close_task(&self, task_id: &str, state: TaskState) -> anyhow::Result<bool> {
-        let changed = self.lock().execute(
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        let changed = tx.execute(
             "UPDATE task SET state = ?2 WHERE id = ?1 AND state = 'open'",
             params![task_id, state.as_str()],
         )?;
+        if changed == 1 {
+            // A task delegated for a board item ends in the item's history.
+            super::board_links::task_closed(&tx, task_id, state)?;
+        }
+        tx.commit()?;
         Ok(changed == 1)
     }
 
@@ -264,10 +271,12 @@ impl Db {
     }
 
     pub fn set_task_state(&self, task_id: &str, state: TaskState) -> anyhow::Result<()> {
-        self.lock().execute(
-            "UPDATE task SET state = ?2 WHERE id = ?1",
-            params![task_id, state.as_str()],
-        )?;
+        if !self.try_close_task(task_id, state)? {
+            self.lock().execute(
+                "UPDATE task SET state = ?2 WHERE id = ?1",
+                params![task_id, state.as_str()],
+            )?;
+        }
         Ok(())
     }
 }

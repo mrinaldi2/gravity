@@ -16,9 +16,10 @@ pub(super) fn tool(name: &str, desc: &str, props: Value, required: Vec<&str>) ->
     })
 }
 
-pub(super) fn tool_list() -> Value {
+pub(super) fn tool_list(board_tools: &[Value]) -> Value {
     let mut tools = core_tools();
     tools.extend(super::schema_decisions::decision_tools());
+    tools.extend_from_slice(board_tools);
     json!({ "tools": tools })
 }
 
@@ -37,7 +38,8 @@ fn core_tools() -> Vec<Value> {
                  "body": {"type": "string"},
                  "kind": {"type": "string", "enum": ["task", "reply", "note"]},
                  "ref": {"type": "string", "description": "Message id this replies to"},
-                 "deadline_hours": {"type": "integer", "description": "Deadline for a kind 'task' send, in hours (default 24, max 168)"}
+                 "deadline_hours": {"type": "integer", "description": "Deadline for a kind 'task' send, in hours (default 24, max 168)"},
+                 "item": {"type": "string", "description": "Board item this task is for (e.g. H-017): links the task there, and its completion or expiry goes into the item's history"}
              }),
              vec!["to", "body"]),
         tool("complete_task",
@@ -47,7 +49,8 @@ fn core_tools() -> Vec<Value> {
              json!({
                  "task_id": {"type": "string"},
                  "result": {"type": "string"},
-                 "artifacts": {"type": "array", "items": {"type": "string"}}
+                 "artifacts": {"type": "array", "items": {"type": "string"}},
+                 "item": {"type": "string", "description": "Board item the artifacts belong to; defaults to the item the task was delegated for"}
              }),
              vec!["task_id", "result"]),
         tool("cancel_task",

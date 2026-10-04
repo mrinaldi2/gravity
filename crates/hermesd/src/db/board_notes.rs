@@ -1,13 +1,14 @@
-//! Board storage, part 4: comments and links. Neither is versioned: two people
-//! may comment at once, and linking the same thing twice is harmless. Each
-//! still records its history event.
+//! Board storage, part 4: comments, links and acceptance checks. Comments and
+//! links aren't versioned: two people may comment at once, and linking the
+//! same thing twice is harmless. Each still records its history event.
 
-use crate::board::model::{ItemComment, ItemEventKind, ItemLink, LinkKind};
+use crate::board::model::{Item, ItemComment, ItemEventKind, ItemLink, LinkKind};
 use bus::{new_id, now};
 use rusqlite::params;
 
 use super::board::to_text;
-use super::board_items::{record, Event};
+use super::board_edit::versioned;
+use super::board_items::{record, Event, Write};
 use super::board_tx::BoardTx;
 use super::{ts, Actor};
 
@@ -85,5 +86,60 @@ impl BoardTx<'_> {
             )?;
         }
         Ok(link)
+    }
+
+    /// Remove a link; false when there was none.
+    pub fn remove_item_link(
+        &self,
+        item_id: &str,
+        kind: LinkKind,
+        target: &str,
+        actor: &Actor<'_>,
+    ) -> anyhow::Result<bool> {
+        let removed = self.conn.execute(
+            "DELETE FROM item_link WHERE item_id = ?1 AND kind = ?2 AND ref = ?3",
+            params![item_id, to_text(&kind), target],
+        )?;
+        if removed > 0 {
+            let event = Event {
+                kind: ItemEventKind::Unlinked,
+                from: Some(target),
+                to: None,
+                field: Some(to_text(&kind)),
+                note: None,
+            };
+            record(self.conn, item_id, actor, event)?;
+        }
+        Ok(removed > 0)
+    }
+
+    /// Check (or uncheck) one acceptance criterion; versioned like an edit.
+    pub fn check_ac(
+        &self,
+        id: &str,
+        expected: u64,
+        idx: u32,
+        checked: bool,
+        machine: Option<&str>,
+        actor: &Actor<'_>,
+    ) -> anyhow::Result<Write<Item>> {
+        versioned(self.conn, id, expected, |tx| {
+            let changed = tx.execute(
+                "UPDATE item_ac SET checked = ?3, checked_by = ?4, checked_at = ?5, machine = ?6
+                 WHERE item_id = ?1 AND idx = ?2",
+                params![id, idx, checked, actor.as_stored(), ts(now()), machine],
+            )?;
+            anyhow::ensure!(changed == 1, "{id} has no acceptance criterion {idx}");
+            let field = format!("ac:{idx}");
+            let event = Event {
+                kind: ItemEventKind::Edited,
+                from: None,
+                to: Some(if checked { "checked" } else { "failed" }),
+                field: Some(&field),
+                note: machine,
+            };
+            record(tx, id, actor, event)?;
+            Ok(())
+        })
     }
 }

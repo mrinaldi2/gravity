@@ -38,6 +38,11 @@ pub mod board {
 
     /// Bumped only on a breaking change to this surface.
     pub const VERSION: u32 = 1;
+
+    /// JSON Schemas of the board's messages, by name, generated from the
+    /// protos at build time; the MCP board tools are built on them.
+    pub const MESSAGE_SCHEMAS: &str =
+        include_str!(concat!(env!("OUT_DIR"), "/board_messages.schema.json"));
 }
 
 /// What a WebSocket binary frame carries: an `Envelope` per frame.

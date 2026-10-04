@@ -89,8 +89,14 @@ impl Conn {
             return Err(refuse("invalid_request", "empty board request"));
         };
         let cap = match request {
-            Request::ItemMove(_) => Capability::Control,
-            _ => Capability::Read,
+            Request::BoardGet(_)
+            | Request::ItemGet(_)
+            | Request::ItemHistory(_)
+            | Request::ItemQuery(_)
+            | Request::ItemMoveCheck(_)
+            | Request::BoardWatch(_)
+            | Request::BoardUnwatch(_) => Capability::Read,
+            _ => Capability::Control,
         };
         if !self.caps.contains(&cap) {
             return Err(refuse(
@@ -118,6 +124,23 @@ impl Conn {
             Request::ItemQuery(r) => Response::Items(self.item_query(&r)?),
             Request::ItemMoveCheck(r) => Response::MoveCheck(self.item_move_check(&r.id)?),
             Request::ItemMove(r) => Response::Moved(self.item_move(&r)?),
+            // Bots make these edits over MCP (B5); the owner's item drawer
+            // (U4) serves them here next.
+            Request::ItemCreate(_)
+            | Request::ItemUpdate(_)
+            | Request::ItemComment(_)
+            | Request::ItemLink(_)
+            | Request::ItemUnlink(_)
+            | Request::ItemBlock(_)
+            | Request::ItemUnblock(_)
+            | Request::ItemAssign(_)
+            | Request::ItemRank(_)
+            | Request::ItemCheckAc(_) => {
+                return Err(refuse(
+                    "unsupported",
+                    "item edits aren't served over WebSocket yet",
+                ))
+            }
         }))
     }
 

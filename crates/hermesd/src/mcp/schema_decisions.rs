@@ -44,7 +44,8 @@ pub(super) fn decision_tools() -> Vec<Value> {
                 "deadline_at": {"type": "string", "description": "RFC 3339, when the choice stops being available"},
                 "on_behalf_of": {"type": "string", "description": "Bot name whose work waits on this"},
                 "source_task_id": {"type": "string"},
-                "supersedes": {"type": "string", "description": "Decision id this replaces because the facts changed"}
+                "supersedes": {"type": "string", "description": "Decision id this replaces because the facts changed"},
+                "item": {"type": "string", "description": "Board item this decision is for (e.g. H-017); linked there"}
             }),
             vec!["title", "body"],
         ),

@@ -7,6 +7,8 @@ use bus::{MessageKind, TaskState, MAX_MESSAGE_BYTES};
 use serde_json::{json, Value};
 
 use crate::app::AppState;
+use crate::board::feed::ChangeKind;
+use crate::board::model::LinkKind;
 use crate::events::Push;
 use crate::messaging;
 use crate::messaging::Dm;
@@ -52,6 +54,11 @@ pub(super) fn complete_task(
     }
     // The flip is the gate: it both rejects an already-closed task and stops a
     // concurrent cancel_task from overwriting this result.
+    // Artifacts land on the item the task was delegated for, or the one named.
+    let item = match super::board::item_arg(app, &me, args)? {
+        Some(item) => Some(item),
+        None => app.db.task_item(task_id)?,
+    };
     if !app.db.try_close_task(task_id, TaskState::Done)? {
         anyhow::bail!(
             "task is already {}",
@@ -81,6 +88,16 @@ pub(super) fn complete_task(
         let key = format!("{}:{}", msg.id, from_bot);
         let delivery = app.db.enqueue_delivery(&msg.id, from_bot, &key)?;
         app.events.push(Push::DeliveryUpdate { delivery });
+    }
+    if let Some(item) = &item {
+        let actor = super::board::bot_actor(&me);
+        super::board::published(app, &me.project_id, ChangeKind::ItemUpserted, None, || {
+            for path in &artifacts {
+                app.db
+                    .add_item_link(item, LinkKind::Artifact, path, None, &actor)?;
+            }
+            Ok(((), item.clone()))
+        })?;
     }
     // A worker's task closing frees its slot for the queue.
     app.workers.nudge();

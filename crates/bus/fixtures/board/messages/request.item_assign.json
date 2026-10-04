@@ -1,0 +1,10 @@
+{
+  "reqId": "27",
+  "boardRequest": {
+    "itemAssign": {
+      "id": "H-017",
+      "expectedVersion": "7",
+      "bot": "Desktop Dev"
+    }
+  }
+}

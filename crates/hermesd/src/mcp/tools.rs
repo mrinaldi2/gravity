@@ -9,6 +9,7 @@ use bus::{
 use serde_json::{json, Value};
 
 use crate::app::AppState;
+use crate::board::feed::ChangeKind;
 use crate::messaging;
 use crate::messaging::Dm;
 
@@ -49,6 +50,10 @@ pub(super) fn send_message(
         MessageKind::Task | MessageKind::Reply | MessageKind::Note => {}
     }
     let ref_id = args.get("ref").and_then(|v| v.as_str());
+    let item = super::board::item_arg(app, &me, args)?;
+    if item.is_some() && kind != MessageKind::Task {
+        anyhow::bail!("'item' links a delegated task to a board item; send kind 'task'");
+    }
 
     // Hop/origin tracking: extend the chain from the caller's newest open task.
     let open_task = app.db.newest_open_task_for(bot_id)?;
@@ -190,6 +195,19 @@ pub(super) fn send_message(
                 hop + 1,
                 &new_chain,
             )?;
+            if let Some(item) = &item {
+                let actor = super::board::bot_actor(&me);
+                super::board::published(
+                    app,
+                    &me.project_id,
+                    ChangeKind::ItemUpserted,
+                    None,
+                    || {
+                        app.db.link_task_item(&task.id, item, &actor)?;
+                        Ok(((), item.clone()))
+                    },
+                )?;
+            }
             Ok(json!({ "message_id": msg.id, "num": msg.num, "task_id": task.id }))
         }
         MessageKind::Chat | MessageKind::Done => unreachable!("refused above"),

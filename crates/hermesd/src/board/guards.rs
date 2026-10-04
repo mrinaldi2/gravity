@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 
 use conditions::conditions;
+pub use conditions::{check_template, DOR_FIELDS};
 
 use super::model::{
     BoardColumn, ColumnCategory as Cat, Item, ItemLink, LinkKind, PersonRole, Platform, Role,
@@ -293,6 +294,20 @@ pub fn check_block(item: &Item, who: &Who, setting: bool, reason: Option<&str>) 
         ));
     }
     out
+}
+
+/// Checking an acceptance criterion: a tester, a verifier named on the item,
+/// the lead or the owner.
+pub fn check_ac(item: &Item, who: &Who) -> Vec<Unmet> {
+    if who.leads() || *who == Who::Daemon || who.verifies(item) {
+        Vec::new()
+    } else {
+        vec![unmet(
+            "role.not_allowed",
+            "Only a tester, a named verifier or the lead can.",
+            None,
+        )]
+    }
 }
 
 /// Ranking, P0, and editing WIP limits, columns or templates: the lead or the owner.
