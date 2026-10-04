@@ -44,9 +44,26 @@ fn hook_settings_use_the_new_token_and_guard_the_current_home() {
 }
 
 #[test]
-fn the_bus_keeps_its_name_until_the_mcp_rename() {
-    assert_eq!(brand::ACTIVE_MCP_SERVER, brand::LEGACY_MCP_SERVER);
-    assert_eq!(brand::MCP_SERVER, "hermes-bus");
+fn the_bus_is_registered_as_hermes_bus() {
+    assert_eq!(brand::ACTIVE_MCP_SERVER, "hermes-bus");
     assert_eq!(brand::DISPLAY_NAME, "The Hermes");
     assert_eq!(brand::HOME_DIR_NAME, ".gravity");
+}
+
+/// A bot provisioned before the rename has `gravity-bus` in its `mcp.json`.
+/// The rewrite on its next start leaves only the new name, so the session
+/// never sees the bus twice.
+#[test]
+fn regenerating_a_pre_rename_mcp_config_drops_the_old_name() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let stale = serde_json::json!({"mcpServers": {"gravity-bus": {
+        "type": "http", "url": "http://127.0.0.1:7777/mcp",
+        "headers": {"Authorization": "Bearer ${GRAVITY_TOKEN}"}
+    }}});
+    std::fs::write(tmp.path().join("mcp.json"), stale.to_string()).expect("stale");
+    write_mcp_config(tmp.path(), 7777, brand::BOT_TOKEN_ENV, None).expect("rewrite");
+    let raw = std::fs::read_to_string(tmp.path().join("mcp.json")).expect("read");
+    let mcp: serde_json::Value = serde_json::from_str(&raw).expect("parse");
+    let servers = mcp["mcpServers"].as_object().expect("servers");
+    assert_eq!(servers.keys().collect::<Vec<_>>(), ["hermes-bus"]);
 }

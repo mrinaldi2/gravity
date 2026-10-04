@@ -264,7 +264,7 @@ async fn tool_items_are_recorded_for_the_chat() {
         .iter()
         .filter_map(|r| r["message"]["content"][0]["name"].as_str())
         .collect();
-    assert_eq!(tools, ["Bash", "Edit", "mcp__gravity-bus__send_message"]);
+    assert_eq!(tools, ["Bash", "Edit", "mcp__hermes-bus__send_message"]);
     let patch = records
         .iter()
         .find_map(|r| r["toolUseResult"]["structuredPatch"].as_array())

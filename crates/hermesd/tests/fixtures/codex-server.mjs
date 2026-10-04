@@ -32,7 +32,7 @@ function receive(request, respond) {
       notify("item/completed", { item: { id: "cmd-1", type: "commandExecution", command: "cargo test",
         cwd: "/w", aggregatedOutput: "test result: ok", exitCode: 0, status: "completed" } });
       notify("item/completed", { item: change });
-      notify("item/completed", { item: { id: "mcp-1", type: "mcpToolCall", server: "gravity-bus",
+      notify("item/completed", { item: { id: "mcp-1", type: "mcpToolCall", server: "hermes-bus",
         tool: "send_message", status: "completed", arguments: { to: "lead", kind: "note", body: "built" },
         result: { content: [{ type: "text", text: "{}" }] }, error: null } });
       notify("item/completed", { item: { type: "agentMessage", text: "Built it." } });

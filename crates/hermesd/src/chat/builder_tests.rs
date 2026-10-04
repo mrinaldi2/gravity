@@ -302,3 +302,31 @@ fn codex_tool_records_read_as_steps_and_bus_calls() {
         (1, 1, 1)
     );
 }
+
+/// A resumed session spans the MCP rename: calls before it are recorded as
+/// `gravity-bus`, calls after it as `hermes-bus`, and both read as sends.
+#[test]
+fn bus_calls_read_the_same_across_the_rename() {
+    let builder = build(&[
+        peer("u1", "[msg #3 from LEAD · task · task_id t-3] report back"),
+        assistant(
+            "a1",
+            json!([
+                {"type": "tool_use", "id": "old", "name": "mcp__gravity-bus__send_message",
+                 "input": {"to": "lead", "kind": "note", "body": "before"}},
+                {"type": "tool_use", "id": "new", "name": "mcp__hermes-bus__send_message",
+                 "input": {"to": "lead", "kind": "note", "body": "after"}}
+            ]),
+        ),
+        end_of_turn(),
+    ]);
+    let sent: Vec<&str> = builder.turns[0]
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            ChatItem::Sent { to, .. } => Some(to.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(sent, ["lead", "lead"]);
+}

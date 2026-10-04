@@ -115,6 +115,7 @@ mod tests {
             Some((Browser::OwnersChrome, "tabs_create"))
         );
         assert_eq!(browser_tool("mcp__gravity-bus__send_message"), None);
+        assert_eq!(browser_tool("mcp__hermes-bus__send_message"), None);
     }
 
     #[test]

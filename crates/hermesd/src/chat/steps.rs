@@ -5,10 +5,6 @@ use serde_json::Value;
 
 use super::model::FileRef;
 
-/// The MCP server name the bus is registered under; R1-D3 routes this
-/// through `brand` and accepts both names.
-const BUS_PREFIX: &str = "mcp__gravity-bus__";
-
 /// Bus tools that are housekeeping, not something the owner wants to read.
 const MINOR_BUS_TOOLS: &[&str] = &[
     "check_inbox",
@@ -66,7 +62,7 @@ pub enum BusCall {
 }
 
 pub fn bus_call(name: &str, input: &Value) -> Option<BusCall> {
-    let tool = name.strip_prefix(BUS_PREFIX)?;
+    let tool = crate::brand::bus_tool(name)?;
     let text = |key: &str| {
         input
             .get(key)
@@ -184,9 +180,7 @@ pub fn describe(name: &str, input: &Value) -> Described {
         },
     };
     let minor = MINOR_TOOLS.contains(&name)
-        || name
-            .strip_prefix(BUS_PREFIX)
-            .is_some_and(|tool| MINOR_BUS_TOOLS.contains(&tool));
+        || crate::brand::bus_tool(name).is_some_and(|tool| MINOR_BUS_TOOLS.contains(&tool));
     Described {
         title,
         subtitle: subtitle.map(|s| truncate(&s, 160)),
@@ -279,6 +273,8 @@ mod tests {
         assert_eq!(bash.kind, ToolKind::Command);
         let edit = describe("Edit", &json!({"file_path": "C:\\work\\src\\app.ts"}));
         assert_eq!(edit.title, "Edited app.ts");
+        assert!(describe("mcp__hermes-bus__check_inbox", &json!({})).minor);
+        // Transcripts from before the rename.
         assert!(describe("mcp__gravity-bus__check_inbox", &json!({})).minor);
         assert_eq!(
             describe("mcp__chrome__take_screenshot", &json!({})).title,
@@ -288,10 +284,10 @@ mod tests {
 
     #[test]
     fn reads_bus_tools_as_what_they_did() {
-        let call = bus_call(
-            "mcp__gravity-bus__complete_task",
-            &json!({"task_id": "t", "result": "done", "artifacts": ["/a/b/report.md"]}),
-        );
+        let input = json!({"task_id": "t", "result": "done", "artifacts": ["/a/b/report.md"]});
+        let call = bus_call("mcp__hermes-bus__complete_task", &input);
+        // A transcript from before the rename reads the same.
+        assert_eq!(bus_call("mcp__gravity-bus__complete_task", &input), call);
         assert_eq!(
             call,
             Some(BusCall::Completed {

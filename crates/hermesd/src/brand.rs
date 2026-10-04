@@ -29,9 +29,21 @@ pub const MCP_SERVER: &str = "hermes-bus";
 /// stay readable forever.
 pub const LEGACY_MCP_SERVER: &str = "gravity-bus";
 
-/// The name bots are registered under today. The MCP rename (R1-D3) points
-/// this at [`MCP_SERVER`] together with the transcript parsers.
-pub const ACTIVE_MCP_SERVER: &str = LEGACY_MCP_SERVER;
+/// The name bots are registered under: `mcp.json`, Codex's config, the MCP
+/// `serverInfo` and the system prompt all use it.
+pub const ACTIVE_MCP_SERVER: &str = MCP_SERVER;
+
+/// Tool-name prefixes of the bus in transcripts, newest first. Sessions from
+/// before the rename keep `mcp__gravity-bus__*` calls forever, so readers
+/// accept both.
+pub const BUS_TOOL_PREFIXES: [&str; 2] = ["mcp__hermes-bus__", "mcp__gravity-bus__"];
+
+/// The bus tool a transcript's tool name refers to, under either name.
+pub fn bus_tool(name: &str) -> Option<&str> {
+    BUS_TOOL_PREFIXES
+        .iter()
+        .find_map(|prefix| name.strip_prefix(prefix))
+}
 
 /// The daemon home under the user's home directory. Moves in the home
 /// migration, together with everything the bots' paths and transcripts embed.
@@ -104,6 +116,25 @@ mod tests {
         let get = env(&[("GRAVITY_HOME", "/old")]);
         assert_eq!(read_env("HOME", get), Some(OsString::from("/old")));
         assert_eq!(read_env("HOME", env(&[])), None);
+    }
+
+    #[test]
+    fn bus_tools_are_read_under_both_names() {
+        assert_eq!(
+            bus_tool("mcp__hermes-bus__send_message"),
+            Some("send_message")
+        );
+        assert_eq!(
+            bus_tool("mcp__gravity-bus__send_message"),
+            Some("send_message")
+        );
+        assert_eq!(bus_tool("mcp__playwright__browser_click"), None);
+        for (prefix, server) in BUS_TOOL_PREFIXES
+            .iter()
+            .zip([MCP_SERVER, LEGACY_MCP_SERVER])
+        {
+            assert_eq!(*prefix, format!("mcp__{server}__"));
+        }
     }
 
     #[test]
