@@ -19,6 +19,7 @@ use serde_json::{json, Value};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::task::JoinHandle;
 
+use super::term_mirror::{Mirror, State};
 use crate::app::AppState;
 use crate::terminal::coalesce;
 
@@ -33,25 +34,6 @@ fn unb64(text: &str) -> Vec<u8> {
     base64::engine::general_purpose::STANDARD
         .decode(text)
         .unwrap_or_default()
-}
-
-/// Where a mirror stands.
-enum State {
-    /// No feed: nobody watches, or the link is down.
-    Stopped,
-    /// Asked for a feed; frames that overtake the reply wait here.
-    Starting(Vec<(u64, Vec<u8>)>),
-    Running,
-}
-
-/// A peer bot's terminal mirrored into its stand-in's buffer.
-struct Mirror {
-    peer_id: String,
-    remote_bot_id: String,
-    viewers: usize,
-    state: State,
-    /// The newest of the peer's sequence numbers pushed into the mirror.
-    last_remote: u64,
 }
 
 /// Terminal feeds this daemon serves, and mirrors of its peers' terminals.
@@ -315,11 +297,9 @@ async fn feed(app: &Arc<AppState>, bot_id: &str) -> anyhow::Result<()> {
         .into_iter()
         .flatten()
         .filter_map(|f| Some((f["seq"].as_u64()?, unb64(f["data"].as_str()?))));
-    for (seq, data) in replayed.chain(early) {
-        if seq > mirror.last_remote {
-            term.push(data);
-            mirror.last_remote = seq;
-        }
+    let resumed = reply["resumed"].as_bool().unwrap_or(true);
+    for data in mirror.take_replay(resumed, replayed.chain(early)) {
+        term.push(data);
     }
     Ok(())
 }
@@ -340,11 +320,12 @@ pub(super) fn receive_frames(app: &AppState, peer_id: &str, frame: &Value) {
         };
         match &mut mirror.state {
             State::Starting(early) => early.push((seq, unb64(data))),
-            State::Running if seq > mirror.last_remote => {
-                app.supervisor.ensure_term(&bot.id).push(unb64(data));
-                mirror.last_remote = seq;
+            State::Running => {
+                if mirror.accept(seq) {
+                    app.supervisor.ensure_term(&bot.id).push(unb64(data));
+                }
             }
-            _ => {}
+            State::Stopped => {}
         }
     }
 }

@@ -192,6 +192,11 @@ impl PeerHub {
         );
         if let Some(old) = replaced {
             old.closed.notify_one();
+            // A peer that reconnects before its old link is seen to drop (its
+            // daemon restarted) starts with no feeds: stop the mirrors fed
+            // over the old link now, so `link_up` asks for them again.
+            self.terms.link_down(&peer_id);
+            self.browsers.link_down(&app, &peer_id);
         }
         tracing::info!(peer_id, "peer link up");
         let _ = app.db.touch_peer(&peer_id);
@@ -257,15 +262,19 @@ impl PeerHub {
         }
 
         let mut links = self.lock();
-        if links
+        let current = links
             .get(&peer_id)
-            .is_some_and(|link| link.generation == generation)
-        {
+            .is_some_and(|link| link.generation == generation);
+        if current {
             links.remove(&peer_id);
         }
         drop(links);
-        self.terms.link_down(&peer_id);
-        self.browsers.link_down(&app, &peer_id);
+        // A link replaced by a newer one leaves the terminal and browser
+        // feeds and mirrors alone: they belong to the new link by now.
+        if current {
+            self.terms.link_down(&peer_id);
+            self.browsers.link_down(&app, &peer_id);
+        }
         let _ = app.db.touch_peer(&peer_id);
         tracing::info!(peer_id, "peer link down");
     }
