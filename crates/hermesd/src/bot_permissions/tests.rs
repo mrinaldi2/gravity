@@ -3,10 +3,13 @@ use std::path::{Path, PathBuf};
 use bus::{PermissionExtra, PermissionProfile};
 use serde_json::{json, Value};
 
-use super::guard::{decide, verdict, GuardContext};
+use super::guard::decide;
 use super::*;
 
-fn input(profile: PermissionProfile, extras: &[PermissionExtra]) -> Value {
+mod bypass_table;
+mod guard_cases;
+
+pub(super) fn input(profile: PermissionProfile, extras: &[PermissionExtra]) -> Value {
     generate(&SettingsInput {
         profile,
         extras,
@@ -23,7 +26,7 @@ fn input(profile: PermissionProfile, extras: &[PermissionExtra]) -> Value {
     })
 }
 
-fn rules(settings: &Value, list: &str) -> Vec<String> {
+pub(super) fn rules(settings: &Value, list: &str) -> Vec<String> {
     settings["permissions"][list]
         .as_array()
         .expect("list")
@@ -248,212 +251,6 @@ fn rule_paths_are_absolute_on_both_platforms() {
     assert_eq!(rule_path(Path::new(r"C:\Users\me\x")), "//c/Users/me/x");
 }
 
-fn ctx() -> GuardContext {
-    GuardContext {
-        home: PathBuf::from("/Users/me/.gravity"),
-        user_home: PathBuf::from("/Users/me"),
-        writable: vec![
-            PathBuf::from("/Users/me/.gravity/projects/p/bots/dev"),
-            PathBuf::from("/Users/me/Developer"),
-            PathBuf::from("/tmp"),
-        ],
-        allow_main: false,
-    }
-}
-
-fn bash(command: &str) -> Option<String> {
-    decide(
-        &json!({
-            "tool_name": "Bash",
-            "tool_input": { "command": command },
-            "cwd": "/Users/me/.gravity/projects/p/bots/dev/workspace"
-        }),
-        &ctx(),
-    )
-}
-
-#[test]
-fn forced_pushes_are_caught_in_any_spelling() {
-    for command in [
-        "git push -f origin feat",
-        "git -C . push --force",
-        "git -c x=y push origin +main",
-        "git push --force-with-lease",
-        "sh -c 'git push -uf origin x'",
-        "cd repo && git push origin feat --force",
-    ] {
-        assert!(bash(command).is_some(), "{command} was let through");
-    }
-    for command in [
-        "git push origin feat",
-        "git push -u origin H-031",
-        "git status",
-    ] {
-        assert_eq!(bash(command), None, "{command} was blocked");
-    }
-}
-
-/// CE-003 decision: only the bot with `release_main` reaches `main`.
-#[test]
-fn main_is_reserved_for_release_main() {
-    for command in [
-        "git push origin main",
-        "git -C . push origin HEAD:main",
-        "git push origin feat:refs/heads/main",
-        "git push origin 'refs/heads/*:refs/heads/*'",
-        "git push --all origin",
-        "git push --delete origin feat",
-        "git push -d origin feat",
-        "git push origin :feat",
-        "git push origin tag v1 main",
-        "git -c alias.p='push --force' p",
-        "git config alias.p 'push origin main'",
-        "gh pr merge 12 --squash",
-        "gh api -X PUT repos/me/x/pulls/12/merge",
-    ] {
-        assert!(bash(command).is_some(), "{command} was let through");
-    }
-    for command in [
-        "git push origin feat/main-menu",
-        "git push -u origin H-031-fixes",
-        "git push origin tag v1",
-        "git push -o ci.skip origin feat",
-        "git config --get alias.st",
-        "gh pr create --base main --title x --body y",
-        "gh pr view 12",
-    ] {
-        assert_eq!(bash(command), None, "{command} was blocked");
-    }
-    // On main with no refspec, the current branch is what git pushes.
-    let repo = tempfile::tempdir().expect("tmp");
-    let git = |args: &[&str]| {
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(repo.path())
-            .args(args)
-            .output()
-            .expect("git")
-    };
-    git(&["init", "-q", "-b", "main"]);
-    git(&[
-        "-c",
-        "user.name=t",
-        "-c",
-        "user.email=t@t",
-        "commit",
-        "-q",
-        "--allow-empty",
-        "-m",
-        "x",
-    ]);
-    let push = |command: &str, ctx: &GuardContext| {
-        decide(
-            &json!({
-                "tool_name": "Bash",
-                "tool_input": { "command": command },
-                "cwd": repo.path().display().to_string()
-            }),
-            ctx,
-        )
-    };
-    assert!(push("git push", &ctx()).is_some());
-    assert!(push("git push origin HEAD", &ctx()).is_some());
-    let release = GuardContext {
-        allow_main: true,
-        ..ctx()
-    };
-    for command in ["git push", "git push origin main", "gh pr merge 12"] {
-        assert_eq!(
-            push(command, &release),
-            None,
-            "{command} was blocked for release_main"
-        );
-    }
-    assert!(push("git push -f origin main", &release).is_some());
-    git(&["switch", "-q", "-c", "feat"]);
-    assert_eq!(push("git push", &ctx()), None);
-    // The rules fail fast for everyone but release_main.
-    let deny = rules(&input(PermissionProfile::Trusted, &[]), "deny");
-    assert!(deny.contains(&"Bash(git push * main)".to_string()));
-    let devops = rules(
-        &input(PermissionProfile::Trusted, &[PermissionExtra::ReleaseMain]),
-        "deny",
-    );
-    assert!(!devops.iter().any(|r| r.contains("main")));
-}
-
-#[test]
-fn destructive_commands_stay_in_the_bots_own_folders() {
-    for command in [
-        "rm -rf ~/x",
-        "/bin/rm -rf /etc/hosts",
-        "sh -c 'rm -rf ../../other-bot'",
-        "mv notes.md ~/Documents/",
-        "echo pwned > /etc/hosts",
-        "true && $(rm -rf /Users/me/Pictures)",
-    ] {
-        assert!(bash(command).is_some(), "{command} was let through");
-    }
-    for command in [
-        "rm -rf target",
-        "rm -rf /Users/me/Developer/gravity/target",
-        "rm /tmp/scratch.txt",
-        "cargo test 2>&1 > /tmp/log",
-        "ls > /dev/null",
-        "mv a.txt b.txt",
-    ] {
-        assert_eq!(bash(command), None, "{command} was blocked");
-    }
-}
-
-#[test]
-fn protected_files_are_refused_even_through_an_interpreter() {
-    for command in [
-        "cat ~/.gravity/secrets/client.token",
-        "python3 -c \"open('$HOME/.gravity/secrets/x').read()\"",
-        "node -e \"require('fs').writeFileSync('/Users/me/.claude/settings.json', '{}')\"",
-        "cat ~/.ssh/id_ed25519",
-        "sed -i '' s/a/b/ .claude/settings.local.json",
-        "cp x /Users/me/.gravity/projects/p/bots/dev/settings.gen.json",
-    ] {
-        assert!(bash(command).is_some(), "{command} was let through");
-    }
-    let write = |path: &str| {
-        decide(
-            &json!({ "tool_name": "Write", "tool_input": { "file_path": path }, "cwd": "/w" }),
-            &ctx(),
-        )
-    };
-    assert!(write("/Users/me/.claude.json").is_some());
-    assert!(write(
-        "/Users/me/.gravity/projects/p/bots/other/workspace/.claude/settings.local.json"
-    )
-    .is_some());
-    assert_eq!(write("/w/src/main.rs"), None);
-}
-
-#[test]
-fn shared_machine_rules_are_enforced() {
-    assert!(bash("pkill -f vitest").is_some());
-    assert!(bash("killall node").is_some());
-    assert!(bash("xcrun simctl install booted App.app").is_some());
-    assert!(bash("xcrun simctl erase all").is_some());
-    assert_eq!(bash("kill 4242"), None);
-    assert_eq!(bash("xcrun simctl install 5D0A-UDID App.app"), None);
-}
-
-#[test]
-fn the_verdict_is_a_pre_tool_use_deny() {
-    let answer = verdict(bash("pkill node")).expect("deny");
-    assert_eq!(answer["hookSpecificOutput"]["hookEventName"], "PreToolUse");
-    assert_eq!(answer["hookSpecificOutput"]["permissionDecision"], "deny");
-    assert!(verdict(None).is_none());
-    assert_eq!(
-        decide(&json!({ "tool_name": "Read", "tool_input": {} }), &ctx()),
-        None
-    );
-}
-
 /// CE-003 M1: one Read call must not hand a bot the owner's private key.
 #[test]
 fn reading_sensitive_locations_is_denied_by_rule_and_by_the_guard() {
@@ -471,7 +268,7 @@ fn reading_sensitive_locations_is_denied_by_rule_and_by_the_guard() {
     let call = |tool: &str, input: Value| {
         decide(
             &json!({ "tool_name": tool, "tool_input": input, "cwd": "/Users/me" }),
-            &ctx(),
+            &guard_cases::ctx(),
         )
     };
     assert!(call("Read", json!({ "file_path": "/Users/me/.ssh/id_rsa" })).is_some());
@@ -496,5 +293,41 @@ fn reading_sensitive_locations_is_denied_by_rule_and_by_the_guard() {
             json!({ "pattern": ".ssh", "path": "/Users/me/Developer" })
         ),
         None
+    );
+}
+
+/// CE-003 M4: the guard may delete only in the bot's own folders and the
+/// trusted paths' worktrees, never in the trusted paths themselves.
+#[test]
+fn the_guard_is_told_worktrees_not_trusted_paths_are_writable() {
+    let cfg = crate::config::Config {
+        home: PathBuf::from("/Users/me/.gravity"),
+        user_home: PathBuf::from("/Users/me"),
+        ..crate::config::Config::default()
+    };
+    let start = |profile, extras| BotStart {
+        cfg: &cfg,
+        profile,
+        extras,
+        project_name: "Hermes",
+        bot_root: Path::new("/Users/me/.gravity/projects/p/bots/dev"),
+        workspace: Path::new("/Users/me/.gravity/projects/p/bots/dev/workspace"),
+        artifacts: Some(Path::new("/Users/me/.gravity/projects/p/artifacts")),
+        repo_url: None,
+    };
+    let trusted = start(PermissionProfile::Trusted, &[]).guard_command();
+    assert!(
+        trusted.contains("--worktrees '/Users/me/Developer'"),
+        "{trusted}"
+    );
+    assert!(
+        !trusted.contains("--writable '/Users/me/Developer'"),
+        "{trusted}"
+    );
+    assert!(!trusted.contains("--full") && !trusted.contains("--allow-main"));
+    let devops = start(PermissionProfile::Full, &[PermissionExtra::ReleaseMain]).guard_command();
+    assert!(
+        devops.contains("--full") && devops.contains("--allow-main"),
+        "{devops}"
     );
 }

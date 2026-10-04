@@ -27,8 +27,9 @@ runtime = "pty"
 claude_bin = "claude"
 claude_args = []
 # Folders outside their own that bots work in, such as your repositories.
-# Permission profiles name them to Claude Code's auto mode as trusted, and the
-# guard hook lets bots delete or move files inside them. `~` expands.
+# Permission profiles name them to Claude Code's auto mode as trusted. The guard
+# hook lets bots delete or move files only in their `<repo>-wt-*` git worktrees,
+# never in your checkouts beside them. `~` expands.
 # trusted_paths = ["~/Developer"]
 # Extra lines for Claude Code's auto-mode classifier, added to every bot's
 # generated environment: trusted domains, the repositories bots push to, …

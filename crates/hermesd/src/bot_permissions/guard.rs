@@ -1,27 +1,41 @@
-//! `hermesd guard`: the PreToolUse hook every bot runs (H-031 §2).
+//! `hermesd guard`: the PreToolUse hook every bot runs (H-031 §2, hardened
+//! per CE-003 M3–M5).
 //!
 //! Permission rules match command text, so `git -C . push -f`, `sh -c '…'`,
 //! an absolute `/bin/rm` or a `python3 -c "open(…)"` walk past them. The
 //! guard reads the tool call on stdin, parses it, and denies:
 //! - a Read, Grep or Glob of a protected path;
 //! - any mention of the daemon's secrets, `~/.ssh`, `~/.claude.json`,
-//!   Claude settings files, the daemon config or a bot's generated settings;
-//! - `rm`, `rmdir`, `mv`, `unlink` or an output redirect aimed outside the
-//!   bot's own directory, the project's artifacts or the trusted paths;
+//!   Claude settings files, the daemon config or a bot's generated settings,
+//!   however the path is spelled (`//`, `/./`, `..`, `"$HOME"`, `~user`, a
+//!   variable set earlier on the line, a glob, a `cd` before it, a symlink);
+//! - `rm`, `mv`, `cp`, `tee`, `dd`, `truncate`, `ln`, `rsync`, `sed -i`,
+//!   `find -delete`/`-exec`, `xargs <destructive>` or an output redirect
+//!   aimed outside the bot's own directory, the project's artifacts, the
+//!   temp dirs and the git worktrees (`<repo>-wt-*`) in the trusted paths;
 //! - a forced `git push` or a remote branch deletion, in any spelling, and
 //!   any push or merge to `main` unless the bot holds `release_main`;
-//! - `pkill`/`killall`, and `simctl` against `all` or `booted` (CE-001).
+//! - `pkill`/`killall`, and `simctl` against `all` or `booted` (CE-001);
+//! - in Full, where nothing else reviews a call: inline interpreter code
+//!   (`python3 -c`, `perl -e`, `node -e`, …), commands read from stdin,
+//!   `eval`, decoded text fed into a substitution, and writes outside the
+//!   bot's own folders.
 //!
 //! Hooks run in every permission mode, so this is the boundary that still
-//! holds in Full. It cannot see paths a script computes at runtime.
+//! holds in Full. It is a parser, not a sandbox: a script file can still
+//! compute a path at runtime.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::{json, Value};
 
-use super::shell::{self, Words};
-
+mod commands;
+mod full;
 mod git;
+mod paths;
+mod words;
+
+use paths::Scope;
 
 /// What the guard knows about the bot it guards, passed on its command line.
 pub struct GuardContext {
@@ -29,86 +43,16 @@ pub struct GuardContext {
     pub home: PathBuf,
     pub user_home: PathBuf,
     /// Where destructive commands may act: the bot's directory, the
-    /// project's artifacts, the trusted paths and the temp dirs.
+    /// project's artifacts and the temp dirs.
     pub writable: Vec<PathBuf>,
+    /// Folders (the trusted paths) whose `<repo>-wt-*` children are git
+    /// worktrees bots may also change. The folders themselves, and the
+    /// owner's checkouts in them, are not.
+    pub worktrees: Vec<PathBuf>,
     /// The bot holds `release_main`: it may push and merge to `main`.
     pub allow_main: bool,
-}
-
-impl GuardContext {
-    fn protected(&self) -> Vec<PathBuf> {
-        vec![
-            self.home.join("secrets"),
-            self.home.join("gravityd.toml"),
-            self.home.join("bot-settings.json"),
-            self.user_home.join(".ssh"),
-            self.user_home.join(".claude.json"),
-            self.user_home.join(".claude").join("settings.json"),
-            self.user_home.join(".claude").join("settings.local.json"),
-        ]
-    }
-
-    /// Any of these in a path makes it protected wherever it lives, written
-    /// relative (`.claude/settings.json`) or absolute.
-    const PROTECTED_NAMES: [&'static str; 3] = [
-        ".claude/settings.json",
-        ".claude/settings.local.json",
-        "settings.gen.json",
-    ];
-
-    fn mentions_protected(&self, text: &str) -> Option<String> {
-        let text = self.expand_home(text).replace('\\', "/");
-        for path in self.protected() {
-            let path = path.display().to_string().replace('\\', "/");
-            if text.contains(&path) {
-                return Some(path);
-            }
-        }
-        Self::PROTECTED_NAMES
-            .iter()
-            .find(|name| text.contains(*name))
-            .map(|name| (*name).to_string())
-    }
-
-    fn expand_home(&self, text: &str) -> String {
-        let home = format!("{}/", self.user_home.display());
-        text.replace("${HOME}/", &home)
-            .replace("$HOME/", &home)
-            .replace("~/", &home)
-    }
-
-    fn resolve(&self, cwd: &Path, word: &str) -> PathBuf {
-        let expanded = self.expand_home(word);
-        let path = Path::new(&expanded);
-        normalize(&if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            cwd.join(path)
-        })
-    }
-
-    fn may_change(&self, path: &Path) -> bool {
-        path == Path::new("/dev/null")
-            || self
-                .writable
-                .iter()
-                .any(|root| path.starts_with(normalize(root)))
-    }
-}
-
-/// `a/./b/../c` → `a/c`, without touching the disk (the target may not exist).
-fn normalize(path: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
-    for part in path.components() {
-        match part {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                out.pop();
-            }
-            other => out.push(other),
-        }
-    }
-    out
+    /// The project runs in Full, where the guard is the only check.
+    pub full: bool,
 }
 
 /// Why the tool call must not run, or `None` to let it through.
@@ -116,17 +60,20 @@ pub fn decide(input: &Value, ctx: &GuardContext) -> Option<String> {
     let tool = input["tool_name"].as_str().unwrap_or_default();
     let args = &input["tool_input"];
     let cwd = PathBuf::from(input["cwd"].as_str().unwrap_or("/"));
+    let scope = Scope::new(&cwd);
     match tool {
-        "Bash" => bash(args["command"].as_str().unwrap_or_default(), &cwd, ctx),
+        "Bash" => commands::line(
+            args["command"].as_str().unwrap_or_default(),
+            &mut scope.clone(),
+            ctx,
+        ),
         "Read" | "Grep" | "Glob" => {
             // `path` is where Grep/Glob search; a Glob pattern can name a path too.
             ["file_path", "path", "pattern"]
                 .iter()
                 .filter(|key| tool != "Grep" || **key != "pattern")
                 .filter_map(|key| args[*key].as_str())
-                .find_map(|path| {
-                    ctx.mentions_protected(&ctx.resolve(&cwd, path).display().to_string())
-                })
+                .find_map(|path| ctx.protected_word(path, &scope))
                 .map(|path| format!("{path} is protected; don't read it, ask the owner"))
         }
         "Write" | "Edit" | "MultiEdit" | "NotebookEdit" => {
@@ -134,101 +81,22 @@ pub fn decide(input: &Value, ctx: &GuardContext) -> Option<String> {
                 .as_str()
                 .or_else(|| args["notebook_path"].as_str())
                 .unwrap_or_default();
-            ctx.mentions_protected(&ctx.resolve(&cwd, file).display().to_string())
-                .map(|path| format!("{path} is protected; ask the owner to change it"))
-        }
-        _ => None,
-    }
-}
-
-fn bash(line: &str, cwd: &Path, ctx: &GuardContext) -> Option<String> {
-    if let Some(path) = ctx.mentions_protected(line) {
-        return Some(format!(
-            "this command touches {path}, which is protected; don't reword it, ask the owner"
-        ));
-    }
-    shell::commands(line)
-        .iter()
-        .find_map(|words| simple_command(words, cwd, ctx))
-}
-
-fn simple_command(words: &Words, cwd: &Path, ctx: &GuardContext) -> Option<String> {
-    let at = shell::program_index(words)?;
-    let name = shell::program(&words[at]);
-    let rest = &words[at + 1..];
-    if let Some(reason) = redirect_outside(words, cwd, ctx) {
-        return Some(reason);
-    }
-    match name {
-        "sh" | "bash" | "zsh" | "dash" => {
-            let script = rest
-                .iter()
-                .position(|w| w == "-c")
-                .and_then(|i| rest.get(i + 1))?;
-            bash(script, cwd, ctx)
-        }
-        "pkill" | "killall" => Some(format!(
-            "`{name}` could stop another bot's process; keep the PID you started and `kill <pid>`"
-        )),
-        "rm" | "rmdir" | "unlink" | "mv" | "shred" => {
-            let target = rest
-                .iter()
-                .filter(|w| !w.starts_with('-') && !is_redirect(w))
-                .map(|w| ctx.resolve(cwd, w))
-                .find(|p| !ctx.may_change(p))?;
-            Some(format!(
-                "`{name}` would change {} outside your own folders; leave it alone and ask its owner",
-                target.display()
-            ))
-        }
-        "git" => git::git(rest, &[cwd.to_path_buf()], ctx, &|script| {
-            bash(script, cwd, ctx)
-        }),
-        "gh" => git::gh(rest, ctx),
-        "xcrun" if rest.first().is_some_and(|w| w == "simctl") => simctl(&rest[1..]),
-        "simctl" => simctl(rest),
-        _ => None,
-    }
-}
-
-fn is_redirect(word: &str) -> bool {
-    word.trim_start_matches(|c: char| c.is_ascii_digit() || c == '&')
-        .starts_with('>')
-}
-
-/// `> file`, `>> file`, `2>file`: where the output lands must be ours.
-fn redirect_outside(words: &Words, cwd: &Path, ctx: &GuardContext) -> Option<String> {
-    let mut targets = Vec::new();
-    for (i, w) in words.iter().enumerate() {
-        if !is_redirect(w) {
-            continue;
-        }
-        let glued = w.trim_start_matches(|c: char| c.is_ascii_digit() || c == '&' || c == '>');
-        if w.contains(">&") {
-            continue; // fd duplication, not a file
-        }
-        if glued.is_empty() {
-            if let Some(next) = words.get(i + 1) {
-                targets.push(next.as_str());
+            if let Some(path) = ctx.protected_word(file, &scope) {
+                return Some(format!("{path} is protected; ask the owner to change it"));
             }
-        } else {
-            targets.push(glued);
+            // In Full nothing reviews a write to a shell rc or a launch agent.
+            if ctx.full {
+                if let Err(path) = ctx.may_write_file(file, &scope) {
+                    return Some(format!(
+                        "{} is outside your own folders; ask the owner",
+                        path.display()
+                    ));
+                }
+            }
+            None
         }
+        _ => None,
     }
-    let target = targets
-        .into_iter()
-        .map(|t| ctx.resolve(cwd, t))
-        .find(|p| !ctx.may_change(p))?;
-    Some(format!(
-        "output would be written to {} outside your own folders",
-        target.display()
-    ))
-}
-
-fn simctl(rest: &[String]) -> Option<String> {
-    rest.iter().any(|w| w == "booted" || w == "all").then(|| {
-        "address only your own simulator, by its UDID (never `booted` or `all`)".to_string()
-    })
 }
 
 /// The hook's answer for Claude Code, or nothing to allow.
@@ -244,9 +112,10 @@ pub fn verdict(reason: Option<String>) -> Option<Value> {
     })
 }
 
-/// `hermesd guard --home H --user-home U [--writable P]… [--allow-main]`: read one tool call
-/// on stdin and print a deny when it must not run. Never fails the call on
-/// its own errors: a broken guard must not wedge every bot.
+/// `hermesd guard --home H --user-home U [--writable P]… [--worktrees P]…
+/// [--allow-main] [--full]`: read one tool call on stdin and print a deny
+/// when it must not run. Never fails the call on its own errors: a broken
+/// guard must not wedge every bot.
 pub fn run(args: &[String]) -> i32 {
     let value_of = |flag: &str| {
         args.iter()
@@ -254,21 +123,28 @@ pub fn run(args: &[String]) -> i32 {
             .and_then(|i| args.get(i + 1))
             .map(PathBuf::from)
     };
+    let all_of = |flag: &str| -> Vec<PathBuf> {
+        args.windows(2)
+            .filter(|pair| pair[0] == flag)
+            .map(|pair| PathBuf::from(&pair[1]))
+            .collect()
+    };
     let (Some(home), Some(user_home)) = (value_of("--home"), value_of("--user-home")) else {
-        eprintln!("usage: hermesd guard --home <dir> --user-home <dir> [--writable <dir>]…");
+        eprintln!(
+            "usage: hermesd guard --home <dir> --user-home <dir> [--writable <dir>]… \
+             [--worktrees <dir>]… [--allow-main] [--full]"
+        );
         return 2;
     };
-    let mut writable: Vec<PathBuf> = args
-        .windows(2)
-        .filter(|pair| pair[0] == "--writable")
-        .map(|pair| PathBuf::from(&pair[1]))
-        .collect();
+    let mut writable = all_of("--writable");
     writable.extend(temp_dirs());
     let ctx = GuardContext {
         home,
         user_home,
         writable,
+        worktrees: all_of("--worktrees"),
         allow_main: args.iter().any(|a| a == "--allow-main"),
+        full: args.iter().any(|a| a == "--full"),
     };
     let mut input = String::new();
     if std::io::Read::read_to_string(&mut std::io::stdin(), &mut input).is_err() {

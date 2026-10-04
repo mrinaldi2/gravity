@@ -46,8 +46,9 @@ pub struct Config {
     pub codex_args: Vec<String>,
     /// Folders outside their own that bots work in, such as the owner's
     /// repositories (`~` expands). Permission profiles name them to the
-    /// auto-mode classifier as trusted, and the guard hook lets destructive
-    /// commands act inside them (H-031).
+    /// auto-mode classifier as trusted; the guard hook lets destructive
+    /// commands act only in their `<repo>-wt-*` git worktrees, never in the
+    /// owner's checkouts beside them (H-031, CE-003 M4).
     pub trusted_paths: Vec<String>,
     /// Lines added to every bot's auto-mode `environment` (H-031), after the
     /// generated ones: the owner's own trust context, such as a tailnet

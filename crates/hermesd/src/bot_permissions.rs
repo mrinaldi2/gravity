@@ -78,12 +78,22 @@ impl BotStart<'_> {
             "--user-home".to_string(),
             quote(&self.cfg.user_home.display().to_string()),
         ];
+        // The trusted paths are the classifier's trust context, not a licence
+        // to delete: only their `<repo>-wt-*` worktrees are (CE-003 M4).
         let writable = std::iter::once(self.bot_root.to_path_buf())
             .chain(self.artifacts.map(Path::to_path_buf))
-            .chain(self.trusted_paths());
-        for dir in writable {
-            parts.push("--writable".to_string());
+            .map(|dir| ("--writable", dir))
+            .chain(
+                self.trusted_paths()
+                    .into_iter()
+                    .map(|dir| ("--worktrees", dir)),
+            );
+        for (flag, dir) in writable {
+            parts.push(flag.to_string());
             parts.push(quote(&dir.display().to_string()));
+        }
+        if self.profile == PermissionProfile::Full {
+            parts.push("--full".to_string());
         }
         if self.extras.contains(&PermissionExtra::ReleaseMain) {
             parts.push("--allow-main".to_string());

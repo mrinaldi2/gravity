@@ -6,6 +6,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use super::paths::Scope;
 use super::GuardContext;
 use crate::bot_permissions::shell;
 
@@ -80,15 +81,14 @@ const VALUED_GLOBALS: &[&str] = &[
     "--config-env",
 ];
 
-/// `git <rest>` run from any of `dirs` (the directories the command may
-/// run in). `shell_check` judges an alias that runs a shell command.
+/// `git <rest>` run from any of the scope's directories. `shell_check` judges an alias that runs a shell command.
 pub(super) fn git(
     rest: &[String],
-    dirs: &[PathBuf],
+    scope: &Scope,
     ctx: &GuardContext,
     shell_check: &dyn Fn(&str) -> Option<String>,
 ) -> Option<String> {
-    let mut dirs = dirs.to_vec();
+    let mut scope = scope.clone();
     let mut words = rest.to_vec();
     let mut i = 0;
     // An alias can expand to another alias; git stops such loops too.
@@ -97,7 +97,7 @@ pub(super) fn git(
             if VALUED_GLOBALS.contains(&w.as_str()) {
                 let value = words.get(i + 1).cloned().unwrap_or_default();
                 if w == "-C" {
-                    dirs = dirs.iter().map(|d| ctx.resolve(d, &value)).collect();
+                    scope.dirs = ctx.resolve(&scope, &value);
                 }
                 if w == "-c" && is_alias_key(&value) {
                     return Some(ALIAS.to_string());
@@ -112,20 +112,18 @@ pub(super) fn git(
                 break;
             }
         }
-        let Some(sub) = words.get(i).cloned() else {
-            return None;
-        };
+        let sub = words.get(i).cloned()?;
         let args = &words[i + 1..];
         if BUILTINS.contains(&sub.as_str()) || sub == "send-pack" {
             return match sub.as_str() {
-                "push" => push(args, &dirs, ctx),
+                "push" => push(args, &scope.dirs, ctx),
                 "send-pack" => (!ctx.allow_main)
                     .then(|| "use `git push`, which the guard can check".to_string()),
                 "config" => config(args),
                 _ => None,
             };
         }
-        let alias = dirs.iter().find_map(|d| alias_of(d, &sub))?;
+        let alias = scope.dirs.iter().find_map(|d| alias_of(d, &sub))?;
         if let Some(script) = alias.strip_prefix('!') {
             return shell_check(script);
         }

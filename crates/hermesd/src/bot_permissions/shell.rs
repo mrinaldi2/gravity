@@ -1,6 +1,6 @@
 //! Just enough shell parsing for the guard: a command line split into simple
-//! commands (`;`, `&&`, `||`, `|`, `&`, newlines, `( )`, `{ }`, `$( )` and
-//! backticks all separate), each a list of words with quotes removed.
+//! commands (`;`, `&&`, `||`, `|`, `&`, newlines, `( )`, `{ }` groups, `$( )`
+//! and backticks all separate), each a list of words with quotes removed.
 //!
 //! It is deliberately conservative rather than a full shell: the guard only
 //! needs to find the program and its arguments in every command a line could
@@ -59,6 +59,12 @@ pub fn commands(line: &str) -> Vec<Words> {
                     }
                 }
             }
+            // `$'\x2essh'` is `.ssh`: decode it as the shell will.
+            '$' if chars.peek() == Some(&'\'') => {
+                chars.next();
+                in_word = true;
+                ansi_c(&mut chars, &mut word);
+            }
             '\\' => {
                 in_word = true;
                 if let Some(n) = chars.next() {
@@ -68,6 +74,14 @@ pub fn commands(line: &str) -> Vec<Words> {
                 }
             }
             ' ' | '\t' => end_word(&mut word, &mut in_word, &mut words),
+            // `{ …; }` groups only as a word of its own; `a{b,c}` and
+            // `${x}` are brace and variable expansions inside a word.
+            '{' | '}'
+                if in_word || (c == '{' && !matches!(chars.peek(), Some(' ' | '\t' | '\n'))) =>
+            {
+                in_word = true;
+                word.push(c);
+            }
             ';' | '\n' | '|' | '&' | '(' | ')' | '`' | '{' | '}' => {
                 // `2>&1` and `&>` are redirections, not separators.
                 if c == '&' && (word.ends_with('>') || chars.peek() == Some(&'>')) {
@@ -103,13 +117,54 @@ pub fn commands(line: &str) -> Vec<Words> {
     out
 }
 
+/// The body of a `$'…'` string, escapes decoded, up to its closing quote.
+fn ansi_c(chars: &mut std::iter::Peekable<std::str::Chars<'_>>, word: &mut String) {
+    while let Some(c) = chars.next() {
+        match c {
+            '\'' => return,
+            '\\' => {
+                let Some(e) = chars.next() else { return };
+                let radix_digits = |chars: &mut std::iter::Peekable<std::str::Chars<'_>>,
+                                    radix: u32,
+                                    max: usize,
+                                    first: Option<char>| {
+                    let mut digits: String = first.into_iter().collect();
+                    while digits.len() < max && chars.peek().is_some_and(|d| d.is_digit(radix)) {
+                        digits.extend(chars.next());
+                    }
+                    u32::from_str_radix(&digits, radix)
+                        .ok()
+                        .and_then(char::from_u32)
+                };
+                let decoded = match e {
+                    'n' => Some('\n'),
+                    't' => Some('\t'),
+                    'r' => Some('\r'),
+                    'a' => Some('\u{7}'),
+                    'b' => Some('\u{8}'),
+                    'e' | 'E' => Some('\u{1b}'),
+                    'f' => Some('\u{c}'),
+                    'v' => Some('\u{b}'),
+                    'x' => radix_digits(chars, 16, 2, None),
+                    'u' => radix_digits(chars, 16, 4, None),
+                    'U' => radix_digits(chars, 16, 8, None),
+                    '0'..='7' => radix_digits(chars, 8, 3, Some(e)),
+                    other => Some(other),
+                };
+                word.extend(decoded);
+            }
+            other => word.push(other),
+        }
+    }
+}
+
 /// The program's file name: `/bin/rm` and `rm` are both `rm`.
 pub fn program(word: &str) -> &str {
     word.rsplit(['/', '\\']).next().unwrap_or(word)
 }
 
 /// `NAME=value` before a program sets its environment.
-fn is_assignment(word: &str) -> bool {
+pub fn is_assignment(word: &str) -> bool {
     word.split_once('=').is_some_and(|(name, _)| {
         !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     })
@@ -136,6 +191,8 @@ pub fn program_index(words: &[String]) -> Option<usize> {
                     i += 1;
                 }
             }
+            // Keywords before a command: `do rm …`, `then rm …`, `! rm …`.
+            "if" | "then" | "else" | "elif" | "while" | "until" | "do" | "!" => i += 1,
             "timeout" | "gtimeout" => {
                 i += 1;
                 while words.get(i).is_some_and(|w| w.starts_with('-')) {
