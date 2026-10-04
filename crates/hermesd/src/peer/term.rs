@@ -54,6 +54,44 @@ struct Mirror {
     last_remote: u64,
 }
 
+impl Mirror {
+    /// Whether a frame from the peer is newer than what the mirror holds,
+    /// moving the mirror's cursor to it if so.
+    fn accept(&mut self, seq: u64) -> bool {
+        if seq <= self.last_remote {
+            return false;
+        }
+        self.last_remote = seq;
+        true
+    }
+
+    /// What an attach reply's replay, and the frames that overtook it, push
+    /// into the stand-in's terminal.
+    ///
+    /// A reply that could not resume replays the peer's whole buffer: its
+    /// daemon restarted and numbers frames from 1 again, or the cursor fell
+    /// out of its ring. The mirror then forgets its cursor, or it would drop
+    /// every frame until the new numbers passed the old ones, and starts
+    /// with a terminal reset so the replay paints a clean screen.
+    fn take_replay(
+        &mut self,
+        resumed: bool,
+        frames: impl IntoIterator<Item = (u64, Vec<u8>)>,
+    ) -> Vec<Vec<u8>> {
+        let mut out = Vec::new();
+        if !resumed && self.last_remote > 0 {
+            self.last_remote = 0;
+            out.push(b"\x1bc".to_vec());
+        }
+        for (seq, data) in frames {
+            if self.accept(seq) {
+                out.push(data);
+            }
+        }
+        out
+    }
+}
+
 /// Terminal feeds this daemon serves, and mirrors of its peers' terminals.
 #[derive(Default)]
 pub struct Terms {
@@ -315,11 +353,9 @@ async fn feed(app: &Arc<AppState>, bot_id: &str) -> anyhow::Result<()> {
         .into_iter()
         .flatten()
         .filter_map(|f| Some((f["seq"].as_u64()?, unb64(f["data"].as_str()?))));
-    for (seq, data) in replayed.chain(early) {
-        if seq > mirror.last_remote {
-            term.push(data);
-            mirror.last_remote = seq;
-        }
+    let resumed = reply["resumed"].as_bool().unwrap_or(true);
+    for data in mirror.take_replay(resumed, replayed.chain(early)) {
+        term.push(data);
     }
     Ok(())
 }
@@ -340,11 +376,12 @@ pub(super) fn receive_frames(app: &AppState, peer_id: &str, frame: &Value) {
         };
         match &mut mirror.state {
             State::Starting(early) => early.push((seq, unb64(data))),
-            State::Running if seq > mirror.last_remote => {
-                app.supervisor.ensure_term(&bot.id).push(unb64(data));
-                mirror.last_remote = seq;
+            State::Running => {
+                if mirror.accept(seq) {
+                    app.supervisor.ensure_term(&bot.id).push(unb64(data));
+                }
             }
-            _ => {}
+            State::Stopped => {}
         }
     }
 }
@@ -383,5 +420,64 @@ pub fn resize(app: &AppState, stand_in: &Bot, cols: u16, rows: u16, force: bool)
             peer,
             json!({ "type": "term_resize", "bot_id": remote, "cols": cols, "rows": rows, "force": force }),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mirror(last_remote: u64) -> Mirror {
+        Mirror {
+            peer_id: "peer".into(),
+            remote_bot_id: "bot".into(),
+            viewers: 1,
+            state: State::Running,
+            last_remote,
+        }
+    }
+
+    fn frames(seqs: &[u64]) -> Vec<(u64, Vec<u8>)> {
+        seqs.iter()
+            .map(|s| (*s, format!("f{s}").into_bytes()))
+            .collect()
+    }
+
+    #[test]
+    fn a_resumed_replay_skips_what_the_mirror_already_holds() {
+        let mut m = mirror(5);
+        let out = m.take_replay(true, frames(&[4, 5, 6, 7]));
+        assert_eq!(out, vec![b"f6".to_vec(), b"f7".to_vec()]);
+        assert_eq!(m.last_remote, 7);
+    }
+
+    #[test]
+    fn a_restarted_peer_numbering_from_one_again_is_mirrored() {
+        // The peer fed up to 90 000, then its daemon restarted: the attach
+        // reply cannot resume and replays its new buffer from seq 1.
+        let mut m = mirror(90_000);
+        let out = m.take_replay(false, frames(&[1, 2, 3]));
+        assert_eq!(
+            out,
+            vec![
+                b"\x1bc".to_vec(),
+                b"f1".to_vec(),
+                b"f2".to_vec(),
+                b"f3".to_vec()
+            ]
+        );
+        assert_eq!(m.last_remote, 3);
+        // Live frames after the replay are applied, not dropped as old.
+        assert!(m.accept(4));
+        assert!(m.accept(5));
+        assert!(!m.accept(5));
+        assert_eq!(m.last_remote, 5);
+    }
+
+    #[test]
+    fn a_first_replay_needs_no_reset() {
+        let mut m = mirror(0);
+        let out = m.take_replay(false, frames(&[1, 2]));
+        assert_eq!(out, vec![b"f1".to_vec(), b"f2".to_vec()]);
     }
 }
