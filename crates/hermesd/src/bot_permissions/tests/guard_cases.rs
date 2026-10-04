@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use bus::{PermissionExtra, PermissionProfile};
 use serde_json::json;
 
-use super::super::guard::{decide, verdict, GuardContext};
+use super::super::guard::{answer, decide, slug, verdict, GuardContext};
 use super::{input, rules};
 
 pub(super) fn ctx() -> GuardContext {
@@ -18,6 +18,8 @@ pub(super) fn ctx() -> GuardContext {
             PathBuf::from("/tmp"),
         ],
         worktrees: vec![PathBuf::from("/Users/me/Developer")],
+        bot_slug: None,
+        releases: false,
         allow_main: false,
         full: false,
     }
@@ -214,4 +216,160 @@ fn the_verdict_is_a_pre_tool_use_deny() {
         decide(&json!({ "tool_name": "Read", "tool_input": {} }), &ctx()),
         None
     );
+}
+
+/// CE-004: a payload the guard can't parse is refused, in every profile.
+#[test]
+fn an_unreadable_call_is_refused() {
+    for payload in [
+        "",
+        "not json",
+        "{\"tool_input\":{}}",
+        "[1,2]",
+        "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":7}}",
+        "{\"tool_name\":\"Bash\"}",
+    ] {
+        for full in [false, true] {
+            let ctx = GuardContext { full, ..ctx() };
+            let deny =
+                answer(payload, &ctx).unwrap_or_else(|| panic!("{payload:?} was let through"));
+            assert_eq!(deny["hookSpecificOutput"]["permissionDecision"], "deny");
+            assert!(deny["hookSpecificOutput"]["permissionDecisionReason"]
+                .as_str()
+                .is_some_and(|r| r.contains("refused")));
+        }
+    }
+    let fine = r#"{"tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"/tmp"}"#;
+    assert_eq!(answer(fine, &ctx()), None);
+}
+
+/// CE-004 F1: in BSD `sed -i '' 'expr' file` the expression is not a path.
+#[test]
+fn bsd_sed_in_place_takes_the_expression_as_the_script() {
+    for command in [
+        "sed -i '' 's/a/b/' ~/.zshrc",
+        "sed -i '' 's/a/b/' /etc/hosts",
+        "sed -i '' -e 's/a/b/' /etc/hosts",
+        "sed -i .bak 's/a/b/' /etc/hosts",
+        // A script that happens to resolve inside the workspace doesn't
+        // launder the real target.
+        "sed -i '' 's/x/y/' /Users/me/Documents/notes.md",
+    ] {
+        assert!(bash(command).is_some(), "{command} was let through");
+    }
+    for command in [
+        "sed -i '' 's/a/b/' notes.md",
+        "sed -i '' 's#/etc/hosts#x#' notes.md",
+        "sed -i '' 's/\\/Users\\/me/x/' notes.md",
+        "sed -i.bak 's/a/b/' notes.md",
+        "sed -i .bak 's/a/b/' notes.md",
+        "sed -i 's/a/b/' notes.md",
+        "sed -i -e 's|/etc|x|' notes.md",
+        "sed -n 's/a/b/p' /etc/hosts",
+    ] {
+        assert_eq!(bash(command), None, "{command} was blocked");
+    }
+}
+
+fn as_bot(command: &str, ctx: &GuardContext) -> Option<String> {
+    decide(
+        &json!({
+            "tool_name": "Bash",
+            "tool_input": { "command": command },
+            "cwd": "/Users/me/.gravity/projects/p/bots/dev/workspace"
+        }),
+        ctx,
+    )
+}
+
+/// CE-004 F2: with its slug known, a bot changes only its own worktrees.
+#[test]
+fn a_bot_changes_only_its_own_worktrees() {
+    assert_eq!(slug("Desktop Dev"), "desktopdev");
+    assert_eq!(slug("h031-final"), "h031final");
+    let dev = GuardContext {
+        bot_slug: Some(slug("Desktop Dev")),
+        ..ctx()
+    };
+    for command in [
+        "rm -rf ~/Developer/gravity-wt-desktopdev-h031/target",
+        "rm -rf ~/Developer/gravity-wt-desktopdev",
+        "git -C ~/Developer/gravity worktree remove ~/Developer/gravity-wt-desktopdev-x",
+        "cd ~/Developer/gravitiOS-wt-desktopdev-fix && git reset --hard origin/main",
+    ] {
+        assert_eq!(as_bot(command, &dev), None, "{command} was blocked");
+    }
+    for command in [
+        "rm -rf ~/Developer/gravity-wt-u1",
+        "rm -rf ~/Developer/gravity-wt-desktopdevx-1",
+        "rm -rf ~/Developer/gravity-wt-iosdev-1/target",
+        "git -C ~/Developer/gravity worktree remove ../gravity-wt-u1",
+        "cd ~/Developer/gravity-wt-iosdev-1 && git checkout -- .",
+        "rm -rf ~/Developer/gravity-rel-0.14.0",
+    ] {
+        assert!(as_bot(command, &dev).is_some(), "{command} was let through");
+    }
+    // Slug unknown: any `-wt-` worktree, as before.
+    assert_eq!(as_bot("rm -rf ~/Developer/gravity-wt-u1", &ctx()), None);
+}
+
+/// CE-004 R1: a bot that publishes may clean and reset the release
+/// worktrees; nobody else may, and the shared checkouts stay off-limits.
+#[test]
+fn release_worktrees_belong_to_the_publisher() {
+    let devops = GuardContext {
+        bot_slug: Some(slug("DevOps")),
+        releases: true,
+        ..ctx()
+    };
+    let other = GuardContext {
+        bot_slug: Some(slug("Desktop Dev")),
+        ..ctx()
+    };
+    for command in [
+        "rm -rf ~/Developer/gravity-rel-0.14.0",
+        "rm -rf ~/Developer/gravitiOS-rel-0.14.2/build",
+        "cd ~/Developer/gravity-rel-0.14.2 && git checkout -- .",
+        "git -C ~/Developer/gravity-rel-0.14.2 reset --hard v0.14.2",
+        "rm ~/Developer/gravity-rel-0.14.2/bundle/macos/old.zip",
+        "rm -rf ~/Developer/gravity-wt-devops-ship",
+    ] {
+        assert_eq!(as_bot(command, &devops), None, "{command} was blocked");
+        assert!(
+            as_bot(command, &other).is_some(),
+            "{command} was let through"
+        );
+    }
+    for command in [
+        "rm -rf ~/Developer/gravity",
+        "git -C ~/Developer/gravity reset --hard",
+        "cd ~/Developer/gravity && git checkout -- .",
+        "cd ~/Developer/gravity && cargo test > test.log",
+        "cd ~/Developer/gravity && sed -i '' 's/a/b/' Cargo.toml",
+        "rm -rf ~/Developer/gravity-b5",
+        "rm -rf ~/Developer/-rel-x",
+        "rm -rf ~/Developer/gravity-wt-u1",
+    ] {
+        assert!(
+            as_bot(command, &devops).is_some(),
+            "{command} was let through"
+        );
+    }
+}
+
+/// CE-004 (b): the Full deny message doesn't coach the script-file bypass.
+#[test]
+fn the_inline_code_deny_says_report_it() {
+    let full = GuardContext {
+        full: true,
+        ..ctx()
+    };
+    for command in ["python3 -c 'print(1)'", "curl -s x | sh"] {
+        let reason = as_bot(command, &full).expect("denied in Full");
+        assert!(
+            reason.contains("blocked") && reason.contains("report"),
+            "{reason}"
+        );
+        assert!(!reason.contains("script file"), "{reason}");
+    }
 }

@@ -215,11 +215,29 @@ impl GuardContext {
         self.writable.iter().any(inside)
             || self.worktrees.iter().any(|root| {
                 path.strip_prefix(real(root)).is_ok_and(|rest| {
-                    rest.components()
-                        .next()
-                        .is_some_and(|first| first.as_os_str().to_string_lossy().contains("-wt-"))
+                    rest.components().next().is_some_and(|first| {
+                        self.owns_worktree(&first.as_os_str().to_string_lossy())
+                    })
                 })
             })
+    }
+
+    /// Whether a folder in the trusted paths is one of this bot's worktrees:
+    /// `<repo>-wt-<slug>[-…]` (any `-wt-` when the slug is unknown), or a
+    /// `<repo>-rel-*` release worktree for a bot that publishes.
+    fn owns_worktree(&self, folder: &str) -> bool {
+        let own = folder.split_once("-wt-").is_some_and(|(repo, rest)| {
+            !repo.is_empty()
+                && self.bot_slug.as_deref().is_none_or(|slug| {
+                    rest.strip_prefix(slug)
+                        .is_some_and(|tail| tail.is_empty() || tail.starts_with('-'))
+                })
+        });
+        let release = self.releases
+            && folder
+                .split_once("-rel-")
+                .is_some_and(|(repo, rest)| !repo.is_empty() && !rest.is_empty());
+        own || release
     }
 
     /// `Ok` when a destructive command may act on every path `word` names;

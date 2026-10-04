@@ -72,9 +72,8 @@ impl Supervisor {
             }
         }
 
-        // A bot is one continuous conversation: every start after the first
-        // resumes the workspace's session, so a daemon restart is invisible to
-        // the bot and to whoever was talking to it.
+        // A bot is one continuous conversation: each later start resumes the
+        // session, so a daemon restart is invisible to the bot and its peers.
         let resume = bot.runtime == bus::BotRuntime::ClaudeCode && self.wants_resume(bot_id);
         // The permission profile (H-031): a generated `--settings` file and mode.
         let stored = crate::bot_permissions::Stored::load(&self.inner.db, &bot)?;
@@ -83,6 +82,7 @@ impl Supervisor {
             profile: stored.profile,
             extras: &stored.extras,
             project_name: project.as_ref().map_or("", |p| p.name.as_str()),
+            bot_name: &bot.name,
             bot_root: bot_root.as_deref().unwrap_or(&workspace),
             workspace: &workspace,
             artifacts: artifacts.as_deref(),

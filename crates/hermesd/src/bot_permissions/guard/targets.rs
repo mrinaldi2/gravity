@@ -14,7 +14,7 @@ pub(super) fn of(name: &str, rest: &[String], args: &[String]) -> Vec<String> {
             .filter_map(|w| w.strip_prefix("of="))
             .map(str::to_string)
             .collect(),
-        "sed" | "gsed" => in_place(rest),
+        "sed" | "gsed" => in_place(rest, name == "sed"),
         "chmod" | "chown" | "chgrp" | "xattr" | "chflags" => args.iter().skip(1).cloned().collect(),
         "curl" => output(
             rest,
@@ -104,8 +104,10 @@ fn without_values(rest: &[String], values: &[&str]) -> Vec<String> {
 }
 
 /// `sed -i` rewrites its file arguments; the first positional is the script
-/// unless `-e`/`-f` gave it.
-fn in_place(rest: &[String]) -> Vec<String> {
+/// unless `-e`/`-f` gave it. macOS's BSD `sed` reads the word after a bare
+/// `-i` as the backup suffix (`-i ''`, `-i .bak`), so that word is neither
+/// the script nor a file (CE-004 F1); GNU `gsed` has no such word.
+fn in_place(rest: &[String], bsd: bool) -> Vec<String> {
     let edits = rest.iter().any(|w| {
         w.starts_with("--in-place")
             || (w.starts_with('-') && !w.starts_with("--") && w.contains('i'))
@@ -116,12 +118,25 @@ fn in_place(rest: &[String]) -> Vec<String> {
     let scripted = rest
         .iter()
         .any(|w| w == "-e" || w == "-f" || w.starts_with("--expression"));
-    let files = without_values(rest, &["-e", "-f", "--expression", "--file"]);
+    let mut files = without_values(rest, &["-e", "-f", "--expression", "--file"]);
+    let suffix = rest
+        .iter()
+        .position(|w| w == "-i")
+        .and_then(|i| rest.get(i + 1))
+        .filter(|w| bsd && (w.is_empty() || (w.starts_with('.') && !w.contains('/'))));
+    if let Some(suffix) = suffix {
+        // A dot word after `-i` would be a file to GNU sed: with the script
+        // given by `-e`, keep judging it as one.
+        if suffix.is_empty() || !scripted {
+            if let Some(at) = files.iter().position(|w| w == suffix) {
+                files.remove(at);
+            }
+        }
+    }
     let skip = usize::from(!scripted);
-    // `-i ''` on macOS leaves an empty suffix word behind.
     files
         .into_iter()
-        .skip(skip)
         .filter(|w| !w.is_empty())
+        .skip(skip)
         .collect()
 }

@@ -27,7 +27,7 @@ pub(super) fn only(name: &str, rest: &[String], args: &[String], scope: &Scope) 
     };
     if inline {
         return Some(format!(
-            "in Full the guard can't read inline `{name}` code; write it to a script file in your workspace and run that"
+            "in Full the guard can't read inline `{name}` code, so it is blocked; don't work around it, report what you needed"
         ));
     }
     let interpreter = name.starts_with("python")
@@ -49,7 +49,7 @@ pub(super) fn only(name: &str, rest: &[String], args: &[String], scope: &Scope) 
     let shell_script = matches!(name, "sh" | "bash" | "zsh" | "dash" | "ksh") && cluster("c");
     if interpreter && args.is_empty() && !info && !shell_script && !asks(&["-m"]) {
         return Some(format!(
-            "in Full `{name}` may not read code from stdin or a heredoc; run a script file instead"
+            "in Full `{name}` may not read code from stdin or a heredoc, so it is blocked; don't work around it, report what you needed"
         ));
     }
     let decodes = match name {

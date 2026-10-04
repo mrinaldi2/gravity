@@ -130,6 +130,7 @@ pub(super) fn git(
                         dir.display()
                     ))
                 }
+                "worktree" => worktree(args, &scope, ctx),
                 _ => None,
             };
         }
@@ -145,6 +146,25 @@ pub(super) fn git(
         i = 0;
     }
     Some("this git alias expands too deeply to check".to_string())
+}
+
+/// `git worktree remove|move <path>` deletes or moves a worktree: it must be
+/// the bot's own (CE-004 F2), resolved from where git runs.
+fn worktree(args: &[String], scope: &Scope, ctx: &GuardContext) -> Option<String> {
+    let action = args.first()?;
+    if !matches!(action.as_str(), "remove" | "move") {
+        return None;
+    }
+    args[1..]
+        .iter()
+        .filter(|w| !w.starts_with('-'))
+        .find_map(|w| ctx.may_change_word(w, scope).err())
+        .map(|path| {
+            format!(
+                "`git worktree {action}` would act on {}, which isn't yours; use your own worktree",
+                path.display()
+            )
+        })
 }
 
 /// `reset --hard`, `clean -f`, `checkout -- .`, `restore`: they throw away
