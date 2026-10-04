@@ -12,7 +12,9 @@
 //! - `rm`, `mv`, `cp`, `tee`, `dd`, `truncate`, `ln`, `rsync`, `sed -i`,
 //!   `find -delete`/`-exec`, `xargs <destructive>` or an output redirect
 //!   aimed outside the bot's own directory, the project's artifacts, the
-//!   temp dirs and the git worktrees (`<repo>-wt-*`) in the trusted paths;
+//!   temp dirs, the bot's own git worktrees (`<repo>-wt-<bot>-*`) in the
+//!   trusted paths and, for a bot that publishes, the release worktrees
+//!   (`<repo>-rel-*`);
 //! - a forced `git push` or a remote branch deletion, in any spelling, and
 //!   any push or merge to `main` unless the bot holds `release_main`;
 //! - `pkill`/`killall`, and `simctl` against `all` or `booted` (CE-001);
@@ -24,6 +26,13 @@
 //! Hooks run in every permission mode, so this is the boundary that still
 //! holds in Full. It is a parser, not a sandbox: a script file can still
 //! compute a path at runtime.
+//!
+//! It fails closed: a tool call it can't parse is denied, in every profile
+//! (CE-004). It can't cover its own absence, though. If the binary the hook
+//! names is gone (an app update moved `hermesd`), Claude Code treats the
+//! hook's failure to start as a non-blocking error and runs the call: Standard
+//! and Trusted still have the auto-mode classifier, Full has nothing. That is
+//! one reason Full is not selectable yet (CE-004 (b)).
 
 use std::path::PathBuf;
 
@@ -50,6 +59,13 @@ pub struct GuardContext {
     /// worktrees bots may also change. The folders themselves, and the
     /// owner's checkouts in them, are not.
     pub worktrees: Vec<PathBuf>,
+    /// The bot's slug (`desktopdev`): when known, only `<repo>-wt-<slug>`
+    /// and `<repo>-wt-<slug>-*` are its worktrees, not another bot's
+    /// (CE-004 F2). `None`: any `-wt-` folder.
+    pub bot_slug: Option<String>,
+    /// The bot publishes releases: the `<repo>-rel-*` release worktrees in
+    /// the trusted paths are its to clean and reset (CE-004 R1).
+    pub releases: bool,
     /// The bot holds `release_main`: it may push and merge to `main`.
     pub allow_main: bool,
     /// The project runs in Full, where the guard is the only check.
@@ -113,10 +129,36 @@ pub fn verdict(reason: Option<String>) -> Option<Value> {
     })
 }
 
+/// The hook's answer to one stdin payload: a deny when the call must not run
+/// or can't be read. A payload the guard can't parse is refused, so a
+/// malformed call is never waved through (CE-004).
+pub fn answer(payload: &str, ctx: &GuardContext) -> Option<Value> {
+    let reason = match serde_json::from_str::<Value>(payload) {
+        Ok(call) if call["tool_name"].as_str().is_some_and(|t| !t.is_empty()) => {
+            if call["tool_name"] == "Bash" && !call["tool_input"]["command"].is_string() {
+                Some("it couldn't read this Bash call's command, so it is refused".to_string())
+            } else {
+                decide(&call, ctx)
+            }
+        }
+        Ok(_) => Some("it couldn't tell which tool this call is for, so it is refused".to_string()),
+        Err(_) => Some("it couldn't parse this tool call, so it is refused".to_string()),
+    };
+    verdict(reason)
+}
+
+/// A bot name as its worktree slug: `Desktop Dev` is `desktopdev`.
+pub fn slug(bot_name: &str) -> String {
+    bot_name
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
+}
+
 /// `hermesd guard --home H --user-home U [--writable P]… [--worktrees P]…
-/// [--allow-main] [--full]`: read one tool call on stdin and print a deny
-/// when it must not run. Never fails the call on its own errors: a broken
-/// guard must not wedge every bot.
+/// [--bot NAME] [--releases] [--allow-main] [--full]`: read one tool call on
+/// stdin and print a deny when it must not run or can't be read.
 pub fn run(args: &[String]) -> i32 {
     let value_of = |flag: &str| {
         args.iter()
@@ -133,8 +175,9 @@ pub fn run(args: &[String]) -> i32 {
     let (Some(home), Some(user_home)) = (value_of("--home"), value_of("--user-home")) else {
         eprintln!(
             "usage: hermesd guard --home <dir> --user-home <dir> [--writable <dir>]… \
-             [--worktrees <dir>]… [--allow-main] [--full]"
+             [--worktrees <dir>]… [--bot <name>] [--releases] [--allow-main] [--full]"
         );
+        // Exit 2 blocks the call; stderr tells the bot why.
         return 2;
     };
     let mut writable = all_of("--writable");
@@ -144,17 +187,22 @@ pub fn run(args: &[String]) -> i32 {
         user_home,
         writable,
         worktrees: all_of("--worktrees"),
+        bot_slug: args
+            .iter()
+            .position(|a| a == "--bot")
+            .and_then(|i| args.get(i + 1))
+            .map(|name| slug(name))
+            .filter(|slug| !slug.is_empty()),
+        releases: args.iter().any(|a| a == "--releases"),
         allow_main: args.iter().any(|a| a == "--allow-main"),
         full: args.iter().any(|a| a == "--full"),
     };
     let mut input = String::new();
+    // Unreadable stdin leaves an empty payload, which `answer` refuses.
     if std::io::Read::read_to_string(&mut std::io::stdin(), &mut input).is_err() {
-        return 0;
+        input.clear();
     }
-    let Ok(call) = serde_json::from_str::<Value>(&input) else {
-        return 0;
-    };
-    if let Some(answer) = verdict(decide(&call, &ctx)) {
+    if let Some(answer) = answer(&input, &ctx) {
         println!("{answer}");
     }
     0

@@ -16,6 +16,8 @@ const PROFILES: readonly {
   readonly id: PermissionProfile;
   readonly name: string;
   readonly help: string;
+  /** Shown but not selectable, with this line saying why. */
+  readonly unavailable?: string;
 }[] = [
   {
     id: "standard",
@@ -31,6 +33,9 @@ const PROFILES: readonly {
     id: "full",
     name: "Full",
     help: "Nothing is reviewed: only the hard deny-list and the guard stop a bot. The guard refuses inline interpreter code and anything outside the bot's own folders, but can't read script files. For bots in a container, VM or separate user account.",
+    // CE-004 (b): the daemon refuses it too; a project stored as Full runs as Trusted.
+    unavailable:
+      "Not available yet: bots run as you, and if the guard stops running nothing else would review them.",
   },
 ];
 
@@ -95,6 +100,7 @@ export default function ProjectPermissionsForm({
               name="permission-profile"
               value={profile.id}
               checked={chosen === profile.id}
+              disabled={profile.unavailable !== undefined}
               onChange={() => {
                 setChosen(profile.id);
               }}
@@ -102,6 +108,9 @@ export default function ProjectPermissionsForm({
             <span>
               {profile.name}
               <span className="field-hint">{profile.help}</span>
+              {profile.unavailable === undefined ? null : (
+                <span className="field-hint">{profile.unavailable}</span>
+              )}
             </span>
           </label>
         ))}

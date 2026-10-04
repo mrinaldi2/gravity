@@ -27,6 +27,15 @@ impl Conn {
             );
             return Ok(());
         };
+        // A stale client may still offer Full; it is off until it is safe.
+        if profile == PermissionProfile::Full && !crate::bot_permissions::FULL_ENABLED {
+            self.reply_err(
+                req_id,
+                "invalid_request",
+                "the Full profile is disabled until bots run in a separate user account or VM; use Trusted",
+            );
+            return Ok(());
+        }
         let Some(project) = self.app.db.get_live_project(project_id)? else {
             self.reply_err(req_id, "not_found", "project not found or already deleted");
             return Ok(());

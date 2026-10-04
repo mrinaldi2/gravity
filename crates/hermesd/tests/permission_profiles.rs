@@ -70,6 +70,12 @@ async fn the_owner_sets_a_profile_and_the_bot_restarts_under_it() {
         .await;
     assert_eq!(refused["code"], "forbidden", "{refused}");
 
+    // Full is disabled (CE-004 (b)): a stale client can't turn it on.
+    let full = owner
+        .request(json!({ "type": "set_project_permission_profile", "project_id": project_id, "profile": "full" }))
+        .await;
+    assert_eq!(full["code"], "invalid_request", "{full}");
+
     let set = owner
         .request(json!({ "type": "set_project_permission_profile", "project_id": project_id, "profile": "trusted" }))
         .await;

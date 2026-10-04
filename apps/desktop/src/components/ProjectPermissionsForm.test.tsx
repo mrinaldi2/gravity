@@ -44,8 +44,7 @@ describe("ProjectPermissionsForm", () => {
     });
   });
 
-  it("warns plainly before Full", async () => {
-    const user = userEvent.setup();
+  it("shows Full but doesn't let it be picked, and says why", () => {
     render(
       <ProjectPermissionsForm
         client={owner()}
@@ -54,12 +53,11 @@ describe("ProjectPermissionsForm", () => {
         onToast={toastSpy()}
       />,
     );
-    await user.click(screen.getByRole("radio", { name: /Full/ }));
-    await user.click(screen.getByRole("button", { name: "Apply profile" }));
-    expect(screen.getByRole("dialog")).toHaveTextContent(
-      /container, a VM or a separate user account/,
-    );
-    expect(screen.getByRole("dialog")).toHaveTextContent(/not the script files/);
+    const full = screen.getByRole("radio", { name: /Full/ });
+    expect(full).toBeDisabled();
+    expect(full).not.toBeChecked();
+    expect(screen.getByText(/Not available yet/)).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Trusted/ })).toBeEnabled();
   });
 
   it("lets a connection without approve see the profile but not change it", () => {

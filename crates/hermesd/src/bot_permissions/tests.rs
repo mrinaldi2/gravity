@@ -131,6 +131,25 @@ fn full_bypasses_and_skips_the_unanswerable_warning() {
     assert!(rules(&settings, "deny").contains(&"Bash(git push --force*)".to_string()));
 }
 
+/// CE-004 (b): Full is kept in code but a project stored as Full runs as
+/// Trusted until it is enabled.
+#[test]
+fn full_is_disabled_and_falls_back_to_trusted() {
+    const { assert!(!FULL_ENABLED) };
+    assert_eq!(
+        effective(PermissionProfile::Full),
+        PermissionProfile::Trusted
+    );
+    assert_eq!(
+        effective(PermissionProfile::Trusted),
+        PermissionProfile::Trusted
+    );
+    assert_eq!(
+        effective(PermissionProfile::Standard),
+        PermissionProfile::Standard
+    );
+}
+
 #[test]
 fn the_interim_settings_are_folded_in_and_not_passed_twice() {
     let dir = tempfile::tempdir().expect("tmp");
@@ -310,6 +329,7 @@ fn the_guard_is_told_worktrees_not_trusted_paths_are_writable() {
         profile,
         extras,
         project_name: "Hermes",
+        bot_name: "Desktop Dev",
         bot_root: Path::new("/Users/me/.gravity/projects/p/bots/dev"),
         workspace: Path::new("/Users/me/.gravity/projects/p/bots/dev/workspace"),
         artifacts: Some(Path::new("/Users/me/.gravity/projects/p/artifacts")),
@@ -325,6 +345,14 @@ fn the_guard_is_told_worktrees_not_trusted_paths_are_writable() {
         "{trusted}"
     );
     assert!(!trusted.contains("--full") && !trusted.contains("--allow-main"));
+    assert!(trusted.contains("--bot 'Desktop Dev'"), "{trusted}");
+    assert!(!trusted.contains("--releases"), "{trusted}");
+    let publishers: [&[PermissionExtra]; 2] =
+        [&[PermissionExtra::Publish], &[PermissionExtra::ReleaseMain]];
+    for extras in publishers {
+        let publisher = start(PermissionProfile::Trusted, extras).guard_command();
+        assert!(publisher.contains("--releases"), "{publisher}");
+    }
     let devops = start(PermissionProfile::Full, &[PermissionExtra::ReleaseMain]).guard_command();
     assert!(
         devops.contains("--full") && devops.contains("--allow-main"),

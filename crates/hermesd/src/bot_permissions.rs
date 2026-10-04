@@ -31,10 +31,33 @@ pub struct Stored {
     pub repo_url: Option<String>,
 }
 
+/// Full is not selectable yet (CE-004 (b)): the guard can't cover its own
+/// absence, and nothing else reviews a Full bot's calls. The code stays for
+/// when bots run as a separate user or in a VM; flip this then.
+pub const FULL_ENABLED: bool = false;
+
+/// The profile a bot actually runs with: a project stored as Full falls back
+/// to Trusted while Full is disabled.
+pub fn effective(profile: PermissionProfile) -> PermissionProfile {
+    if profile == PermissionProfile::Full && !FULL_ENABLED {
+        PermissionProfile::Trusted
+    } else {
+        profile
+    }
+}
+
 impl Stored {
     pub fn load(db: &crate::db::Db, bot: &bus::Bot) -> anyhow::Result<Self> {
+        let stored = db.project_permission_profile(&bot.project_id)?;
+        let profile = effective(stored);
+        if profile != stored {
+            tracing::warn!(
+                bot = %bot.name,
+                "project is stored as Full, which is disabled; running as Trusted"
+            );
+        }
         Ok(Self {
-            profile: db.project_permission_profile(&bot.project_id)?,
+            profile,
             extras: db.bot_permission_extras(&bot.id)?,
             repo_url: db.project_repo(&bot.project_id)?.map(|r| r.url),
         })
@@ -47,6 +70,8 @@ pub struct BotStart<'a> {
     pub profile: PermissionProfile,
     pub extras: &'a [PermissionExtra],
     pub project_name: &'a str,
+    /// The bot's name: its worktrees are `<repo>-wt-<slug>-*`.
+    pub bot_name: &'a str,
     pub bot_root: &'a Path,
     pub workspace: &'a Path,
     pub artifacts: Option<&'a Path>,
@@ -79,7 +104,8 @@ impl BotStart<'_> {
             quote(&self.cfg.user_home.display().to_string()),
         ];
         // The trusted paths are the classifier's trust context, not a licence
-        // to delete: only their `<repo>-wt-*` worktrees are (CE-003 M4).
+        // to delete: only the bot's own `<repo>-wt-<bot>-*` worktrees are
+        // (CE-003 M4, CE-004 F2).
         let writable = std::iter::once(self.bot_root.to_path_buf())
             .chain(self.artifacts.map(Path::to_path_buf))
             // Installing a build replaces the app in /Applications.
@@ -96,6 +122,16 @@ impl BotStart<'_> {
         for (flag, dir) in writable {
             parts.push(flag.to_string());
             parts.push(quote(&dir.display().to_string()));
+        }
+        if !self.bot_name.is_empty() {
+            parts.push("--bot".to_string());
+            parts.push(quote(self.bot_name));
+        }
+        // DevOps cleans and resets the `<repo>-rel-*` release trees.
+        if self.extras.contains(&PermissionExtra::Publish)
+            || self.extras.contains(&PermissionExtra::ReleaseMain)
+        {
+            parts.push("--releases".to_string());
         }
         if self.profile == PermissionProfile::Full {
             parts.push("--full".to_string());
