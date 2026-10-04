@@ -36,6 +36,7 @@ pub(crate) fn project_view(app: &AppState, project: &bus::Project) -> Value {
         "lead_bot_id": project.lead_bot_id,
         "links": links,
         "repo": app.db.project_repo(&project.id).ok().flatten(),
+        "permission_profile": app.db.project_permission_profile(&project.id).unwrap_or_default(),
         "deleted_at": project.deleted_at.map(|t| t.to_rfc3339()),
         "created_at": project.created_at.to_rfc3339()
     })
@@ -79,6 +80,7 @@ pub(crate) fn bot_view(app: &AppState, bot: &bus::Bot) -> Value {
         "instructions": bot.instructions,
         "runtime": bot.runtime,
         "user_chrome": bot.user_chrome,
+        "permission_extras": app.db.bot_permission_extras(&bot.id).unwrap_or_default(),
         "temporary": bot.temporary,
         "state": state.as_str(),
         "state_reason": reason,

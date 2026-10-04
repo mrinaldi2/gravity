@@ -15,6 +15,8 @@ fn spec(root: &Path) -> BotSpec {
         claude_bin: "unused".into(),
         claude_args: Vec::new(),
         codex: Some(CodexSpec {
+            profile: bus::PermissionProfile::Standard,
+            trusted_paths: Vec::new(),
             bin: std::env::var("NODE_BINARY").unwrap_or_else(|_| "node".into()),
             args: vec![Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("tests/fixtures/codex-server.mjs")

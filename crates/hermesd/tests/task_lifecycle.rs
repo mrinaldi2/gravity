@@ -252,14 +252,28 @@ async fn artifacts_dir_is_provisioned_and_carried_in_results() {
     let artifacts = hermesd::paths::artifacts_dir(&p.d.app.cfg, &project.dir_name);
     assert!(artifacts.is_dir(), "missing {}", artifacts.display());
     let spawned = terminal(&p.d, &p.ids[0]);
+    let bot_root = std::path::Path::new(
+        &p.d.app
+            .db
+            .get_bot(&p.ids[0])
+            .expect("query")
+            .expect("bot")
+            .workspace_path,
+    )
+    .parent()
+    .expect("bot root")
+    .to_path_buf();
+    let generated = bot_root.join(hermesd::bot_permissions::SETTINGS_FILE);
     assert!(
-        spawned.contains("--allowedTools"),
-        "the session was spawned without the artifacts grant: {spawned}"
+        spawned.contains(&format!("--settings {}", generated.display())),
+        "the session was spawned without its generated settings: {spawned}"
     );
+    let allow = std::fs::read_to_string(&generated).expect("generated settings");
     for rule in hermesd::paths::artifacts_allow_rules(&artifacts) {
+        assert!(rule.contains("(//"), "{rule} must be anchored as absolute");
         assert!(
-            spawned.contains(&rule),
-            "the session was spawned without {rule}: {spawned}"
+            allow.contains(&rule),
+            "the generated settings lack {rule}: {allow}"
         );
     }
     assert!(

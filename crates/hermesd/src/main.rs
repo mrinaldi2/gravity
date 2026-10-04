@@ -25,6 +25,11 @@ async fn main() -> anyhow::Result<()> {
         );
         return Ok(());
     }
+    // The PreToolUse hook runs once per tool call of every bot: no config,
+    // no logging, nothing on stdout but its answer.
+    if args.first().map(String::as_str) == Some("guard") {
+        std::process::exit(hermesd::bot_permissions::guard::run(&args[1..]));
+    }
     let config_path = flag_value(&args, "--config");
     let negotiate_port = args.iter().any(|arg| arg == "--negotiate-port");
 

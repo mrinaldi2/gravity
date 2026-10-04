@@ -107,6 +107,7 @@ export default function MainPane(props: MainPaneProps): ReactElement {
         onSetLead={props.onSetProjectLead}
         onSetRepo={props.onSetProjectRepo}
         onDelete={props.onDeleteProject}
+        onToast={addToast}
       />
     );
   }

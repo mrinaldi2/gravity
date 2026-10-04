@@ -10,6 +10,7 @@ import BotAvatar from "./BotAvatar";
 import { BOT_ICONS } from "./botIcons";
 import BotHistory from "./bot/BotHistory";
 import BotChromeSwitch from "./bot/BotChromeSwitch";
+import BotPermissionExtras from "./bot/BotPermissionExtras";
 import BotRuntimePicker from "./bot/BotRuntimePicker";
 
 interface InfoPanelProps {
@@ -262,6 +263,14 @@ export default function InfoPanel({
         bot={bot}
         connected={connected}
         canControl={canControl}
+        onBotUpdated={onBotUpdated}
+        onToast={onToast}
+      />
+
+      <BotPermissionExtras
+        client={client}
+        bot={bot}
+        connected={connected}
         onBotUpdated={onBotUpdated}
         onToast={onToast}
       />

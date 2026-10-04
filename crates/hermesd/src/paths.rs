@@ -277,17 +277,15 @@ pub fn write_hook_settings(
 
 /// Permission rules granting access to the project's shared artifacts
 /// directory — the one place outside the workspace a bot may read and write.
-/// Passed to the runtime as `--allowedTools` rather than written into the
-/// workspace's `settings.json`: a grant on the command line comes from the
-/// daemon that spawned the session, so Claude Code's trust dialog never has
-/// to warn that "this folder pre-approves permissions". Absolute paths so the
-/// rules cannot be re-anchored by a cwd change.
+/// They go into the bot's generated `--settings` file (H-031), never the
+/// workspace's `settings.json`: allow rules there make Claude Code's trust
+/// dialog warn about pre-approved permissions.
 ///
-/// `Edit(path)` covers every file-editing tool, `Write` included. Granting
-/// `Write(path)` as well makes Claude Code print a warning at startup that it
-/// is not matched by file permission checks.
+/// The paths are anchored with `//` (absolute). A single leading `/` means
+/// "relative to the settings file", so the rules used to match nothing.
+/// `Edit(path)` covers every file-editing tool, `Write` included.
 pub fn artifacts_allow_rules(artifacts_dir: &Path) -> Vec<String> {
-    let dir = artifacts_dir.display();
+    let dir = crate::bot_permissions::rule_path(artifacts_dir);
     vec![format!("Read({dir}/**)"), format!("Edit({dir}/**)")]
 }
 
