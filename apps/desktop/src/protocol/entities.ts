@@ -1,6 +1,17 @@
 // Domain entities exchanged over the hermesd control plane (protocol v2).
 // See docs/protocol.md.
 
+/** How much a project's bots may do without asking (H-031). */
+export type PermissionProfile = "standard" | "trusted" | "full";
+
+/** A power one bot gets on top of its project's profile. */
+export type PermissionExtra =
+  | "publish"
+  | "daemon_restart"
+  | "app_restart"
+  | "install"
+  | "release_main";
+
 export interface Project {
   readonly id: string;
   readonly name: string;
@@ -16,6 +27,8 @@ export interface Project {
   readonly lead_bot_id?: string | null;
   /** The shared git repository workers check out and push to; absent on older daemons. */
   readonly repo?: ProjectRepo | null;
+  /** What its bots may do without asking (H-031); absent on older daemons. */
+  readonly permission_profile?: PermissionProfile;
   readonly created_at: string;
 }
 
@@ -64,6 +77,8 @@ export interface Bot {
   readonly peer?: BotPeer | null;
   /** May drive the owner's own Chrome; absent on older daemons. */
   readonly user_chrome?: boolean;
+  /** Powers on top of its project's permission profile (H-031). */
+  readonly permission_extras?: readonly PermissionExtra[];
   /** A temporary worker, archived once its one task closes. */
   readonly temporary?: boolean;
   readonly created_at: string;

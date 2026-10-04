@@ -44,6 +44,20 @@ pub struct Config {
     pub claude_args: Vec<String>,
     pub codex_bin: String,
     pub codex_args: Vec<String>,
+    /// Folders outside their own that bots work in, such as the owner's
+    /// repositories (`~` expands). Permission profiles name them to the
+    /// auto-mode classifier as trusted; the guard hook lets destructive
+    /// commands act only in their `<repo>-wt-*` git worktrees, never in the
+    /// owner's checkouts beside them (H-031, CE-003 M4).
+    pub trusted_paths: Vec<String>,
+    /// Lines added to every bot's auto-mode `environment` (H-031), after the
+    /// generated ones: the owner's own trust context, such as a tailnet
+    /// domain or the repositories bots push to. This is where the lines of
+    /// a hand-applied `bot-settings.json` belong once it is retired.
+    pub auto_mode_environment: Vec<String>,
+    /// Like `auto_mode_environment`, for the bots of one project only,
+    /// keyed by the project's name.
+    pub project_auto_mode_environment: std::collections::BTreeMap<String, Vec<String>>,
     pub default_bot_runtime: bus::BotRuntime,
     /// Context window, in tokens, a bot session may grow to before Claude Code
     /// auto-compacts it (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`). Bots are
@@ -188,6 +202,9 @@ impl Default for Config {
             claude_args: Vec::new(),
             codex_bin: "codex".to_string(),
             codex_args: Vec::new(),
+            trusted_paths: vec!["~/Developer".to_string()],
+            auto_mode_environment: Vec::new(),
+            project_auto_mode_environment: std::collections::BTreeMap::new(),
             default_bot_runtime: bus::BotRuntime::ClaudeCode,
             auto_compact_window: Some(DEFAULT_AUTO_COMPACT_WINDOW),
             classic_renderer: true,

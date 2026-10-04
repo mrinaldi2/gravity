@@ -199,6 +199,18 @@ impl Db {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
+    /// Every live bot standing in for one of `peer_id`'s, in any project.
+    pub fn stand_ins_through(&self, peer_id: &str) -> anyhow::Result<Vec<Bot>> {
+        let conn = self.lock();
+        let sql = format!(
+            "SELECT {} FROM bot WHERE peer_id = ?1 AND deleted_at IS NULL",
+            Self::BOT_COLS
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(params![peer_id], Self::bot_from_row)?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
     /// A bot row standing in for a bot that runs on `peer_id`. It gets a DM
     /// conversation like any bot, an empty workspace path, and a directory
     /// name no local bot can have, so nothing ever provisions files for it.

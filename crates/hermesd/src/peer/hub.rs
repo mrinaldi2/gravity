@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use tokio::sync::{mpsc, oneshot, Notify};
 
 use crate::app::AppState;
+use crate::events::Push;
 
 /// How long a request waits for the peer's response. A forwarded message with
 /// artifacts is the slowest frame there is, and a tailnet hop is fast.
@@ -200,6 +201,7 @@ impl PeerHub {
         }
         tracing::info!(peer_id, "peer link up");
         let _ = app.db.touch_peer(&peer_id);
+        push_stand_ins(&app, &peer_id);
         // Whatever changed in linked projects while the link was down.
         {
             let (app, peer_id) = (app.clone(), peer_id.clone());
@@ -276,7 +278,20 @@ impl PeerHub {
             self.browsers.link_down(&app, &peer_id);
         }
         let _ = app.db.touch_peer(&peer_id);
+        if current {
+            push_stand_ins(&app, &peer_id);
+        }
         tracing::info!(peer_id, "peer link down");
+    }
+}
+
+/// A stand-in's state is whether its machine is reachable, worked out when a
+/// client is sent the bot. Clients hold what they were last sent, so each
+/// link going up or down resends the peer's stand-ins; otherwise a client
+/// that loaded its bots while the link was down shows them stopped for good.
+fn push_stand_ins(app: &AppState, peer_id: &str) {
+    for bot in app.db.stand_ins_through(peer_id).unwrap_or_default() {
+        app.events.push(Push::BotUpdated { bot });
     }
 }
 

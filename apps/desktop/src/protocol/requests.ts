@@ -8,6 +8,8 @@ import type {
   DeliveryState,
   DeviceCapability,
   OverlapPolicy,
+  PermissionExtra,
+  PermissionProfile,
   RoutineTrigger,
 } from "./entities";
 
@@ -181,6 +183,18 @@ export type ClientRequestBody =
   | { readonly type: "list_tasks"; readonly bot_id: string; readonly limit?: number }
   | { readonly type: "get_task"; readonly bot_id: string; readonly task_id: string }
   | { readonly type: "set_bot_user_chrome"; readonly bot_id: string; readonly enabled: boolean }
+  /** Owner only (approve grant); restarts the project's bots. */
+  | {
+      readonly type: "set_project_permission_profile";
+      readonly project_id: string;
+      readonly profile: PermissionProfile;
+    }
+  /** Owner only; replaces the bot's extras and restarts it. */
+  | {
+      readonly type: "set_bot_permission_extras";
+      readonly bot_id: string;
+      readonly extras: readonly PermissionExtra[];
+    }
   /** Restarts the session; it picks its conversation back up and is told what it left unfinished. */
   | { readonly type: "restart_bot"; readonly bot_id: string }
   /** Restarts with a fresh conversation; work, memory and tasks are kept. */

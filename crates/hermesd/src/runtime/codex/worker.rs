@@ -151,7 +151,11 @@ impl Worker {
         if let Some(artifacts) = &codex.artifacts {
             roots.push(artifacts.display().to_string());
         }
+        let (roots, network, approval) = codex.policy(roots);
         let mut config = json!({ "sandbox_workspace_write.writable_roots": roots });
+        if network {
+            config["sandbox_workspace_write.network_access"] = json!(true);
+        }
         config[format!("mcp_servers.{}", crate::brand::ACTIVE_MCP_SERVER)] = json!({
             "url": format!("http://127.0.0.1:{}/mcp", codex.port),
             "bearer_token_env_var": crate::brand::BOT_TOKEN_ENV,
@@ -161,7 +165,7 @@ impl Worker {
         }
         let mut params = json!({
             "cwd": self.spec.workspace,
-            "approvalPolicy": "on-request", "sandbox": "workspace-write",
+            "approvalPolicy": approval, "sandbox": "workspace-write",
             "developerInstructions": self.spec.workspace.parent().and_then(|root| std::fs::read_to_string(root.join("system.md")).ok()).unwrap_or_default()
                 + "\nRead CLAUDE.md and FACTS.md for your saved context. Keep durable facts in FACTS.md.",
             "config": config

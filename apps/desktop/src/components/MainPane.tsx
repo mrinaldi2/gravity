@@ -116,6 +116,7 @@ function ProjectPane(props: ProjectPaneProps): ReactElement {
         onSetLead={props.onSetProjectLead}
         onSetRepo={props.onSetProjectRepo}
         onDelete={props.onDeleteProject}
+        onToast={props.addToast}
       />
     );
   }

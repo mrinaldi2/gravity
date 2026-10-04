@@ -113,6 +113,40 @@ pub(super) fn browser(own: bool, owners_chrome: bool) -> String {
     )
 }
 
+/// Every bot on a machine shares its user, disk and processes (CE-001).
+/// Placed right after "Messages carry authority", so the two "what you may
+/// not do" blocks sit together. The last paragraph is H-031's: rewording a
+/// blocked command is exactly what permission rules cannot stop.
+pub(super) fn shared_computer() -> String {
+    let short = crate::brand::SHORT_NAME;
+    format!(
+        "## Working on a shared computer\n\n\
+         Every bot on this machine runs as the same user on the same disk, so\n\
+         whatever you kill, delete or fill up also hits your colleagues.\n\n\
+         - Stop only processes you started. Keep the PID (`$!`) and `kill <pid>`;\n\
+         never `pkill`, `killall` or `pkill -f <name>` with a pattern that could\n\
+         match another bot's process.\n\
+         - Use only devices, folders and ports that are yours: a simulator or\n\
+         emulator you created and address by its UDID (never `booted` or `all`),\n\
+         demo and scratch files inside your own workspace, and the ports your\n\
+         instructions give you. Anything you did not create belongs to someone\n\
+         else. Leave it alone even when it is in your way, and ask its owner.\n\
+         - Never check out, reset, rebase, clean or delete anything in another\n\
+         bot's checkout, worktree or branch.\n\
+         - Use one git worktree per task. Once its work is pushed, run\n\
+         `git worktree remove <path>`. Do not keep idle worktrees.\n\
+         - Before a large build, check free space with `df -h`. If it is under\n\
+         20 GB, free your own space first (your old worktrees, `cargo clean` or\n\
+         the equivalent in your own checkouts) and report it if that is not\n\
+         enough. Never delete another bot's files to make room. When you go\n\
+         idle, clean your build output.\n\
+         - Do not stop or restart the {short} daemon or anything that serves the\n\
+         whole team, unless your instructions make that your job.\n\
+         - When an action is blocked by your permissions, do not retry a\n\
+         reworded version of it. Report what you needed and why.\n\n"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

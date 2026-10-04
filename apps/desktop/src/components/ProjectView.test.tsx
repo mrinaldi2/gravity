@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ProjectRepo } from "../protocol/entities";
 import { FakeDaemon } from "../test/fakeDaemon";
 import * as fx from "../test/fixtures";
+import { toastSpy } from "../test/spies";
 import ProjectView from "./ProjectView";
 
 function renderView(over: Partial<Parameters<typeof ProjectView>[0]> = {}) {
@@ -28,6 +29,7 @@ function renderView(over: Partial<Parameters<typeof ProjectView>[0]> = {}) {
       onSetLead={onSetLead}
       onSetRepo={onSetRepo}
       onDelete={onDelete}
+      onToast={toastSpy()}
       {...over}
     />,
   );

@@ -30,6 +30,38 @@ pub struct CodexSpec {
     pub artifacts: Option<PathBuf>,
     /// The bot's own browser server, `{command, args, env}`, when it has one.
     pub browser: Option<Value>,
+    /// The project's permission profile (H-031) and the configured trusted
+    /// paths, which Trusted and Full add to the sandbox's writable roots.
+    pub profile: bus::PermissionProfile,
+    pub trusted_paths: Vec<String>,
+}
+
+impl CodexSpec {
+    /// Where the sandbox may write, whether it may reach the network, and
+    /// its approval policy, from the permission profile. Codex has no
+    /// deny-list, so even Full keeps the workspace-write sandbox: it only
+    /// stops asking and widens where it may write.
+    pub fn policy(&self, mut roots: Vec<String>) -> (Vec<String>, bool, &'static str) {
+        let wider = self.profile != bus::PermissionProfile::Standard;
+        if wider {
+            roots.extend(self.trusted_paths.iter().map(|p| expand_home(p)));
+        }
+        let approval = if self.profile == bus::PermissionProfile::Full {
+            "never"
+        } else {
+            "on-request"
+        };
+        (roots, wider, approval)
+    }
+}
+
+/// `~/x` against the user's home; anything else as given.
+fn expand_home(path: &str) -> String {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+    match (path.strip_prefix("~/"), home) {
+        (Some(rest), Some(home)) => std::path::Path::new(&home).join(rest).display().to_string(),
+        _ => path.to_string(),
+    }
 }
 
 pub struct CodexAdapter;

@@ -7,6 +7,7 @@ pub mod app;
 pub mod approval;
 pub mod backup;
 pub mod board;
+pub mod bot_permissions;
 pub mod botmgmt;
 pub mod brand;
 pub mod browser;

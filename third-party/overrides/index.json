@@ -476,5 +476,17 @@
       "file": "dfa03909fc116919fc11df5be9e5e9238520a89c.txt",
       "upstream_sha256": "791a00933f2ea7e512856361e026998362241c3918d7be948c24d29441033b55"
     }
+  ],
+  "@bufbuild/protobuf@2.16.0": [
+    {
+      "url": "https://raw.githubusercontent.com/bufbuild/protobuf-es/b3b232f7f466eda27c66e8f63c82f930578b6cc6/LICENSE",
+      "file": "0852eae3adf81df4a705737ec733a408a3e9ddc0.txt",
+      "upstream_sha256": "c04b4216f1cd4c5a4f7fb2f2a1b0ae70d847e9e0cac7c9dee9bf8cc03177c449"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/protocolbuffers/protobuf/8a71927d74a4ce34efe2d8769fda198f52d20d12/LICENSE",
+      "file": "19b305b00060a774a9180fb916c14b49edb2008f.txt",
+      "upstream_sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d"
+    }
   ]
 }
