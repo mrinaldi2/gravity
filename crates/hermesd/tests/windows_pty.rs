@@ -269,7 +269,7 @@ async fn codex_startup_failure_is_reported_in_state_and_terminal() {
         .supervisor
         .state(id)
         .1
-        .contains("failed to start"));
+        .contains("Engine couldn't start"));
     let output: Vec<u8> = daemon
         .app
         .supervisor
