@@ -310,6 +310,23 @@ pub fn check_ac(item: &Item, who: &Who) -> Vec<Unmet> {
     }
 }
 
+/// Changing acceptance criteria: until the item reaches Verify; after that
+/// they are what testers and the owner check against.
+pub fn check_ac_edit(item: &Item) -> Vec<Unmet> {
+    if matches!(
+        item.category,
+        Cat::Verify | Cat::Approval | Cat::Deploying | Cat::Done | Cat::Cancelled
+    ) {
+        vec![unmet(
+            "ac.locked",
+            "Its acceptance criteria are fixed once it reaches Verify.",
+            Some("Send it back to Doing first."),
+        )]
+    } else {
+        Vec::new()
+    }
+}
+
 /// Ranking, P0, and editing WIP limits, columns or templates: the lead or the owner.
 pub fn check_lead(who: &Who) -> Vec<Unmet> {
     if who.leads() || *who == Who::Daemon {

@@ -43,6 +43,16 @@ pub struct BoardChange {
 /// resync instead.
 const BACKLOG: usize = 1024;
 
+/// The card to push for a change that has committed. A failed read must not
+/// lose the push (ARCH-R8 F2): the change is published without its card, and
+/// clients refetch that item.
+pub fn card_after_commit(db: &crate::db::Db, item_id: &str) -> Option<ItemCard> {
+    db.board_read(|t| t.card(item_id)).unwrap_or_else(|e| {
+        tracing::warn!(item_id, error = %e, "card read after commit failed; pushing without it");
+        None
+    })
+}
+
 #[derive(Clone)]
 pub struct BoardFeed {
     seqs: Arc<Mutex<HashMap<String, u64>>>,
@@ -51,9 +61,17 @@ pub struct BoardFeed {
 
 impl Default for BoardFeed {
     fn default() -> Self {
+        Self::with_backlog(BACKLOG)
+    }
+}
+
+impl BoardFeed {
+    /// A feed that lets a connection fall `backlog` changes behind; tests
+    /// use a small one to reach the resync path.
+    pub fn with_backlog(backlog: usize) -> Self {
         Self {
             seqs: Arc::default(),
-            tx: broadcast::channel(BACKLOG).0,
+            tx: broadcast::channel(backlog).0,
         }
     }
 }

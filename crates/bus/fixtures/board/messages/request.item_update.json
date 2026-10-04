@@ -16,7 +16,13 @@
       "labels": {
         "values": []
       },
-      "parentId": ""
+      "parentId": "",
+      "acceptanceCriteria": {
+        "values": [
+          "Opens without crashing",
+          "Lint is clean"
+        ]
+      }
     }
   }
 }

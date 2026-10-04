@@ -281,3 +281,19 @@ fn templates_name_only_known_dor_fields() {
         "{err}"
     );
 }
+
+#[test]
+fn acceptance_criteria_are_fixed_from_verify_on() {
+    for cat in [Cat::Inbox, Cat::Ready, Cat::Doing, Cat::Review] {
+        assert!(check_ac_edit(&item(cat)).is_empty(), "{cat:?}");
+    }
+    for cat in [
+        Cat::Verify,
+        Cat::Approval,
+        Cat::Deploying,
+        Cat::Done,
+        Cat::Cancelled,
+    ] {
+        assert_eq!(check_ac_edit(&item(cat))[0].code, "ac.locked", "{cat:?}");
+    }
+}

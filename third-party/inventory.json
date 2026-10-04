@@ -11,8 +11,8 @@
     "apps/desktop/src-tauri/Cargo.lock": "24db758e26ae0b41a7b01cbba424cb53d6ad17e4b1fd5f1c4de09720d91762ba",
     "apps/desktop/src-tauri/Cargo.toml": "4b2fa1b8c59f0daac8f8efaee916fde47ccba51bf30e3b24126a12ad4a582cbe",
     "apps/desktop/src-tauri/tauri.conf.json": "ec7228bd78868ee1c20587ae2f670f0ec787a0edca5a1c0aad916b4e8e953f7e",
-    "apps/desktop/package.json": "395a87e32b1915f785df00d050836c2c195126108b7fe3a68bdb634dc204f774",
-    "apps/desktop/pnpm-lock.yaml": "3b09aaddca393a2f55d902e0721fc2cd3f620859b83cf6c0d479f51ebc84a93f",
+    "apps/desktop/package.json": "c971fe3d630a70a0181b821b74837c5730c80a470b49f254be8636b179a5df2b",
+    "apps/desktop/pnpm-lock.yaml": "fcc8b17d5228db54ab5f16def81e603100d855d0634cdbfbf7b9f21a1872cef1",
     "apps/desktop/vite.config.ts": "029db7146e224ff4381cb2fb69d8a72c3c803ddfd56d8af2bf3ca5ab6d093fd9",
     "apps/marketing/package.json": "eb06e030ffa6b5a299377e0c772d4691d6f03740a76269a0ddb3629c1a9472ae",
     "apps/marketing/pnpm-lock.yaml": "8bac14609a15069e41ebb8c00a9a53075dc1c66cd6fd351fc39dd7b1b1d4e759",
@@ -31,8 +31,10 @@
     "apps/desktop/src-tauri/windows/installer-hooks.nsh": "e0129ebe51e85066fbd3824bb94fdd47a7b23276e14dc465da7c76f0eac08cc8",
     ".github/workflows/windows.yml": "1f84bc91f27c0478b48fa5d806f0fa843c5d9734fb634cc82d4b49c8e5b3d9d9",
     "third-party/overrides/0322ceec0b8f15aa2d74a6173c07cc8c6f3764b3.txt": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+    "third-party/overrides/0852eae3adf81df4a705737ec733a408a3e9ddc0.txt": "c04b4216f1cd4c5a4f7fb2f2a1b0ae70d847e9e0cac7c9dee9bf8cc03177c449",
     "third-party/overrides/11069edd79019f7dafbe3138841cf289209270dd.txt": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
     "third-party/overrides/16fe87b06e802f094b3fbb0894b137bca2b16ef1.txt": "a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2",
+    "third-party/overrides/19b305b00060a774a9180fb916c14b49edb2008f.txt": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
     "third-party/overrides/2008402b8a1299cf118ea38e02116bfcc72e53c3.txt": "1d85bd754b04ceec93e98e890edd1fa3c6a22e81bcb32135806beeccefa51cd1",
     "third-party/overrides/261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     "third-party/overrides/31aa79387f27e730e33d871925e152e35e428031.txt": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
@@ -55,14 +57,36 @@
     "third-party/overrides/dfa03909fc116919fc11df5be9e5e9238520a89c.txt": "791a00933f2ea7e512856361e026998362241c3918d7be948c24d29441033b55",
     "third-party/overrides/e68a7ab37c8accca023db5f1505d48e4375d4324.txt": "0d17b75c1867fd568bcbb735f329d0d4253846c4b756a65e4d440c1e4bd59187",
     "third-party/overrides/f433b1a53f5b830a205fd2df78e2b34974656c7b.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
-    "third-party/overrides/index.json": "fb30af8948be80dcdf2fc5b9f4eaef80b6fee4d33385386540f679763b651492"
+    "third-party/overrides/index.json": "7d1fb16e6984e5d8077696b8caa395c6be08db487ba9c30c2eab559cb724f7bb"
   },
   "outputs": {
     "third-party/DAEMON_NOTICES.txt": "02a2de784e4658919bb9670cd10ccc73e974c8ab0d475a2f2cf2d2b23e56ff15",
-    "third-party/DESKTOP_NOTICES.txt": "e50bcce644a0ec9ef002ffb16a36465e1350a4471b1dfd836408d9075ad22dab",
+    "third-party/DESKTOP_NOTICES.txt": "50562244260f04edbdb476f16979b7dde170b021cba1303b60bd23f7e4618c58",
     "apps/marketing/public/THIRD_PARTY_NOTICES.txt": "fe0e343d06cefa62f499f856b77f463d6ef41f7a42f2be4d9726895fc39657a8"
   },
   "packages": [
+    {
+      "ecosystem": "JavaScript",
+      "name": "@bufbuild/protobuf",
+      "version": "2.16.0",
+      "license": "(Apache-2.0 AND BSD-3-Clause)",
+      "components": {
+        "desktop": "runtime dependency closure"
+      },
+      "source": "https://registry.npmjs.org/@bufbuild/protobuf/-/protobuf-2.16.0.tgz",
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/bufbuild/protobuf-es/b3b232f7f466eda27c66e8f63c82f930578b6cc6/LICENSE",
+          "sha256": "c04b4216f1cd4c5a4f7fb2f2a1b0ae70d847e9e0cac7c9dee9bf8cc03177c449",
+          "upstream_sha256": "c04b4216f1cd4c5a4f7fb2f2a1b0ae70d847e9e0cac7c9dee9bf8cc03177c449"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/protocolbuffers/protobuf/8a71927d74a4ce34efe2d8769fda198f52d20d12/LICENSE",
+          "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+          "upstream_sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d"
+        }
+      ]
+    },
     {
       "ecosystem": "JavaScript",
       "name": "@cloudflare/kv-asset-handler",

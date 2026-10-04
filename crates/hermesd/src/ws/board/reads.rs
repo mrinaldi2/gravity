@@ -40,6 +40,8 @@ impl Conn {
 
     /// A project's first `board_get` enables its board (B2 defaults), on
     /// this daemon as its home. Enabling is a change, so it needs `control`.
+    /// A project that already has a board keeps its home: this runs only
+    /// when it has none.
     fn enable_board(&self, project_id: &str) -> Result<(), Refusal> {
         let db = &self.app.db;
         if !db
@@ -53,6 +55,18 @@ impl Conn {
                 "no_board",
                 "This project has no board yet; enabling it needs the control grant.",
             ));
+        }
+        // One home per project (H-020 §1.3). Until boards forward (B9), a
+        // linked project's board lives on the side that accepted the link:
+        // the dialing side would otherwise grow a second board.
+        for link in db.project_links(project_id)? {
+            if db.get_peer(&link.peer_id)?.is_some_and(|p| p.url.is_some()) {
+                return Err(refuse(
+                    "no_board",
+                    "This project is linked; its board lives on its home computer \
+                     (board forwarding comes later).",
+                ));
+            }
         }
         db.ensure_board(project_id, &db.daemon_id()?, None)?;
         Ok(())

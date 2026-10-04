@@ -10,6 +10,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 use super::board::{from_text, to_json_list, to_text};
 use super::board_items::{item_in, rank_first, rank_last, record, Event, Write};
+use super::board_notes::replace_ac;
 use super::board_tx::BoardTx;
 use super::{ts, Actor};
 use crate::board::guards::WIP_OVERRIDE_LABEL;
@@ -25,6 +26,8 @@ pub struct ItemEdit<'a> {
     pub priority: Option<Priority>,
     pub labels: Option<&'a [String]>,
     pub parent_id: Option<Option<&'a str>>,
+    /// The whole list; a criterion whose text stays keeps its check.
+    pub acceptance_criteria: Option<&'a [String]>,
 }
 
 /// Where a move puts an item.
@@ -151,6 +154,9 @@ impl BoardTx<'_> {
                 );
                 tx.execute("UPDATE item SET labels = ?2 WHERE id = ?1", params![id, to])?;
                 edited(tx, id, actor, "labels", &from, &to)?;
+            }
+            if let Some(texts) = edit.acceptance_criteria {
+                replace_ac(tx, &before, texts, actor)?;
             }
             if let Some(parent) = edit.parent_id.filter(|p| *p != before.parent_id.as_deref()) {
                 tx.execute(
