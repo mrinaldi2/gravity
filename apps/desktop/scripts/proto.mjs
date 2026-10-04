@@ -35,10 +35,10 @@ try {
   const fresh = join(scratch, relative(root, committed));
   const want = files(fresh)
     .map((path) => relative(fresh, path))
-    .sort();
+    .toSorted();
   const have = files(committed)
     .map((path) => relative(committed, path))
-    .sort();
+    .toSorted();
   const stale = [
     ...want.filter(
       (name) =>
