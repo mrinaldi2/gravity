@@ -77,7 +77,13 @@ mod tests {
         let (sink, mut link) = link::channel::<WsMessage>(0);
         let (out, out_rx) = mpsc::unbounded_channel();
         let (viewer, frames) = Viewer::new(out.clone());
-        let writer = tokio::spawn(write_out(sink, out_rx, mpsc::unbounded_channel().1, frames, NEVER));
+        let writer = tokio::spawn(write_out(
+            sink,
+            out_rx,
+            mpsc::unbounded_channel().1,
+            frames,
+            NEVER,
+        ));
 
         for n in 0..1000 {
             assert!(viewer.frame(json!({ "type": "browser_frame", "n": n })));
@@ -117,7 +123,13 @@ mod tests {
         let (sink, mut link) = link::channel::<WsMessage>(8);
         let (out, out_rx) = mpsc::unbounded_channel();
         let (viewer, frames) = Viewer::new(out.clone());
-        let writer = tokio::spawn(write_out(sink, out_rx, mpsc::unbounded_channel().1, frames, NEVER));
+        let writer = tokio::spawn(write_out(
+            sink,
+            out_rx,
+            mpsc::unbounded_channel().1,
+            frames,
+            NEVER,
+        ));
 
         viewer.frame(json!({ "type": "browser_frame" }));
         viewer.clear();
@@ -135,7 +147,13 @@ mod tests {
         let (sink, mut link) = link::channel::<WsMessage>(8);
         let (out, out_rx) = mpsc::unbounded_channel();
         let (viewer, frames) = Viewer::new(out.clone());
-        let writer = tokio::spawn(write_out(sink, out_rx, mpsc::unbounded_channel().1, frames, Duration::from_secs(20)));
+        let writer = tokio::spawn(write_out(
+            sink,
+            out_rx,
+            mpsc::unbounded_channel().1,
+            frames,
+            Duration::from_secs(20),
+        ));
 
         tokio::time::sleep(Duration::from_secs(19)).await;
         assert!(link.try_recv().is_err(), "pinged early");

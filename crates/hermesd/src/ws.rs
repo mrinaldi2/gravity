@@ -117,7 +117,13 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
     // Writer task: everything outbound goes through one sink.
     // Binary frames (protobuf envelopes) have their own queue to the writer.
     let (bin_tx, bin_rx) = mpsc::unbounded_channel::<Vec<u8>>();
-    let writer = tokio::spawn(writer::write_out(sink, out_rx, bin_rx, frames, PING_INTERVAL));
+    let writer = tokio::spawn(writer::write_out(
+        sink,
+        out_rx,
+        bin_rx,
+        frames,
+        PING_INTERVAL,
+    ));
 
     // Handshake: first frame must be a valid hello.
     let session = match tokio::time::timeout(IDLE_TIMEOUT, stream.next()).await {

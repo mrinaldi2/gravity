@@ -31,11 +31,17 @@ where
 {
     let decoded: T = serde_json::from_str(&read(name))
         .unwrap_or_else(|e| panic!("{name}.json does not decode: {e}"));
-    let via_json: T = serde_json::from_value(serde_json::to_value(&decoded).expect("encode"))
-        .expect("re-decode");
-    assert_eq!(via_json, decoded, "{name}.json changes on a JSON round trip");
+    let via_json: T =
+        serde_json::from_value(serde_json::to_value(&decoded).expect("encode")).expect("re-decode");
+    assert_eq!(
+        via_json, decoded,
+        "{name}.json changes on a JSON round trip"
+    );
     let via_binary = T::decode(decoded.encode_to_vec().as_slice()).expect("binary decode");
-    assert_eq!(via_binary, decoded, "{name}.json changes on a binary round trip");
+    assert_eq!(
+        via_binary, decoded,
+        "{name}.json changes on a binary round trip"
+    );
 }
 
 #[test]
@@ -64,7 +70,12 @@ fn fixtures_and_entities_match_one_to_one() {
         .expect("fixture dir")
         .map(|entry| entry.expect("entry").path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
-        .map(|path| path.file_stem().expect("stem").to_string_lossy().into_owned())
+        .map(|path| {
+            path.file_stem()
+                .expect("stem")
+                .to_string_lossy()
+                .into_owned()
+        })
         .collect();
     let mut expected: BTreeSet<String> = ENTITIES.iter().map(|s| (*s).to_string()).collect();
     expected.insert("enums".to_string());
@@ -90,7 +101,10 @@ fn the_enum_fixture_lists_every_value() {
             .unwrap_or_else(|e| panic!("enums.json {enum_name}: {e}"))
     };
     let checks: [(&str, Vec<String>); 12] = [
-        ("ColumnCategory", defined::<ColumnCategory>(|e| e.as_str_name())),
+        (
+            "ColumnCategory",
+            defined::<ColumnCategory>(|e| e.as_str_name()),
+        ),
         ("WipScope", defined::<WipScope>(|e| e.as_str_name())),
         ("Role", defined::<Role>(|e| e.as_str_name())),
         ("ItemType", defined::<ItemType>(|e| e.as_str_name())),
@@ -98,9 +112,15 @@ fn the_enum_fixture_lists_every_value() {
         ("Size", defined::<Size>(|e| e.as_str_name())),
         ("Priority", defined::<Priority>(|e| e.as_str_name())),
         ("PersonRole", defined::<PersonRole>(|e| e.as_str_name())),
-        ("VerificationResult", defined::<VerificationResult>(|e| e.as_str_name())),
+        (
+            "VerificationResult",
+            defined::<VerificationResult>(|e| e.as_str_name()),
+        ),
         ("LinkKind", defined::<LinkKind>(|e| e.as_str_name())),
-        ("ItemEventKind", defined::<ItemEventKind>(|e| e.as_str_name())),
+        (
+            "ItemEventKind",
+            defined::<ItemEventKind>(|e| e.as_str_name()),
+        ),
         ("TemplateKind", defined::<TemplateKind>(|e| e.as_str_name())),
     ];
     for (enum_name, values) in &checks {

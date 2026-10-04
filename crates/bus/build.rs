@@ -6,7 +6,10 @@ use std::path::PathBuf;
 
 use prost::Message;
 
-const FILES: &[&str] = &["hermes/board/v1/board.proto", "hermes/wire/v1/envelope.proto"];
+const FILES: &[&str] = &[
+    "hermes/board/v1/board.proto",
+    "hermes/wire/v1/envelope.proto",
+];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?).join("../../proto");

@@ -9,11 +9,22 @@ use prost::Message;
 /// The reply to one binary frame.
 pub(super) fn reply(frame: &[u8]) -> Vec<u8> {
     let (req_id, code, message) = match Envelope::decode(frame) {
-        Err(e) => (0, "invalid_request", format!("not a protobuf Envelope: {e}")),
-        Ok(Envelope { req_id, body: None }) => (req_id, "invalid_request", "empty envelope".to_string()),
-        Ok(Envelope { req_id, body: Some(Body::Error(_)) }) => {
-            (req_id, "invalid_request", "clients do not send errors".to_string())
+        Err(e) => (
+            0,
+            "invalid_request",
+            format!("not a protobuf Envelope: {e}"),
+        ),
+        Ok(Envelope { req_id, body: None }) => {
+            (req_id, "invalid_request", "empty envelope".to_string())
         }
+        Ok(Envelope {
+            req_id,
+            body: Some(Body::Error(_)),
+        }) => (
+            req_id,
+            "invalid_request",
+            "clients do not send errors".to_string(),
+        ),
     };
     Envelope {
         req_id,
@@ -39,12 +50,19 @@ mod tests {
 
     #[test]
     fn garbage_is_refused_without_a_request_id() {
-        assert_eq!(error_of(&reply(&[0xff, 0xff, 0xff])), (0, "invalid_request".into()));
+        assert_eq!(
+            error_of(&reply(&[0xff, 0xff, 0xff])),
+            (0, "invalid_request".into())
+        );
     }
 
     #[test]
     fn an_envelope_is_answered_under_its_own_request_id() {
-        let request = Envelope { req_id: 42, body: None }.encode_to_vec();
+        let request = Envelope {
+            req_id: 42,
+            body: None,
+        }
+        .encode_to_vec();
         assert_eq!(error_of(&reply(&request)), (42, "invalid_request".into()));
     }
 }
