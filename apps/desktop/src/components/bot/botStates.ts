@@ -14,9 +14,21 @@ export const BOT_STATE_LABEL: Readonly<Record<BotState, string>> = {
   stopped: "Stopped",
 };
 
-/** The state in words, an unknown one included, with the reason when there is one. */
+/** The failure states whose reason the owner sees (ux-glossary rule 8). */
+const REASON_SHOWN: ReadonlySet<BotState> = new Set<BotState>([
+  "crashed",
+  "auth_failed",
+  "rate_limited",
+]);
+
+/**
+ * The state in words, an unknown one included. A failure state carries its
+ * reason; every other reason is internal bookkeeping and stays hidden.
+ */
 export function botStateTitle(bot: Pick<Bot, "state" | "state_reason">): string {
   const label: string | undefined = BOT_STATE_LABEL[bot.state];
   const words = label ?? "Unknown";
-  return bot.state_reason.length > 0 ? `${words} — ${bot.state_reason}` : words;
+  return REASON_SHOWN.has(bot.state) && bot.state_reason.length > 0
+    ? `${words} — ${bot.state_reason}`
+    : words;
 }

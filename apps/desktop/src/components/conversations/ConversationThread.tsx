@@ -4,6 +4,7 @@ import type { DaemonApi } from "../../protocol/api";
 import { fmtTimestamp } from "../../util";
 import BotAvatar from "../BotAvatar";
 import ChatMarkdown from "../chat/ChatMarkdown";
+import { taskStateLabel } from "../tasks/taskStates";
 import { botOf, kindLabel, pairTitle } from "./conversationModel";
 import { useAgentThread } from "./useAgentConversations";
 
@@ -28,7 +29,7 @@ function MessageBubble({
           <span className={`conv-kind conv-kind-${message.kind}`}>{kindLabel(message.kind)}</span>
           {message.task == null ? null : (
             <span className={`task-badge task-badge-${message.task.state}`}>
-              {message.task.state}
+              {taskStateLabel(message.task.state)}
             </span>
           )}
           <span className="conv-time">{fmtTimestamp(message.created_at)}</span>

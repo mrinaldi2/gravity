@@ -91,17 +91,17 @@ describe("Composer", () => {
     expect(spies.onSave).toHaveBeenCalled();
   });
 
-  it("opens the hold strip from Later", async () => {
+  it("opens the hold strip from Put on hold…", async () => {
     const user = userEvent.setup();
     const spies = renderComposer();
-    expect(screen.queryByLabelText("Hold until")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("On hold until")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Later" }));
-    await user.click(screen.getByRole("button", { name: "Hold" }));
+    await user.click(screen.getByRole("button", { name: "Put on hold…" }));
+    await user.click(screen.getByRole("button", { name: "Put on hold" }));
     expect(spies.onHold).toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Later" }));
-    expect(screen.queryByLabelText("Hold until")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Put on hold…" }));
+    expect(screen.queryByLabelText("On hold until")).not.toBeInTheDocument();
   });
 
   it("shows the picked option and clears it", async () => {

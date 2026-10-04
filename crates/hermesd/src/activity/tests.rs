@@ -148,3 +148,21 @@ fn compares_stamps_as_instants_not_strings() {
         Some("from the transcript".to_string())
     );
 }
+
+#[test]
+fn daemon_notices_preview_as_hermes() {
+    let own = bus::Sender {
+        kind: SenderKind::Bot,
+        bot_id: Some("b1".into()),
+        name: "alice".into(),
+    };
+    assert_eq!(preview_sender(&own, "b1"), "");
+    assert_eq!(
+        preview_sender(&crate::messaging::daemon_sender(), "b1"),
+        "Hermes"
+    );
+    assert_eq!(
+        preview_sender(&crate::messaging::user_sender(), "b1"),
+        "user"
+    );
+}

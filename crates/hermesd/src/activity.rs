@@ -186,15 +186,23 @@ fn from_transcript_file(path: &Path) -> Option<Activity> {
 fn from_bus(db: &Db, bot_id: &str) -> Option<Activity> {
     let conv = db.dm_conversation(bot_id).ok()??;
     let msg = db.list_messages(&conv.id, None, 1).ok()?.pop()?;
-    let from = match msg.sender.kind {
-        SenderKind::Bot if msg.sender.bot_id.as_deref() == Some(bot_id) => String::new(),
-        _ => msg.sender.name.clone(),
-    };
     Some(Activity {
-        from,
+        from: preview_sender(&msg.sender, bot_id),
         text: truncate(&msg.body),
         at: msg.created_at,
     })
+}
+
+/// Who a bus preview names: nobody for the bot's own words, and the Hermes
+/// service, not "system", for the daemon's notices.
+fn preview_sender(sender: &bus::Sender, bot_id: &str) -> String {
+    match sender.kind {
+        SenderKind::Bot if sender.bot_id.as_deref() == Some(bot_id) => String::new(),
+        SenderKind::User if sender.name == crate::messaging::DAEMON_SENDER_NAME => {
+            crate::brand::SHORT_NAME.to_string()
+        }
+        _ => sender.name.clone(),
+    }
 }
 
 /// One preview line for a bot: the newer of its last Claude Code turn and its

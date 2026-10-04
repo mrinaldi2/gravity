@@ -17,7 +17,7 @@ export default function NotificationSettings(): ReactElement {
             the Dock.
           </div>
         </div>
-        <label className="toggle" htmlFor="settings-dock-badge" aria-label="Toggle dock badge">
+        <label className="toggle" htmlFor="settings-dock-badge" aria-label="Dock badge">
           <input
             id="settings-dock-badge"
             type="checkbox"
@@ -43,7 +43,7 @@ export default function NotificationSettings(): ReactElement {
         <label
           className="toggle"
           htmlFor="settings-decision-notifications"
-          aria-label="Toggle decision notifications"
+          aria-label="Urgent decisions"
         >
           <input
             id="settings-decision-notifications"

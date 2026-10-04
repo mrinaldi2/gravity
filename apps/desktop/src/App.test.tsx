@@ -302,7 +302,7 @@ describe("App state", () => {
     // The header shows routine states through the dot alone, so the label is
     // the only place the push surfaces.
     await waitFor(() => {
-      expect(screen.getByLabelText("Working \u2014 thinking")).toBeInTheDocument();
+      expect(screen.getByLabelText("Working")).toBeInTheDocument();
     });
   });
 
@@ -364,18 +364,17 @@ describe("App state", () => {
   it("offers a View action on approval pushes that opens the bot", async () => {
     const user = userEvent.setup();
     await renderApp();
-
-    daemon.emit("approval_pending", {
+    const push = {
       type: "approval_pending",
       bot_id: "b1",
-      detail: "wants to run rm",
-    });
-    await waitFor(() => {
-      expect(screen.getByText("alice needs approval")).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByRole("button", { name: "View" }));
-    expect(screen.queryByText("wants to run rm")).not.toBeInTheDocument();
+      detail: "Claude needs your permission",
+    } as const;
+    daemon.emit("approval_pending", push);
+    daemon.emit("approval_pending", { ...push, tool: "Bash" });
+    await screen.findByText("alice wants to run Bash");
+    expect(screen.getByText("alice needs approval")).toBeInTheDocument();
+    expect(screen.queryByText(push.detail)).not.toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "View" })[0] ?? document.body);
     expect(screen.getByTestId("terminal")).toBeInTheDocument();
   });
 

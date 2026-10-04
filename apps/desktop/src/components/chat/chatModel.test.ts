@@ -65,6 +65,12 @@ describe("labels", () => {
     expect(
       triggerView({ kind: "bus", from: "lead", msg_kind: "task", num: 3, text: "port it" }).label,
     ).toBe("Task from lead");
+    expect(
+      triggerView({ kind: "bus", from: "You", msg_kind: "note", num: 4, text: "fyi" }).label,
+    ).toBe("Note from you");
+    expect(
+      triggerView({ kind: "bus", from: "Hermes", msg_kind: "note", num: 5, text: "hi" }).label,
+    ).toBe("Note from Hermes");
     expect(triggerView({ kind: "routine", name: "nightly", text: "/report" }).label).toBe(
       "Routine nightly",
     );
