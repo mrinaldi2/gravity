@@ -300,3 +300,48 @@ fn the_verdict_is_a_pre_tool_use_deny() {
         None
     );
 }
+
+/// CE-003 M1: one Read call must not hand a bot the owner's private key.
+#[test]
+fn reading_sensitive_locations_is_denied_by_rule_and_by_the_guard() {
+    for profile in PermissionProfile::ALL {
+        let settings = input(profile, &[]);
+        let deny = rules(&settings, "deny");
+        for rule in ["Read(~/.ssh/**)", "Read(~/.claude.json)"] {
+            assert!(deny.contains(&rule.to_string()), "{profile:?} lacks {rule}");
+        }
+        let matcher = settings["hooks"]["PreToolUse"][0]["matcher"]
+            .as_str()
+            .expect("matcher");
+        assert!(matcher.split('|').any(|tool| tool == "Read"), "{matcher}");
+    }
+    let call = |tool: &str, input: Value| {
+        decide(
+            &json!({ "tool_name": tool, "tool_input": input, "cwd": "/Users/me" }),
+            &ctx(),
+        )
+    };
+    assert!(call("Read", json!({ "file_path": "/Users/me/.ssh/id_rsa" })).is_some());
+    assert!(call("Read", json!({ "file_path": ".ssh/id_ed25519" })).is_some());
+    assert!(call("Read", json!({ "file_path": "/Users/me//.claude.json" })).is_some());
+    assert!(call(
+        "Grep",
+        json!({ "pattern": "PRIVATE", "path": "/Users/me/.ssh" })
+    )
+    .is_some());
+    assert!(call("Glob", json!({ "pattern": "/Users/me/.gravity/secrets/*" })).is_some());
+    assert_eq!(
+        call(
+            "Read",
+            json!({ "file_path": "/Users/me/Developer/x/README.md" })
+        ),
+        None
+    );
+    assert_eq!(
+        call(
+            "Grep",
+            json!({ "pattern": ".ssh", "path": "/Users/me/Developer" })
+        ),
+        None
+    );
+}

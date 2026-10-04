@@ -3,6 +3,7 @@
 //! Permission rules match command text, so `git -C . push -f`, `sh -c '…'`,
 //! an absolute `/bin/rm` or a `python3 -c "open(…)"` walk past them. The
 //! guard reads the tool call on stdin, parses it, and denies:
+//! - a Read, Grep or Glob of a protected path;
 //! - any mention of the daemon's secrets, `~/.ssh`, `~/.claude.json`,
 //!   Claude settings files, the daemon config or a bot's generated settings;
 //! - `rm`, `rmdir`, `mv`, `unlink` or an output redirect aimed outside the
@@ -112,6 +113,17 @@ pub fn decide(input: &Value, ctx: &GuardContext) -> Option<String> {
     let cwd = PathBuf::from(input["cwd"].as_str().unwrap_or("/"));
     match tool {
         "Bash" => bash(args["command"].as_str().unwrap_or_default(), &cwd, ctx),
+        "Read" | "Grep" | "Glob" => {
+            // `path` is where Grep/Glob search; a Glob pattern can name a path too.
+            ["file_path", "path", "pattern"]
+                .iter()
+                .filter(|key| tool != "Grep" || **key != "pattern")
+                .filter_map(|key| args[*key].as_str())
+                .find_map(|path| {
+                    ctx.mentions_protected(&ctx.resolve(&cwd, path).display().to_string())
+                })
+                .map(|path| format!("{path} is protected; don't read it, ask the owner"))
+        }
         "Write" | "Edit" | "MultiEdit" | "NotebookEdit" => {
             let file = args["file_path"]
                 .as_str()

@@ -41,6 +41,10 @@ pub fn rule_path(path: &Path) -> String {
     }
 }
 
+/// The tools the guard hook sees: every one that runs a command or names a
+/// path to read or write.
+pub const GUARD_MATCHER: &str = "Bash|Read|Grep|Glob|Write|Edit|MultiEdit|NotebookEdit";
+
 pub fn generate(input: &SettingsInput<'_>) -> Value {
     let mut deny = hard_deny(input);
     let mut allow = artifacts_allow(input.artifacts);
@@ -79,7 +83,7 @@ pub fn generate(input: &SettingsInput<'_>) -> Value {
         "permissions": { "allow": allow, "deny": deny },
         "hooks": {
             "PreToolUse": [{
-                "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit",
+                "matcher": GUARD_MATCHER,
                 "hooks": [{ "type": "command", "command": input.guard_command }]
             }]
         }
@@ -167,6 +171,9 @@ fn hard_deny(input: &SettingsInput<'_>) -> Vec<String> {
         format!("Read({home}/secrets/**)"),
         format!("Edit({home}/secrets/**)"),
         format!("Bash(*{home_name}/secrets*)"),
+        // A Read deny also covers Grep, Glob, Edit and Write (CE-003 M1).
+        "Read(~/.ssh/**)".to_string(),
+        "Read(~/.claude.json)".to_string(),
         "Edit(~/.claude/settings.json)".to_string(),
         "Edit(~/.claude/settings.local.json)".to_string(),
         "Edit(~/.claude.json)".to_string(),
