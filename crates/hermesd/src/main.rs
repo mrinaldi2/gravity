@@ -69,6 +69,14 @@ async fn main() -> anyhow::Result<()> {
         Some("service") => {
             let paths =
                 hermesd::service::ServicePaths::new(cfg.home.clone(), cfg.user_home.clone());
+            // Flags are not otherwise parsed here; `service install --help`
+            // used to run the install.
+            if args.iter().any(|a| a == "--help" || a == "-h") {
+                println!(
+                    "usage: hermesd service <install [--binary <path>]|uninstall|restart|status>"
+                );
+                return Ok(());
+            }
             match args.get(1).map(String::as_str) {
                 Some("install") => {
                     let source =
