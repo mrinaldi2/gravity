@@ -9,6 +9,14 @@ use anyhow::Context;
 
 const VERSION_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// The default pre-rename home (`~/.gravity`) an install may stop, migrate
+/// and clean up after, if any. A home set with `THEHERMES_HOME` is migrated
+/// by hand, so the daemon of the default home is then the user's main
+/// installation, which that install must leave alone.
+pub(crate) fn default_legacy_home(user_home: &Path, home_overridden: bool) -> Option<PathBuf> {
+    (!home_overridden).then(|| user_home.join(crate::brand::LEGACY_HOME_DIR_NAME))
+}
+
 pub(crate) fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     let mut name = path.as_os_str().to_owned();
     name.push(suffix);
@@ -194,5 +202,20 @@ impl Backup {
             remove_if_present(old)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_overridden_home_leaves_the_default_legacy_home_alone() {
+        let user = Path::new("/u");
+        assert_eq!(
+            default_legacy_home(user, false),
+            Some(user.join(crate::brand::LEGACY_HOME_DIR_NAME))
+        );
+        assert_eq!(default_legacy_home(user, true), None);
     }
 }

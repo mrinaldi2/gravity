@@ -157,12 +157,9 @@ impl<L: Launchctl> Launchd<'_, L> {
     /// The homes `id`'s daemon may hold.
     fn homes(&self, id: Identity) -> Vec<PathBuf> {
         let mut homes = match id {
-            Identity::Legacy => vec![
-                self.old_home.clone(),
-                self.paths
-                    .user_home
-                    .join(crate::brand::LEGACY_HOME_DIR_NAME),
-            ],
+            Identity::Legacy => std::iter::once(self.old_home.clone())
+                .chain(self.paths.legacy_agent_home())
+                .collect(),
             Identity::Current => vec![self.paths.home.clone()],
         };
         homes.dedup();
@@ -191,8 +188,12 @@ impl<L: Launchctl> Launchd<'_, L> {
 
 impl<L: Launchctl> Host for Launchd<'_, L> {
     fn installed(&self) -> Vec<Identity> {
+        // With an overridden home the pre-rename agent is the user's main
+        // daemon, which this install neither migrates nor may stop.
+        let legacy_ours = self.paths.legacy_agent_home().is_some();
         [Identity::Legacy, Identity::Current]
             .into_iter()
+            .filter(|id| *id != Identity::Legacy || legacy_ours)
             .filter(|id| self.plist(*id).is_file())
             .collect()
     }

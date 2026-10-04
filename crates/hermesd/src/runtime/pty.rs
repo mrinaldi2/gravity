@@ -66,6 +66,9 @@ impl RuntimeAdapter for PtyAdapter {
         for (k, v) in &spec.env {
             cmd.env(k, v);
         }
+        for key in super::withheld_env() {
+            cmd.env_remove(key);
+        }
         cmd.env("TERM", "xterm-256color");
 
         let child = pair

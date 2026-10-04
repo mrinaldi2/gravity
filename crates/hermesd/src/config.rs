@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
+mod overridden;
+
 /// Bounds Claude Code accepts for the auto-compact window.
 pub(crate) const AUTO_COMPACT_WINDOW_MIN: u32 = 100_000;
 pub(crate) const AUTO_COMPACT_WINDOW_MAX: u32 = 1_000_000;
@@ -226,8 +228,14 @@ impl Default for Config {
 
 /// Whether `THEHERMES_HOME` (or `GRAVITY_HOME`) points the daemon at a home
 /// of the user's choosing; only the default home is migrated automatically.
+/// Set to either default home, as the service launchers do, it is not.
 pub fn home_is_overridden() -> bool {
-    crate::brand::env_var_os("HOME").is_some()
+    overridden::overridden(
+        crate::brand::env_var_os("HOME")
+            .map(PathBuf::from)
+            .as_deref(),
+        &dirs_home(),
+    )
 }
 
 pub fn default_home() -> PathBuf {

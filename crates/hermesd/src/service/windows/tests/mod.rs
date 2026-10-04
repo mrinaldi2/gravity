@@ -131,7 +131,8 @@ fn task_names_carry_the_label_user_and_home() {
 
 #[test]
 fn legacy_homes_cover_an_explicit_home_and_the_default() {
-    let paths = ServicePaths::new(PathBuf::from(r"C:\h"), PathBuf::from(r"C:\Users\u"));
+    let paths = ServicePaths::new(PathBuf::from(r"C:\h"), PathBuf::from(r"C:\Users\u"))
+        .with_home_overridden(false);
     assert_eq!(
         paths.legacy_homes(),
         vec![
@@ -142,8 +143,43 @@ fn legacy_homes_cover_an_explicit_home_and_the_default() {
     let default = ServicePaths::new(
         PathBuf::from(r"C:\Users\u").join(".gravity"),
         PathBuf::from(r"C:\Users\u"),
-    );
+    )
+    .with_home_overridden(false);
     assert_eq!(default.legacy_homes().len(), 1);
+}
+
+/// Schtasks that must never be asked anything.
+struct Untouched;
+
+impl host::Schtasks for Untouched {
+    fn run(&self, args: &[&str]) -> anyhow::Result<()> {
+        panic!("schtasks {args:?}")
+    }
+    fn exists(&self, name: &str) -> bool {
+        panic!("exists {name}")
+    }
+    fn wait_ended(&self, name: &str) -> anyhow::Result<()> {
+        panic!("wait_ended {name}")
+    }
+}
+
+/// With `THEHERMES_HOME` set, the task of the default home is the user's
+/// main daemon, which nothing migrates: an install must not find it, so it
+/// neither stops it nor deletes its task and files.
+#[test]
+fn an_overridden_home_never_takes_over_the_default_homes_task() {
+    let root = tempfile::tempdir().expect("temporary root");
+    let user = root.path().join("user");
+    let default = user.join(crate::brand::LEGACY_HOME_DIR_NAME);
+    std::fs::create_dir_all(&default).expect("default home");
+    let marker = default.join(crate::brand::legacy_daemon_file("-task.xml"));
+    std::fs::write(&marker, b"x").expect("marker");
+    let home = root.path().join("chosen");
+    let paths = ServicePaths::new(home.clone(), user).with_home_overridden(true);
+    assert_eq!(paths.legacy_homes(), std::slice::from_ref(&home));
+    let host = TaskScheduler::new(&paths, &home, 0, Untouched).expect("host");
+    assert!(host.installed().is_empty());
+    assert!(marker.is_file());
 }
 
 /// The migration moves the home right after a stop returns, so the process

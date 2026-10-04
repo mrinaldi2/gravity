@@ -158,7 +158,8 @@ fn launchd_with(
 /// The pre-rename agent loaded from its plist, running the old home.
 fn legacy_agent(moving: &Moving) -> (ServicePaths, FakeLaunchctl) {
     let plan = moving.plan();
-    let paths = ServicePaths::new(plan.to.clone(), plan.user_home.clone());
+    let paths =
+        ServicePaths::new(plan.to.clone(), plan.user_home.clone()).with_home_overridden(false);
     std::fs::create_dir_all(&paths.launch_agents).unwrap();
     std::fs::write(paths.legacy_plist_path(), "legacy agent").unwrap();
     let launchctl = FakeLaunchctl::default();
@@ -334,4 +335,28 @@ fn restart_reinstalls_a_missing_binary_without_migrating() {
     sequence::restart(&bundled, &layout(&paths, &paths.home), &host).unwrap();
     assert_eq!(std::fs::read_to_string(paths.bin_path()).unwrap(), "new");
     assert_eq!(host.launchctl.loaded(), [CURRENT]);
+}
+
+/// With `THEHERMES_HOME` set, the pre-rename agent runs the user's main
+/// default home, which nothing migrates: the install leaves it running and
+/// keeps its plist.
+#[test]
+fn an_overridden_home_never_takes_over_the_pre_rename_agent() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = ServicePaths::new(tmp.path().join("chosen"), tmp.path().join("user"))
+        .with_home_overridden(true);
+    std::fs::create_dir_all(paths.user_home.join(crate::brand::LEGACY_HOME_DIR_NAME)).unwrap();
+    std::fs::create_dir_all(&paths.launch_agents).unwrap();
+    std::fs::write(paths.legacy_plist_path(), "legacy agent").unwrap();
+    let source = tmp.path().join("bundled");
+    std::fs::write(&source, "new").unwrap();
+    let launchctl = FakeLaunchctl::default();
+    launchctl.loaded.borrow_mut().insert(LEGACY.into());
+    let host = launchd_with(&paths, paths.home.clone(), launchctl);
+    assert!(host.installed().is_empty());
+    install_with(&source, &paths, None, &host).unwrap();
+    let calls = host.launchctl.calls.borrow().clone();
+    assert!(!calls.iter().any(|c| c.contains(LEGACY_LABEL)), "{calls:?}");
+    assert_eq!(host.launchctl.loaded(), [CURRENT, LEGACY]);
+    assert!(paths.legacy_plist_path().is_file());
 }
