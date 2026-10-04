@@ -14,6 +14,7 @@ pub use decisions_list::DecisionFilter;
 pub use routines::RoutineLimits;
 pub use runs::NewRun;
 pub use signals::NewSignal;
+pub use usage::{UsageCursor, UsageMinute};
 pub use workers::NewWorker;
 
 pub mod agent_talk;
@@ -47,6 +48,7 @@ mod task_views;
 mod tasks;
 #[cfg(test)]
 mod tests;
+mod usage;
 mod workers;
 #[cfg(test)]
 mod workers_tests;

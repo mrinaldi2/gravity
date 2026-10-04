@@ -38,6 +38,7 @@ pub mod service;
 pub mod service;
 pub mod supervisor;
 pub mod terminal;
+pub mod usage;
 pub mod workers;
 pub mod worktree;
 pub mod ws;

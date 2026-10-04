@@ -330,7 +330,11 @@ fn settle(mut page: Vec<ChatTurn>, all: &[ChatTurn], busy: bool) -> Vec<ChatTurn
 
 /// Folds the complete lines after `offset` into the builder and returns the
 /// offset of the first line not yet complete.
-fn read_from(path: &Path, offset: u64, mut push: impl FnMut(u64, &str)) -> anyhow::Result<u64> {
+pub(crate) fn read_from(
+    path: &Path,
+    offset: u64,
+    mut push: impl FnMut(u64, &str),
+) -> anyhow::Result<u64> {
     let mut file = File::open(path)?;
     let len = file.metadata()?.len();
     // A shorter file than we have read is a rewritten one: start over.

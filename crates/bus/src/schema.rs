@@ -8,6 +8,7 @@ mod base;
 mod decisions;
 mod history;
 mod peers;
+mod usage;
 mod workers;
 
 use base::MIGRATION_1;
@@ -17,6 +18,7 @@ use history::{
     MIGRATION_7, MIGRATION_8, MIGRATION_9,
 };
 use peers::{MIGRATION_14, MIGRATION_15, MIGRATION_16};
+use usage::MIGRATION_24;
 use workers::{MIGRATION_18, MIGRATION_19};
 
 pub const MIGRATIONS: &[&str] = &[
@@ -40,4 +42,13 @@ pub const MIGRATIONS: &[&str] = &[
     "ALTER TABLE bot ADD COLUMN user_chrome INTEGER NOT NULL DEFAULT 0;",
     MIGRATION_18,
     MIGRATION_19,
+    // 20–23 are reserved for the board (H-020 §1.1). These placeholders keep
+    // usage at version 24; the board branches replace them in place. A
+    // database must not reach version 24 before they do, or it would skip
+    // the board migrations: do not release this ahead of them.
+    "",
+    "",
+    "",
+    "",
+    MIGRATION_24,
 ];

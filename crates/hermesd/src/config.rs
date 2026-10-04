@@ -90,6 +90,9 @@ pub struct Config {
     /// transcripts. Distinct from `home`, which is the daemon's own state
     /// directory; separate so tests can point it at a fixture tree.
     pub user_home: PathBuf,
+    /// Token usage capture and the price table that turns tokens into cost
+    /// units. See [`crate::usage`].
+    pub usage: crate::usage::UsageConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -203,6 +206,7 @@ impl Default for Config {
             allowed_origins: Vec::new(),
             retention: RetentionConfig::default(),
             user_home: dirs_home(),
+            usage: crate::usage::UsageConfig::default(),
         }
     }
 }

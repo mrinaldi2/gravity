@@ -73,3 +73,16 @@ base_backoff_seconds = 5
 tick_interval_ms = 30000
 lease_seconds = 300
 catch_up_window_minutes = 60
+
+# Token usage per bot, counted from transcripts into `usage_minute`.
+# Prices (USD per million tokens) turn tokens into comparable cost units;
+# entries here override the built-in table by model-id prefix.
+[usage]
+enabled = true
+interval_seconds = 30
+# [usage.prices."claude-opus-5-5"]
+# input = 4.0
+# cache_write = 5.0
+# cache_write_1h = 8.0
+# cache_read = 0.2
+# output = 20.0

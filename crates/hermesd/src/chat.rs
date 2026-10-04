@@ -19,10 +19,12 @@ pub mod model;
 mod steps;
 mod store;
 mod triggers;
+pub mod usage_lines;
 pub mod writes;
 
 pub(crate) use envelope::unwrap_peer;
 pub(crate) use steps::truncate;
+pub(crate) use store::read_from;
 pub use store::ChatStore;
 
 /// How often the watcher looks for transcript growth in loaded chats.
