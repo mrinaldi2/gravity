@@ -33,6 +33,7 @@ mod commands;
 mod full;
 mod git;
 mod paths;
+mod targets;
 mod words;
 
 use paths::Scope;

@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use super::paths::Scope;
-use super::{full, git, GuardContext};
+use super::{full, git, targets, GuardContext};
 use crate::bot_permissions::shell::{self, Words};
 
 /// Why the line must not run, or `None`.
@@ -156,18 +156,9 @@ fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
         "gh" => return git::gh(rest, ctx),
         "xcrun" if rest.first().is_some_and(|w| w == "simctl") => return simctl(&rest[1..]),
         "simctl" => return simctl(rest),
-        "rm" | "rmdir" | "unlink" | "shred" | "srm" | "trash" | "mv" | "tee" => args,
-        "cp" | "install" | "ditto" | "ln" | "rsync" => destination(rest),
-        "truncate" => without_values(rest, &["-s", "-r", "--size", "--reference"]),
-        "dd" => rest
-            .iter()
-            .filter_map(|w| w.strip_prefix("of="))
-            .map(str::to_string)
-            .collect(),
-        "sed" | "gsed" => in_place(rest),
         "find" => return find(rest, scope, ctx),
         "xargs" => return xargs(rest, scope, ctx),
-        _ => Vec::new(),
+        _ => targets::of(name, rest, &args),
     };
     let target = targets
         .iter()
@@ -216,78 +207,6 @@ fn reads_tree(
     Some(format!(
         "`{name}` would read {path}, which is protected, along with the rest; narrow it to the folder you need"
     ))
-}
-
-/// Where `cp`, `install`, `ditto`, `ln` and `rsync` write: `-t dir` or the
-/// last argument (a remote `host:path` is not this computer's).
-fn destination(rest: &[String]) -> Vec<String> {
-    if let Some(i) = rest.iter().position(|w| w == "-t") {
-        return rest.get(i + 1).cloned().into_iter().collect();
-    }
-    if let Some(dir) = rest
-        .iter()
-        .find_map(|w| w.strip_prefix("--target-directory="))
-    {
-        return vec![dir.to_string()];
-    }
-    let values = [
-        "-m",
-        "-o",
-        "-g",
-        "-e",
-        "-S",
-        "--exclude",
-        "--include",
-        "--filter",
-    ];
-    let args = without_values(rest, &values);
-    match args.last() {
-        Some(last) if args.len() >= 2 && !is_remote(last) => vec![last.clone()],
-        _ => Vec::new(),
-    }
-}
-
-fn is_remote(word: &str) -> bool {
-    word.split_once(':')
-        .is_some_and(|(host, _)| !host.is_empty() && !host.contains('/'))
-}
-
-/// Positional arguments, skipping the value of each option in `values`.
-fn without_values(rest: &[String], values: &[&str]) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut i = 0;
-    while let Some(w) = rest.get(i) {
-        i += 1;
-        if values.contains(&w.as_str()) {
-            i += 1;
-        } else if !w.starts_with('-') && !is_redirect(w) {
-            out.push(w.clone());
-        }
-    }
-    out
-}
-
-/// `sed -i` rewrites its file arguments; the first positional is the script
-/// unless `-e`/`-f` gave it.
-fn in_place(rest: &[String]) -> Vec<String> {
-    let edits = rest.iter().any(|w| {
-        w.starts_with("--in-place")
-            || (w.starts_with('-') && !w.starts_with("--") && w.contains('i'))
-    });
-    if !edits {
-        return Vec::new();
-    }
-    let scripted = rest
-        .iter()
-        .any(|w| w == "-e" || w == "-f" || w.starts_with("--expression"));
-    let files = without_values(rest, &["-e", "-f", "--expression", "--file"]);
-    let skip = usize::from(!scripted);
-    // `-i ''` on macOS leaves an empty suffix word behind.
-    files
-        .into_iter()
-        .skip(skip)
-        .filter(|w| !w.is_empty())
-        .collect()
 }
 
 /// What `find` deletes or hands to a destructive command: its start points.
@@ -364,7 +283,7 @@ fn simctl(rest: &[String]) -> Option<String> {
     })
 }
 
-fn is_redirect(word: &str) -> bool {
+pub(super) fn is_redirect(word: &str) -> bool {
     word.trim_start_matches(|c: char| c.is_ascii_digit() || c == '&')
         .starts_with('>')
 }

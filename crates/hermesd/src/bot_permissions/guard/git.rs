@@ -120,6 +120,16 @@ pub(super) fn git(
                 "send-pack" => (!ctx.allow_main)
                     .then(|| "use `git push`, which the guard can check".to_string()),
                 "config" => config(args),
+                "reset" | "clean" | "checkout" | "restore" if discards(&sub, args) => {
+                    let dir = scope
+                        .dirs
+                        .iter()
+                        .find(|d| !ctx.may_change(&super::paths::real(d)))?;
+                    Some(format!(
+                        "`git {sub}` would discard work in {}, which isn't yours; use your own worktree",
+                        dir.display()
+                    ))
+                }
                 _ => None,
             };
         }
@@ -135,6 +145,20 @@ pub(super) fn git(
         i = 0;
     }
     Some("this git alias expands too deeply to check".to_string())
+}
+
+/// `reset --hard`, `clean -f`, `checkout -- .`, `restore`: they throw away
+/// uncommitted work, like an `rm` of it.
+fn discards(sub: &str, args: &[String]) -> bool {
+    let has = |flags: &[&str]| args.iter().any(|a| flags.contains(&a.as_str()));
+    match sub {
+        "reset" => has(&["--hard", "--merge", "--keep"]),
+        "clean" => args.iter().any(|a| {
+            a == "--force" || (a.starts_with('-') && !a.starts_with("--") && a.contains('f'))
+        }),
+        "checkout" => has(&["--", ".", "-f", "--force", "-p", "--patch"]),
+        _ => !has(&["--staged"]) || has(&["--worktree", "-W"]),
+    }
 }
 
 const ALIAS: &str =
