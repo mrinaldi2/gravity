@@ -308,7 +308,8 @@ fn config_and_the_settings_it_names_are_rewritten_and_restored() {
     let f = fixture();
     let from = &f.plan.from;
     let config = format!(
-        "port = 7777\nclaude_args = [\"--settings\", \"{}/bot-settings.json\"]\n",
+        // Literal TOML strings: a Windows path's backslashes are not escapes.
+        "port = 7777\nclaude_args = ['--settings', '{}/bot-settings.json']\n",
         from.display()
     );
     let settings = format!(
@@ -328,7 +329,7 @@ fn config_and_the_settings_it_names_are_rewritten_and_restored() {
     let to = &f.plan.to;
     let config_now = std::fs::read_to_string(to.join("hermesd.toml")).expect("config");
     assert!(
-        config_now.contains(&format!("\"{}/bot-settings.json\"", to.display())),
+        config_now.contains(&format!("'{}/bot-settings.json'", to.display())),
         "{config_now}"
     );
     let settings_now = std::fs::read_to_string(to.join("bot-settings.json")).expect("settings");
