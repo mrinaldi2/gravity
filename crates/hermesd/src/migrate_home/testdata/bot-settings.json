@@ -1,0 +1,33 @@
+{
+  "autoMode": {
+    "environment": [
+      "$defaults",
+      "Trusted repos: the owner's repos, their git worktrees, and every bot's own workspace under ~/.gravity/projects/<project>/bots/<bot>/workspace.",
+      "Sensitive data locations: ~/.gravity/secrets (bot tokens), ~/.ssh, ~/.claude.json, the owner's personal files outside ~/Developer and ~/.gravity."
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Read(~/.gravity/secrets/**)",
+      "Edit(~/.gravity/secrets/**)",
+      "Bash(*.gravity/secrets*)",
+      "Edit(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Edit(~/.claude.json)",
+      "Edit(~/.gravity/gravityd.toml)",
+      "Edit(~/.gravity/bot-settings.json)",
+      "Edit(~/.gravity/projects/**/.claude/settings.json)",
+      "Edit(~/.gravity/projects/**/.claude/settings.local.json)",
+      "Edit(~/.gravity/projects/gravity/bots/devops/workspace/serve/serve.sh)",
+      "Edit(~/.gravity/projects/gravity/bots/devops/workspace/serve/publish.sh)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git push * --force*)",
+      "Bash(git push * +*)",
+      "Bash(*tailscale funnel *)",
+      "Bash(*Tailscale funnel *)",
+      "mcp__claude_ai_Higgsfield",
+      "mcp__claude_ai_Kaggle"
+    ]
+  }
+}
