@@ -163,6 +163,7 @@ name = "bus"
 version = "0.14.1"
 dependencies = [
  "chrono",
+ "hex",
  "pbjson",
  "pbjson-build",
  "pbjson-types",
@@ -171,6 +172,7 @@ dependencies = [
  "protox",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.20",
  "uuid",
 ]

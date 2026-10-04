@@ -10,6 +10,10 @@
 
 use std::collections::BTreeMap;
 
+/// The well-known types the generated messages use (Timestamp, Struct), so
+/// code mapping to and from them needs no dependency of its own.
+pub use pbjson_types;
+
 /// The board surface (H-017): entities now, requests and pushes in B4.
 #[allow(clippy::all, clippy::pedantic, missing_docs)]
 pub mod board {
