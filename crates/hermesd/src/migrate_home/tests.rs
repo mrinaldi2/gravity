@@ -1,5 +1,16 @@
+use std::cell::RefCell;
+
 use super::*;
 use crate::activity::{claude_project_key, transcript_dir};
+
+thread_local! {
+    /// The [`crash_point`] a test stops the run at.
+    pub(super) static CRASH_AT: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+fn crash_at(point: Option<&str>) {
+    CRASH_AT.with(|at| *at.borrow_mut() = point.map(str::to_string));
+}
 
 /// A pre-rename home under a temporary user home: a database with one bot,
 /// the daemon's old-named files, and a Claude Code transcript dir for the
@@ -243,8 +254,15 @@ fn a_junction_survives_shell_characters_in_the_path() {
     let link = root.path().join("old&home");
 
     steps::make_link(&target, &link).expect("junction");
-    assert!(link.symlink_metadata().expect("link").file_type().is_symlink());
-    assert_eq!(std::fs::read(link.join("bus.sqlite")).expect("through"), b"db");
+    assert!(link
+        .symlink_metadata()
+        .expect("link")
+        .file_type()
+        .is_symlink());
+    assert_eq!(
+        std::fs::read(link.join("bus.sqlite")).expect("through"),
+        b"db"
+    );
 
     steps::remove_link(&link).expect("remove junction");
     assert!(link.symlink_metadata().is_err());
@@ -252,4 +270,90 @@ fn a_junction_survives_shell_characters_in_the_path() {
     // A real directory is never taken for a link.
     assert!(steps::remove_link(&target).is_err());
     assert!(target.is_dir());
+}
+
+/// The migrated layout: everything under the new home, paths rewritten,
+/// transcripts under the new key, the old path a link.
+fn assert_migrated(f: &Fixture) {
+    let to = &f.plan.to;
+    let state = f.plan.state().expect("state").expect("found");
+    assert!(state.is_complete(), "{:?}", state.steps);
+    assert!(to.join("hermesd.toml").exists());
+    assert_eq!(
+        workspace_path(&to.join("bus.sqlite")),
+        f.new_ws.to_string_lossy()
+    );
+    assert!(is_migrated(to));
+    assert!(transcript_dir(&f.plan.user_home, &f.new_ws)
+        .join("s1.jsonl")
+        .exists());
+    assert!(f.plan.from.symlink_metadata().expect("link").is_symlink());
+}
+
+/// The layout before the run, as `rollback_restores_the_old_layout` checks.
+fn assert_rolled_back(f: &Fixture) {
+    let from = &f.plan.from;
+    assert!(from.symlink_metadata().expect("home").is_dir());
+    assert!(!f.plan.to.exists());
+    assert!(from.join("gravityd.toml").exists());
+    assert!(!from.join(STATE_FILE).exists());
+    assert_eq!(
+        workspace_path(&from.join("bus.sqlite")),
+        f.old_ws.to_string_lossy()
+    );
+    assert!(!is_migrated(from));
+    assert!(transcript_dir(&f.plan.user_home, &f.old_ws)
+        .join("s1.jsonl")
+        .exists());
+}
+
+/// Killed right after the home was renamed, before the state file (which
+/// moved with it) learned about it: resume must not see "no daemon home"
+/// and "destination not empty", and rollback must move it back.
+#[test]
+fn a_crash_between_the_move_and_the_state_save_resumes_or_rolls_back() {
+    for resume in [true, false] {
+        let f = fixture();
+        crash_at(Some("moved"));
+        let crashed = run(&f.plan, &mut Vec::new());
+        crash_at(None);
+        assert!(format!("{:#}", crashed.expect_err("crash")).contains("injected"));
+        assert!(f.plan.from.symlink_metadata().is_err());
+        let saved = State::load(&f.plan.to.join(STATE_FILE)).expect("saved state");
+        assert!(!saved.done(Step::Move));
+
+        if resume {
+            let mut out = Vec::new();
+            assert!(dry_run(&f.plan, &mut out).expect("dry run"));
+            run(&f.plan, &mut Vec::new()).expect("resume");
+            assert_migrated(&f);
+        } else {
+            rollback(&f.plan, &mut Vec::new()).expect("rollback");
+            assert_rolled_back(&f);
+        }
+    }
+}
+
+/// A run killed after any step's work but before that step was marked done
+/// finishes on the next run, and can be rolled back instead.
+#[test]
+fn a_crash_after_any_step_resumes_or_rolls_back() {
+    for step in Step::ALL {
+        for resume in [true, false] {
+            let f = fixture();
+            crash_at(Some(&format!("{step:?}")));
+            let crashed = run(&f.plan, &mut Vec::new());
+            crash_at(None);
+            assert!(crashed.is_err(), "{step:?}");
+            if resume {
+                run(&f.plan, &mut Vec::new())
+                    .unwrap_or_else(|e| panic!("resume after {step:?}: {e:#}"));
+                assert_migrated(&f);
+            } else {
+                rollback(&f.plan, &mut Vec::new())
+                    .unwrap_or_else(|e| panic!("rollback after {step:?}: {e:#}"));
+                assert_rolled_back(&f);
+            }
+        }
+    }
 }

@@ -106,11 +106,52 @@ impl Plan {
             && self.from.join("bus.sqlite").is_file()
     }
 
+    /// The run in progress, if any. A crash between moving the home and
+    /// saving the state leaves a log in the new home that does not know about
+    /// the move yet; that move is recorded here, so resume and rollback both
+    /// see it. Callers that change anything save the state themselves.
     fn state(&self) -> anyhow::Result<Option<State>> {
-        State::locate(&self.from, &self.to)
-            .map(|path| State::load(&path))
-            .transpose()
+        let Some(path) = State::locate(&self.from, &self.to) else {
+            return Ok(None);
+        };
+        let mut state = State::load(&path)?;
+        let moved_unrecorded = path.starts_with(&self.to)
+            && state.from == self.from
+            && !state.done(Step::Move)
+            && self.from.symlink_metadata().is_err();
+        if moved_unrecorded {
+            note_move(self, &mut state);
+        }
+        Ok(Some(state))
     }
+}
+
+/// Records a finished home move: the step, where the backup went with it,
+/// and the rename rollback undoes. The state file moved with the home, so
+/// this only happens once it has.
+fn note_move(plan: &Plan, state: &mut State) {
+    state.steps.push(Step::Move);
+    if let Some(backup) = state.backup.take() {
+        state.backup = backup
+            .strip_prefix(&plan.from)
+            .map(|rest| plan.to.join(rest))
+            .ok()
+            .or(Some(backup));
+    }
+    state.actions.push(Action::Rename {
+        from: plan.from.clone(),
+        to: plan.to.clone(),
+    });
+}
+
+/// Where a test makes the run stop dead, as if the process were killed:
+/// nothing after it runs and nothing more is saved.
+fn crash_point(_at: &str) -> anyhow::Result<()> {
+    #[cfg(test)]
+    if tests::CRASH_AT.with(|at| at.borrow().as_deref() == Some(_at)) {
+        bail!("injected crash at {_at}");
+    }
+    Ok(())
 }
 
 /// The migration the default home still needs, if any: a real `~/.gravity`
@@ -281,6 +322,7 @@ pub fn run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<State> {
         }
         writeln!(out, "{step:?}...")?;
         run_step(plan, &mut state, step).with_context(|| format!("step {step:?}"))?;
+        crash_point(&format!("{step:?}"))?;
         state.finish_step(step)?;
     }
     state.completed_at = Some(chrono::Utc::now().to_rfc3339());
@@ -307,22 +349,13 @@ fn run_step(plan: &Plan, state: &mut State, step: Step) -> anyhow::Result<()> {
                 std::fs::create_dir_all(parent)?;
             }
             // The state file moves with the home; record the step's action
-            // only once it has.
+            // only once it has. A crash in between is caught by `Plan::state`.
             steps::move_home(&plan.from, &plan.to).with_context(|| {
                 format!("moving {} to {}", plan.from.display(), plan.to.display())
             })?;
-            state.steps.push(Step::Move);
-            if let Some(backup) = state.backup.take() {
-                state.backup = backup
-                    .strip_prefix(&plan.from)
-                    .map(|rest| plan.to.join(rest))
-                    .ok()
-                    .or(Some(backup));
-            }
-            state.record(Action::Rename {
-                from: plan.from.clone(),
-                to: plan.to.clone(),
-            })?;
+            crash_point("moved")?;
+            note_move(plan, state);
+            state.save()?;
         }
         Step::RenameFiles => {
             for (old, new) in steps::renamed_files() {
@@ -335,11 +368,19 @@ fn run_step(plan: &Plan, state: &mut State, step: Step) -> anyhow::Result<()> {
         Step::Database => {
             let db = plan.to.join("bus.sqlite");
             let pairs = plan.path_pairs();
+            // Logged before it runs: the reverse rewrite is harmless if this
+            // never committed, and a crash right after it is still undone.
+            if !state
+                .actions
+                .iter()
+                .any(|a| matches!(a, Action::Database { .. }))
+            {
+                state.record(Action::Database {
+                    from: pairs[0].0.clone(),
+                    to: pairs[0].1.clone(),
+                })?;
+            }
             sql::apply(&db, &pairs, true)?;
-            state.record(Action::Database {
-                from: pairs[0].0.clone(),
-                to: pairs[0].1.clone(),
-            })?;
         }
         Step::Transcripts => {
             steps::move_transcripts(plan, state)?;
