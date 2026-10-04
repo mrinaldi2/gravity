@@ -189,6 +189,11 @@ pub fn provision_bot(cfg: &Config, spec: &BotProvision<'_>) -> anyhow::Result<Bo
     Ok(BotDirs { root, workspace })
 }
 
+/// Keeps bots out of the daemon's secrets wherever the home lives.
+pub(crate) fn secrets_deny_rule() -> String {
+    format!("Read(~/{}/secrets/**)", crate::brand::HOME_DIR_NAME)
+}
+
 /// (Re)write the bot's `mcp.json`. Called at creation and again on every start,
 /// so a change to the daemon's port reaches existing bots without
 /// re-provisioning — the same reason `write_hook_settings` runs each start. The
@@ -200,15 +205,12 @@ pub fn write_mcp_config(
     bot_token_env: &str,
     browser: Option<&serde_json::Value>,
 ) -> anyhow::Result<()> {
-    let mut mcp = serde_json::json!({
-        "mcpServers": {
-            "gravity-bus": {
-                "type": "http",
-                "url": format!("http://127.0.0.1:{daemon_port}/mcp"),
-                "headers": {
-                    "Authorization": format!("Bearer ${{{bot_token_env}}}")
-                }
-            }
+    let mut mcp = serde_json::json!({ "mcpServers": {} });
+    mcp["mcpServers"][crate::brand::ACTIVE_MCP_SERVER] = serde_json::json!({
+        "type": "http",
+        "url": format!("http://127.0.0.1:{daemon_port}/mcp"),
+        "headers": {
+            "Authorization": format!("Bearer ${{{bot_token_env}}}")
         }
     });
     // The bot's own browser, when one can be started; see `crate::browser`.

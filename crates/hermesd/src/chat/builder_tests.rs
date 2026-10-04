@@ -172,7 +172,7 @@ fn the_daemon_and_routines_are_not_the_owner() {
         end_of_turn(),
         peer("u2", "[routine \"nightly\" #4 · run_id r-1] /report"),
     ]);
-    assert!(matches!(&builder.turns[0].trigger, Trigger::Bus { from, .. } if from == "Gravity"));
+    assert!(matches!(&builder.turns[0].trigger, Trigger::Bus { from, .. } if from == "You"));
     assert!(
         matches!(&builder.turns[1].trigger, Trigger::Routine { name, run_id, .. }
         if name == "nightly" && run_id.as_deref() == Some("r-1"))

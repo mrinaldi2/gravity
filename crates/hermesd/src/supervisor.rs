@@ -36,7 +36,7 @@ mod restart;
 mod session_events;
 mod termio;
 
-pub const BOT_TOKEN_ENV: &str = "GRAVITY_TOKEN";
+pub use crate::brand::BOT_TOKEN_ENV;
 /// Caps how large a bot's conversation grows before Claude Code compacts it.
 /// Set from the daemon rather than the workspace settings so a bot editing its
 /// own `.claude` cannot opt itself into an unbounded (and costly) window.

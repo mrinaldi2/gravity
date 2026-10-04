@@ -173,9 +173,13 @@ pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
 /// client.
 const DEFAULT_PORT: u16 = 49777;
 
-/// Root of the daemon's state, mirroring `hermesd`'s own resolution.
+/// Root of the daemon's state, mirroring `hermesd`'s own resolution in
+/// `crates/hermesd/src/brand.rs`: `THEHERMES_HOME`, then `GRAVITY_HOME`.
 pub(crate) fn daemon_home() -> Result<PathBuf, String> {
-    if let Some(home) = std::env::var_os("GRAVITY_HOME") {
+    let set = ["THEHERMES_HOME", "GRAVITY_HOME"]
+        .iter()
+        .find_map(std::env::var_os);
+    if let Some(home) = set {
         return Ok(PathBuf::from(home));
     }
     Ok(user_home()?.join(".gravity"))

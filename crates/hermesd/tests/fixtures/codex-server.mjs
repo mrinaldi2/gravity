@@ -2,7 +2,7 @@ import { appendFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { listen, terminal } from "./codex-websocket.mjs";
 
-const log = process.env.GRAVITY_TEST_LOG ?? "../codex-fixture-rpc.jsonl";
+const log = process.env.THEHERMES_TEST_LOG ?? "../codex-fixture-rpc.jsonl";
 let send = (value) => { process.stdout.write(`${JSON.stringify(value)}\n`); };
 const notify = (method, params) => { send({ method, params }); };
 let active = false;
@@ -61,7 +61,7 @@ function receive(request, respond) {
 
 const args = process.argv.slice(2);
 if (args.includes("--remote")) {
-  await terminal(args[args.indexOf("--remote") + 1], process.env.GRAVITY_CODEX_REMOTE_TOKEN);
+  await terminal(args[args.indexOf("--remote") + 1], process.env.THEHERMES_CODEX_REMOTE_TOKEN);
 } else if (args.includes("--ws-auth")) {
   send = listen(args[args.indexOf("--listen") + 1], args[args.indexOf("--ws-token-sha256") + 1], receive);
 } else {

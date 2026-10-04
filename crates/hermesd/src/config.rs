@@ -209,13 +209,13 @@ impl Default for Config {
 
 fn default_home() -> PathBuf {
     resolve_home(
-        std::env::var_os("GRAVITY_HOME").map(PathBuf::from),
+        crate::brand::env_var_os("HOME").map(PathBuf::from),
         dirs_home(),
     )
 }
 
 fn resolve_home(gravity_home: Option<PathBuf>, user_home: PathBuf) -> PathBuf {
-    gravity_home.unwrap_or_else(|| user_home.join(".gravity"))
+    gravity_home.unwrap_or_else(|| user_home.join(crate::brand::HOME_DIR_NAME))
 }
 
 fn dirs_home() -> PathBuf {

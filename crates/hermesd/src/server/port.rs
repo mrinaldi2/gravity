@@ -169,7 +169,7 @@ async fn bind_with_grace(
     anyhow::bail!("could not reserve a fallback port after {PORT_NEGOTIATION_ATTEMPTS} attempts")
 }
 
-/// Asks whatever owns `port` on loopback whether it is a Gravity-family daemon,
+/// Asks whatever owns `port` on loopback whether it is one of our daemons,
 /// returning the version it reports. Hand-rolled because this runs before the
 /// app exists and the daemon has no HTTP client of its own.
 pub(crate) fn probe_health(port: u16, timeout: Duration) -> Option<String> {

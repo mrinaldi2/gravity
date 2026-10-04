@@ -21,7 +21,7 @@ impl Supervisor {
         self.set_state(bot_id, BotState::Crashed, &reason);
         if state != BotState::Crashed {
             if let Some(term) = self.term(bot_id) {
-                term.push(format!("\r\n[Gravity] {reason}\r\n").into_bytes());
+                term.push(format!("\r\n[{}] {reason}\r\n", crate::brand::SHORT_NAME).into_bytes());
             }
             self.inner
                 .events

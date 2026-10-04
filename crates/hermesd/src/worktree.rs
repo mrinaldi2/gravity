@@ -72,7 +72,11 @@ pub fn provision(spec: &WorktreeSpec) -> anyhow::Result<PathBuf> {
     git(&spec.repo, &["rev-parse", "--verify", &spec.base_ref])
         .with_context(|| format!("base ref '{}' not found", spec.base_ref))?;
 
-    let branch = format!("gravity/{}", sanitize_branch(&spec.bot_name));
+    let branch = format!(
+        "{}/{}",
+        crate::brand::ON_DISK_SLUG,
+        sanitize_branch(&spec.bot_name)
+    );
     if let Some(parent) = spec.dest.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -126,10 +130,10 @@ pub fn read_meta(worktree: &Path) -> anyhow::Result<WorktreeMeta> {
 }
 
 /// Remove a worktree only when it is fully clean and was provisioned by
-/// Gravity (ownership metadata present). Never force-removes.
+/// the daemon (ownership metadata present). Never force-removes.
 pub fn cleanup(worktree: &Path) -> anyhow::Result<CleanupOutcome> {
     let meta =
-        read_meta(worktree).context("refusing cleanup: not a Gravity-provisioned worktree")?;
+        read_meta(worktree).context("refusing cleanup: not a daemon-provisioned worktree")?;
 
     let status = git(worktree, &["status", "--porcelain"])?;
     // Our metadata file itself is expectedly untracked.

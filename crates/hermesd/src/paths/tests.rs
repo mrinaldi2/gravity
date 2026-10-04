@@ -17,7 +17,7 @@ fn spec<'a>(name: &'a str, instructions: &'a str) -> BotProvision<'a> {
         description: "reviews code",
         instructions,
         daemon_port: 7777,
-        bot_token_env: "GRAVITY_TOKEN",
+        bot_token_env: crate::brand::BOT_TOKEN_ENV,
         max_bots_per_project: 12,
         max_workers_per_project: 4,
         temporary: false,
@@ -105,4 +105,19 @@ fn regeneration_is_idempotent() {
         .modified()
         .expect("mtime");
     assert_eq!(before, after, "unchanged content should not rewrite");
+}
+
+#[test]
+fn system_md_speaks_of_hermes_and_the_registered_bus() {
+    let mut with_browser = spec("Reviewer", "");
+    with_browser.own_browser = true;
+    let md = prompt::system_md(&with_browser);
+    assert!(md.contains("## How to use the Hermes bus"));
+    assert!(md.contains(&format!(
+        "Use the `{}` MCP tools",
+        crate::brand::ACTIVE_MCP_SERVER
+    )));
+    assert!(md.contains("on Hermes there is no"));
+    assert!(md.contains("the owner can watch it from Hermes."));
+    assert!(!md.contains("Gravity"));
 }

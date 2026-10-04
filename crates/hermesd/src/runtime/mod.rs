@@ -63,7 +63,7 @@ pub enum SessionEvent {
         tool: String,
         input: serde_json::Value,
     },
-    /// A permission request stopped waiting without Gravity's answer, e.g.
+    /// A permission request stopped waiting without the daemon's answer, e.g.
     /// it was answered in the runtime's own terminal.
     PermissionGone {
         key: u64,

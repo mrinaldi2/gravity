@@ -41,7 +41,11 @@ pub fn start(tx: mpsc::UnboundedSender<SessionEvent>) -> anyhow::Result<(MsgSock
 fn spawn_inbox(
     tx: mpsc::UnboundedSender<SessionEvent>,
 ) -> anyhow::Result<(MsgSocket, tokio::task::JoinHandle<()>)> {
-    let path = format!(r"\\.\pipe\gravity-double-{}", uuid::Uuid::new_v4());
+    let path = format!(
+        r"\\.\pipe\{}-double-{}",
+        crate::brand::SLUG,
+        uuid::Uuid::new_v4()
+    );
     let token = uuid::Uuid::new_v4().to_string();
     let server = ServerOptions::new()
         .first_pipe_instance(true)

@@ -34,7 +34,7 @@ pub fn salvage_branch(worker_name: &str, bot_id: &str) -> String {
         .collect::<String>()
         .to_lowercase();
     let short: String = bot_id.chars().take(8).collect();
-    format!("gravity/{name}-{short}")
+    format!("{}/{name}-{short}", crate::brand::ON_DISK_SLUG)
 }
 
 /// What came of saving work a worker left unpushed.
@@ -110,10 +110,14 @@ fn try_salvage(checkout: &Path, worker_name: &str, bot_id: &str) -> anyhow::Resu
 fn as_worker(checkout: &Path, worker_name: &str, args: &[&str]) -> anyhow::Result<()> {
     let configured = git(checkout, &["config", "user.email"], LOCAL_TIMEOUT)
         .is_ok_and(|email| !email.trim().is_empty());
-    let name = format!("user.name={worker_name} (Gravity worker)");
+    let name = format!(
+        "user.name={worker_name} {}",
+        crate::brand::WORKER_GIT_SUFFIX
+    );
+    let email = format!("user.email={}", crate::brand::WORKER_GIT_EMAIL);
     let mut full = Vec::new();
     if !configured {
-        full.extend(["-c", &name, "-c", "user.email=worker@gravity.invalid"]);
+        full.extend(["-c", &name, "-c", &email]);
     }
     full.extend_from_slice(args);
     git(checkout, &full, LOCAL_TIMEOUT).map(|_| ())

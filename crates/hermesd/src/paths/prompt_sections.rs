@@ -108,7 +108,8 @@ pub(super) fn browser(own: bool, owners_chrome: bool) -> String {
         "You have a browser of your own: the `playwright` tools (`browser_navigate`, \
          `browser_snapshot`, `browser_click`, `browser_tabs`, and mouse tools that act at \
          coordinates on a screenshot). It is private to you, keeps its logins between \
-         sessions, and the owner can watch it from Gravity.{chrome}\n\n"
+         sessions, and the owner can watch it from {short}.{chrome}\n\n",
+        short = crate::brand::SHORT_NAME
     )
 }
 

@@ -1,4 +1,4 @@
-//! Implementations of the `gravity-bus` MCP tools.
+//! Implementations of the bus's MCP tools (`brand::ACTIVE_MCP_SERVER`).
 
 use std::sync::Arc;
 

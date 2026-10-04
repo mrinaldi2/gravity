@@ -132,7 +132,7 @@ pub enum Internal {
         tool: String,
         input: serde_json::Value,
     },
-    /// That request no longer waits on Gravity's answer.
+    /// That request no longer waits on the daemon's answer.
     RuntimePermissionGone { bot_id: String, key: u64 },
 }
 

@@ -1,11 +1,12 @@
 //! How a tool call reads in the chat: a human title for the step, or, for
-//! Gravity's own bus tools, the message, result or decision it really was.
+//! the daemon's own bus tools, the message, result or decision it really was.
 
 use serde_json::Value;
 
 use super::model::FileRef;
 
-/// The MCP server name Gravity registers its bus under.
+/// The MCP server name the bus is registered under; R1-D3 routes this
+/// through `brand` and accepts both names.
 const BUS_PREFIX: &str = "mcp__gravity-bus__";
 
 /// Bus tools that are housekeeping, not something the owner wants to read.

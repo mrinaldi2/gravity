@@ -37,7 +37,7 @@ impl Worker {
                     | "mcpServer/elicitation/request"
             )
         {
-            return self.write(&json!({ "id": id, "error": { "code": -32601, "message": "Gravity does not support this server request" } }));
+            return self.write(&json!({ "id": id, "error": { "code": -32601, "message": format!("{} does not support this server request", crate::brand::DISPLAY_NAME) } }));
         }
         self.prompt_serial += 1;
         let number = self.prompt_serial;

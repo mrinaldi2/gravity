@@ -144,16 +144,17 @@ impl Worker {
         }
     }
     fn initialize(&mut self) -> anyhow::Result<()> {
-        self.rpc("initialize", json!({ "clientInfo": { "name": "gravity", "title": "Gravity", "version": env!("CARGO_PKG_VERSION") }, "capabilities": { "experimentalApi": true } }))?;
+        self.rpc("initialize", json!({ "clientInfo": { "name": crate::brand::SLUG, "title": crate::brand::DISPLAY_NAME, "version": env!("CARGO_PKG_VERSION") }, "capabilities": { "experimentalApi": true } }))?;
         self.write(&json!({ "method": "initialized", "params": {} }))?;
         let codex = self.spec.codex.as_ref().context("missing Codex settings")?;
         let mut roots = vec![self.spec.workspace.display().to_string()];
         if let Some(artifacts) = &codex.artifacts {
             roots.push(artifacts.display().to_string());
         }
-        let mut config = json!({
-            "mcp_servers.gravity-bus": { "url": format!("http://127.0.0.1:{}/mcp", codex.port), "bearer_token_env_var": "GRAVITY_TOKEN" },
-            "sandbox_workspace_write.writable_roots": roots
+        let mut config = json!({ "sandbox_workspace_write.writable_roots": roots });
+        config[format!("mcp_servers.{}", crate::brand::ACTIVE_MCP_SERVER)] = json!({
+            "url": format!("http://127.0.0.1:{}/mcp", codex.port),
+            "bearer_token_env_var": crate::brand::BOT_TOKEN_ENV,
         });
         if let Some(browser) = &codex.browser {
             config[format!("mcp_servers.{}", crate::browser::setup::SERVER)] = browser.clone();

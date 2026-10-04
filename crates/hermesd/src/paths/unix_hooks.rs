@@ -82,7 +82,7 @@ pub fn settings(daemon_port: u16, bot_token_env: &str) -> serde_json::Value {
             "allow": [],
             "deny": [
                 "Read(../**)",
-                "Read(~/.gravity/secrets/**)",
+                crate::paths::secrets_deny_rule(),
                 "Bash(rm -rf /*)"
             ]
         },

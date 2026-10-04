@@ -2,7 +2,7 @@
 use std::path::Path;
 
 pub fn settings(workspace: &Path, port: u16, token_env: &str) -> anyhow::Result<serde_json::Value> {
-    let script = workspace.join(".claude/gravity-hook.ps1");
+    let script = workspace.join(format!(".claude/{}-hook.ps1", crate::brand::ON_DISK_SLUG));
     let body = format!(
         r#"param([string]$Event)
 $ErrorActionPreference = 'Stop'
@@ -55,7 +55,7 @@ exit 0
     }
     Ok(serde_json::json!({
         "crossSessionInbound": "accept",
-        "permissions": { "allow": [], "deny": ["Read(../**)", "Read(~/.gravity/secrets/**)", "Bash(rm -rf /*)"] },
+        "permissions": { "allow": [], "deny": ["Read(../**)", crate::paths::secrets_deny_rule(), "Bash(rm -rf /*)"] },
         "hooks": hooks
     }))
 }

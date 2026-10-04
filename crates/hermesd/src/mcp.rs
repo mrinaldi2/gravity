@@ -119,7 +119,7 @@ pub async fn mcp_handler(
         "initialize" => Ok(json!({
             "protocolVersion": "2024-11-05",
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "gravity-bus", "version": crate::app::DAEMON_VERSION }
+            "serverInfo": { "name": crate::brand::ACTIVE_MCP_SERVER, "version": crate::app::DAEMON_VERSION }
         })),
         "ping" => Ok(json!({})),
         "tools/list" => Ok(tool_list()),

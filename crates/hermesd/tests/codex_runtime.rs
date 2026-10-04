@@ -27,7 +27,7 @@ fn spec(root: &Path) -> BotSpec {
         env: vec![
             ("GRAVITY_TOKEN".into(), "test-token".into()),
             (
-                "GRAVITY_TEST_LOG".into(),
+                "THEHERMES_TEST_LOG".into(),
                 root.join("rpc.jsonl").display().to_string(),
             ),
         ],

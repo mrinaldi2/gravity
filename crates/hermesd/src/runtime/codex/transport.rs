@@ -1,4 +1,4 @@
-//! A private, authenticated App Server shared by Gravity and the native TUI.
+//! A private, authenticated App Server shared by Hermes and the native TUI.
 use super::Wire;
 use anyhow::Context;
 use futures::{SinkExt, StreamExt};

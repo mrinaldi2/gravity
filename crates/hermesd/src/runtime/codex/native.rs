@@ -1,4 +1,4 @@
-//! The official Codex terminal UI and Gravity share one private App Server.
+//! The official Codex terminal UI and Hermes share one private App Server.
 use super::{start_server, transport::Remote, CodexAdapter};
 use crate::runtime::{
     pty::PtyAdapter, BotSpec, Capabilities, RuntimeAdapter, RuntimeSession, SessionEvent,
@@ -38,13 +38,13 @@ impl RuntimeAdapter for NativeCodexAdapter {
             "--remote".to_string(),
             remote.address,
             "--remote-auth-token-env".to_string(),
-            "GRAVITY_CODEX_REMOTE_TOKEN".to_string(),
+            crate::brand::env_name("CODEX_REMOTE_TOKEN"),
             "--no-alt-screen".to_string(),
             thread.trim().to_string(),
         ]);
         terminal
             .env
-            .push(("GRAVITY_CODEX_REMOTE_TOKEN".to_string(), remote.token));
+            .push((crate::brand::env_name("CODEX_REMOTE_TOKEN"), remote.token));
         let ui = match PtyAdapter.start(&terminal) {
             Ok(ui) => ui,
             Err(error) => {

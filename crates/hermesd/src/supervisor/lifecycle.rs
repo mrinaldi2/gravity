@@ -130,7 +130,7 @@ impl Supervisor {
             claude_args.extend(crate::paths::artifacts_allow_rules(artifacts));
         }
 
-        let mut env = vec![(BOT_TOKEN_ENV.to_string(), token)];
+        let mut env = crate::brand::bot_token_vars(token);
         if let Some(window) = self.inner.auto_compact.effective(&self.inner.cfg) {
             env.push((AUTO_COMPACT_WINDOW_ENV.to_string(), window.to_string()));
         }
