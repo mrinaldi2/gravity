@@ -29,7 +29,7 @@ export function deletionBody(project: Project, botCount: number): string {
   return `Delete “${project.name}”? ${bots} along with their conversations. Workspaces on disk are kept.`;
 }
 
-/** Project settings: the name, what it holds, and deletion. */
+/** The project window's Settings tab: the name, what it holds, and deletion. */
 export default function ProjectView(props: ProjectViewProps): ReactElement {
   const { client, project, bots, connected, canControl } = props;
   const { onRename, onSetLead, onSetRepo, onDelete, onToast } = props;
@@ -51,15 +51,6 @@ export default function ProjectView(props: ProjectViewProps): ReactElement {
 
   return (
     <div className="project-view tab-pane-scroll">
-      <div className="view-header" data-tauri-drag-region="deep">
-        <div className="view-header-main">
-          <h2 className="view-title">{project.name}</h2>
-          <span className="state-chip">
-            {bots.length} {bots.length === 1 ? "bot" : "bots"}
-          </span>
-        </div>
-      </div>
-
       <div className="panel">
         <h3 className="panel-title">Project</h3>
 

@@ -1,0 +1,303 @@
+/* The Board tab (H-018 §3, §5): 264px columns, sticky headers, cards on --bg-raised. */
+
+.board-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Filter bar: one row above the board. */
+.board-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.board-filter-group {
+  display: flex;
+  gap: 4px;
+}
+
+.board-filter-button,
+.board-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  font: inherit;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.board-filter-button:hover,
+.board-filter-chip:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.board-filter-on {
+  color: var(--text-strong);
+  background: var(--bg-active);
+  border-color: var(--accent);
+}
+
+.board-filter-button:focus-visible,
+.board-filter-chip:focus-visible,
+.board-filter-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.board-filter-menu {
+  position: relative;
+}
+
+.board-filter-popup {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  margin: 0;
+  padding: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
+.board-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.board-filter-option:hover {
+  background: var(--bg-hover);
+}
+
+.board-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+}
+
+.board-filter-summary {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+.board-filter-clear {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Empty board. */
+.board-empty {
+  margin: 16px 16px 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.board-empty h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: var(--text-strong);
+}
+
+.board-empty p {
+  margin: 0;
+}
+
+/* Columns scroll sideways; each column scrolls its own cards under a sticky header. */
+.board-columns {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  padding: 12px 16px 16px;
+  overflow-x: auto;
+}
+
+.board-column {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 264px;
+  width: 264px;
+  min-height: 0;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: opacity 150ms ease-out;
+}
+
+.board-column-over {
+  border-top: 2px solid var(--red);
+}
+
+.board-column-header {
+  position: sticky;
+  top: 0;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.board-column-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.board-column-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.board-column-count {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.board-wip {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.board-wip-full {
+  color: var(--amber);
+}
+
+.board-wip-over {
+  color: var(--red);
+}
+
+.board-column-collapse {
+  display: inline-flex;
+  margin-left: auto;
+  padding: 2px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.board-column-collapse:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.board-column-loads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.board-column-load {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.board-column-chip {
+  margin: 6px 0 0;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-active);
+  border-radius: 6px;
+}
+
+.board-column-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 48px;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+/* Drag feedback: allowed columns get a dashed accent outline, refused ones dim. */
+.board-dragging .board-column-allowed {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.board-dragging .board-column-refused {
+  opacity: 0.5;
+}
+
+/* Inbox as a collapsed 48px rail. */
+.board-rail {
+  flex: 0 0 48px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.board-rail-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 12px 0;
+  font: inherit;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.board-rail-button:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.board-rail-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.board-rail-name {
+  writing-mode: vertical-rl;
+  font-size: 12px;
+}

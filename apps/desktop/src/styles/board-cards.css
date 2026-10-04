@@ -1,0 +1,273 @@
+/* Board cards and the move popovers (H-018 §3.2, §3.3). */
+
+/* Cards. */
+.board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.board-card[draggable="true"] {
+  cursor: grab;
+}
+
+.board-card:hover {
+  background: var(--bg-hover);
+}
+
+.board-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.board-card-blocked {
+  border-left: 3px solid var(--red);
+}
+
+.board-card-dragging {
+  opacity: 0.5;
+}
+
+.board-card-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.board-card-type {
+  white-space: nowrap;
+}
+
+.board-card-sep {
+  color: var(--text-faint);
+}
+
+.board-card-id {
+  font-family: var(--mono);
+  color: var(--text-dim);
+}
+
+.board-card-priority {
+  margin-left: auto;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.board-card-p0 {
+  color: var(--red);
+}
+
+.board-card-p1 {
+  color: var(--amber);
+}
+
+.board-card-more {
+  display: inline-flex;
+  margin-left: 4px;
+  padding: 1px 3px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.board-card-priority + .board-card-more {
+  margin-left: 4px;
+}
+
+.board-card-id + .board-card-more {
+  margin-left: auto;
+}
+
+.board-card-more:hover {
+  color: var(--text);
+  background: var(--bg-active);
+}
+
+.board-card-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-strong);
+}
+
+.board-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.board-chip {
+  padding: 1px 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg-active);
+  border-radius: 4px;
+}
+
+.board-card-blocked-line {
+  color: var(--red);
+}
+
+.board-card-override {
+  color: var(--amber);
+}
+
+.board-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.board-card-assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text);
+}
+
+.board-card-assignee-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-card-unassigned {
+  color: var(--text-faint);
+}
+
+.board-card-stale {
+  margin-left: auto;
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+/* Popovers: Move to…, and the refusal that lists every unmet guard. */
+.board-popover {
+  position: fixed;
+  min-width: 240px;
+  max-width: 360px;
+  padding: 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  font-size: 13px;
+}
+
+.board-popover-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.board-popover-note {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.board-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.board-move-item {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: baseline;
+  gap: 0 6px;
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.board-move-item:hover,
+.board-move-item:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+
+.board-move-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.board-move-mark {
+  color: var(--green);
+}
+
+.board-move-refused {
+  color: var(--text-dim);
+}
+
+.board-move-refused .board-move-mark {
+  color: var(--red);
+}
+
+.board-move-reason {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.board-refusal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-refusal-list li {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 6px;
+}
+
+.board-refusal-mark {
+  color: var(--red);
+}
+
+.board-refusal-text {
+  display: block;
+  color: var(--text);
+}
+
+.board-refusal-fix {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.board-move-dialog .field input {
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-column {
+    transition: none;
+  }
+}

@@ -1,3 +1,4 @@
+import type { BoardApi } from "./board";
 import type { ConnectionStatus, Endpoint } from "./connection";
 import type { Grant } from "./entities";
 import type { PushOf, ReplyOf, ServerPushType, ServerReplyType } from "./messages";
@@ -13,7 +14,7 @@ export interface AttachResult {
  * The control-plane surface the UI depends on. `DaemonClient` is the real
  * implementation; tests supply their own, so no component imports a socket.
  */
-export interface DaemonApi {
+export interface DaemonApi extends BoardApi {
   /** Changes whenever the configured daemon endpoint changes. */
   readonly connectionGeneration: number;
   readonly status: ConnectionStatus;
@@ -21,6 +22,8 @@ export interface DaemonApi {
   readonly serverVersion: string;
   readonly grants: readonly Grant[];
   readonly deviceId: string | null;
+  /** Binary encodings the daemon accepts (`hello_ok.encodings`); "proto" serves the board. */
+  readonly encodings: readonly string[];
   start(): void;
   setEndpoint(endpoint: Endpoint): void;
   getEndpoint(): Endpoint;

@@ -1,4 +1,6 @@
 import type { AttachResult, DaemonApi } from "./api";
+import type { BoardCall, BoardReply } from "./board";
+import { BoardChannel, PROTO_ENCODING } from "./board";
 import { CLIENT_ID, DaemonError, PROTOCOL_VERSION } from "./connection";
 import type { ConnectionStatus, Endpoint } from "./connection";
 import type { Grant } from "./entities";
@@ -15,6 +17,7 @@ import { dispatchPush, emptyHandlers } from "./push";
 import type { ClientRequestBody, FireBody, RequestBody } from "./requests";
 import { isReply, parseServerMessage, replyIs } from "./wire";
 import { CONTRACTS } from "./contracts";
+import type { BoardEvent } from "./gen/hermes/board/v1/requests_pb";
 
 interface PendingRequest {
   readonly resolve: (reply: ServerReply) => void;
@@ -46,6 +49,7 @@ function isHandshakeVerdict(status: ConnectionStatus): boolean {
  * - typed push subscription via `on(...)`
  * - automatic reconnect with exponential backoff
  * - per-bot `after_seq` cursor tracking for terminal replay
+ * - the board surface: protobuf envelopes in binary frames on the same socket
  */
 export class DaemonClient implements DaemonApi {
   private endpoint: Endpoint;
@@ -56,6 +60,7 @@ export class DaemonClient implements DaemonApi {
   private backoffMs = MIN_BACKOFF_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly pending = new Map<string, PendingRequest>();
+  private readonly boardChannel = new BoardChannel();
   private readonly cursors = new Map<string, number>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
   private readonly handlers: PushHandlerSets = emptyHandlers();
@@ -68,6 +73,7 @@ export class DaemonClient implements DaemonApi {
   grants: readonly Grant[] = [];
   /** Device id when authenticated with a device token, null for the owner token. */
   deviceId: string | null = null;
+  encodings: readonly string[] = [];
 
   constructor(endpoint: Endpoint, getToken: () => Promise<string>) {
     this.endpoint = endpoint;
@@ -155,6 +161,23 @@ export class DaemonClient implements DaemonApi {
     ws.send(JSON.stringify({ ...body, req_id: this.newReqId() }));
   }
 
+  board(call: BoardCall): Promise<BoardReply> {
+    const ws = this.ws;
+    if (this.status !== "connected" || ws === null || ws.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new DaemonError("disconnected", "not connected to daemon"));
+    }
+    if (!this.encodings.includes(PROTO_ENCODING)) {
+      return Promise.reject(
+        new DaemonError("unsupported", "the board needs a newer Hermes service"),
+      );
+    }
+    return this.boardChannel.send(ws, BigInt(this.newReqId()), call);
+  }
+
+  onBoardEvent(handler: (event: BoardEvent) => void): () => void {
+    return this.boardChannel.on(handler);
+  }
+
   /**
    * Attaches to a bot terminal, resuming from the last seen sequence number
    * when the caller still has the matching screen (`resume`). Callers with a
@@ -212,12 +235,15 @@ export class DaemonClient implements DaemonApi {
       return;
     }
     this.ws = ws;
+    ws.binaryType = "arraybuffer";
     ws.addEventListener("open", () => {
       void this.handshake(ws);
     });
     ws.addEventListener("message", (event: MessageEvent) => {
       if (typeof event.data === "string") {
         this.handleFrame(event.data);
+      } else if (event.data instanceof ArrayBuffer) {
+        this.boardChannel.receive(new Uint8Array(event.data));
       }
     });
     ws.addEventListener("close", () => {
@@ -267,6 +293,7 @@ export class DaemonClient implements DaemonApi {
       this.serverVersion = reply.server_version;
       this.grants = reply.grants;
       this.deviceId = reply.device_id;
+      this.encodings = reply.encodings ?? [];
       this.backoffMs = MIN_BACKOFF_MS;
       this.setStatus("connected");
     } catch (error) {
@@ -336,6 +363,7 @@ export class DaemonClient implements DaemonApi {
   private failPending(error: Error): void {
     const entries = [...this.pending.values()];
     this.pending.clear();
+    this.boardChannel.failAll(error);
     for (const entry of entries) {
       entry.reject(error);
     }
