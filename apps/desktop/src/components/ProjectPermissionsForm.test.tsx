@@ -59,6 +59,7 @@ describe("ProjectPermissionsForm", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent(
       /container, a VM or a separate user account/,
     );
+    expect(screen.getByRole("dialog")).toHaveTextContent(/not the script files/);
   });
 
   it("lets a connection without approve see the profile but not change it", () => {
@@ -113,6 +114,30 @@ describe("BotPermissionExtras", () => {
       type: "set_bot_permission_extras",
       bot_id: "b1",
       extras: ["publish", "daemon_restart"],
+    });
+  });
+
+  it("offers release_main, the only way a bot reaches main", async () => {
+    const user = userEvent.setup();
+    const daemon = owner().onRequest("set_bot_permission_extras", () => ({
+      type: "bot",
+      req_id: "1",
+      bot: fx.bot({ permission_extras: ["release_main"] }),
+    }));
+    render(
+      <BotPermissionExtras
+        client={daemon}
+        bot={fx.bot()}
+        connected
+        onBotUpdated={() => {}}
+        onToast={toastSpy()}
+      />,
+    );
+    await user.click(screen.getByRole("checkbox", { name: /Release to main/ }));
+    expect(daemon.requests.map((r) => r.body)).toContainEqual({
+      type: "set_bot_permission_extras",
+      bot_id: "b1",
+      extras: ["release_main"],
     });
   });
 });

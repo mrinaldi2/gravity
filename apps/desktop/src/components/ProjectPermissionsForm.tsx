@@ -30,13 +30,13 @@ const PROFILES: readonly {
   {
     id: "full",
     name: "Full",
-    help: "Nothing is reviewed: only the hard deny-list and the guard stop a bot. For bots in a container, VM or separate user account.",
+    help: "Nothing is reviewed: only the hard deny-list and the guard stop a bot. The guard refuses inline interpreter code and anything outside the bot's own folders, but can't read script files. For bots in a container, VM or separate user account.",
   },
 ];
 
 /** What the owner reads before Full is applied (H-031 §3). */
 const FULL_WARNING =
-  "In Full, nothing reviews what a bot runs except the deny-list and the guard. Bots run as you, with your SSH keys, logins, browser sessions and files, so a web page a bot reads could make it act on any of them. Use Full only when this project's bots run in a container, a VM or a separate user account.";
+  "In Full, nothing reviews what a bot runs except the deny-list and the guard. The guard reads every command line, but not the script files a bot writes and runs. Bots run as you, with your SSH keys, logins, browser sessions and files, so a web page a bot reads could make it act on any of them. Use Full only when this project's bots run in a container, a VM or a separate user account.";
 
 /**
  * How much the project's bots may do without asking (H-031). Owner only: a
