@@ -2,12 +2,14 @@
 //! and the current `The Hermes-…` one, stopping either with its whole
 //! process tree, and registering one. `schtasks.exe` sits behind
 //! [`Schtasks`], so tests never create a task.
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
 
+use super::process_tree;
 use super::reap::{reap, stop_daemon};
 use super::sequence::{Host, Identity};
 use super::stage::remove_if_present;
@@ -19,7 +21,8 @@ use super::ServicePaths;
 pub(super) trait Schtasks {
     fn run(&self, args: &[&str]) -> anyhow::Result<()>;
     fn exists(&self, name: &str) -> bool;
-    /// Waits for the task to leave the Running state. `/end` returns before
+    /// Waits for the task to stop running (Ready, or Disabled when a stop
+    /// disabled it first) with its process tree gone. `/end` returns before
     /// Task Scheduler has finished ending the launcher, and a `/run` in
     /// that interval reports success while IgnoreNew drops it.
     fn wait_ended(&self, name: &str) -> anyhow::Result<()>;
@@ -42,16 +45,66 @@ impl Schtasks for System {
         super::task::task_exists(name)
     }
     fn wait_ended(&self, name: &str) -> anyhow::Result<()> {
-        let script = format!(
-            "$s = New-Object -ComObject Schedule.Service; $s.Connect(); $t = $s.GetFolder('\\').GetTask('{}'); $until = [DateTime]::UtcNow.AddSeconds(30); while ($t.State -ne 3) {{ if ([DateTime]::UtcNow -ge $until) {{ exit 1 }}; Start-Sleep -Milliseconds 100 }}",
-            name.replace('\'', "''")
-        );
-        let out = Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-            .output()?;
-        anyhow::ensure!(out.status.success(), "task {name} did not finish stopping");
-        Ok(())
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let mut child = Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                &ended_script(name),
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()?;
+        // The first line names the task's running instances: pin their
+        // process trees before they exit and their PIDs can be reused.
+        let mut first = String::new();
+        if let Some(stdout) = child.stdout.take() {
+            BufReader::new(stdout).read_line(&mut first)?;
+        }
+        let mut tree = Vec::new();
+        for pid in engine_pids(&first) {
+            tree.extend(process_tree::tree(pid)?);
+        }
+        let status = child.wait()?;
+        anyhow::ensure!(status.success(), "task {name} did not finish stopping");
+        wait_exited(&tree, deadline).with_context(|| format!("task {name} left processes running"))
     }
+}
+
+/// Task Scheduler's `TASK_STATE_DISABLED` and `TASK_STATE_READY`: a task
+/// that is not running. A stop disables the task first, so it ends Disabled.
+pub(super) const ENDED_STATES: [u32; 2] = [1, 3];
+
+/// Prints the PIDs of the task's running instances, then waits up to 30 s
+/// for it to reach an ended state with no instance left.
+pub(super) fn ended_script(name: &str) -> String {
+    let ended = ENDED_STATES.map(|state| state.to_string()).join(",");
+    format!(
+        "$s = New-Object -ComObject Schedule.Service; $s.Connect(); $t = $s.GetFolder('\\').GetTask('{}'); \
+         Write-Output ((@($t.GetInstances(0)) | ForEach-Object {{ $_.EnginePID }}) -join ','); \
+         $until = [DateTime]::UtcNow.AddSeconds(30); \
+         while (-not (@({ended}) -contains $t.State) -or $t.GetInstances(0).Count -gt 0) {{ if ([DateTime]::UtcNow -ge $until) {{ exit 1 }}; Start-Sleep -Milliseconds 100 }}",
+        name.replace('\'', "''")
+    )
+}
+
+/// The engine PIDs on the script's first line.
+pub(super) fn engine_pids(line: &str) -> Vec<u32> {
+    line.trim()
+        .split(',')
+        .filter_map(|pid| pid.trim().parse().ok())
+        .filter(|&pid| pid != 0)
+        .collect()
+}
+
+/// Waits until every process in `tree` has exited.
+pub(super) fn wait_exited(tree: &[process_tree::Process], deadline: Instant) -> anyhow::Result<()> {
+    while tree.iter().any(|process| !process.exited()) {
+        anyhow::ensure!(Instant::now() < deadline, "process tree still running");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    Ok(())
 }
 
 /// The tasks an install moves between.

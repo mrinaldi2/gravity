@@ -121,6 +121,12 @@ impl Process {
         )))
     }
 
+    /// Whether the process has exited; its PID stays pinned until dropped.
+    pub fn exited(&self) -> bool {
+        // SAFETY: the handle is live and was opened with SYNCHRONIZE.
+        unsafe { WaitForSingleObject(self.handle.as_raw_handle(), 0) == WAIT_OBJECT_0 }
+    }
+
     fn kill(&self) -> io::Result<()> {
         // SAFETY: the handle is live and was opened with PROCESS_TERMINATE.
         let killed = unsafe { TerminateProcess(self.handle.as_raw_handle(), 1) } != 0;
@@ -231,6 +237,17 @@ pub fn running(executables: &[PathBuf]) -> io::Result<Vec<Process>> {
             found.push(process);
         }
     }
+    Ok(found)
+}
+
+/// `pid` and every live process descended from it, each pinned by its
+/// handle; empty when `pid` has already exited.
+pub fn tree(pid: u32) -> io::Result<Vec<Process>> {
+    let Some(root) = Process::open(pid)? else {
+        return Ok(Vec::new());
+    };
+    let mut found = vec![root];
+    new_descendants(&mut found)?;
     Ok(found)
 }
 

@@ -246,3 +246,37 @@ fn the_legacy_task_is_disabled_while_stopped_and_enabled_on_restart() {
     assert!(stopped.contains("Disabled"), "{stopped}");
     assert!(!restarted.contains("Disabled"), "{restarted}");
 }
+
+/// A stop disables the task before ending it, so the task finishes
+/// Disabled rather than Ready; both mean it has ended.
+#[test]
+fn a_disabled_or_ready_task_has_ended() {
+    assert_eq!(host::ENDED_STATES, [1, 3]);
+    let script = host::ended_script("Gravity-x's");
+    assert!(script.contains("@(1,3) -contains $t.State"), "{script}");
+    assert!(script.contains("GetInstances(0).Count -gt 0"), "{script}");
+    assert!(script.contains("GetTask('Gravity-x''s')"), "{script}");
+    assert_eq!(host::engine_pids("12, 0,34\r\n"), [12, 34]);
+    assert!(host::engine_pids("\r\n").is_empty());
+}
+
+#[test]
+fn waiting_for_the_task_requires_its_process_tree_to_be_gone() {
+    let cmd = PathBuf::from(std::env::var("ComSpec").expect("ComSpec"));
+    let mut engine = Command::new(&cmd)
+        .args(["/d", "/c", "ping -n 120 127.0.0.1 >nul"])
+        .spawn()
+        .expect("spawn stand-in engine");
+    let tree = process_tree::tree(engine.id()).expect("tree");
+    assert!(!tree.is_empty());
+    let soon = Instant::now() + Duration::from_millis(300);
+    assert!(host::wait_exited(&tree, soon).is_err(), "a live tree ended");
+    let root = process_tree::Process::open(engine.id())
+        .expect("open")
+        .expect("alive");
+    process_tree::kill_tree(root).expect("kill");
+    let _ = engine.wait();
+    let later = Instant::now() + Duration::from_secs(10);
+    host::wait_exited(&tree, later).expect("tree gone");
+    assert!(host::wait_exited(&[], Instant::now()).is_ok());
+}
