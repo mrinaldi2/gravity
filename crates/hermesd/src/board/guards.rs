@@ -119,7 +119,8 @@ pub enum Rule {
     Reject,
     /// Doing/Review/Verify → Done, for spikes and non-code chores.
     Finish,
-    /// Into or out of owner testing and deploying, and Deploying → Done.
+    /// Out of owner testing or deploying (cancelling included), into
+    /// deploying, and into Done other than by `Finish`.
     Release,
     /// Any → Cancelled.
     Cancel,
@@ -130,6 +131,9 @@ pub enum Rule {
 pub fn rule(from: Cat, to: Cat) -> Rule {
     use Cat::*;
     match (from, to) {
+        // Nothing leaves a frozen package or a rollout but the daemon, not
+        // even a cancel: B7's repackage and rollback paths move these items.
+        (Approval | Deploying, _) => Rule::Release,
         (_, Cancelled) => Rule::Cancel,
         (Inbox, Ready) => Rule::Refine,
         (Ready, Doing) => Rule::Start,
@@ -139,7 +143,7 @@ pub fn rule(from: Cat, to: Cat) -> Rule {
         (Verify, Approval) => Rule::Package,
         (Verify, Doing) => Rule::Reject,
         (Doing | Review | Verify, Done) => Rule::Finish,
-        (Approval | Deploying, _) | (_, Deploying | Done) => Rule::Release,
+        (_, Deploying | Done) => Rule::Release,
         _ => Rule::Unlisted,
     }
 }
@@ -173,7 +177,11 @@ pub fn evaluate(item: &Item, mv: &Move<'_>, who: &Who, ctx: &Context) -> Vec<Unm
         return vec![unmet(
             "move.daemon_only",
             "Only the daemon moves items through owner testing and deploying, on the owner's ruling.",
-            Some("Add it to a release package; the owner's verdict moves it."),
+            Some(if matches!(item.category, Cat::Approval | Cat::Deploying) {
+                "Ask DevOps to repackage without it, or roll the release back."
+            } else {
+                "Add it to a release package; the owner's verdict moves it."
+            }),
         )];
     }
     let mut out = Vec::new();

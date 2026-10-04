@@ -199,6 +199,17 @@ const ROWS: &[Row] = &[
         expect: &["move.daemon_only"],
     },
     Row {
+        rule: "Owner testing / Deploying → Cancelled: daemon only, owner included",
+        from: Cat::Deploying,
+        to: Cat::Cancelled,
+        ok: |c| c.who = Who::Daemon,
+        bad: |c| {
+            c.who = Who::Owner;
+            c.reason = Some("changed my mind");
+        },
+        expect: &["move.daemon_only"],
+    },
+    Row {
         rule: "Doing/Review/Verify → Done: spike or non-code chore, outcome linked",
         from: Cat::Review,
         to: Cat::Done,

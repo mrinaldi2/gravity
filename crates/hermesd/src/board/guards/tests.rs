@@ -128,7 +128,9 @@ fn rules_cover_every_category_pair() {
         }
     }
     assert_eq!(rule(Cat::Inbox, Cat::Done), Rule::Release);
-    assert_eq!(rule(Cat::Approval, Cat::Cancelled), Rule::Cancel);
+    assert_eq!(rule(Cat::Approval, Cat::Cancelled), Rule::Release);
+    assert_eq!(rule(Cat::Deploying, Cat::Cancelled), Rule::Release);
+    assert_eq!(rule(Cat::Verify, Cat::Cancelled), Rule::Cancel);
     assert_eq!(rule(Cat::Ready, Cat::Inbox), Rule::Unlisted);
 }
 

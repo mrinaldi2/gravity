@@ -46,7 +46,7 @@ pub(super) fn conditions(
                 out.push(unmet(
                     "start.task",
                     "No delegated task is linked.",
-                    Some("Delegate it and link the task."),
+                    Some("Delegate it with send_message(item: <id>), which links the task."),
                 ));
             }
         }
