@@ -74,18 +74,42 @@ describe("Sidebar", () => {
     await user.click(screen.getByRole("button", { name: "Project menu" }));
     await user.click(screen.getByRole("menuitem", { name: "Project settings" }));
 
-    expect(props.onSelect).toHaveBeenCalledWith({ kind: "project", projectId: "p1" });
+    expect(props.onSelect).toHaveBeenCalledWith({
+      kind: "project",
+      projectId: "p1",
+      tab: "settings",
+    });
   });
 
-  it("collapses and expands the project's bots from its label", async () => {
+  it("opens the project window from its name and from the Project row", async () => {
     const user = userEvent.setup();
-    renderSidebar();
+    const props = renderSidebar();
 
-    await user.click(screen.getByText("Acme"));
+    await user.click(screen.getByRole("button", { name: "Acme" }));
+    await user.click(screen.getByRole("button", { name: "Project" }));
+
+    expect(props.onSelect.mock.calls.map((call) => call[0])).toEqual([
+      { kind: "project", projectId: "p1" },
+      { kind: "project", projectId: "p1" },
+    ]);
+  });
+
+  it("marks the Project row while the project window is open", () => {
+    renderSidebar({ selection: { kind: "project", projectId: "p1", tab: "board" } });
+    expect(screen.getByRole("button", { name: "Project" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("collapses and expands the project's bots from its chevron", async () => {
+    const user = userEvent.setup();
+    const props = renderSidebar();
+
+    await user.click(screen.getByRole("button", { name: "Hide bots", expanded: true }));
     expect(screen.queryByText("alice", { selector: ".bot-row-name" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Project" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByText("Acme"));
+    await user.click(screen.getByRole("button", { name: "Show bots", expanded: false }));
     expect(screen.getByText("alice", { selector: ".bot-row-name" })).toBeInTheDocument();
+    expect(props.onSelect).not.toHaveBeenCalled();
   });
 
   it("offers the same menu from the label's right-click and the ⋯ button", async () => {

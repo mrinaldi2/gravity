@@ -193,10 +193,20 @@ fn the_hook_is_installed_with_a_timeout_longer_than_the_window() {
     .expect("json");
     let hook = &settings["hooks"]["PermissionRequest"][0]["hooks"][0];
     assert_eq!(hook["timeout"], hermesd::approval::HOOK_TIMEOUT_SECS);
-    assert!(hook["command"]
-        .as_str()
-        .expect("command")
-        .contains("/hook/permission"));
+    let command = hook["command"].as_str().expect("command");
+    // Unix inlines the request in the command; Windows runs a PowerShell
+    // script beside the settings that makes it.
+    #[cfg(unix)]
+    assert!(command.contains("/hook/permission"), "{command}");
+    #[cfg(windows)]
+    {
+        assert!(command.ends_with(" PermissionRequest"), "{command}");
+        let script = std::path::Path::new(command.split('"').nth(1).expect("quoted script"));
+        assert!(script.starts_with(dir.path().join(".claude")), "{command}");
+        assert!(std::fs::read_to_string(script)
+            .expect("script")
+            .contains("/hook/permission"));
+    }
 }
 
 #[tokio::test]

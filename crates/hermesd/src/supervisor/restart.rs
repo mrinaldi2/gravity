@@ -17,15 +17,26 @@ impl BotHandle {
 impl Supervisor {
     pub(super) fn report_start_failure(&self, bot_id: &str, error: &anyhow::Error) {
         let (state, _) = self.state(bot_id);
-        let reason = format!("Runtime failed to start: {error:#}");
+        let reason = format!("Engine couldn't start: {error:#}");
         self.set_state(bot_id, BotState::Crashed, &reason);
         if state != BotState::Crashed {
             if let Some(term) = self.term(bot_id) {
                 term.push(format!("\r\n[{}] {reason}\r\n", crate::brand::SHORT_NAME).into_bytes());
             }
-            self.inner
-                .events
-                .push(Push::notice("error", "Bot could not start", reason));
+            self.inner.events.push(Push::notice(
+                "error",
+                format!("{} couldn't start", self.bot_name(bot_id)),
+                reason,
+            ));
+        }
+    }
+
+    /// The bot's name for a toast: notices name the bot, never its id
+    /// (ux-glossary rule 9).
+    pub(super) fn bot_name(&self, bot_id: &str) -> String {
+        match self.inner.db.get_bot(bot_id) {
+            Ok(Some(bot)) => Db::display_name(&bot),
+            _ => "A bot".to_string(),
         }
     }
     /// Restarts a bot with a fresh conversation: the next session does not

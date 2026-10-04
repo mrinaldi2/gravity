@@ -206,7 +206,10 @@ async fn attachments_upload_in_chunks_into_the_project_artifacts() {
         }))
         .await;
     let path = done["upload"]["path"].as_str().expect("path");
-    assert!(path.ends_with("artifacts/uploads/notes.txt"), "{path}");
+    assert!(
+        std::path::Path::new(path).ends_with("artifacts/uploads/notes.txt"),
+        "{path}"
+    );
     assert_eq!(std::fs::read_to_string(path).expect("read"), "hello world");
 
     let refused =

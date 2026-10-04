@@ -56,7 +56,15 @@ describe("InfoPanel", () => {
   it("shows the bot metadata", () => {
     renderPanel(new FakeDaemon());
     expect(screen.getByText("/tmp/alice")).toBeInTheDocument();
-    expect(screen.getByText("Idle — idle")).toBeInTheDocument();
+    expect(screen.getByText("Idle")).toBeInTheDocument();
+    expect(screen.queryByText(/idle$/)).not.toBeInTheDocument();
+  });
+
+  it("shows the reason only for a failure state", () => {
+    renderPanel(new FakeDaemon(), {
+      bot: fx.bot({ state: "crashed", state_reason: "Engine exited with code 1" }),
+    });
+    expect(screen.getByText("Crashed — Engine exited with code 1")).toBeInTheDocument();
   });
 
   it("opens the bot workspace folder", async () => {

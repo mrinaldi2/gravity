@@ -74,6 +74,9 @@ pub enum Push {
     ApprovalPending {
         bot_id: String,
         detail: String,
+        /// The tool waiting for approval, when the notification named one.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        tool: Option<String>,
     },
     Notify {
         level: String,

@@ -2,9 +2,10 @@ import { useState } from "react";
 import type { ReactElement } from "react";
 import type { Bot, Project } from "../../protocol/entities";
 import BotRow from "./BotRow";
-import ConversationsRow from "./ConversationsRow";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { MoreIcon } from "./icons";
 import PinnedBots from "./PinnedBots";
+import ProjectRow from "./ProjectRow";
 import type { SidebarTreeProps } from "./tree";
 import { useProjectMenu } from "./useProjectMenu";
 
@@ -17,8 +18,11 @@ export interface ProjectSectionProps extends SidebarTreeProps {
 export default function ProjectSection(props: ProjectSectionProps): ReactElement {
   const { project, bots, selection, canControl, onSelect, pinnedBotIds } = props;
   const [collapsed, setCollapsed] = useState(false);
-  const openSettings = (): void => {
+  const openWindow = (): void => {
     onSelect({ kind: "project", projectId: project.id });
+  };
+  const openSettings = (): void => {
+    onSelect({ kind: "project", projectId: project.id, tab: "settings" });
   };
   const menu = useProjectMenu({
     project,
@@ -41,21 +45,24 @@ export default function ProjectSection(props: ProjectSectionProps): ReactElement
 
   return (
     <section className="project-section">
-      <div
-        className={`project-header ${
-          selection.kind === "project" && selection.projectId === project.id
-            ? "project-header-selected"
-            : ""
-        }`}
-      >
+      <div className="project-header">
         <button
           type="button"
-          className="project-name"
+          className="project-chevron"
           title={collapsed ? "Show bots" : "Hide bots"}
+          aria-label={collapsed ? "Show bots" : "Hide bots"}
           aria-expanded={!collapsed}
           onClick={() => {
             setCollapsed((prev) => !prev);
           }}
+        >
+          {collapsed ? <ChevronRight aria-hidden="true" /> : <ChevronDown aria-hidden="true" />}
+        </button>
+        <button
+          type="button"
+          className="project-name"
+          title={`Open ${project.name}`}
+          onClick={openWindow}
           onContextMenu={menu.onContextMenu}
         >
           {project.name}
@@ -74,14 +81,10 @@ export default function ProjectSection(props: ProjectSectionProps): ReactElement
 
       {collapsed ? null : (
         <>
-          {props.showConversations === true ? (
-            <ConversationsRow
-              selected={selection.kind === "conversations" && selection.projectId === project.id}
-              onSelect={() => {
-                onSelect({ kind: "conversations", projectId: project.id });
-              }}
-            />
-          ) : null}
+          <ProjectRow
+            selected={selection.kind === "project" && selection.projectId === project.id}
+            onSelect={openWindow}
+          />
           <PinnedBots
             bots={pinnedBots}
             unreadBots={props.unreadBots}

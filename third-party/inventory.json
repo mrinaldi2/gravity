@@ -4,14 +4,14 @@
     "x86_64-pc-windows-msvc"
   ],
   "inputs": {
-    "Cargo.lock": "983c2f48ec2fedb611259cf68d644d21a1216f005da53fa22048dc39052ad57d",
-    "Cargo.toml": "97ce18d5b60cb95220a04ad1f4598426efc70391a049cb9cf800557ec985bced",
+    "Cargo.lock": "a1087a057c4d7493e74540af6467ae9fcdd7ca0138aa3e6b33a1d4e8a5135298",
+    "Cargo.toml": "19d338462ef5e4521840363c556ef8ac90e97e2ca9425a3cd3ac8962b62fd3b3",
     "crates/hermesd/Cargo.toml": "34512fda9aa0bb78b5e8b52db051d1c032f9638af504d293ff2e47d079ed9eeb",
     "crates/bus/Cargo.toml": "0018985960c1a50c48f6bc1cb7a05562258deb7857fb312d039a94f89dfb0519",
-    "apps/desktop/src-tauri/Cargo.lock": "fc93bb1ba77910d2f418b05f8f7768a2b7c3a6a5bd81365bd53a94ff99c23b03",
-    "apps/desktop/src-tauri/Cargo.toml": "b702363edb87574fbeffe9308ec2f0f0e5a344fb825a40d5d6b8b0ad00d805f6",
-    "apps/desktop/src-tauri/tauri.conf.json": "32ef6d92998f6b01b0391173d7e907ed821d6135b18cfd26ee47373a0d1d73b5",
-    "apps/desktop/package.json": "de92501cfc69faddc60827a95f021041feac8a7aff86fa790c0da164ba2edb63",
+    "apps/desktop/src-tauri/Cargo.lock": "24db758e26ae0b41a7b01cbba424cb53d6ad17e4b1fd5f1c4de09720d91762ba",
+    "apps/desktop/src-tauri/Cargo.toml": "4b2fa1b8c59f0daac8f8efaee916fde47ccba51bf30e3b24126a12ad4a582cbe",
+    "apps/desktop/src-tauri/tauri.conf.json": "ec7228bd78868ee1c20587ae2f670f0ec787a0edca5a1c0aad916b4e8e953f7e",
+    "apps/desktop/package.json": "395a87e32b1915f785df00d050836c2c195126108b7fe3a68bdb634dc204f774",
     "apps/desktop/pnpm-lock.yaml": "3b09aaddca393a2f55d902e0721fc2cd3f620859b83cf6c0d479f51ebc84a93f",
     "apps/desktop/vite.config.ts": "029db7146e224ff4381cb2fb69d8a72c3c803ddfd56d8af2bf3ca5ab6d093fd9",
     "apps/marketing/package.json": "eb06e030ffa6b5a299377e0c772d4691d6f03740a76269a0ddb3629c1a9472ae",
@@ -28,7 +28,7 @@
     "package.json": "299597abf0cdef57fbb880e083ce41fa20049a9f6389e3b62e8cca8448233bbc",
     "apps/desktop/src-tauri/tauri.windows.conf.json": "ea00ae5836e5b33e3263c6afccc6faf40b72f74b2c0ff79fd94e3e647e41c453",
     "scripts/prepare-sidecar.ps1": "5ceb045d862f21670b4941ee0152d52b7be56d9e67f9d358e78e6fd59e2a2848",
-    "apps/desktop/src-tauri/windows/installer-hooks.nsh": "018ab78b81649b4c85346786ea59ddab2fb5f09a3aaca845e4bdff91d9b63109",
+    "apps/desktop/src-tauri/windows/installer-hooks.nsh": "e0129ebe51e85066fbd3824bb94fdd47a7b23276e14dc465da7c76f0eac08cc8",
     ".github/workflows/windows.yml": "1f84bc91f27c0478b48fa5d806f0fa843c5d9734fb634cc82d4b49c8e5b3d9d9",
     "third-party/overrides/0322ceec0b8f15aa2d74a6173c07cc8c6f3764b3.txt": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
     "third-party/overrides/11069edd79019f7dafbe3138841cf289209270dd.txt": "8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90",
@@ -59,7 +59,7 @@
   },
   "outputs": {
     "third-party/DAEMON_NOTICES.txt": "02a2de784e4658919bb9670cd10ccc73e974c8ab0d475a2f2cf2d2b23e56ff15",
-    "third-party/DESKTOP_NOTICES.txt": "e50bcce644a0ec9ef002ffb16a36465e1350a4471b1dfd836408d9075ad22dab",
+    "third-party/DESKTOP_NOTICES.txt": "813c9fd3691def7596ab7478c542bd09337a9d18875286435ec298cbbef385c4",
     "apps/marketing/public/THIRD_PARTY_NOTICES.txt": "fe0e343d06cefa62f499f856b77f463d6ef41f7a42f2be4d9726895fc39657a8"
   },
   "packages": [
@@ -2689,22 +2689,6 @@
       },
       "source": "https://registry.npmjs.org/vitest/-/vitest-4.1.11.tgz",
       "notices": []
-    },
-    {
-      "ecosystem": "JavaScript",
-      "name": "web-vitals",
-      "version": "5.3.0",
-      "license": "Apache-2.0",
-      "components": {
-        "desktop": "runtime dependency closure"
-      },
-      "source": "https://registry.npmjs.org/web-vitals/-/web-vitals-5.3.0.tgz",
-      "notices": [
-        {
-          "path": "LICENSE",
-          "sha256": "bfdeded4040e05da31ca9b6239dc83bd23fa26ac8db87342a7ca4363f68916ff"
-        }
-      ]
     },
     {
       "ecosystem": "JavaScript",

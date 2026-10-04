@@ -9,8 +9,9 @@ use super::envelope::{self, Delivered};
 use super::model::{OwnerVia, Trigger};
 use super::steps;
 
-/// The sender shown for messages from `USER`: the owner reads them as theirs.
-const OWNER_SENDER: &str = "You";
+/// The sender shown for the daemon's own notices (introductions, expiries,
+/// renames): the owner never appears as the author of what they didn't write.
+const SERVICE_SENDER: &str = crate::brand::SHORT_NAME;
 
 /// Longest trigger text kept in a turn.
 pub(super) const MAX_TRIGGER_CHARS: usize = 4_000;
@@ -75,7 +76,7 @@ fn delivered_trigger(names: &HashMap<String, String>, delivered: Delivered) -> T
                 // `USER` on anything but a chat is the daemon speaking:
                 // introductions, expiries, renames.
                 let from = if from == "USER" {
-                    OWNER_SENDER.to_string()
+                    SERVICE_SENDER.to_string()
                 } else {
                     names.get(&from).cloned().unwrap_or(from)
                 };

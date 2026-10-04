@@ -5,13 +5,7 @@ import type { Routine } from "../../protocol/entities";
 import type { BotTask } from "../../protocol/tasks";
 import { errText, fmtTimestamp } from "../../util";
 import ChatMarkdown from "../chat/ChatMarkdown";
-
-const STATE_LABEL: Readonly<Record<BotTask["state"], string>> = {
-  open: "Open",
-  done: "Done",
-  cancelled: "Cancelled",
-  expired: "Expired",
-};
+import { TASK_STATE_LABEL } from "./taskStates";
 
 function counterpart(task: BotTask): string {
   const machine = task.other.machine == null ? "" : ` @ ${task.other.machine}`;
@@ -119,7 +113,9 @@ export function TaskRow({ task, client, botId }: TaskRowProps): ReactElement {
       <div className="task-row-head">
         <span className="task-who">{counterpart(task)}</span>
         {task.state === "open" ? null : (
-          <span className={`task-badge task-badge-${task.state}`}>{STATE_LABEL[task.state]}</span>
+          <span className={`task-badge task-badge-${task.state}`}>
+            {TASK_STATE_LABEL[task.state]}
+          </span>
         )}
         <span className="task-when">{when(task)}</span>
       </div>

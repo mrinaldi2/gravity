@@ -56,6 +56,7 @@ async fn native_claude_reaches_its_prompt_without_asking_for_workspace_trust() {
                 }
                 SessionEvent::Exited { .. } => return false,
                 SessionEvent::Lifecycle { .. } => {}
+                SessionEvent::Permission { .. } | SessionEvent::PermissionGone { .. } => {}
             }
         }
         false

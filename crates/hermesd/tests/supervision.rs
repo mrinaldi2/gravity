@@ -27,6 +27,9 @@ async fn a_crashed_bot_is_restarted_by_the_supervision_loop() {
         .await;
     c.wait_for(|v| v["type"] == "bot_state" && v["state"] == "crashed")
         .await;
+    // The toast names the bot, never its id.
+    c.wait_for(|v| v["type"] == "notify" && v["title"] == "alice crashed")
+        .await;
     c.wait_for(|v| v["type"] == "bot_state" && v["state"] == "ready")
         .await;
 }
@@ -105,6 +108,10 @@ async fn an_idle_notification_is_not_an_approval() {
     );
     c.wait_for(|v| v["type"] == "bot_state" && v["state"] == "waiting_for_approval")
         .await;
+    // Claude Code's own wording stays out of the push; the tool comes alone.
+    let pending = c.wait_for(|v| v["type"] == "approval_pending").await;
+    assert_eq!(pending["tool"], "Bash");
+    assert_eq!(pending["detail"], "Wants to run Bash");
 }
 
 /// Granting a permission fires no hook, so a bot that was approved and went

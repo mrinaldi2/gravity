@@ -34,6 +34,7 @@ async fn conpty_streams_a_native_process_and_reports_exit() {
                     return bytes;
                 }
                 SessionEvent::Lifecycle { .. } => {}
+                SessionEvent::Permission { .. } | SessionEvent::PermissionGone { .. } => {}
             }
         }
         panic!("process must report exit");
@@ -268,7 +269,7 @@ async fn codex_startup_failure_is_reported_in_state_and_terminal() {
         .supervisor
         .state(id)
         .1
-        .contains("failed to start"));
+        .contains("Engine couldn't start"));
     let output: Vec<u8> = daemon
         .app
         .supervisor
@@ -279,6 +280,7 @@ async fn codex_startup_failure_is_reported_in_state_and_terminal() {
         .into_iter()
         .flat_map(|frame| frame.data)
         .collect();
-    assert!(String::from_utf8_lossy(&output).contains("[Gravity] Runtime failed to start"));
+    let expected = format!("[{}] Engine couldn't start", hermesd::brand::SHORT_NAME);
+    assert!(String::from_utf8_lossy(&output).contains(&expected));
     assert_eq!(daemon.app.supervisor.active_total(), 0);
 }

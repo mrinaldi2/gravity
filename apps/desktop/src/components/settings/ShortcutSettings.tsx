@@ -18,6 +18,12 @@ interface RecorderProps {
   readonly onRefuse: () => void;
 }
 
+/**
+ * The recorder's accessible name is the combination it shows (ux-glossary
+ * rule 7); the row label says what it is for.
+ */
+const SHORTCUT_PURPOSE_ID = "settings-shortcut-purpose";
+
 function recorderLabel(shortcut: string, recording: boolean): string {
   if (recording) {
     return "Press keys…";
@@ -83,7 +89,7 @@ function ShortcutRecorder(props: RecorderProps): ReactElement {
       ref={buttonRef}
       type="button"
       className={`settings-shortcut${recording ? " settings-shortcut-recording" : ""}`}
-      aria-label="Show or hide window shortcut"
+      aria-describedby={SHORTCUT_PURPOSE_ID}
       disabled={busy}
       onClick={recording ? onCancel : onStart}
       onBlur={recording ? onCancel : undefined}
@@ -134,7 +140,9 @@ export default function ShortcutSettings(): ReactElement {
     <div className="settings-section">
       <div className="settings-row">
         <div className="settings-row-text">
-          <div className="settings-row-label">Show or hide Hermes</div>
+          <div className="settings-row-label" id={SHORTCUT_PURPOSE_ID}>
+            Show or hide Hermes
+          </div>
           <div className="settings-row-help">
             Works from any app. Click the field, then press a combination of two or more modifiers
             and a key, such as {example}. Backspace clears it.

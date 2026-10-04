@@ -73,16 +73,27 @@ impl Supervisor {
             return;
         }
         self.set_state(bot_id, BotState::WaitingForApproval, "notification");
-        let detail = if text.is_empty() {
-            "Claude is waiting for input or permission".to_string()
-        } else {
-            text.to_string()
+        // Claude Code's own wording never reaches the owner (ux-glossary
+        // rule 9): the client names the bot and, when known, the tool.
+        let tool = requested_tool(text);
+        let detail = match &tool {
+            Some(tool) => format!("Wants to run {tool}"),
+            None => "Waiting for your approval".to_string(),
         };
         self.inner.events.push(Push::ApprovalPending {
             bot_id: bot_id.to_string(),
             detail,
+            tool,
         });
     }
+}
+
+/// The tool a permission notification names: Claude Code says "Claude needs
+/// your permission to use Bash".
+fn requested_tool(message: &str) -> Option<String> {
+    let (_, rest) = message.split_once("permission to use ")?;
+    let tool = rest.split_whitespace().next()?.trim_end_matches(['.', ',']);
+    (!tool.is_empty()).then(|| tool.to_string())
 }
 
 /// The "waiting for your input" notification means nobody is typing, not that
@@ -91,4 +102,27 @@ impl Supervisor {
 fn is_idle_notification(message: &str) -> bool {
     let m = message.to_ascii_lowercase();
     m.contains("waiting for your input") || m.contains("waiting for user input")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::requested_tool;
+
+    #[test]
+    fn reads_the_tool_from_a_permission_notification() {
+        assert_eq!(
+            requested_tool("Claude needs your permission to use Bash").as_deref(),
+            Some("Bash")
+        );
+        assert_eq!(
+            requested_tool("Claude needs your permission to use mcp__hermes-bus__send_message.")
+                .as_deref(),
+            Some("mcp__hermes-bus__send_message")
+        );
+        assert_eq!(
+            requested_tool("Claude is waiting for input or permission"),
+            None
+        );
+        assert_eq!(requested_tool(""), None);
+    }
 }

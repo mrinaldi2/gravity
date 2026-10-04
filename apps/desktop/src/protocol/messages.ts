@@ -264,6 +264,8 @@ export type ServerPush =
       readonly type: "approval_pending";
       readonly bot_id: string;
       readonly detail: string;
+      /** The tool waiting for approval, when the daemon knows it. */
+      readonly tool?: string;
     }
   | {
       readonly type: "notify";

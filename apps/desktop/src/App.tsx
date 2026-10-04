@@ -165,7 +165,6 @@ export default function App(): ReactElement {
           onDeleteBot={actions.deleteBot}
           onDeleteProject={actions.deleteProject}
           onOpenSettings={overlays.openSettings}
-          showConversations={client.capabilities.includes("agent_conversations")}
         />
         <main className="main">
           <MainPane

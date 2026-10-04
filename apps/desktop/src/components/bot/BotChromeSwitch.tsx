@@ -60,7 +60,7 @@ export default function BotChromeSwitch({
           {`${bot.name} always has a browser of its own. Allow this only for tasks that need your logged-in sessions; its tabs then open in your Chrome. Restarts the bot.`}
         </div>
       </div>
-      <label className="toggle" htmlFor="bot-user-chrome" aria-label="Toggle access to your Chrome">
+      <label className="toggle" htmlFor="bot-user-chrome" aria-label="Can use your Chrome">
         <input
           id="bot-user-chrome"
           type="checkbox"
