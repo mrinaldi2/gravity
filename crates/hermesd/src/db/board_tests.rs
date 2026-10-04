@@ -170,15 +170,22 @@ fn moves_record_where_from_and_stamp_done() {
         project_id: &p,
     };
     let moved = done(
-        db.move_item(&item.id, item.version, "doing", Some("picked up"), &bot)
-            .unwrap(),
+        db.move_item(
+            &item.id,
+            item.version,
+            "doing",
+            Some("picked up"),
+            false,
+            &bot,
+        )
+        .unwrap(),
     );
     assert_eq!(
         (moved.category, moved.done_at),
         (ColumnCategory::Doing, None)
     );
     let finished = done(
-        db.move_item(&item.id, moved.version, "done", None, &bot)
+        db.move_item(&item.id, moved.version, "done", None, false, &bot)
             .unwrap(),
     );
     assert!(finished.done_at.is_some());
@@ -189,7 +196,7 @@ fn moves_record_where_from_and_stamp_done() {
     );
     assert_eq!(last.actor, "bot:b1");
     assert!(db
-        .move_item(&item.id, finished.version, "nowhere", None, &bot)
+        .move_item(&item.id, finished.version, "nowhere", None, false, &bot)
         .is_err());
     assert_eq!(
         db.get_item(&item.id).unwrap().unwrap().version,
