@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 
 mod overridden;
 
+#[cfg(test)]
+pub(crate) use overridden::overridden as env_home_overrides;
+
 /// Bounds Claude Code accepts for the auto-compact window.
 pub(crate) const AUTO_COMPACT_WINDOW_MIN: u32 = 100_000;
 pub(crate) const AUTO_COMPACT_WINDOW_MAX: u32 = 1_000_000;
@@ -238,6 +241,31 @@ pub fn home_is_overridden() -> bool {
     )
 }
 
+/// The home variable that overrides the default home, by name, if one does.
+pub fn home_override_var() -> Option<String> {
+    if !home_is_overridden() {
+        return None;
+    }
+    [
+        crate::brand::env_name("HOME"),
+        crate::brand::legacy_env_name("HOME"),
+    ]
+    .into_iter()
+    .find(|name| std::env::var_os(name).is_some())
+}
+
+/// `Home: <path>`, naming the variable that chose it, so an operator sees
+/// which home a command is about to act on before it does.
+pub fn home_notice(home: &Path, override_var: Option<&str>) -> String {
+    match override_var {
+        Some(var) => format!("Home: {} (overridden by {var})", home.display()),
+        None => format!("Home: {}", home.display()),
+    }
+}
+
+/// The home the daemon uses: the variable's home when it overrides, else the
+/// default, so a launcher's variable naming `~/.gravity` cannot pin the
+/// daemon to the home it is migrating away from.
 pub fn default_home() -> PathBuf {
     resolve_home(
         crate::brand::env_var_os("HOME").map(PathBuf::from),
@@ -245,8 +273,11 @@ pub fn default_home() -> PathBuf {
     )
 }
 
-fn resolve_home(gravity_home: Option<PathBuf>, user_home: PathBuf) -> PathBuf {
-    gravity_home.unwrap_or_else(|| user_home.join(crate::brand::HOME_DIR_NAME))
+pub(crate) fn resolve_home(gravity_home: Option<PathBuf>, user_home: PathBuf) -> PathBuf {
+    match gravity_home {
+        Some(home) if overridden::overridden(Some(&home), &user_home) => home,
+        _ => user_home.join(crate::brand::HOME_DIR_NAME),
+    }
 }
 
 fn dirs_home() -> PathBuf {

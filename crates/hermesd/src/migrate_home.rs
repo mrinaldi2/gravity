@@ -24,6 +24,8 @@
 //! and the migration checks both lock files before it moves anything.
 
 mod disk;
+#[cfg(test)]
+mod env_home_tests;
 mod files;
 mod preflight;
 #[cfg(test)]
@@ -173,7 +175,12 @@ fn crash_point(_at: &str) -> anyhow::Result<()> {
 /// holding a database, or a run that stopped partway. A home chosen with
 /// `THEHERMES_HOME` is the user's to migrate (`migrate-home --from --to`).
 pub fn pending(cfg: &Config) -> anyhow::Result<Option<Plan>> {
-    if crate::config::home_is_overridden() {
+    pending_unless(cfg, crate::config::home_is_overridden())
+}
+
+/// [`pending`] with the override already decided.
+pub(crate) fn pending_unless(cfg: &Config, overridden: bool) -> anyhow::Result<Option<Plan>> {
+    if overridden {
         return Ok(None);
     }
     pending_for(&Plan::default_for(cfg))
