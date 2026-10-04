@@ -121,3 +121,15 @@ fn system_md_speaks_of_hermes_and_the_registered_bus() {
     assert!(md.contains("the owner can watch it from Hermes."));
     assert!(!md.contains("Gravity"));
 }
+
+#[cfg(unix)]
+#[test]
+fn hook_settings_install_a_statusline_that_reports_account_windows() {
+    let settings = super::unix_hooks::settings(4777, "BOT_TOKEN");
+    let command = settings["statusLine"]["command"].as_str().unwrap();
+    assert_eq!(settings["statusLine"]["type"], "command");
+    assert!(command.contains("http://127.0.0.1:4777/hook?event=StatusLine"));
+    assert!(command.contains("--data-binary @-"));
+    // Prints nothing and never fails the statusline.
+    assert!(command.contains(">/dev/null 2>&1 || true"));
+}

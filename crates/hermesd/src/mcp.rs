@@ -78,6 +78,18 @@ pub async fn hook_handler(
     if event.is_empty() {
         return StatusCode::BAD_REQUEST;
     }
+    // The statusline reports the account's windows, not a lifecycle step.
+    if event == crate::paths::STATUS_LINE_EVENT {
+        let readings = crate::usage::limits::statusline_readings(&body);
+        if !readings.is_empty() {
+            if let Err(e) =
+                crate::usage::limits::record_statusline(&app.db, &readings, chrono::Utc::now())
+            {
+                tracing::debug!(bot_id, error = %e, "recording statusline windows failed");
+            }
+        }
+        return StatusCode::OK;
+    }
     // SessionStart reports the session's inbox socket for channel delivery.
     if let Some(socket) = body.get("socket").and_then(|v| v.as_str()) {
         let msg_token = body.get("msg_token").and_then(|v| v.as_str());

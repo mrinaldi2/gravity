@@ -6,7 +6,8 @@
 //! NULL for this daemon's own bots and names the peer for reported rows.
 //!
 //! `provider_window` is the account limit state per provider and window
-//! (`5h`, `weekly`); G2 and G3 write it. `usage_cursor` is how far each
+//! (`5h`, `weekly`); G2 and G3 write it. `limited_until` is set when a bot
+//! actually hit the window's limit: the pool's bots wait until then. `usage_cursor` is how far each
 //! transcript has been counted, so a restart never counts a turn twice.
 
 pub(super) const MIGRATION_24: &str = r#"
@@ -35,6 +36,7 @@ CREATE TABLE provider_window (
     resets_at         TEXT,
     source            TEXT NOT NULL CHECK(source IN ('observed', 'estimated', 'reported')),
     capacity_estimate REAL,
+    limited_until     TEXT,
     updated_at        TEXT NOT NULL,
     PRIMARY KEY (provider, window)
 );

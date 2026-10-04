@@ -309,6 +309,9 @@ impl Worker {
                 self.hook("UserPromptSubmit", None);
             }
             "turn/completed" => {
+                if let Some(report) = crate::usage::codex::parse(method, params, &self.model) {
+                    let _ = self.events.send(SessionEvent::Usage(report));
+                }
                 self.completed_turns += 1;
                 self.turn = None;
                 let duration = self.turn_started.take().map(|at| at.elapsed().as_millis());
@@ -377,6 +380,9 @@ impl Worker {
             "error" => {
                 if let Some(message) = params.pointer("/error/message").and_then(Value::as_str) {
                     self.output(&format!("\n[Codex] {message}\n"));
+                }
+                if let Some(report) = crate::usage::codex::parse(method, params, &self.model) {
+                    let _ = self.events.send(SessionEvent::Usage(report));
                 }
             }
             _ => {}

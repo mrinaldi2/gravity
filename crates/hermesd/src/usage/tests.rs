@@ -8,7 +8,7 @@ use bus::Bot;
 use crate::chat::usage_lines::{self, Tokens};
 use crate::db::{Db, UsageMinute};
 
-use super::{codex, ingest_file, UsageConfig};
+use super::{codex, ingest_file, limits, UsageConfig};
 
 const STREAMED: &str = include_str!("fixtures/streamed.jsonl");
 const CODEX: &str = include_str!("fixtures/codex_app_server.jsonl");
@@ -43,7 +43,9 @@ fn append(path: &Path, text: &str) {
 }
 
 fn ingest(f: &Fixture) -> usize {
-    ingest_file(&f.db, &UsageConfig::default(), &f.bot, &f.path).unwrap()
+    ingest_file(&f.db, &UsageConfig::default(), &f.bot, &f.path)
+        .unwrap()
+        .rows
 }
 
 fn rows(f: &Fixture) -> Vec<UsageMinute> {
@@ -133,7 +135,9 @@ fn a_second_scan_counts_nothing_new() {
     ingest(&f);
     assert_eq!(ingest(&f), 0);
     // A fresh scanner, as after a restart, resumes from the stored cursor.
-    let again = ingest_file(&f.db, &UsageConfig::default(), &f.bot, &f.path).unwrap();
+    let again = ingest_file(&f.db, &UsageConfig::default(), &f.bot, &f.path)
+        .unwrap()
+        .rows;
     assert_eq!(again, 0);
     assert_streamed_totals(&rows(&f));
 }
@@ -265,7 +269,11 @@ fn codex_notifications_parse_into_reports() {
             reasoning: 32,
         }
     );
-    let codex::Report::Limits(windows) = &reports[1] else {
+    let codex::Report::Limits {
+        windows,
+        reached: false,
+    } = &reports[1]
+    else {
         panic!("{:?}", reports[1]);
     };
     assert_eq!(windows.len(), 2);
@@ -287,7 +295,7 @@ fn a_weekly_only_account_reports_its_window_as_primary() {
         "primary": { "usedPercent": 15.0, "windowDurationMins": 10080, "resetsAt": 1789810691 },
         "secondary": null
     }});
-    let Some(codex::Report::Limits(windows)) =
+    let Some(codex::Report::Limits { windows, .. }) =
         codex::parse("account/rateLimits/updated", &params, "")
     else {
         panic!("no limits");
@@ -368,4 +376,258 @@ fn codex_windows_are_observed_and_sparse_updates_keep_the_rest() {
         ("weekly", Some(17.0))
     );
     assert!(f.db.provider_windows("claude").unwrap().is_empty());
+}
+
+// G3: account limits.
+
+const LIMITS: &str = include_str!("fixtures/claude_limits.jsonl");
+const STATUSLINE: &str = include_str!("fixtures/statusline.json");
+
+fn utc(s: &str) -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::parse_from_rfc3339(s)
+        .unwrap()
+        .with_timezone(&chrono::Utc)
+}
+
+fn limit_lines() -> Vec<&'static str> {
+    LIMITS.lines().collect()
+}
+
+#[test]
+fn a_limit_line_names_its_window_and_exact_reset() {
+    let hit = limits::parse_claude_hit(limit_lines()[1]).unwrap();
+    assert_eq!((hit.provider, hit.window), ("claude", "5h"));
+    assert_eq!(hit.resets_at, utc("2026-09-04T22:40:00Z"));
+    // Usage lines and the model-only limit are not pool hits.
+    assert!(limits::parse_claude_hit(limit_lines()[0]).is_none());
+    assert!(limits::parse_claude_hit(limit_lines()[4]).is_none());
+}
+
+#[test]
+fn a_limit_line_without_quota_reads_the_reset_from_its_text() {
+    // Same instant as the quotaLimits on the line before it.
+    let session = limits::parse_claude_hit(limit_lines()[2]).unwrap();
+    assert_eq!(session.window, "5h");
+    assert_eq!(session.resets_at, utc("2026-09-04T22:40:00Z"));
+    let weekly = limits::parse_claude_hit(limit_lines()[3]).unwrap();
+    assert_eq!(weekly.window, "weekly");
+    assert_eq!(weekly.resets_at, utc("2026-10-07T14:00:00Z"));
+}
+
+#[test]
+fn ingest_hands_back_the_hits_it_read() {
+    let f = fixture();
+    append(&f.path, LIMITS);
+    let found = ingest_file(&f.db, &UsageConfig::default(), &f.bot, &f.path).unwrap();
+    assert_eq!(found.rows, 1);
+    assert_eq!(found.hits.len(), 3, "{:?}", found.hits);
+    // The next pass starts after them.
+    let again = ingest_file(&f.db, &UsageConfig::default(), &f.bot, &f.path).unwrap();
+    assert!(again.hits.is_empty());
+}
+
+#[test]
+fn a_hit_holds_the_pool_and_calibrates_the_capacity_once() {
+    let f = fixture();
+    append(&f.path, LIMITS);
+    let found = ingest_file(&f.db, &UsageConfig::default(), &f.bot, &f.path).unwrap();
+    let now = utc("2026-09-04T19:00:00Z");
+    assert!(limits::record_hit(&f.db, &found.hits[0], now).unwrap());
+    let w = f.db.provider_window("claude", "5h").unwrap().unwrap();
+    assert_eq!(
+        (w.used_percent, w.source.as_str()),
+        (Some(100.0), "observed")
+    );
+    assert_eq!(w.limited_until, Some(utc("2026-09-04T22:40:00Z")));
+    // 1M Opus 5.5 input tokens in the window: 4 units at 100%.
+    assert!((w.capacity_estimate.unwrap() - 4.0).abs() < 1e-9);
+    assert_eq!(
+        limits::limited_until(&f.db, "claude", now).unwrap(),
+        Some(utc("2026-09-04T22:40:00Z"))
+    );
+    assert_eq!(limits::limited_until(&f.db, "codex", now).unwrap(), None);
+    // Another bot reporting the same hit does not move the estimate.
+    f.db.record_usage(
+        &[UsageMinute {
+            bot_id: f.bot.id.clone(),
+            minute: "2026-09-04T18:30:00Z".into(),
+            provider: "claude".into(),
+            model: "claude-opus-5-5".into(),
+            project_id: f.bot.project_id.clone(),
+            input: 0,
+            cache_write: 0,
+            cache_read: 0,
+            output: 0,
+            reasoning: 0,
+            units: 6.0,
+            machine: None,
+        }],
+        &f.bot.id,
+        "other",
+        &Default::default(),
+    )
+    .unwrap();
+    assert!(limits::record_hit(&f.db, &found.hits[1], now).unwrap());
+    let w = f.db.provider_window("claude", "5h").unwrap().unwrap();
+    assert!((w.capacity_estimate.unwrap() - 4.0).abs() < 1e-9);
+    // After the reset the hold is gone.
+    assert_eq!(
+        limits::limited_until(&f.db, "claude", utc("2026-09-04T22:40:00Z")).unwrap(),
+        None
+    );
+}
+
+#[test]
+fn a_hit_whose_window_already_reset_changes_nothing() {
+    let f = fixture();
+    let hit = limits::parse_claude_hit(limit_lines()[1]).unwrap();
+    assert!(!limits::record_hit(&f.db, &hit, utc("2026-09-05T08:00:00Z")).unwrap());
+    assert!(f.db.provider_windows("claude").unwrap().is_empty());
+}
+
+#[test]
+fn statusline_windows_are_observed_and_calibrate_the_capacity() {
+    let f = fixture();
+    append(&f.path, &(limit_lines()[0].to_string() + "\n"));
+    ingest(&f);
+    let input: serde_json::Value = serde_json::from_str(STATUSLINE).unwrap();
+    let readings = limits::statusline_readings(&input);
+    assert_eq!(readings.len(), 2);
+    assert_eq!((readings[0].window, readings[0].used_percent), ("5h", 40.0));
+    assert_eq!(
+        (readings[1].window, readings[1].used_percent),
+        ("weekly", 12.0)
+    );
+    let now = utc("2026-09-04T19:00:00Z");
+    limits::record_statusline(&f.db, &readings, now).unwrap();
+    let five = f.db.provider_window("claude", "5h").unwrap().unwrap();
+    assert_eq!(
+        (five.used_percent, five.source.as_str()),
+        (Some(40.0), "observed")
+    );
+    assert_eq!(five.limited_until, None);
+    // 4 units are 40% of the window: capacity 10.
+    assert!((five.capacity_estimate.unwrap() - 10.0).abs() < 1e-9);
+    let weekly = f.db.provider_window("claude", "weekly").unwrap().unwrap();
+    assert!((weekly.capacity_estimate.unwrap() - 4.0 / 0.12).abs() < 1e-9);
+
+    // A later reading moves the estimate a fifth of the way: 4 units at
+    // 20% is 20, so 10 → 12.
+    let later = vec![limits::WindowReading {
+        window: "5h",
+        used_percent: 20.0,
+        resets_at: five.resets_at,
+    }];
+    limits::record_statusline(&f.db, &later, now + chrono::Duration::seconds(5)).unwrap();
+    let five = f.db.provider_window("claude", "5h").unwrap().unwrap();
+    assert!((five.capacity_estimate.unwrap() - 12.0).abs() < 1e-9);
+}
+
+#[test]
+fn statusline_skips_a_window_that_already_reset_and_carries_no_limits_without_them() {
+    let f = fixture();
+    let input: serde_json::Value = serde_json::from_str(STATUSLINE).unwrap();
+    let readings = limits::statusline_readings(&input);
+    limits::record_statusline(&f.db, &readings, utc("2026-09-10T00:00:00Z")).unwrap();
+    assert!(f.db.provider_windows("claude").unwrap().is_empty());
+    let api_key_session = serde_json::json!({ "model": { "id": "claude-opus-5-5" } });
+    assert!(limits::statusline_readings(&api_key_session).is_empty());
+}
+
+#[test]
+fn between_readings_the_window_is_estimated_from_units() {
+    let f = fixture();
+    append(&f.path, &(limit_lines()[0].to_string() + "\n"));
+    ingest(&f);
+    let input: serde_json::Value = serde_json::from_str(STATUSLINE).unwrap();
+    let readings = limits::statusline_readings(&input);
+    limits::record_statusline(&f.db, &readings, utc("2026-09-04T19:00:00Z")).unwrap();
+    // A fresh reading wins over the estimate.
+    limits::estimate(&f.db, utc("2026-09-04T19:05:00Z")).unwrap();
+    let five = f.db.provider_window("claude", "5h").unwrap().unwrap();
+    assert_eq!(five.source, "observed");
+    // Half an hour on, the 4 units over capacity 10 read as 40%, estimated.
+    limits::estimate(&f.db, utc("2026-09-04T19:30:00Z")).unwrap();
+    let five = f.db.provider_window("claude", "5h").unwrap().unwrap();
+    assert_eq!(five.source, "estimated");
+    assert!((five.used_percent.unwrap() - 40.0).abs() < 1e-9);
+    assert_eq!(five.resets_at, Some(utc("2026-09-04T22:40:00Z")));
+    // Past the reset, a 5-hour window rolls with no known reset; a weekly
+    // one moves on by a week.
+    limits::estimate(&f.db, utc("2026-09-05T23:00:00Z")).unwrap();
+    let five = f.db.provider_window("claude", "5h").unwrap().unwrap();
+    assert_eq!((five.resets_at, five.used_percent), (None, Some(0.0)));
+    limits::estimate(&f.db, utc("2026-09-09T00:00:00Z")).unwrap();
+    let weekly = f.db.provider_window("claude", "weekly").unwrap().unwrap();
+    assert_eq!(
+        weekly.resets_at.unwrap(),
+        utc("2026-09-07T16:53:20Z") + chrono::Duration::days(7)
+    );
+}
+
+#[test]
+fn a_codex_limit_reached_holds_the_window_that_is_full() {
+    let f = fixture();
+    let params = serde_json::json!({ "rateLimits": {
+        "limitId": "codex",
+        "primary": { "usedPercent": 100.0, "windowDurationMins": 300, "resetsAt": 1787769282 },
+        "secondary": { "usedPercent": 40.0, "windowDurationMins": 10080, "resetsAt": 1788284350 },
+        "rateLimitReachedType": "rate_limit_reached"
+    }});
+    let report = codex::parse("account/rateLimits/updated", &params, "").unwrap();
+    let now = utc("2026-08-26T14:00:00Z");
+    assert!(codex::record(&f.db, &UsageConfig::default(), &f.bot, &report, now).unwrap());
+    assert_eq!(
+        limits::limited_until(&f.db, "codex", now).unwrap(),
+        Some(utc("2026-08-26T18:34:42Z"))
+    );
+    let weekly = f.db.provider_window("codex", "weekly").unwrap().unwrap();
+    assert_eq!(weekly.limited_until, None);
+}
+
+#[test]
+fn a_codex_usage_limit_error_holds_a_full_window() {
+    let error = serde_json::json!({
+        "error": { "message": "You've hit your usage limit.", "codexErrorInfo": "usageLimitExceeded" },
+        "willRetry": false, "threadId": "thr_1", "turnId": "turn_9"
+    });
+    assert_eq!(
+        codex::parse("error", &error, ""),
+        Some(codex::Report::LimitReached)
+    );
+    let other =
+        serde_json::json!({ "error": { "message": "x", "codexErrorInfo": "serverOverloaded" } });
+    assert_eq!(codex::parse("error", &other, ""), None);
+    let f = fixture();
+    let now = utc("2026-08-26T14:00:00Z");
+    // Nothing known to be full: no hold.
+    assert!(!codex::record(
+        &f.db,
+        &UsageConfig::default(),
+        &f.bot,
+        &codex::Report::LimitReached,
+        now
+    )
+    .unwrap());
+    let full = codex::Report::Limits {
+        windows: vec![limits::WindowReading {
+            window: "weekly",
+            used_percent: 100.0,
+            resets_at: Some(utc("2026-08-30T00:00:00Z")),
+        }],
+        reached: false,
+    };
+    assert!(!codex::record(&f.db, &UsageConfig::default(), &f.bot, &full, now).unwrap());
+    assert!(codex::record(
+        &f.db,
+        &UsageConfig::default(),
+        &f.bot,
+        &codex::Report::LimitReached,
+        now
+    )
+    .unwrap());
+    assert_eq!(
+        limits::limited_until(&f.db, "codex", now).unwrap(),
+        Some(utc("2026-08-30T00:00:00Z"))
+    );
 }

@@ -77,10 +77,15 @@ impl Supervisor {
         let db = &self.inner.db;
         let result = db.get_bot(bot_id).and_then(|bot| match bot {
             Some(bot) => crate::usage::codex::record(db, cfg, &bot, report, chrono::Utc::now()),
-            None => Ok(()),
+            None => Ok(false),
         });
-        if let Err(e) = result {
-            tracing::debug!(bot_id, error = %e, "recording runtime usage failed");
+        match result {
+            Ok(true) => {
+                tracing::info!(bot_id, "codex account limit hit");
+                self.apply_pool_limits();
+            }
+            Ok(false) => {}
+            Err(e) => tracing::debug!(bot_id, error = %e, "recording runtime usage failed"),
         }
     }
 

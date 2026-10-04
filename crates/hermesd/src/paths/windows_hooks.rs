@@ -15,6 +15,12 @@ try {{
         if ($response.Content) {{ [Console]::Out.Write($response.Content) }}
         exit 0
     }}
+    if ($Event -eq '{status}') {{
+        # Forwards the statusline input (account windows) and prints nothing.
+        $raw = [Console]::In.ReadToEnd()
+        Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:{port}/hook?event={status}' -Method Post -TimeoutSec 2 -ContentType 'application/json; charset=utf-8' -Headers @{{ Authorization = "Bearer $env:{token_env}" }} -Body ([Text.Encoding]::UTF8.GetBytes($raw)) | Out-Null
+        exit 0
+    }}
     $payload = @{{ event = $Event }}
     if ($Event -eq 'SessionStart') {{
         $payload.socket = $env:CLAUDE_CODE_MESSAGING_SOCKET
@@ -30,7 +36,8 @@ try {{
 }} catch {{ }}
 exit 0
 "#,
-        wait = crate::approval::HOOK_TIMEOUT_SECS - 10
+        wait = crate::approval::HOOK_TIMEOUT_SECS - 10,
+        status = super::STATUS_LINE_EVENT
     );
     std::fs::write(&script, body)?;
     let events = [
@@ -56,6 +63,10 @@ exit 0
     Ok(serde_json::json!({
         "crossSessionInbound": "accept",
         "permissions": { "allow": [], "deny": ["Read(../**)", crate::paths::secrets_deny_rule(), "Bash(rm -rf /*)"] },
-        "hooks": hooks
+        "hooks": hooks,
+        "statusLine": {
+            "type": "command",
+            "command": format!("powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{}\" {}", script.display(), super::STATUS_LINE_EVENT)
+        }
     }))
 }

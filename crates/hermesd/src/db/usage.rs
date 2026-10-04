@@ -47,6 +47,8 @@ pub struct ProviderWindow {
     pub source: String,
     /// Cost units the window holds, calibrated at observed readings.
     pub capacity_estimate: Option<f64>,
+    /// Set when a bot hit this window's limit: the pool waits until then.
+    pub limited_until: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -172,7 +174,7 @@ impl Db {
         let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT provider, window, used_percent, resets_at, source, capacity_estimate,
-                    updated_at
+                    limited_until, updated_at
              FROM provider_window WHERE provider = ?1 ORDER BY window",
         )?;
         let rows = stmt
@@ -184,24 +186,27 @@ impl Db {
                     resets_at: r.get::<_, Option<String>>(3)?.map(|s| super::parse_ts(&s)),
                     source: r.get(4)?,
                     capacity_estimate: r.get(5)?,
-                    updated_at: super::parse_ts(&r.get::<_, String>(6)?),
+                    limited_until: r.get::<_, Option<String>>(6)?.map(|s| super::parse_ts(&s)),
+                    updated_at: super::parse_ts(&r.get::<_, String>(7)?),
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 
-    /// Writes a window's reading. The capacity estimate is kept unless
-    /// `w` carries one: a reading alone never forgets the calibration.
+    /// Writes a window's reading. The capacity estimate and the limit are
+    /// kept unless `w` carries them: a reading alone never forgets the
+    /// calibration, nor lifts a limit a bot hit.
     pub fn put_provider_window(&self, w: &ProviderWindow) -> anyhow::Result<()> {
         self.lock().execute(
             "INSERT INTO provider_window(provider, window, used_percent, resets_at, source,
-                 capacity_estimate, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 capacity_estimate, limited_until, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(provider, window) DO UPDATE SET
                  used_percent = excluded.used_percent, resets_at = excluded.resets_at,
                  source = excluded.source,
                  capacity_estimate = COALESCE(excluded.capacity_estimate, capacity_estimate),
+                 limited_until = COALESCE(excluded.limited_until, limited_until),
                  updated_at = excluded.updated_at",
             params![
                 w.provider,
@@ -210,9 +215,22 @@ impl Db {
                 w.resets_at.map(super::ts),
                 w.source,
                 w.capacity_estimate,
+                w.limited_until.map(super::ts),
                 super::ts(w.updated_at),
             ],
         )?;
         Ok(())
+    }
+
+    /// Cost units every bot of `provider` used from `since` (a stored
+    /// minute) on, on this machine and reported by peers.
+    pub fn usage_units_since(&self, provider: &str, since: &str) -> anyhow::Result<f64> {
+        let units = self.lock().query_row(
+            "SELECT COALESCE(SUM(units), 0) FROM usage_minute
+             WHERE provider = ?1 AND minute >= ?2",
+            params![provider, since],
+            |r| r.get(0),
+        )?;
+        Ok(units)
     }
 }

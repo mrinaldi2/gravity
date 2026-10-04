@@ -9,6 +9,7 @@ use chrono::{DateTime, Timelike, Utc};
 use crate::chat::usage_lines::{self, Tokens};
 use crate::db::{Db, UsageCursor, UsageMinute};
 
+use super::limits::{self, LimitHit};
 use super::prices::UsageConfig;
 
 /// How many recent message ids a cursor remembers. A message's copies sit
@@ -16,18 +17,32 @@ use super::prices::UsageConfig;
 /// even when a scan, or a restart, falls between two copies.
 const SEEN_IDS: usize = 64;
 
-/// Counts the lines `path` gained since its cursor and returns how many
-/// new minute rows (or additions to existing ones) were written.
-pub fn ingest_file(db: &Db, cfg: &UsageConfig, bot: &Bot, path: &Path) -> anyhow::Result<usize> {
+/// What one pass over a transcript found.
+#[derive(Debug, Default)]
+pub struct Ingested {
+    /// New minute rows (or additions to existing ones) written.
+    pub rows: usize,
+    /// Limit hits among the new lines, for the caller to record once every
+    /// bot's usage is in.
+    pub hits: Vec<LimitHit>,
+}
+
+/// Counts the lines `path` gained since its cursor.
+pub fn ingest_file(db: &Db, cfg: &UsageConfig, bot: &Bot, path: &Path) -> anyhow::Result<Ingested> {
     let key = path.to_string_lossy().to_string();
     let cursor = db.usage_cursor(&key)?.unwrap_or_default();
     let len = std::fs::metadata(path)?.len();
     if len == cursor.offset {
-        return Ok(0);
+        return Ok(Ingested::default());
     }
     let mut seen = Seen::load(&cursor.seen_json);
     let mut minutes: BTreeMap<(String, String), (Tokens, f64)> = BTreeMap::new();
+    let mut hits = Vec::new();
     let offset = crate::chat::read_from(path, cursor.offset, |_, line| {
+        if let Some(hit) = limits::parse_claude_hit(line) {
+            hits.push(hit);
+            return;
+        }
         let Some(usage) = usage_lines::parse(line) else {
             return;
         };
@@ -66,7 +81,10 @@ pub fn ingest_file(db: &Db, cfg: &UsageConfig, bot: &Bot, path: &Path) -> anyhow
     if offset != cursor.offset || !rows.is_empty() {
         db.record_usage(&rows, &bot.id, &key, &next)?;
     }
-    Ok(rows.len())
+    Ok(Ingested {
+        rows: rows.len(),
+        hits,
+    })
 }
 
 /// The start of `at`'s minute, as stored.

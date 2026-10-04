@@ -259,6 +259,10 @@ pub fn seed_memory_files(workspace: &Path, name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The `/hook` event the installed statusline command posts Claude Code's
+/// statusline input under; see [`crate::usage::limits`].
+pub const STATUS_LINE_EVENT: &str = "StatusLine";
+
 /// (Re)write the workspace's cooperative `.claude/settings.json`. Also called
 /// on every bot start so existing bots pick up hook/setting changes.
 pub fn write_hook_settings(

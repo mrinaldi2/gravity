@@ -32,6 +32,7 @@ use crate::terminal::TermBuffer;
 mod claim;
 mod hooks;
 mod lifecycle;
+mod pool;
 mod restart;
 mod session_events;
 mod termio;
@@ -303,6 +304,10 @@ impl Supervisor {
             let Some(h) = bots.get(bot_id) else {
                 return Err(DeliverError::NotReady("bot has no runtime".to_string()));
             };
+            // Its pool is out of allowance: the delivery waits for the reset.
+            if h.state == BotState::RateLimited {
+                return Err(DeliverError::NotReady(h.reason.clone()));
+            }
             if h.session.is_none() || !h.state.is_running() {
                 return Err(DeliverError::NotReady(format!(
                     "bot is {}",

@@ -4,7 +4,8 @@
 //! chats someone has open, so this keeps its own cursors.
 //!
 //! Codex bots report their tokens and the account's windows live, through
-//! their App Server connection; see [`codex`] (G2).
+//! their App Server connection; see [`codex`] (G2). Account limits, and
+//! the hold on a pool that hit one, are in [`limits`] (G3).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -17,11 +18,12 @@ use crate::app::AppState;
 
 pub mod codex;
 mod ledger;
+pub mod limits;
 mod prices;
 #[cfg(test)]
 mod tests;
 
-pub use ledger::ingest_file;
+pub use ledger::{ingest_file, Ingested};
 pub use prices::{ModelPrice, UsageConfig};
 
 /// A transcript nobody counted yet is only read if it was written this
@@ -42,16 +44,22 @@ pub async fn watch(app: Arc<AppState>) {
     loop {
         tick.tick().await;
         let app = app.clone();
-        let _ = tokio::task::spawn_blocking(move || scan(&app)).await;
+        let _ = tokio::task::spawn_blocking(move || {
+            scan(&app);
+            app.supervisor.apply_pool_limits();
+        })
+        .await;
     }
 }
 
-/// Counts what every local Claude Code bot used since the last scan.
+/// Counts what every local Claude Code bot used since the last scan, then
+/// records the limit hits it found and re-estimates the Claude windows.
 pub fn scan(app: &AppState) {
     let Ok(bots) = app.db.list_bots_with_archived(None) else {
         return;
     };
     let cutoff = Utc::now() - chrono::Duration::hours(ARCHIVED_GRACE_HOURS);
+    let mut hits = Vec::new();
     for bot in bots {
         if bot.is_linked()
             || bot.runtime != BotRuntime::ClaudeCode
@@ -60,10 +68,29 @@ pub fn scan(app: &AppState) {
             continue;
         }
         for path in transcripts(app, &bot) {
-            if let Err(e) = ingest_file(&app.db, &app.cfg.usage, &bot, &path) {
-                tracing::debug!(bot_id = bot.id, path = %path.display(), error = %e, "usage scan failed");
+            match ingest_file(&app.db, &app.cfg.usage, &bot, &path) {
+                Ok(found) => hits.extend(found.hits),
+                Err(e) => {
+                    tracing::debug!(bot_id = bot.id, path = %path.display(), error = %e, "usage scan failed")
+                }
             }
         }
+    }
+    let now = Utc::now();
+    for hit in &hits {
+        match limits::record_hit(&app.db, hit, now) {
+            Ok(true) => tracing::info!(
+                provider = hit.provider,
+                window = hit.window,
+                resets_at = %hit.resets_at,
+                "account limit hit"
+            ),
+            Ok(false) => {}
+            Err(e) => tracing::debug!(error = %e, "recording a limit hit failed"),
+        }
+    }
+    if let Err(e) = limits::estimate(&app.db, now) {
+        tracing::debug!(error = %e, "estimating Claude windows failed");
     }
 }
 

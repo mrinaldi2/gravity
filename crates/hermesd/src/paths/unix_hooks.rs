@@ -1,6 +1,8 @@
 //! Claude Code hook settings on Unix: lifecycle events and permission prompts
 //! posted to the daemon with curl.
 
+use super::STATUS_LINE_EVENT;
+
 /// Cooperative permission rules and lifecycle hooks. Hooks POST lifecycle
 /// events to the daemon; failures are swallowed (`|| true`) so a daemon
 /// hiccup never blocks the session, and hook failure is never interpreted as
@@ -70,6 +72,18 @@ pub fn settings(daemon_port: u16, bot_token_env: &str) -> serde_json::Value {
             )
         }]
     }]);
+    // The statusline input carries the account's 5-hour and weekly window
+    // percentages (subscription accounts), which nothing else reports. The
+    // command forwards it and prints nothing, so the line stays empty.
+    let status_line = serde_json::json!({
+        "type": "command",
+        "command": format!(
+            "curl -fsS -m 2 -X POST 'http://127.0.0.1:{daemon_port}/hook?event={STATUS_LINE_EVENT}' \
+             -H \"Authorization: Bearer ${{{bot_token_env}}}\" \
+             -H 'Content-Type: application/json' --data-binary @- \
+             >/dev/null 2>&1 || true"
+        )
+    });
     serde_json::json!({
         // Bus deliveries arrive over the cross-session inbox socket; accept
         // them unattended so bot-to-bot traffic flows without approval stops.
@@ -97,6 +111,7 @@ pub fn settings(daemon_port: u16, bot_token_env: &str) -> serde_json::Value {
             "Notification": forwarding("Notification"),
             "PermissionRequest": permission,
             "SessionEnd": hook_cmd("SessionEnd")
-        }
+        },
+        "statusLine": status_line
     })
 }

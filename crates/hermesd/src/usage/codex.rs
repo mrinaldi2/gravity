@@ -15,6 +15,7 @@ use bus::Bot;
 use crate::chat::usage_lines::Tokens;
 use crate::db::{Db, ProviderWindow, UsageCursor, UsageMinute};
 
+use super::limits::{self, WindowReading};
 use super::prices::UsageConfig;
 
 pub const PROVIDER: &str = "codex";
@@ -30,17 +31,14 @@ pub enum Report {
         last: Tokens,
     },
     /// The account's windows. Sparse: a window the update leaves out keeps
-    /// its last reading.
-    Limits(Vec<WindowReading>),
-}
-
-/// One account window as the provider reported it.
-#[derive(Debug, Clone, PartialEq)]
-pub struct WindowReading {
-    /// `5h` or `weekly`.
-    pub window: &'static str,
-    pub used_percent: f64,
-    pub resets_at: Option<DateTime<Utc>>,
+    /// its last reading. `reached` is set once the account is out of
+    /// allowance (`rateLimitReachedType`).
+    Limits {
+        windows: Vec<WindowReading>,
+        reached: bool,
+    },
+    /// A turn failed because the account is out of allowance.
+    LimitReached,
 }
 
 /// The ledger's reading of an App Server notification, or `None` for one
@@ -72,7 +70,17 @@ pub fn parse(method: &str, params: &Value, model: &str) -> Option<Report> {
                 .iter()
                 .filter_map(|key| reading(snapshot.get(*key)?))
                 .collect();
-            (!windows.is_empty()).then_some(Report::Limits(windows))
+            let reached = snapshot
+                .get("rateLimitReachedType")
+                .is_some_and(|t| !t.is_null());
+            (!windows.is_empty() || reached).then_some(Report::Limits { windows, reached })
+        }
+        "error" | "turn/completed" => {
+            let info = params
+                .pointer("/error/codexErrorInfo")
+                .or_else(|| params.pointer("/turn/error/codexErrorInfo"))?
+                .as_str()?;
+            (info == "usageLimitExceeded").then_some(Report::LimitReached)
         }
         _ => None,
     }
@@ -118,22 +126,26 @@ fn reading(window: &Value) -> Option<WindowReading> {
     })
 }
 
-/// Writes `report`, received at `at`, into the ledger.
+/// Writes `report`, received at `at`, into the ledger. Returns whether it
+/// put the Codex pool on hold: the account hit a limit that resets later.
 pub fn record(
     db: &Db,
     cfg: &UsageConfig,
     bot: &Bot,
     report: &Report,
     at: DateTime<Utc>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bool> {
     match report {
         Report::Tokens {
             thread_id,
             model,
             total,
             last,
-        } => record_tokens(db, cfg, bot, thread_id, model, total, last, at),
-        Report::Limits(windows) => {
+        } => {
+            record_tokens(db, cfg, bot, thread_id, model, total, last, at)?;
+            Ok(false)
+        }
+        Report::Limits { windows, reached } => {
             for w in windows {
                 db.put_provider_window(&ProviderWindow {
                     provider: PROVIDER.to_string(),
@@ -142,11 +154,17 @@ pub fn record(
                     resets_at: w.resets_at,
                     source: "observed".to_string(),
                     capacity_estimate: None,
+                    limited_until: None,
                     updated_at: at,
                 })?;
             }
-            Ok(())
+            if *reached {
+                limits::limit_full_windows(db, PROVIDER, at)
+            } else {
+                Ok(false)
+            }
         }
+        Report::LimitReached => limits::limit_full_windows(db, PROVIDER, at),
     }
 }
 
