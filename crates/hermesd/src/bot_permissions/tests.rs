@@ -18,6 +18,7 @@ fn input(profile: PermissionProfile, extras: &[PermissionExtra]) -> Value {
         repo_url: Some("git@github.com:me/hermes.git"),
         port: 49777,
         guard_command: "'/bin/hermesd' guard".to_string(),
+        extra_environment: &[],
         interim: None,
     })
 }
@@ -145,7 +146,7 @@ fn the_interim_settings_are_folded_in_and_not_passed_twice() {
         "--settings".to_string(),
         interim.display().to_string(),
     ];
-    let (args, folded) = without_interim_settings(&base);
+    let (args, folded) = without_interim_settings(&base, Path::new("/none"), Path::new("/none"));
     assert_eq!(args, ["--verbose"]);
     let settings = generate(&SettingsInput {
         interim: folded.as_ref(),
@@ -160,6 +161,7 @@ fn the_interim_settings_are_folded_in_and_not_passed_twice() {
             repo_url: None,
             port: 1,
             guard_command: String::new(),
+            extra_environment: &[],
             interim: None,
         }
     });
@@ -175,8 +177,69 @@ fn the_interim_settings_are_folded_in_and_not_passed_twice() {
         "no duplicates"
     );
     assert!(deny.contains(&"Edit(~/.gravity/bot-settings.json)".to_string()));
-    let (args, _) = without_interim_settings(&["--settings=/nowhere.json".to_string()]);
+    let (args, _) = without_interim_settings(
+        &["--settings=/nowhere.json".to_string()],
+        Path::new("/none"),
+        Path::new("/none"),
+    );
     assert!(args.is_empty());
+}
+
+/// CE-003 M2: removing the interim `--settings` must not drop the owner's
+/// trust lines. They are read from `<home>/bot-settings.json` until the
+/// owner moves them into `auto_mode_environment`.
+#[test]
+fn the_owners_trust_lines_survive_removing_the_interim_argument() {
+    let dir = tempfile::tempdir().expect("tmp");
+    let home = dir.path().join(".gravity");
+    std::fs::create_dir_all(&home).expect("mkdir");
+    let tailnet = "Trusted internal domains: *.tail.ts.net";
+    std::fs::write(
+        home.join("bot-settings.json"),
+        json!({ "autoMode": { "environment": ["$defaults", tailnet] } }).to_string(),
+    )
+    .expect("write");
+    // Written as `~/…` in claude_args: expanded against the user's home.
+    let tilde = without_interim_settings(
+        &[
+            "--settings".to_string(),
+            "~/.gravity/bot-settings.json".to_string(),
+        ],
+        Path::new("/none"),
+        dir.path(),
+    );
+    // Argument removed: the file at the default place is still folded in.
+    let removed = without_interim_settings(&[], &home, dir.path());
+    for (args, folded) in [tilde, removed] {
+        assert!(args.is_empty());
+        let folded = folded.expect("folded");
+        assert_eq!(folded["autoMode"]["environment"][1], tailnet);
+    }
+    // Once the file is gone, the config key carries the lines.
+    std::fs::remove_file(home.join("bot-settings.json")).expect("rm");
+    assert!(without_interim_settings(&[], &home, dir.path()).1.is_none());
+    let repo = "Source control: github.com/me/gravity and its branches.".to_string();
+    let settings = generate(&SettingsInput {
+        extra_environment: &[tailnet.to_string(), repo.clone()],
+        ..SettingsInput {
+            profile: PermissionProfile::Trusted,
+            extras: &[],
+            project_name: "Hermes",
+            home: &home,
+            workspace: Path::new("/w"),
+            artifacts: None,
+            trusted_paths: &[],
+            repo_url: None,
+            port: 1,
+            guard_command: String::new(),
+            extra_environment: &[],
+            interim: None,
+        }
+    });
+    let env = settings["autoMode"]["environment"].as_array().expect("env");
+    assert_eq!(env[0], "$defaults");
+    assert!(env.iter().any(|l| l == tailnet));
+    assert!(env.iter().any(|l| *l == repo));
 }
 
 #[test]

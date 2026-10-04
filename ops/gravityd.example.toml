@@ -30,6 +30,12 @@ claude_args = []
 # Permission profiles name them to Claude Code's auto mode as trusted, and the
 # guard hook lets bots delete or move files inside them. `~` expands.
 # trusted_paths = ["~/Developer"]
+# Extra lines for Claude Code's auto-mode classifier, added to every bot's
+# generated environment: trusted domains, the repositories bots push to, …
+# auto_mode_environment = [
+#   "Trusted internal domains: *.example.ts.net (the owner's tailnet).",
+# ]
+# The same for one project's bots: see [project_auto_mode_environment] below.
 codex_bin = "codex"
 codex_args = []
 default_bot_runtime = "claude_code" # or "codex_cli" for newly created bots
@@ -77,3 +83,7 @@ base_backoff_seconds = 5
 tick_interval_ms = 30000
 lease_seconds = 300
 catch_up_window_minutes = 60
+
+# Auto-mode lines for one project's bots, keyed by project name.
+# [project_auto_mode_environment]
+# gravity = ["Source control: github.com/me/gravity and its branches."]

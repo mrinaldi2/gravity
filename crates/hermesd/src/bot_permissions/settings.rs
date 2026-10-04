@@ -25,6 +25,9 @@ pub struct SettingsInput<'a> {
     pub port: u16,
     /// The command that runs the guard hook.
     pub guard_command: String,
+    /// The owner's own lines for the classifier (`auto_mode_environment`
+    /// and the project's entry in `project_auto_mode_environment`).
+    pub extra_environment: &'a [String],
     /// The hand-applied settings file this replaces, folded in so nothing
     /// the owner tuned there is lost.
     pub interim: Option<&'a Value>,
@@ -67,6 +70,11 @@ pub fn generate(input: &SettingsInput<'_>) -> Value {
         }
     }
     let mut environment = environment(input);
+    for line in input.extra_environment {
+        if !environment.contains(line) {
+            environment.push(line.clone());
+        }
+    }
     if let Some(interim) = input.interim {
         merge_strings(&mut environment, &interim["autoMode"]["environment"]);
         merge_strings(&mut deny, &interim["permissions"]["deny"]);
