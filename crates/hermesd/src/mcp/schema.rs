@@ -16,9 +16,10 @@ pub(super) fn tool(name: &str, desc: &str, props: Value, required: Vec<&str>) ->
     })
 }
 
-pub(super) fn tool_list() -> Value {
+pub(super) fn tool_list(board_tools: &[Value]) -> Value {
     let mut tools = core_tools();
     tools.extend(super::schema_decisions::decision_tools());
+    tools.extend_from_slice(board_tools);
     json!({ "tools": tools })
 }
 

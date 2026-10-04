@@ -127,12 +127,57 @@ map_enum!(ItemEventKind {
     Linked,
     Assigned,
     Blocked,
-    Ranked
+    Ranked,
+    TaskDone,
+    TaskExpired,
+    TaskCancelled,
+    Unlinked
 });
 map_enum!(TemplateKind {
     ItemType,
     MeetingType
 });
+
+/// Each enum's spellings, short (the model's, which bots use: "doing",
+/// "reviewer.arch") and wire ("COLUMN_CATEGORY_DOING"), by proto enum name.
+macro_rules! spellings {
+    ($($name:ident),+ $(,)?) => {
+        pub fn spellings(enum_name: &str) -> Option<Vec<(&'static str, &'static str)>> {
+            match enum_name {
+                $(stringify!($name) => Some(
+                    m::$name::ALL
+                        .iter()
+                        .map(|v| (v.as_str(), c::$name::from(*v).as_str_name()))
+                        .collect(),
+                ),)+
+                _ => None,
+            }
+        }
+
+        /// Every enum's spellings at once, for rewriting output.
+        pub fn all_spellings() -> Vec<(&'static str, &'static str)> {
+            [$(stringify!($name)),+]
+                .iter()
+                .flat_map(|name| spellings(name).unwrap_or_default())
+                .collect()
+        }
+    };
+}
+
+spellings!(
+    ColumnCategory,
+    WipScope,
+    Role,
+    ItemType,
+    Platform,
+    Size,
+    Priority,
+    PersonRole,
+    VerificationResult,
+    LinkKind,
+    ItemEventKind,
+    TemplateKind,
+);
 
 pub(crate) fn stamp(at: DateTime<Utc>) -> Option<Timestamp> {
     Some(Timestamp {

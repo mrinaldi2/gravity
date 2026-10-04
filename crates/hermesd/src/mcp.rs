@@ -13,6 +13,9 @@ use serde_json::{json, Value};
 
 use crate::app::AppState;
 
+mod board;
+mod board_edit;
+mod board_schema;
 mod decisions;
 mod remote;
 mod routines;
@@ -122,7 +125,7 @@ pub async fn mcp_handler(
             "serverInfo": { "name": crate::brand::ACTIVE_MCP_SERVER, "version": crate::app::DAEMON_VERSION }
         })),
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(tool_list()),
+        "tools/list" => Ok(tool_list(&board_tools(&app, &bot_id))),
         // Tool-level failures travel as `isError` content; an Err here means
         // the request itself was malformed, which is invalid params (-32602).
         "tools/call" => match remote_call(&app, &bot_id, &params).await {
@@ -199,12 +202,25 @@ fn tool_call(app: &Arc<AppState>, bot_id: &str, params: &Value) -> Result<Value,
         "list_tags" => list_tags(app, bot_id),
         "upsert_tag" => upsert_tag(app, bot_id, &args),
         "retire_tag" => retire_tag(app, bot_id, &args),
+        board_tool if board::is_board_tool(board_tool) => {
+            board::call(app, bot_id, board_tool, &args)
+        }
         other => Err(anyhow::anyhow!("unknown tool: {other}")),
     };
     Ok(match out {
         Ok(v) => text_result(&v),
         Err(e) => tool_error(&e.to_string()),
     })
+}
+
+/// The board tools this bot sees: none until its project has a board, then
+/// those its board roles allow (H-020 §1.6).
+fn board_tools(app: &Arc<AppState>, bot_id: &str) -> Vec<Value> {
+    let roles = caller(app, bot_id).and_then(|bot| board::board_roles(app, &bot));
+    match roles {
+        Ok(Some(roles)) => board_schema::board_tool_list(&roles),
+        _ => Vec::new(),
+    }
 }
 
 fn caller(app: &Arc<AppState>, bot_id: &str) -> anyhow::Result<bus::Bot> {

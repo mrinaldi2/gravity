@@ -25,3 +25,5 @@ protox = "0.9"
 prost-build = "0.14"
 prost = "0.14"
 pbjson-build = "0.9"
+prost-types = "0.14"
+serde_json = { workspace = true }

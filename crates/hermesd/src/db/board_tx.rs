@@ -68,6 +68,10 @@ one_shot! {
     fn add_item_link(
         item_id: &str, kind: LinkKind, target: &str, label: Option<&str>, actor: &Actor<'_>
     ) -> ItemLink;
+    fn remove_item_link(item_id: &str, kind: LinkKind, target: &str, actor: &Actor<'_>) -> bool;
+    fn check_ac(
+        id: &str, expected: u64, idx: u32, checked: bool, machine: Option<&str>, actor: &Actor<'_>
+    ) -> Write<Item>;
     fn item_links(item_id: &str) -> Vec<ItemLink>;
     fn item_project(id: &str) -> Option<String>;
 }

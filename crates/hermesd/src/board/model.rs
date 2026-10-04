@@ -79,6 +79,8 @@ text_enum!(LinkKind {
 text_enum!(ItemEventKind {
     Created => "created", Moved => "moved", Edited => "edited", Commented => "commented",
     Linked => "linked", Assigned => "assigned", Blocked => "blocked", Ranked => "ranked",
+    TaskDone => "task_done", TaskExpired => "task_expired", TaskCancelled => "task_cancelled",
+    Unlinked => "unlinked",
 });
 text_enum!(TemplateKind { ItemType => "item_type", MeetingType => "meeting_type" });
 
