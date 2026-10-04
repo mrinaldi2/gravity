@@ -58,7 +58,7 @@ pub(crate) mod migration;
 use home::managed_markers;
 use home::{
     daemon_file, managed_daemon_is_installed, managed_daemon_needs_repair, managed_marker_exists,
-    migration_pending,
+    migration_pending, switch_over_interrupted,
 };
 pub(crate) use home::{daemon_home, user_home};
 
@@ -170,7 +170,8 @@ pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
 }
 
 /// Reinstalls the managed daemon from the bundled sidecar when its binary has
-/// gone missing, so a broken upgrade heals on the next app launch.
+/// gone missing, or finishes an install that died after moving the home, so
+/// a broken upgrade heals on the next app launch.
 ///
 /// A repair stays a repair: it never moves the home. While a migration is
 /// pending it does nothing, and the install that migrates runs only after
@@ -190,7 +191,9 @@ pub(crate) fn repair_local_daemon_if_broken() -> Result<(), String> {
 }
 
 fn repair_needed(home: &Path, user_home: &Path, migration_pending: bool) -> bool {
-    !migration_pending && managed_daemon_needs_repair(home, user_home)
+    !migration_pending
+        && (managed_daemon_needs_repair(home, user_home)
+            || switch_over_interrupted(home, user_home))
 }
 
 /// Must match `hermesd`'s own config default and `DEFAULT_ENDPOINT` in the
