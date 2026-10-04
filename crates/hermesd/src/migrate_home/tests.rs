@@ -352,3 +352,10 @@ fn config_and_the_settings_it_names_are_rewritten_and_restored() {
         settings
     );
 }
+
+/// The backup's free-space check blocks on Windows too, not only warns.
+#[test]
+fn free_disk_space_is_known_on_every_platform() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    assert!(disk::free_bytes(tmp.path()).is_some_and(|free| free > 0));
+}

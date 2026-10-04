@@ -63,8 +63,30 @@ pub fn free_bytes(path: &Path) -> Option<u64> {
 }
 
 #[cfg(windows)]
-pub fn free_bytes(_path: &Path) -> Option<u64> {
-    None
+pub fn free_bytes(path: &Path) -> Option<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetDiskFreeSpaceExW(
+            directory: *const u16,
+            available_to_caller: *mut u64,
+            total: *mut u64,
+            total_free: *mut u64,
+        ) -> i32;
+    }
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut available = 0u64;
+    // SAFETY: `wide` is NUL-terminated and outlives the call; the two
+    // totals are optional and passed as null.
+    let ok = unsafe {
+        GetDiskFreeSpaceExW(
+            wide.as_ptr(),
+            &mut available,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    (ok != 0).then_some(available)
 }
 
 /// Renames `dir` to an unused `<dir>-stray-<timestamp>` beside it.
