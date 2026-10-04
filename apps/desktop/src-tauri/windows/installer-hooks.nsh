@@ -25,7 +25,7 @@
 ; app. The Hermes installs beside it, so take that install over here: close
 ; the old app and remove its program files, shortcuts and registry entries.
 ; The background service is left to POSTINSTALL, whose "service install"
-; replaces it, and user data (%USERPROFILE%\.gravity, and the app data under
+; replaces it, and user data (%USERPROFILE%\.thehermes, and the app data under
 ; the unchanged bundle id) is never touched. Every step is guarded, so a
 ; second run finds nothing and does nothing.
 !define LEGACY_PRODUCTNAME "Gravity"

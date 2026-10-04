@@ -45,13 +45,47 @@ pub fn bus_tool(name: &str) -> Option<&str> {
         .find_map(|prefix| name.strip_prefix(prefix))
 }
 
-/// The daemon home under the user's home directory. Moves in the home
-/// migration, together with everything the bots' paths and transcripts embed.
-pub const HOME_DIR_NAME: &str = ".gravity";
+/// The daemon home under the user's home directory.
+pub const HOME_DIR_NAME: &str = ".thehermes";
+
+/// The home before the rename. `hermesd migrate-home` moves it to
+/// [`HOME_DIR_NAME`] and leaves a symlink here for one release.
+pub const LEGACY_HOME_DIR_NAME: &str = ".gravity";
+
+/// Stem of the daemon's own files in its home: `hermesd.toml`, `.port`,
+/// `.lock`, `.reclaims`, `logs/hermesd.{out,err}.log`, `hermesd-task.*`.
+pub const DAEMON_FILE_STEM: &str = "hermesd";
+
+/// The same files before the rename; the home migration renames them.
+pub const LEGACY_DAEMON_FILE_STEM: &str = "gravityd";
+
+/// The launchd agent label on macOS.
+pub const LAUNCHD_LABEL: &str = "com.manuelrinaldi.thehermesd";
+
+/// The label releases before the rename installed under. `service install`
+/// unloads it before loading [`LAUNCHD_LABEL`], so the two never both run.
+pub const LEGACY_LAUNCHD_LABEL: &str = "in.mikolajczuk.gravityd";
+
+/// Prefix of the per-user scheduled task on Windows.
+pub const WINDOWS_TASK: &str = "The Hermes";
+
+/// The task prefix before the rename, removed by `service install`.
+pub const LEGACY_WINDOWS_TASK: &str = "Gravity";
+
+/// `<stem><suffix>` in the daemon home, e.g. `daemon_file(".toml")`.
+pub fn daemon_file(suffix: &str) -> String {
+    format!("{DAEMON_FILE_STEM}{suffix}")
+}
+
+/// The pre-rename name of [`daemon_file`].
+pub fn legacy_daemon_file(suffix: &str) -> String {
+    format!("{LEGACY_DAEMON_FILE_STEM}{suffix}")
+}
 
 /// Prefix of on-disk markers and branch names written into bots' repos and
 /// workspaces (`.gravity-worktree.json`, `gravity/<bot>`). Existing worktrees
-/// are recognised by it, so it moves with the home.
+/// and branches in bots' repositories are recognised by it, and those live
+/// outside the home, so the home migration leaves it as it is.
 pub const ON_DISK_SLUG: &str = "gravity";
 
 /// The variable a bot's session reads its bus token from. Bots also get

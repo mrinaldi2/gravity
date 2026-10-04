@@ -51,35 +51,12 @@ fn sidecar_path_for_exe(exe: &Path) -> Result<PathBuf, String> {
     Ok(dir.join(format!("hermesd{}", std::env::consts::EXE_SUFFIX)))
 }
 
-/// Must match `LAUNCHD_LABEL` in `crates/hermesd/src/service.rs`.
-const LAUNCHD_LABEL: &str = "in.mikolajczuk.gravityd";
+mod home;
 
-pub(crate) fn user_home() -> Result<PathBuf, String> {
-    let variable = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
-    std::env::var_os(variable)
-        .map(PathBuf::from)
-        .ok_or_else(|| format!("{variable} is not set"))
-}
-
-/// Mirrors `ServicePaths::bin_path`, `legacy_bin_path` and `plist_path` in
-/// `crates/hermesd/src/service.rs`. An install from before the rename still
-/// counts, so the app's update reaches it and `service install` replaces it.
-fn managed_daemon_is_installed(home: &Path, user_home: &Path) -> bool {
-    ["hermesd", "gravityd"].iter().any(|name| {
-        home.join(format!("bin/{name}{}", std::env::consts::EXE_SUFFIX))
-            .is_file()
-    }) && managed_marker(home, user_home).is_file()
-}
-
-fn managed_marker(home: &Path, user_home: &Path) -> PathBuf {
-    if cfg!(windows) {
-        home.join("gravityd-task.xml")
-    } else {
-        user_home
-            .join("Library/LaunchAgents")
-            .join(format!("{LAUNCHD_LABEL}.plist"))
-    }
-}
+#[cfg(test)]
+use home::managed_markers;
+use home::{daemon_file, managed_daemon_is_installed};
+pub(crate) use home::{daemon_home, user_home};
 
 /// Runs the bundled sidecar's own `service <action>`, the same code path the
 /// CLI uses.
@@ -173,25 +150,13 @@ pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
 /// client.
 const DEFAULT_PORT: u16 = 49777;
 
-/// Root of the daemon's state, mirroring `hermesd`'s own resolution in
-/// `crates/hermesd/src/brand.rs`: `THEHERMES_HOME`, then `GRAVITY_HOME`.
-pub(crate) fn daemon_home() -> Result<PathBuf, String> {
-    let set = ["THEHERMES_HOME", "GRAVITY_HOME"]
-        .iter()
-        .find_map(std::env::var_os);
-    if let Some(home) = set {
-        return Ok(PathBuf::from(home));
-    }
-    Ok(user_home()?.join(".gravity"))
-}
-
 /// The port the daemon installed on this machine actually serves on.
 ///
-/// A managed daemon publishes its selected port in `gravityd.port`, including
+/// A managed daemon publishes its selected port in `hermesd.port`, including
 /// any fallback negotiated because the configured port was occupied.
 ///
 /// An install predating the 49777 default still has `port = 7777` in its
-/// `gravityd.toml`, and `service install` deliberately keeps an existing config,
+/// `hermesd.toml`, and `service install` deliberately keeps an existing config,
 /// so the daemon keeps serving on the old port after an upgrade. The wizard
 /// has to ask the config rather than assume the current default, or it polls
 /// a port nothing will ever answer on.
@@ -204,14 +169,14 @@ pub fn local_daemon_port() -> u16 {
 }
 
 fn daemon_port_from_home(home: &Path) -> u16 {
-    if let Ok(text) = std::fs::read_to_string(home.join("gravityd.port")) {
+    if let Ok(text) = std::fs::read_to_string(daemon_file(home, ".port")) {
         if let Ok(port) = text.trim().parse::<u16>() {
             if port > 0 {
                 return port;
             }
         }
     }
-    let Ok(text) = std::fs::read_to_string(home.join("gravityd.toml")) else {
+    let Ok(text) = std::fs::read_to_string(daemon_file(home, ".toml")) else {
         return DEFAULT_PORT;
     };
     let Ok(parsed) = text.parse::<toml::Table>() else {
@@ -250,13 +215,13 @@ fn tail_of(path: &Path) -> Option<String> {
 }
 
 /// The daemon's most recent log, so a failed install can say *why* it never
-/// came up. The daemon logs to stderr, so `gravityd.err.log` normally holds
+/// came up. The daemon logs to stderr, so `hermesd.err.log` normally holds
 /// everything; the stdout log is a fallback for a build that logged there.
 /// `None` means there is nothing to show.
 #[tauri::command]
 pub fn daemon_log_tail() -> Option<String> {
     let logs = daemon_home().ok()?.join("logs");
-    tail_of(&logs.join("gravityd.err.log")).or_else(|| tail_of(&logs.join("gravityd.out.log")))
+    tail_of(&daemon_file(&logs, ".err.log")).or_else(|| tail_of(&daemon_file(&logs, ".out.log")))
 }
 
 #[cfg(test)]
@@ -295,7 +260,7 @@ mod tests {
         let home = root.join("gravity");
         let user_home = root.join("user");
         let bin = home.join(format!("bin/hermesd{}", std::env::consts::EXE_SUFFIX));
-        let plist = managed_marker(&home, &user_home);
+        let plist = managed_markers(&home, &user_home)[0].clone();
         std::fs::create_dir_all(bin.parent().expect("binary parent")).expect("binary directory");
         std::fs::write(&bin, b"daemon").expect("daemon binary");
         assert!(!managed_daemon_is_installed(&home, &user_home));
@@ -313,7 +278,7 @@ mod tests {
         let home = root.join("gravity");
         let user_home = root.join("user");
         let legacy = home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX));
-        let plist = managed_marker(&home, &user_home);
+        let plist = managed_markers(&home, &user_home)[0].clone();
         std::fs::create_dir_all(legacy.parent().expect("binary parent")).expect("binary directory");
         std::fs::create_dir_all(plist.parent().expect("plist parent")).expect("plist directory");
         std::fs::write(&legacy, b"daemon").expect("legacy daemon binary");
@@ -337,8 +302,8 @@ mod tests {
     #[test]
     fn runtime_port_takes_precedence_over_the_configured_port() {
         let home = daemon_test_home("runtime-port");
-        std::fs::write(home.join("gravityd.toml"), "port = 49777\n").expect("configured port");
-        std::fs::write(home.join("gravityd.port"), "50123\n").expect("runtime port");
+        std::fs::write(home.join("hermesd.toml"), "port = 49777\n").expect("configured port");
+        std::fs::write(home.join("hermesd.port"), "50123\n").expect("runtime port");
 
         assert_eq!(daemon_port_from_home(&home), 50_123);
         std::fs::remove_dir_all(home).expect("test cleanup");
@@ -353,12 +318,12 @@ mod tests {
         let home = root.join("gravity");
         let user_home = root.join("user");
         let bin = home.join(format!("bin/hermesd{}", std::env::consts::EXE_SUFFIX));
-        let plist = managed_marker(&home, &user_home);
+        let plist = managed_markers(&home, &user_home)[0].clone();
         std::fs::create_dir_all(bin.parent().expect("binary parent")).expect("binary directory");
         std::fs::create_dir_all(plist.parent().expect("plist parent")).expect("plist directory");
         std::fs::write(&bin, b"daemon").expect("daemon binary");
         std::fs::write(&plist, b"plist").expect("launchd plist");
-        std::fs::write(home.join("gravityd.port"), "49777\n").expect("runtime port");
+        std::fs::write(home.join("hermesd.port"), "49777\n").expect("runtime port");
 
         assert!(managed_daemon_is_installed(&home, &user_home));
         assert_eq!(daemon_port_from_home(&home), 49_777);
@@ -371,6 +336,7 @@ mod tests {
     #[test]
     fn invalid_runtime_port_falls_back_to_the_configured_port() {
         let home = daemon_test_home("invalid-runtime-port");
+        // An unmigrated home, as the app sees it before `service install`.
         std::fs::write(home.join("gravityd.toml"), "port = 7777\n").expect("configured port");
         std::fs::write(home.join("gravityd.port"), "stale\n").expect("runtime port");
 

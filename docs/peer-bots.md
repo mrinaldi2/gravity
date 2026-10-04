@@ -18,7 +18,7 @@ artifacts those results attach.
 
 ## Setting it up
 
-On the Windows PC, add its Tailscale address to `bind` in `gravityd.toml`
+On the Windows PC, add its Tailscale address to `bind` in `hermesd.toml`
 (next to `127.0.0.1`) and restart the daemon. Then create an invite for the
 Mac:
 

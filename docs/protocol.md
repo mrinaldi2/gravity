@@ -49,7 +49,7 @@ grant is connected; otherwise the prompt stays in the bot's terminal.
 
 Two credential kinds are accepted as `token`:
 
-- **Owner token** (`~/.gravity/secrets/client.token`) — full grants, same machine.
+- **Owner token** (`~/.thehermes/secrets/client.token`) — full grants, same machine.
 - **Device token** — issued via `create_device`, carries scoped `grants`
   (any of `read`, `control`, `approve`) and can be revoked. A revoked device
   cannot reconnect.
@@ -216,7 +216,7 @@ breaking wire-shape change; v1 clients must upgrade before connecting.
 - `config`: the daemon configuration under `config` (shape below). Replied to both
   `get_config` and `set_config`; the latter echoes the state after the write.
   `port` is what the daemon serves and points bots at; `configured_port` is what
-  `gravityd.toml` asked for. They differ when the configured port was occupied
+  `hermesd.toml` asked for. They differ when the configured port was occupied
   and a fallback was negotiated, which also moves the bus `/mcp` URL.
 
 ## Server pushes (no `req_id`)
@@ -339,7 +339,7 @@ Timestamps are RFC 3339 UTC strings. IDs are UUIDv4 strings.
   conversation was cleared and points at `FACTS.md`. It is read from the
   transcript just before the session starts; a note still waiting to be
   delivered is not sent twice. `resume_after_restart = false` in
-  `gravityd.toml` turns it off.
+  `hermesd.toml` turns it off.
 - Multiple clients may `attach` to the same bot; all receive `term` pushes. Any
   connection with the `control` grant may `input`/`resize` — there is no input
   lease. Bus deliveries are posted to the bot session's inbox socket
@@ -364,10 +364,10 @@ Timestamps are RFC 3339 UTC strings. IDs are UUIDv4 strings.
 - `set_config` (advertised as the `config` capability, requires the `control`
   grant) writes only `auto_compact_window`: a number in 100000–1000000, or
   `null` for the model default. The value is persisted in the daemon's database
-  — layered over `gravityd.toml`, which stays untouched — and takes effect the
+  — layered over `hermesd.toml`, which stays untouched — and takes effect the
   next time each bot's session starts. `bind`, `port` and `runtime` in the
   `config` reply are read-only: they describe how the daemon was launched and
-  change only via `gravityd.toml` plus a restart.
+  change only via `hermesd.toml` plus a restart.
 
 ## Bot self-management
 
@@ -410,7 +410,7 @@ avatar is dealt one of the icons at random.
 
 ### A project's directory never moves
 
-A project owns `~/.gravity/projects/<dir_name>/`, and every bot's
+A project owns `~/.thehermes/projects/<dir_name>/`, and every bot's
 `workspace_path` points inside it. `dir_name` is derived from the name at
 creation and then frozen, so `update_project` changes only what the project is
 called: nothing on disk moves and no running bot loses its workspace. The name

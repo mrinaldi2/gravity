@@ -5,16 +5,17 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context;
 
-pub const SERVICE_LABEL: &str = "Gravity";
-const DEFAULT_CONFIG: &str = include_str!("../../../../ops/gravityd.example.toml");
+pub const SERVICE_LABEL: &str = crate::brand::WINDOWS_TASK;
+const DEFAULT_CONFIG: &str = include_str!("../../../../ops/hermesd.example.toml");
 
 pub struct ServicePaths {
     home: PathBuf,
+    user_home: PathBuf,
 }
 
 impl ServicePaths {
-    pub fn new(home: PathBuf, _user_home: PathBuf) -> Self {
-        Self { home }
+    pub fn new(home: PathBuf, user_home: PathBuf) -> Self {
+        Self { home, user_home }
     }
     pub fn bin_path(&self) -> PathBuf {
         self.home.join("bin/hermesd.exe")
@@ -26,31 +27,50 @@ impl ServicePaths {
     }
     // Kept as the common installation-marker API for the existing CLI.
     pub fn plist_path(&self) -> PathBuf {
-        self.home.join("gravityd-task.xml")
+        self.home.join(crate::brand::daemon_file("-task.xml"))
     }
     pub fn config_path(&self) -> PathBuf {
-        self.home.join("gravityd.toml")
+        self.home.join(crate::brand::daemon_file(".toml"))
     }
     pub fn log_dir(&self) -> PathBuf {
         self.home.join("logs")
     }
     fn launcher_path(&self) -> PathBuf {
-        self.home.join("gravityd-task.ps1")
+        self.home.join(crate::brand::daemon_file("-task.ps1"))
     }
     fn pid_path(&self) -> PathBuf {
-        self.home.join("gravityd-task.pid")
+        self.home.join(crate::brand::daemon_file("-task.pid"))
+    }
+    /// Homes a task from before the rename may run from: this one, when it
+    /// was set explicitly, and the default pre-rename home.
+    fn legacy_homes(&self) -> Vec<PathBuf> {
+        let mut homes = vec![self.home.clone()];
+        let default = self.user_home.join(crate::brand::LEGACY_HOME_DIR_NAME);
+        if default != self.home {
+            homes.push(default);
+        }
+        homes
     }
 }
 
 fn task_name(paths: &ServicePaths) -> anyhow::Result<String> {
-    use sha2::{Digest, Sha256};
-    let home = paths.home.canonicalize()?.to_string_lossy().to_lowercase();
-    let hash = hex::encode(Sha256::digest(home.as_bytes()));
-    Ok(format!(
-        "{SERVICE_LABEL}-{}-{}",
-        crate::permissions::user_sid()?,
-        &hash[..12]
+    task_name_in(SERVICE_LABEL, &paths.home)
+}
+
+fn task_name_in(label: &str, home: &Path) -> anyhow::Result<String> {
+    let home = home.canonicalize()?.to_string_lossy().to_lowercase();
+    Ok(task_name_for(
+        label,
+        &crate::permissions::user_sid()?,
+        &home,
     ))
+}
+
+/// `<label>-<user SID>-<hash of the home>`: one task per user and home.
+fn task_name_for(label: &str, sid: &str, canonical_home: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let hash = hex::encode(Sha256::digest(canonical_home.as_bytes()));
+    format!("{label}-{sid}-{}", &hash[..12])
 }
 
 fn quote(path: &Path) -> String {
@@ -174,7 +194,7 @@ pub fn install(source: &Path, paths: &ServicePaths) -> anyhow::Result<()> {
     }
     let launcher = format!(
         "$ErrorActionPreference = 'Stop'\n$env:{} = {}\n$p = Start-Process -FilePath {} -ArgumentList '--negotiate-port' -WindowStyle Hidden -PassThru -RedirectStandardOutput {} -RedirectStandardError {}\n[IO.File]::WriteAllText({}, [string]$p.Id)\n$p.WaitForExit()\nexit $p.ExitCode\n",
-        crate::brand::env_name("HOME"), quote(&paths.home), quote(&paths.bin_path()), quote(&paths.log_dir().join("gravityd.out.log")), quote(&paths.log_dir().join("gravityd.err.log")), quote(&paths.pid_path())
+        crate::brand::env_name("HOME"), quote(&paths.home), quote(&paths.bin_path()), quote(&paths.log_dir().join(crate::brand::daemon_file(".out.log"))), quote(&paths.log_dir().join(crate::brand::daemon_file(".err.log"))), quote(&paths.pid_path())
     );
     std::fs::write(paths.launcher_path(), launcher)?;
     let sid = crate::permissions::user_sid()?;
@@ -195,6 +215,80 @@ pub fn install(source: &Path, paths: &ServicePaths) -> anyhow::Result<()> {
     ])
 }
 
+/// The tasks a release before the rename created, once stopped. Names are
+/// kept from before the migration: they hash the old home's resolved path,
+/// which the compatibility junction changes afterwards.
+pub struct Legacy {
+    tasks: Vec<(String, PathBuf)>,
+}
+
+/// Ends the task a release before the rename created (`Gravity-…`, launching
+/// `gravityd-task.ps1`) and waits for its daemon to release the home.
+///
+/// Runs before the home migration and before the new task is created: both
+/// tasks would otherwise start a daemon at logon. The task stays registered
+/// until [`remove_legacy`], so a failed migration can start it again with
+/// [`restart_legacy`].
+pub fn stop_legacy(paths: &ServicePaths) -> anyhow::Result<Option<Legacy>> {
+    let mut tasks = Vec::new();
+    for home in paths.legacy_homes() {
+        let marker = home.join(crate::brand::legacy_daemon_file("-task.xml"));
+        if !marker.is_file() {
+            continue;
+        }
+        let name = task_name_in(crate::brand::LEGACY_WINDOWS_TASK, &home)?;
+        tracing::info!(task = %name, "stopping the pre-rename task");
+        let _ = Command::new("schtasks.exe")
+            .args(["/end", "/tn", &name])
+            .output()?;
+        let pid_path = home.join(crate::brand::legacy_daemon_file("-task.pid"));
+        if let Ok(pid) = std::fs::read_to_string(&pid_path) {
+            let pid: u32 = pid.trim().parse().context("invalid managed daemon PID")?;
+            let bin = home.join("bin");
+            stop_daemon(pid, &[bin.join("gravityd.exe"), bin.join("hermesd.exe")])?;
+        }
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            match crate::home::lock_legacy(&home) {
+                Ok(_lock) => break,
+                Err(error) if Instant::now() >= deadline => {
+                    return Err(error).context("waiting for the pre-rename daemon to stop")
+                }
+                Err(_) => std::thread::sleep(Duration::from_millis(100)),
+            }
+        }
+        tasks.push((name, home));
+    }
+    Ok((!tasks.is_empty()).then_some(Legacy { tasks }))
+}
+
+/// Starts the old task again, after a failed migration was rolled back.
+pub fn restart_legacy(_paths: &ServicePaths, legacy: &Legacy) -> anyhow::Result<()> {
+    for (name, _) in &legacy.tasks {
+        run_task(&["/run", "/tn", name])?;
+    }
+    Ok(())
+}
+
+/// Deletes the old task and its files, wherever the migration left them.
+pub fn remove_legacy(paths: &ServicePaths, legacy: Legacy) -> anyhow::Result<()> {
+    for (name, home) in &legacy.tasks {
+        // A task already deleted by hand is fine.
+        if let Err(error) = run_task(&["/delete", "/tn", name, "/f"]) {
+            tracing::warn!(%error, task = %name, "could not delete the pre-rename task");
+        }
+        for dir in [home, &paths.home] {
+            for suffix in ["-task.xml", "-task.ps1", "-task.pid"] {
+                let path = dir.join(crate::brand::legacy_daemon_file(suffix));
+                if path.is_file() {
+                    std::fs::remove_file(path)?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn reload(paths: &ServicePaths) -> anyhow::Result<()> {
     anyhow::ensure!(
         paths.plist_path().is_file(),
@@ -205,6 +299,11 @@ pub fn reload(paths: &ServicePaths) -> anyhow::Result<()> {
 }
 
 pub fn uninstall(paths: &ServicePaths) -> anyhow::Result<()> {
+    match stop_legacy(paths) {
+        Ok(Some(legacy)) => remove_legacy(paths, legacy)?,
+        Ok(None) => {}
+        Err(error) => tracing::warn!(%error, "could not stop the pre-rename task"),
+    }
     // The app may be removed after the user already uninstalled its daemon.
     if !paths.plist_path().is_file() {
         return Ok(());
@@ -239,51 +338,5 @@ pub fn status(paths: &ServicePaths, configured_port: u16) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn stopping_an_absent_or_reused_pid_is_a_no_op() {
-        let root = tempfile::tempdir().expect("temporary home");
-        let executables = [
-            root.path().join("hermesd.exe"),
-            root.path().join("gravityd.exe"),
-        ];
-        stop_daemon(i32::MAX as u32, &executables).expect("absent process");
-        stop_daemon(std::process::id(), &executables).expect("unrelated process is preserved");
-    }
-
-    #[test]
-    fn uninstall_without_an_installed_daemon_is_a_no_op() {
-        let root = tempfile::tempdir().expect("temporary home");
-        for home in [root.path().to_path_buf(), root.path().join("absent")] {
-            let paths = ServicePaths::new(home.clone(), root.path().to_path_buf());
-            uninstall(&paths).expect("already uninstalled");
-            assert!(!paths.plist_path().exists());
-            assert!(!paths.bin_path().exists());
-        }
-    }
-
-    #[test]
-    fn task_is_scoped_to_current_user_and_escapes_paths() {
-        let paths = ServicePaths::new(
-            PathBuf::from(r"C:\Users\Test & User\.gravity"),
-            PathBuf::new(),
-        );
-        let task = render_task(&paths, "S-1-5-21-123");
-        assert!(task.contains("InteractiveToken"));
-        assert!(task.contains("LeastPrivilege"));
-        assert!(task.contains("Test &amp; User"));
-        assert!(task.contains("-WindowStyle Hidden"));
-        assert!(task.contains("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>"));
-        assert!(task.contains("<UserId>S-1-5-21-123</UserId>"));
-    }
-
-    #[test]
-    fn launcher_quotes_apostrophes() {
-        assert_eq!(
-            quote(Path::new("C:/O'Brien/gravity.exe")),
-            r"'C:\O''Brien\gravity.exe'"
-        );
-    }
-}
+#[path = "windows_tests.rs"]
+mod tests;

@@ -23,7 +23,7 @@ crates/hermesd/      daemon: runtime adapters, durable delivery, scheduler,
                   MCP bridge, WebSocket control plane
 apps/desktop/     Tauri v2 + React + xterm.js client
 docs/             architecture, WS protocol v2, public-build configuration
-ops/              launchd plist + example gravityd.toml
+ops/              launchd plist + example hermesd.toml
 scripts/          repository checks (file-length rule)
 ```
 
@@ -130,12 +130,12 @@ serves on a free port instead and the app follows it there. That moves the bot
 bus off the allowlisted `http://127.0.0.1:49777/mcp` URL, which a policy-managed
 Mac silently drops, so Settings → Connection flags it and the daemon restarts
 onto `49777` as soon as it comes free. Set `negotiate_port = false` in
-`gravityd.toml` to get a daemon that refuses to start instead.
+`hermesd.toml` to get a daemon that refuses to start instead.
 
 ## Run the whole stack (development)
 
 `scripts/dev.sh` starts a workspace-private daemon and the client against it —
-nothing touches `~/.gravity`, so it can run beside the installed production
+nothing touches `~/.thehermes`, so it can run beside the installed production
 daemon and beside other checkouts:
 
 ```sh
@@ -145,7 +145,7 @@ GRAVITY_RUNTIME=double ./scripts/dev.sh # deterministic echo runtime, no tokens 
 ```
 
 The daemon gets its own home at `.dev/gravityd/` (gitignored) with a generated
-`gravityd.toml`. Ports derive from `CONDUCTOR_PORT` when Conductor sets it —
+`hermesd.toml`. Ports derive from `CONDUCTOR_PORT` when Conductor sets it —
 frontend on `CONDUCTOR_PORT`, daemon on `CONDUCTOR_PORT+1`, defaulting to
 1420/1421 — so parallel workspaces do not collide. In browser mode the script
 prints the `localStorage` snippet that points the page at that daemon; the
@@ -158,13 +158,13 @@ frontend dependencies.
 ## Run the daemon (development)
 
 ```sh
-mkdir -p ~/.gravity
-cp ops/gravityd.example.toml ~/.gravity/gravityd.toml   # optional; defaults are sane
+mkdir -p ~/.thehermes
+cp ops/hermesd.example.toml ~/.thehermes/hermesd.toml   # optional; defaults are sane
 cargo run -p hermesd                                   # or: hermesd --config <path>
 curl http://127.0.0.1:49777/health
 ```
 
-On first start the daemon generates `~/.gravity/secrets/client.token`
+On first start the daemon generates `~/.thehermes/secrets/client.token`
 (mode 0600), which the desktop client reads automatically on the same machine.
 
 For a remote client (laptop over Tailscale), do **not** copy the owner token.
@@ -176,7 +176,7 @@ connection settings. Revoking the device immediately prevents reconnection.
 ### Backup & restore
 
 ```sh
-hermesd backup                       # ~/.gravity/backups/backup-<timestamp>
+hermesd backup                       # ~/.thehermes/backups/backup-<timestamp>
 hermesd backup --out /path/to/dir
 hermesd restore --from /path/to/dir  # refuses if a db exists
 hermesd restore --from /path/to/dir --overwrite   # moves current db aside first
@@ -185,27 +185,45 @@ hermesd restore --from /path/to/dir --overwrite   # moves current db aside first
 Backups use SQLite's online backup API and include configuration manifests
 (project/bot config files) but never secrets or bot workspaces. Retention
 pruning (messages, deliveries, routine runs; FTS index kept in sync) runs
-daily by default — see `[retention]` in `gravityd.toml`.
+daily by default — see `[retention]` in `hermesd.toml`.
 
 ## Mac mini service
 
 ```sh
 cargo build --release
-./target/release/hermesd service install   # binary → ~/.gravity/bin, launchd user agent
+./target/release/hermesd service install   # binary → ~/.thehermes/bin, launchd user agent
 sudo pmset -a sleep 0 disablesleep 1    # keep the mini awake
 ```
 
-`service install` copies the invoked binary to `~/.gravity/bin/hermesd`,
-writes `~/.gravity/gravityd.toml` if missing, and bootstraps the
-`in.mikolajczuk.gravityd` launchd agent — rerun it after a rebuild to upgrade in
+`service install` copies the invoked binary to `~/.thehermes/bin/hermesd`,
+writes `~/.thehermes/hermesd.toml` if missing, and bootstraps the
+`com.manuelrinaldi.thehermesd` launchd agent — rerun it after a rebuild to upgrade in
 place. `service restart` bounces that agent without touching the install, which
 kills every running bot session mid-turn; Settings → Connection offers the same
-thing behind a confirmation. `ops/in.mikolajczuk.gravityd.plist` remains for
+thing behind a confirmation. `ops/com.manuelrinaldi.thehermesd.plist` remains for
 fully manual setups.
+
+### Upgrading from `~/.gravity`
+
+Releases before 0.15 kept their state in `~/.gravity` under the launchd label
+`in.mikolajczuk.gravityd` (Windows task `Gravity-…`). `service install` stops
+that service, moves the home with `hermesd migrate-home`, and installs the new
+one; a failed migration is rolled back and the old service restarted. To look
+first, or to undo:
+
+```sh
+hermesd migrate-home --dry-run    # paths, rows and transcript dirs it would touch
+hermesd migrate-home              # backup, move, rewrite paths, rename transcript dirs
+hermesd migrate-home --rollback   # reverse it from the log in migrate-home.json
+```
+
+The move keeps every bot's Claude Code transcripts and memory by renaming
+their `~/.claude/projects` directories, and leaves `~/.gravity` as a symlink to
+`~/.thehermes` for one release.
 
 ## How it works, briefly
 
-- Each **bot** is a provisioned directory (`~/.gravity/projects/<p>/bots/<b>`)
+- Each **bot** is a provisioned directory (`~/.thehermes/projects/<p>/bots/<b>`)
   with `system.md`, `mcp.json`, and a workspace containing `CLAUDE.md` and
   cooperative `.claude/settings.json` (permission rules + lifecycle hooks that
   report state to the daemon). The runtime adapter spawns `claude` there in a

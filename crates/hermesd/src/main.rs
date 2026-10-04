@@ -15,6 +15,58 @@ fn flag_value(args: &[String], flag: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// `hermesd migrate-home [--dry-run | --rollback] [--from <dir>] [--to <dir>]`.
+fn migrate_home(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
+    use hermesd::migrate_home::{self as migrate, Plan};
+    let default = Plan::default_for(cfg);
+    let plan = Plan::new(
+        flag_value(args, "--from").unwrap_or(default.from),
+        flag_value(args, "--to").unwrap_or(default.to),
+        default.user_home,
+    );
+    let mut out = std::io::stdout();
+    if args.iter().any(|a| a == "--dry-run") {
+        if !migrate::dry_run(&plan, &mut out)? {
+            std::process::exit(1);
+        }
+    } else if args.iter().any(|a| a == "--rollback") {
+        migrate::rollback(&plan, &mut out)?;
+    } else {
+        migrate::run(&plan, &mut out)?;
+    }
+    Ok(())
+}
+
+/// Before `service install`: stops the pre-rename service and migrates the
+/// default home when it still needs it. A failed migration is rolled back
+/// and the old service started again, so the machine is never left without
+/// a daemon. Returns whether the home moved.
+fn install_migrating(cfg: &Config, paths: &hermesd::service::ServicePaths) -> anyhow::Result<bool> {
+    use hermesd::{migrate_home as migrate, service};
+    let legacy = service::stop_legacy(paths)?;
+    let pending = migrate::pending(cfg)?;
+    if let Some(plan) = &pending {
+        let mut out = std::io::stdout();
+        if let Err(error) = migrate::run(plan, &mut out) {
+            let undone = migrate::rollback(plan, &mut out);
+            if let (Ok(()), Some(legacy)) = (&undone, &legacy) {
+                service::restart_legacy(paths, legacy)?;
+            }
+            return Err(match undone {
+                Ok(()) => error.context("home migration failed and was rolled back"),
+                Err(rollback) => error.context(format!(
+                    "home migration failed, and so did its rollback ({rollback:#}); \
+                     see migrate-home.json in the home"
+                )),
+            });
+        }
+    }
+    if let Some(legacy) = legacy {
+        service::remove_legacy(paths, legacy)?;
+    }
+    Ok(pending.is_some())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -41,7 +93,20 @@ async fn main() -> anyhow::Result<()> {
 
     let mut cfg = Config::load(config_path.as_deref())?;
 
+    // Everything but the service and the migration itself would otherwise
+    // start a fresh, empty home next to the one holding the data.
+    if !matches!(
+        args.first().map(String::as_str),
+        Some("service" | "migrate-home")
+    ) {
+        hermesd::migrate_home::refuse_unmigrated(&cfg)?;
+    }
+
     match args.first().map(String::as_str) {
+        Some("migrate-home") => {
+            migrate_home(&cfg, &args)?;
+            return Ok(());
+        }
         Some("backup") => {
             let out = flag_value(&args, "--out").unwrap_or_else(|| {
                 cfg.home.join("backups").join(format!(
@@ -73,6 +138,13 @@ async fn main() -> anyhow::Result<()> {
                 Some("install") => {
                     let source =
                         flag_value(&args, "--binary").map_or_else(std::env::current_exe, Ok)?;
+                    if install_migrating(&cfg, &paths)? {
+                        cfg = Config::load(config_path.as_deref())?;
+                    }
+                    let paths = hermesd::service::ServicePaths::new(
+                        cfg.home.clone(),
+                        cfg.user_home.clone(),
+                    );
                     hermesd::service::install(&source, &paths)?;
                     hermesd::service::reload(&paths)?;
                     println!(

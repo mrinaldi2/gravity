@@ -11,12 +11,12 @@ use std::process::Command;
 
 use anyhow::Context;
 
-pub const LAUNCHD_LABEL: &str = "in.mikolajczuk.gravityd";
+pub const LAUNCHD_LABEL: &str = crate::brand::LAUNCHD_LABEL;
 pub const SERVICE_LABEL: &str = LAUNCHD_LABEL;
-const DEFAULT_CONFIG: &str = include_str!("../../../ops/gravityd.example.toml");
+const DEFAULT_CONFIG: &str = include_str!("../../../ops/hermesd.example.toml");
 
 /// Where the managed installation lives, derived from the daemon home
-/// (`~/.gravity`) and the user home (for `~/Library/LaunchAgents`).
+/// (`~/.thehermes`) and the user home (for `~/Library/LaunchAgents`).
 pub struct ServicePaths {
     home: PathBuf,
     user_home: PathBuf,
@@ -37,7 +37,7 @@ impl ServicePaths {
     }
 
     /// Where releases before the rename installed the binary. `install`
-    /// replaces it and `uninstall` removes it. The service label is unchanged.
+    /// replaces it and `uninstall` removes it.
     pub fn legacy_bin_path(&self) -> PathBuf {
         self.home.join("bin").join("gravityd")
     }
@@ -46,8 +46,15 @@ impl ServicePaths {
         self.launch_agents.join(format!("{LAUNCHD_LABEL}.plist"))
     }
 
+    /// The agent releases before the rename installed. [`stop_legacy`]
+    /// unloads and deletes it, so the old and new agents never both run.
+    pub fn legacy_plist_path(&self) -> PathBuf {
+        self.launch_agents
+            .join(format!("{}.plist", crate::brand::LEGACY_LAUNCHD_LABEL))
+    }
+
     pub fn config_path(&self) -> PathBuf {
-        self.home.join("gravityd.toml")
+        self.home.join(crate::brand::daemon_file(".toml"))
     }
 
     pub fn log_dir(&self) -> PathBuf {
@@ -102,8 +109,12 @@ fn render_plist(binary: &Path, log_dir: &Path, user_home: &Path) -> String {
 </plist>
 "#,
         binary = binary.display(),
-        out_log = log_dir.join("gravityd.out.log").display(),
-        err_log = log_dir.join("gravityd.err.log").display(),
+        out_log = log_dir
+            .join(crate::brand::daemon_file(".out.log"))
+            .display(),
+        err_log = log_dir
+            .join(crate::brand::daemon_file(".err.log"))
+            .display(),
         local_bin = user_home.join(".local/bin").display(),
     )
 }
@@ -156,9 +167,46 @@ pub fn install(source: &Path, paths: &ServicePaths) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The agent a release before the rename installed, once stopped.
+pub struct Legacy {
+    plist: PathBuf,
+}
+
+/// Unloads the agent installed under [`crate::brand::LEGACY_LAUNCHD_LABEL`],
+/// if there is one. `launchctl bootout` returns once the process has exited.
+///
+/// Runs before the home migration and before the new agent is loaded: both
+/// agents would otherwise start a daemon and fight over the port. The plist
+/// stays until [`remove_legacy`], so a failed migration can put the old agent
+/// back with [`restart_legacy`].
+pub fn stop_legacy(paths: &ServicePaths) -> anyhow::Result<Option<Legacy>> {
+    let plist = paths.legacy_plist_path();
+    if !plist.exists() {
+        return Ok(None);
+    }
+    tracing::info!(plist = %plist.display(), "stopping the pre-rename agent");
+    bootout(&plist)?;
+    Ok(Some(Legacy { plist }))
+}
+
+/// Loads the old agent again, after a failed migration was rolled back.
+pub fn restart_legacy(_paths: &ServicePaths, legacy: &Legacy) -> anyhow::Result<()> {
+    bootstrap(&legacy.plist)
+}
+
+/// Deletes the old agent's plist once the new one is about to replace it.
+pub fn remove_legacy(_paths: &ServicePaths, legacy: Legacy) -> anyhow::Result<()> {
+    remove_if_present(&legacy.plist)
+}
+
 /// Removes the agent plist and the managed binary. Daemon state (database,
 /// config, secrets, bot workspaces) is deliberately left in place.
 pub fn uninstall(paths: &ServicePaths) -> anyhow::Result<()> {
+    match stop_legacy(paths) {
+        Ok(Some(legacy)) => remove_legacy(paths, legacy)?,
+        Ok(None) => {}
+        Err(e) => tracing::warn!(error = %e, "could not stop the pre-rename agent"),
+    }
     tracing::info!(plist = %paths.plist_path().display(), "stopping hermesd agent");
     if let Err(e) = bootout(&paths.plist_path()) {
         tracing::warn!(error = %e, "bootout failed; removing files anyway");
@@ -220,10 +268,16 @@ pub fn reload(paths: &ServicePaths) -> anyhow::Result<()> {
     if let Err(e) = bootout(&plist) {
         tracing::warn!(error = %e, "bootout failed; continuing to bootstrap");
     }
+    bootstrap(&plist)?;
+    tracing::info!(label = LAUNCHD_LABEL, "hermesd agent started");
+    Ok(())
+}
+
+fn bootstrap(plist: &Path) -> anyhow::Result<()> {
     let domain = gui_domain()?;
     let out = Command::new("launchctl")
         .args(["bootstrap", &domain])
-        .arg(&plist)
+        .arg(plist)
         .output()
         .context("running launchctl bootstrap")?;
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -240,7 +294,6 @@ pub fn reload(paths: &ServicePaths) -> anyhow::Result<()> {
         "launchctl bootstrap failed: {}",
         stderr.trim()
     );
-    tracing::info!(%domain, label = LAUNCHD_LABEL, "hermesd agent started");
     Ok(())
 }
 
@@ -286,113 +339,4 @@ pub fn status(paths: &ServicePaths, configured_port: u16) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn paths(dir: &Path) -> ServicePaths {
-        ServicePaths::new(dir.join("state"), dir.join("userhome"))
-    }
-
-    fn fake_binary(dir: &Path) -> PathBuf {
-        let src = dir.join("hermesd-src");
-        std::fs::write(&src, b"#!/bin/sh\n").unwrap();
-        src
-    }
-
-    #[test]
-    fn plist_bakes_absolute_paths() {
-        let rendered = render_plist(
-            Path::new("/x/bin/hermesd"),
-            Path::new("/x/logs"),
-            Path::new("/Users/x"),
-        );
-        assert!(rendered.contains("<string>/x/bin/hermesd</string>"));
-        assert!(rendered.contains("<string>/x/logs/gravityd.out.log</string>"));
-        assert!(rendered.contains("<string>--negotiate-port</string>"));
-        assert!(rendered.contains(LAUNCHD_LABEL));
-        assert!(!rendered.contains('~'));
-    }
-
-    /// A launchd agent inherits no login-shell environment, so a `claude`
-    /// installed by Claude Code's own installer is only reachable if the plist
-    /// puts `~/.local/bin` on PATH.
-    #[test]
-    fn plist_path_covers_the_claude_code_installer_location() {
-        let rendered = render_plist(
-            Path::new("/x/bin/hermesd"),
-            Path::new("/x/logs"),
-            Path::new("/Users/x"),
-        );
-        assert!(rendered.contains("<string>/Users/x/.local/bin:/usr/local/bin:"));
-    }
-
-    #[test]
-    fn install_stages_binary_config_and_plist() {
-        let tmp = tempfile::tempdir().unwrap();
-        let p = paths(tmp.path());
-        install(&fake_binary(tmp.path()), &p).unwrap();
-        assert!(p.bin_path().exists());
-        assert!(p.plist_path().exists());
-        assert!(p.config_path().exists());
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(p.bin_path())
-                .unwrap()
-                .permissions()
-                .mode();
-            assert_eq!(mode & 0o755, 0o755);
-        }
-    }
-
-    #[test]
-    fn install_keeps_an_existing_config() {
-        let tmp = tempfile::tempdir().unwrap();
-        let p = paths(tmp.path());
-        std::fs::create_dir_all(p.config_path().parent().unwrap()).unwrap();
-        std::fs::write(p.config_path(), "port = 9999\n").unwrap();
-        install(&fake_binary(tmp.path()), &p).unwrap();
-        assert_eq!(
-            std::fs::read_to_string(p.config_path()).unwrap(),
-            "port = 9999\n"
-        );
-    }
-
-    #[test]
-    fn install_replaces_a_previous_binary() {
-        let tmp = tempfile::tempdir().unwrap();
-        let p = paths(tmp.path());
-        install(&fake_binary(tmp.path()), &p).unwrap();
-        let src = tmp.path().join("hermesd-src");
-        std::fs::write(&src, b"new contents").unwrap();
-        install(&src, &p).unwrap();
-        assert_eq!(std::fs::read(p.bin_path()).unwrap(), b"new contents");
-    }
-
-    /// An install from before the rename left `bin/gravityd` behind and a
-    /// plist pointing at it; upgrading must replace both, keeping the label.
-    #[test]
-    fn install_replaces_a_pre_rename_binary_and_repoints_the_plist() {
-        let tmp = tempfile::tempdir().unwrap();
-        let p = paths(tmp.path());
-        std::fs::create_dir_all(p.legacy_bin_path().parent().unwrap()).unwrap();
-        std::fs::write(p.legacy_bin_path(), b"old").unwrap();
-        install(&fake_binary(tmp.path()), &p).unwrap();
-        assert!(!p.legacy_bin_path().exists());
-        assert!(p.bin_path().exists());
-        let plist = std::fs::read_to_string(p.plist_path()).unwrap();
-        assert!(plist.contains(&format!("<string>{}</string>", p.bin_path().display())));
-        assert!(!plist.contains("bin/gravityd"));
-        assert!(plist.contains("<string>in.mikolajczuk.gravityd</string>"));
-    }
-
-    #[test]
-    fn install_from_the_installed_path_skips_the_copy() {
-        let tmp = tempfile::tempdir().unwrap();
-        let p = paths(tmp.path());
-        install(&fake_binary(tmp.path()), &p).unwrap();
-        // Reinstalling from the managed location itself must not fail.
-        install(&p.bin_path(), &p).unwrap();
-        assert!(p.bin_path().exists());
-    }
-}
+mod tests;

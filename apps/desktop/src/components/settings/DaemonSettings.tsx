@@ -170,7 +170,7 @@ function DaemonLaunchConfig({ config }: { readonly config: DaemonConfig }): Reac
         <div className="settings-row-text">
           <div className="settings-row-label">Bind addresses</div>
           <div className="settings-row-help">
-            Change in gravityd.toml and restart the Hermes service.
+            Change in hermesd.toml and restart the Hermes service.
           </div>
         </div>
         <span className="settings-value">{config.bind.join(", ")}</span>
@@ -185,7 +185,7 @@ function DaemonLaunchConfig({ config }: { readonly config: DaemonConfig }): Reac
               Port {config.configured_port} was unavailable at startup. Hermes is using{" "}
               {config.port} for the app and bot bus. Another process or an operating-system
               reservation can block a port. To use a fixed port, choose an available port in
-              gravityd.toml and restart the Hermes service. Remote clients and MCP URL allowlists
+              hermesd.toml and restart the Hermes service. Remote clients and MCP URL allowlists
               must use the active port.
             </div>
           ) : null}
@@ -201,7 +201,7 @@ function DaemonLaunchConfig({ config }: { readonly config: DaemonConfig }): Reac
         <div className="settings-row-text">
           <div className="settings-row-label">Session runner</div>
           <div className="settings-row-help">
-            How the Hermes service starts bot sessions. Set in gravityd.toml.
+            How the Hermes service starts bot sessions. Set in hermesd.toml.
           </div>
         </div>
         <span className="settings-value">{config.runtime}</span>
@@ -213,7 +213,7 @@ function DaemonLaunchConfig({ config }: { readonly config: DaemonConfig }): Reac
 /**
  * Daemon configuration over the control plane, rendered as rows inside the
  * connection pane. Only the auto-compact window is writable; bind/port/runtime
- * describe how the daemon was launched and change only via `gravityd.toml`
+ * describe how the daemon was launched and change only via `hermesd.toml`
  * plus a restart.
  */
 export default function DaemonSettings(props: DaemonSettingsProps): ReactElement {

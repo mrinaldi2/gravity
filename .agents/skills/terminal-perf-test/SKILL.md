@@ -30,7 +30,7 @@ PERF_DIR=$(cd "$PERF_DIR" && pwd -P)
 export GRAVITY_HOME="$PERF_DIR"
 export GRAVITY_WS=ws://127.0.0.1:49555/ws
 cargo build -p hermesd
-cat > "$GRAVITY_HOME/gravityd.toml" <<EOF
+cat > "$GRAVITY_HOME/hermesd.toml" <<EOF
 home = "$GRAVITY_HOME"
 bind = ["127.0.0.1"]
 port = 49555
@@ -38,11 +38,11 @@ negotiate_port = false
 runtime = "double"
 supervision_interval_ms = 500
 EOF
-./target/debug/hermesd --config "$GRAVITY_HOME/gravityd.toml" > "$PERF_DIR/gravityd.log" 2>&1 &
+./target/debug/hermesd --config "$GRAVITY_HOME/hermesd.toml" > "$PERF_DIR/hermesd.log" 2>&1 &
 PERF_DAEMON_PID=$!
 ```
 
-Wait for `$GRAVITY_HOME/gravityd.port`, confirm it is 49555 and the recorded
+Wait for `$GRAVITY_HOME/hermesd.port`, confirm it is 49555 and the recorded
 PID is still running, then check `curl --fail http://127.0.0.1:49555/health`.
 Stop on startup failure. Do not connect the driver to an installed daemon or
 use it with `pty`: its generated input belongs only in the echo runtime.

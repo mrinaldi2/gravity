@@ -179,7 +179,7 @@ fn listening_url(app: &AppState) -> anyhow::Result<String> {
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "this daemon only listens on localhost; add its Tailscale address to \
-                 `bind` in gravityd.toml and restart it, or pass the url to dial"
+                 `bind` in hermesd.toml and restart it, or pass the url to dial"
             )
         })?;
     Ok(format!("ws://{}/peer", SocketAddr::new(*ip, app.cfg.port)))

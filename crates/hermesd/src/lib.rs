@@ -19,6 +19,7 @@ pub mod events;
 pub mod home;
 pub mod mcp;
 pub mod messaging;
+pub mod migrate_home;
 pub mod model;
 pub mod overrides;
 pub mod paths;

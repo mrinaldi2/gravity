@@ -74,7 +74,7 @@ describe("DaemonSettings", () => {
       /Hermes is using 50123 for the app and bot bus/,
     );
     expect(screen.getByText(/operating-system reservation/)).toHaveTextContent(
-      /choose an available port in gravityd.toml and restart the Hermes service/,
+      /choose an available port in hermesd.toml and restart the Hermes service/,
     );
   });
 

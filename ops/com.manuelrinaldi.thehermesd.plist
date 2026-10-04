@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>in.mikolajczuk.gravityd</string>
+    <string>com.manuelrinaldi.thehermesd</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/hermesd</string>
@@ -18,9 +18,9 @@
     <key>ThrottleInterval</key>
     <integer>10</integer>
     <key>StandardOutPath</key>
-    <string>~/.gravity/logs/gravityd.out.log</string>
+    <string>~/.thehermes/logs/hermesd.out.log</string>
     <key>StandardErrorPath</key>
-    <string>~/.gravity/logs/gravityd.err.log</string>
+    <string>~/.thehermes/logs/hermesd.err.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>

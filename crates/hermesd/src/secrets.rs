@@ -1,5 +1,5 @@
 //! Token management: one client token for the control plane, one scoped token
-//! per bot for the MCP bridge. Files live under `~/.gravity/secrets` with
+//! per bot for the MCP bridge. Files live under `~/.thehermes/secrets` with
 //! mode 0700/0600 and are never exported.
 
 use std::collections::HashMap;

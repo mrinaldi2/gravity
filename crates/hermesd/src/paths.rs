@@ -189,9 +189,14 @@ pub fn provision_bot(cfg: &Config, spec: &BotProvision<'_>) -> anyhow::Result<Bo
     Ok(BotDirs { root, workspace })
 }
 
-/// Keeps bots out of the daemon's secrets wherever the home lives.
+/// Keeps bots out of the daemon's secrets wherever the home lives, including
+/// through the `~/.gravity` symlink the home migration leaves behind.
 pub(crate) fn secrets_deny_rule() -> String {
     format!("Read(~/{}/secrets/**)", crate::brand::HOME_DIR_NAME)
+}
+
+pub(crate) fn legacy_secrets_deny_rule() -> String {
+    format!("Read(~/{}/secrets/**)", crate::brand::LEGACY_HOME_DIR_NAME)
 }
 
 /// (Re)write the bot's `mcp.json`. Called at creation and again on every start,

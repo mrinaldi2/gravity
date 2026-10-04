@@ -22,7 +22,7 @@ test("require an explicit home and match its published port", (context) => {
   assert.throws(() => localDaemon(undefined, "ws://127.0.0.1:49555/ws"), /GRAVITY_HOME/);
   const home = mkdtempSync(join(tmpdir(), "gravity-skill-test-"));
   context.after(() => rmSync(home, { recursive: true }));
-  writeFileSync(join(home, "gravityd.port"), "49555\n");
+  writeFileSync(join(home, "hermesd.port"), "49555\n");
   assert.equal(localDaemon(home, "ws://127.0.0.1:49555/ws").endpoint.port, "49555");
   assert.throws(() => localDaemon(home, "ws://127.0.0.1:49888/ws"), /published port/);
 });

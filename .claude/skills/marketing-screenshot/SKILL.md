@@ -33,7 +33,7 @@ mkdir -p "$GRAVITY_HOME" "$SHOT_DIR/shots"
 CLAUDE_BIN=$(command -v claude)
 cargo build -p hermesd
 ./scripts/prepare-sidecar.sh
-cat > "$GRAVITY_HOME/gravityd.toml" <<EOF
+cat > "$GRAVITY_HOME/hermesd.toml" <<EOF
 home = "$GRAVITY_HOME"
 bind = ["127.0.0.1"]
 port = 49888
@@ -42,11 +42,11 @@ runtime = "pty"
 claude_bin = "$CLAUDE_BIN"
 supervision_interval_ms = 1000
 EOF
-./target/debug/hermesd --config "$GRAVITY_HOME/gravityd.toml" > "$SHOT_DIR/gravityd.log" 2>&1 &
+./target/debug/hermesd --config "$GRAVITY_HOME/hermesd.toml" > "$SHOT_DIR/hermesd.log" 2>&1 &
 SHOT_DAEMON_PID=$!
 ```
 
-Wait for `$GRAVITY_HOME/gravityd.port` and a successful
+Wait for `$GRAVITY_HOME/hermesd.port` and a successful
 `curl --fail http://127.0.0.1:49888/health`. Confirm the recorded daemon PID
 is still running and the published port is 49888. Do not continue on a startup
 failure. Leave `$HOME` unchanged so Claude Code can use its existing login.

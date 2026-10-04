@@ -234,7 +234,7 @@ export interface DaemonConfig {
   readonly bind: readonly string[];
   /** The port being served, and the one bots reach the bus at. */
   readonly port: number;
-  /** What `gravityd.toml` asked for; differs when a fallback was negotiated. */
+  /** What `hermesd.toml` asked for; differs when a fallback was negotiated. */
   readonly configured_port: number;
   readonly runtime: string;
   /** Null when unset: Claude Code uses the model default. */

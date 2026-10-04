@@ -25,31 +25,31 @@ and uninstall after manual daemon removal, using an isolated test home with no
 real bots.
 
 The Windows installer installs and starts the bundled daemon under
-`%USERPROFILE%\.gravity\bin\hermesd.exe` and registers a Task Scheduler task
+`%USERPROFILE%\.thehermes\bin\hermesd.exe` and registers a Task Scheduler task
 for the current user. No separate daemon download or command is needed. Running
 the installer again refreshes the managed daemon even when the app version has
 not changed, restarting bot sessions while preserving projects and configuration.
 It runs immediately and at user sign-in, without elevation,
 and leaves bots running when the desktop closes. The task requires an interactive
 user session; it does not run while that user is signed out. Logs, configuration,
-and state live under `%USERPROFILE%\.gravity`; `GRAVITY_HOME` overrides this root.
+and state live under `%USERPROFILE%\.thehermes`; `GRAVITY_HOME` overrides this root.
 The configured port defaults to 49777. If Windows reserves it (for example for
 Hyper-V), the local managed daemon chooses an available port and the desktop
-follows it. To use a fixed port, choose an available `port` in `gravityd.toml`
+follows it. To use a fixed port, choose an available `port` in `hermesd.toml`
 and restart the daemon. Remote clients and MCP URL allowlists must use the active
 port. Direct
 launches and remotely reachable daemons require an available configured port.
 
 ```powershell
 # After installation:
-& "$env:USERPROFILE/.gravity/bin/hermesd.exe" service status
-& "$env:USERPROFILE/.gravity/bin/hermesd.exe" service restart
-& "$env:USERPROFILE/.gravity/bin/hermesd.exe" service uninstall
+& "$env:USERPROFILE/.thehermes/bin/hermesd.exe" service status
+& "$env:USERPROFILE/.thehermes/bin/hermesd.exe" service restart
+& "$env:USERPROFILE/.thehermes/bin/hermesd.exe" service uninstall
 ```
 
 The desktop uninstaller also stops and removes its managed daemon task.
 Uninstalling keeps the database, configuration and workspaces; deleting
-`%USERPROFILE%\.gravity` after uninstall gives a completely fresh setup.
+`%USERPROFILE%\.thehermes` after uninstall gives a completely fresh setup.
 The first-run wizard can still install a missing bundled daemon as a recovery step.
 The desktop can also connect to a remote daemon using a device token.
 
@@ -63,7 +63,7 @@ cannot use a Claude inbox inside WSL; install the native CLI for native bots.
 For Codex bots, install and sign in to Codex CLI on the daemon host, then choose
 **Bot info → Bot runtime → Codex CLI**. Gravity searches PATH, the usual npm/pnpm
 and native Windows CLI locations, then the Codex desktop bundle. An explicit
-`codex_bin` path in `gravityd.toml` overrides discovery. The Windows task can
+`codex_bin` path in `hermesd.toml` overrides discovery. The Windows task can
 have an older PATH than a newly opened terminal, so custom installation paths
 should be configured explicitly. Missing CLIs are rejected before the current
 bot session is stopped; later startup failures appear in the bot state and
@@ -78,7 +78,7 @@ Windows' newer online dictation is not used, so the setting for Online speech
 recognition does not matter.
 
 For development without model credentials, set `runtime = "double"` in a private
-`gravityd.toml` and run `cargo run -p hermesd -- --config <path>`. The double uses
+`hermesd.toml` and run `cargo run -p hermesd -- --config <path>`. The double uses
 an authenticated named pipe and exercises the same message-delivery path.
 
 Run `pnpm run verify` before proposing a change. The visual suite uses the pinned

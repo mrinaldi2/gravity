@@ -31,7 +31,7 @@ function Install-App {
     $process = Start-Process -FilePath $installerPath -ArgumentList @('/S', "/D=$installDir") -WindowStyle Hidden -PassThru -Wait
     if ($process.ExitCode -ne 0) { throw "Installer exited $($process.ExitCode)" }
     Wait-For {
-        $portFile = Join-Path $stateDir 'gravityd.port'
+        $portFile = Join-Path $stateDir 'hermesd.port'
         if (!(Test-Path -LiteralPath $portFile)) { return $false }
         $port = (Get-Content -LiteralPath $portFile -Raw).Trim()
         try {
@@ -44,7 +44,7 @@ function Install-App {
             throw 'Installed daemon differs from the installer sidecar.'
         }
     }
-    if (!(Test-Path -LiteralPath (Join-Path $stateDir 'gravityd-task.xml'))) {
+    if (!(Test-Path -LiteralPath (Join-Path $stateDir 'hermesd-task.xml'))) {
         throw 'Installer did not register the daemon task.'
     }
     $app = Join-Path $installDir 'hermes-desktop.exe'
@@ -60,7 +60,7 @@ function Uninstall-App {
     Wait-For {
         return !(Test-Path -LiteralPath $uninstallKey) -and
             !(Test-Path -LiteralPath (Join-Path $installDir 'hermes-desktop.exe')) -and
-            !(Test-Path -LiteralPath (Join-Path $stateDir 'gravityd-task.xml')) -and
+            !(Test-Path -LiteralPath (Join-Path $stateDir 'hermesd-task.xml')) -and
             !(Test-Path -LiteralPath (Join-Path $stateDir 'bin/hermesd.exe'))
     } 'Uninstaller left the app or managed daemon installed.'
 }
@@ -68,7 +68,7 @@ function Uninstall-App {
 try {
     New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
     $env:GRAVITY_HOME = $stateDir
-    $config = Join-Path $stateDir 'gravityd.toml'
+    $config = Join-Path $stateDir 'hermesd.toml'
     $configText = "port = 49777`nruntime = `"double`"`nmax_bots_per_project = 7`n"
     [IO.File]::WriteAllText($config, $configText)
     $projectDir = Join-Path $stateDir 'projects/installer-sentinel'
@@ -77,10 +77,10 @@ try {
     [IO.File]::WriteAllText($sentinel, 'preserved project data')
 
     Install-App
-    $firstPid = (Get-Content -LiteralPath (Join-Path $stateDir 'gravityd-task.pid') -Raw).Trim()
+    $firstPid = (Get-Content -LiteralPath (Join-Path $stateDir 'hermesd-task.pid') -Raw).Trim()
     Write-Output 'Fresh install started the matching daemon without opening the app.'
     Install-App
-    $secondPid = (Get-Content -LiteralPath (Join-Path $stateDir 'gravityd-task.pid') -Raw).Trim()
+    $secondPid = (Get-Content -LiteralPath (Join-Path $stateDir 'hermesd-task.pid') -Raw).Trim()
     if ($firstPid -eq $secondPid) { throw 'Same-version reinstall did not refresh the daemon.' }
     if ((Get-Content -LiteralPath $config -Raw) -ne $configText -or
         (Get-Content -LiteralPath $sentinel -Raw) -ne 'preserved project data') {
@@ -101,7 +101,7 @@ try {
 } finally {
     try {
         if (Test-Path -LiteralPath $uninstaller) { Uninstall-App }
-        $marker = Join-Path $stateDir 'gravityd-task.xml'
+        $marker = Join-Path $stateDir 'hermesd-task.xml'
         if (Test-Path -LiteralPath $marker) {
             & $expectedDaemon service uninstall
             if ($LASTEXITCODE -ne 0) { throw 'Could not clean up the isolated daemon.' }

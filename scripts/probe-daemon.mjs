@@ -3,8 +3,8 @@
 import fs from "node:fs";
 import os from "node:os";
 
-const port = Number(process.argv[2] ?? fs.readFileSync(`${os.homedir()}/.gravity/gravityd.port`, "utf8").trim());
-const token = fs.readFileSync(`${os.homedir()}/.gravity/secrets/client.token`, "utf8").trim();
+const port = Number(process.argv[2] ?? fs.readFileSync(`${os.homedir()}/.thehermes/hermesd.port`, "utf8").trim());
+const token = fs.readFileSync(`${os.homedir()}/.thehermes/secrets/client.token`, "utf8").trim();
 const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
 
 let nextId = 1;

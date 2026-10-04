@@ -8,7 +8,7 @@ use anyhow::Context;
 
 /// Exclusive claim on a daemon home, released when this process exits.
 pub struct HomeLock {
-    _file: File,
+    _files: Vec<File>,
 }
 
 /// Claims `home` for this process.
@@ -16,12 +16,34 @@ pub struct HomeLock {
 /// Two daemons sharing a home run two supervisors against one database and
 /// start every bot twice. A port collision used to stop the second one; port
 /// negotiation means it no longer does, so the claim is explicit.
+///
+/// The pre-rename lock file is claimed too: until the `~/.gravity` symlink the
+/// home migration leaves is removed, a daemon from before the rename can still
+/// reach this home through it, and that one only knows the old name.
 pub fn lock(home: &Path) -> anyhow::Result<HomeLock> {
+    let mut files = Vec::new();
+    for name in [
+        crate::brand::daemon_file(".lock"),
+        crate::brand::legacy_daemon_file(".lock"),
+    ] {
+        files.push(lock_file(home, &name)?);
+    }
+    Ok(HomeLock { _files: files })
+}
+
+/// Claims a home the way a daemon from before the rename does, which is how
+/// the home migration proves the old daemon has stopped.
+pub fn lock_legacy(home: &Path) -> anyhow::Result<HomeLock> {
+    let file = lock_file(home, &crate::brand::legacy_daemon_file(".lock"))?;
+    Ok(HomeLock { _files: vec![file] })
+}
+
+fn lock_file(home: &Path, name: &str) -> anyhow::Result<File> {
     std::fs::create_dir_all(home)?;
-    let path = home.join("gravityd.lock");
+    let path = home.join(name);
     let file = File::create(&path).with_context(|| format!("creating {}", path.display()))?;
     match file.try_lock() {
-        Ok(()) => Ok(HomeLock { _file: file }),
+        Ok(()) => Ok(file),
         Err(std::fs::TryLockError::WouldBlock) => anyhow::bail!(
             "another hermesd is already running against {}; stop it first",
             home.display()
@@ -33,14 +55,17 @@ pub fn lock(home: &Path) -> anyhow::Result<HomeLock> {
 }
 
 pub fn runtime_port_path(home: &Path) -> PathBuf {
-    home.join("gravityd.port")
+    home.join(crate::brand::daemon_file(".port"))
 }
 
-/// Publishes the port selected for this process without changing gravityd.toml.
+/// Publishes the port selected for this process without changing hermesd.toml.
 pub fn publish_runtime_port(home: &Path, port: u16) -> anyhow::Result<()> {
     std::fs::create_dir_all(home)?;
     let path = runtime_port_path(home);
-    let staged = home.join(format!("gravityd.port.{}.tmp", std::process::id()));
+    let staged = home.join(crate::brand::daemon_file(&format!(
+        ".port.{}.tmp",
+        std::process::id()
+    )));
     std::fs::write(&staged, format!("{port}\n"))?;
     std::fs::rename(staged, path)?;
     Ok(())
@@ -63,7 +88,7 @@ pub const MAX_RECLAIMS: u32 = 3;
 const RECLAIM_WINDOW: Duration = Duration::from_secs(3600);
 
 fn reclaims_path(home: &Path) -> PathBuf {
-    home.join("gravityd.reclaims")
+    home.join(crate::brand::daemon_file(".reclaims"))
 }
 
 fn now_secs() -> u64 {
@@ -186,5 +211,20 @@ mod tests {
 
         drop(held);
         lock(home.path()).expect("lock after release");
+    }
+
+    /// A daemon from before the rename holds only `gravityd.lock`; reaching
+    /// the same home through the compatibility symlink must not start a second.
+    #[test]
+    fn a_pre_rename_daemon_holding_the_old_lock_blocks_the_claim() {
+        let home = tempfile::tempdir().expect("temporary home");
+        let old = lock_legacy(home.path()).expect("old daemon's lock");
+
+        assert!(lock(home.path()).is_err());
+
+        drop(old);
+        let held = lock(home.path()).expect("lock after release");
+        assert!(lock_legacy(home.path()).is_err());
+        drop(held);
     }
 }
