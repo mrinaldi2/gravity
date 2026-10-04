@@ -9,12 +9,13 @@ use serde_json::{json, Value};
 
 use crate::app::AppState;
 use crate::board::contract::model_list;
+use crate::board::feed::ChangeKind;
 use crate::board::guards::{self, Who};
 use crate::board::model::{Item, ItemType, LinkKind, Platform, Priority, Size, Unmet};
 use crate::board::moves::load_in;
 use crate::db::{BoardTx, ItemEdit, NewItem, Write};
 
-use super::board::{bot_id, conflict, item_out, out, own_item, refused, written, Me};
+use super::board::{bot_id, conflict, item_out, out, own_item, published, refused, written, Me};
 use super::board_schema::decode;
 
 pub(super) fn call(
@@ -25,16 +26,16 @@ pub(super) fn call(
 ) -> anyhow::Result<Value> {
     let project = me.bot.project_id.as_str();
     match name {
-        "item_create" => create(app, me, decode("ItemCreateRequest", args, project)?),
-        "item_update" => update(app, me, decode("ItemUpdateRequest", args, project)?),
-        "item_comment" => comment(app, me, decode("ItemCommentRequest", args, project)?),
-        "item_link" => link(app, me, decode("ItemLinkRequest", args, project)?),
-        "item_unlink" => unlink(app, me, decode("ItemUnlinkRequest", args, project)?),
-        "item_block" => block(app, me, decode("ItemBlockRequest", args, project)?),
-        "item_unblock" => unblock(app, me, decode("ItemUnblockRequest", args, project)?),
-        "item_assign" => assign(app, me, decode("ItemAssignRequest", args, project)?),
-        "item_rank" => rank(app, me, decode("ItemRankRequest", args, project)?),
-        "item_check_ac" => check_ac(app, me, decode("ItemCheckAcRequest", args, project)?),
+        "item_create" => create(app, me, decode("ItemCreate", args, project)?),
+        "item_update" => update(app, me, decode("ItemUpdate", args, project)?),
+        "item_comment" => comment(app, me, decode("ItemAddComment", args, project)?),
+        "item_link" => link(app, me, decode("ItemAddLink", args, project)?),
+        "item_unlink" => unlink(app, me, decode("ItemRemoveLink", args, project)?),
+        "item_block" => block(app, me, decode("ItemBlock", args, project)?),
+        "item_unblock" => unblock(app, me, decode("ItemUnblock", args, project)?),
+        "item_assign" => assign(app, me, decode("ItemAssign", args, project)?),
+        "item_rank" => rank(app, me, decode("ItemRank", args, project)?),
+        "item_check_ac" => check_ac(app, me, decode("ItemCheckAc", args, project)?),
         other => anyhow::bail!("unknown tool: {other}"),
     }
 }
@@ -56,25 +57,28 @@ fn guarded(
     write: impl FnOnce(&BoardTx<'_>) -> anyhow::Result<Write<Item>>,
 ) -> anyhow::Result<Value> {
     own_item(app, me, id)?;
-    let edit = app.db.board_tx(|t| {
-        let (item, _, who) = load_in(t, id, &me.actor())?;
-        if item.version != expected {
-            return Ok(Edit::Stale(item));
+    let project = me.bot.project_id.as_str();
+    published(app, project, ChangeKind::ItemUpserted, None, || {
+        let edit = app.db.board_tx(|t| {
+            let (item, _, who) = load_in(t, id, &me.actor())?;
+            if item.version != expected {
+                return Ok(Edit::Stale(item));
+            }
+            let unmet = guard(&item, &who);
+            if !unmet.is_empty() {
+                return Ok(Edit::Refused(unmet));
+            }
+            Ok(Edit::Written(write(t)?))
+        })?;
+        match edit {
+            Edit::Refused(unmet) => Err(refused(unmet)),
+            Edit::Stale(item) => Err(conflict(item)),
+            Edit::Written(w) => Ok((written(w)?, id.to_string())),
         }
-        let unmet = guard(&item, &who);
-        if !unmet.is_empty() {
-            return Ok(Edit::Refused(unmet));
-        }
-        Ok(Edit::Written(write(t)?))
-    })?;
-    match edit {
-        Edit::Refused(unmet) => Err(refused(unmet)),
-        Edit::Stale(item) => Err(conflict(item)),
-        Edit::Written(w) => written(w),
-    }
+    })
 }
 
-fn create(app: &Arc<AppState>, me: &Me, req: c::ItemCreateRequest) -> anyhow::Result<Value> {
+fn create(app: &Arc<AppState>, me: &Me, req: c::ItemCreate) -> anyhow::Result<Value> {
     let unmet = guards::check_new(&req.title);
     if !unmet.is_empty() {
         return Err(refused(unmet));
@@ -83,29 +87,33 @@ fn create(app: &Arc<AppState>, me: &Me, req: c::ItemCreateRequest) -> anyhow::Re
         own_item(app, me, parent)?;
     }
     let platforms = model_list(req.platforms, Platform::from_wire)?;
-    let item = app.db.create_item(
-        &NewItem {
-            project_id: &me.bot.project_id,
-            item_type: ItemType::from_wire(req.r#type)?,
-            title: req.title.trim(),
-            description: req.description.as_deref().unwrap_or_default(),
-            platforms: &platforms,
-            size: req.size.map(Size::from_wire).transpose()?,
-            priority: req
-                .priority
-                .map(Priority::from_wire)
-                .transpose()?
-                .unwrap_or(Priority::P2),
-            labels: &req.labels,
-            parent_id: req.parent_id.as_deref(),
-            acceptance_criteria: &req.acceptance_criteria,
-        },
-        &me.actor(),
-    )?;
-    Ok(json!({ "item": item_out(item)? }))
+    let project = me.bot.project_id.as_str();
+    published(app, project, ChangeKind::ItemUpserted, None, || {
+        let item = app.db.create_item(
+            &NewItem {
+                project_id: &me.bot.project_id,
+                item_type: ItemType::from_wire(req.r#type)?,
+                title: req.title.trim(),
+                description: req.description.as_deref().unwrap_or_default(),
+                platforms: &platforms,
+                size: req.size.map(Size::from_wire).transpose()?,
+                priority: req
+                    .priority
+                    .map(Priority::from_wire)
+                    .transpose()?
+                    .unwrap_or(Priority::P2),
+                labels: &req.labels,
+                parent_id: req.parent_id.as_deref(),
+                acceptance_criteria: &req.acceptance_criteria,
+            },
+            &me.actor(),
+        )?;
+        let id = item.id.clone();
+        Ok((json!({ "item": item_out(item)? }), id))
+    })
 }
 
-fn update(app: &Arc<AppState>, me: &Me, req: c::ItemUpdateRequest) -> anyhow::Result<Value> {
+fn update(app: &Arc<AppState>, me: &Me, req: c::ItemUpdate) -> anyhow::Result<Value> {
     if let Some(parent) = req.parent_id.as_deref().filter(|p| !p.is_empty()) {
         own_item(app, me, parent)?;
     }
@@ -142,16 +150,26 @@ fn update(app: &Arc<AppState>, me: &Me, req: c::ItemUpdateRequest) -> anyhow::Re
     })
 }
 
-fn comment(app: &Arc<AppState>, me: &Me, req: c::ItemCommentRequest) -> anyhow::Result<Value> {
+fn comment(app: &Arc<AppState>, me: &Me, req: c::ItemAddComment) -> anyhow::Result<Value> {
     own_item(app, me, &req.id)?;
     anyhow::ensure!(!req.body.trim().is_empty(), "'body' is empty");
-    let comment =
-        app.db
-            .add_item_comment(&req.id, &req.body, req.reply_to.as_deref(), &me.actor())?;
-    Ok(json!({ "comment": out(c::ItemComment::from(comment))? }))
+    published(
+        app,
+        &me.bot.project_id,
+        ChangeKind::ItemUpserted,
+        None,
+        || {
+            let reply_to = req.reply_to.as_deref();
+            let comment = app
+                .db
+                .add_item_comment(&req.id, &req.body, reply_to, &me.actor())?;
+            let out = json!({ "comment": out(c::ItemComment::from(comment))? });
+            Ok((out, req.id.clone()))
+        },
+    )
 }
 
-fn link(app: &Arc<AppState>, me: &Me, req: c::ItemLinkRequest) -> anyhow::Result<Value> {
+fn link(app: &Arc<AppState>, me: &Me, req: c::ItemAddLink) -> anyhow::Result<Value> {
     own_item(app, me, &req.id)?;
     let kind = LinkKind::from_wire(req.kind)?;
     if matches!(
@@ -161,22 +179,42 @@ fn link(app: &Arc<AppState>, me: &Me, req: c::ItemLinkRequest) -> anyhow::Result
         own_item(app, me, &req.r#ref)?;
         anyhow::ensure!(req.r#ref != req.id, "an item can't link to itself");
     }
-    let link =
-        app.db
-            .add_item_link(&req.id, kind, &req.r#ref, req.label.as_deref(), &me.actor())?;
-    Ok(json!({ "link": out(c::ItemLink::from(link))? }))
+    published(
+        app,
+        &me.bot.project_id,
+        ChangeKind::ItemUpserted,
+        None,
+        || {
+            let label = req.label.as_deref();
+            let link = app
+                .db
+                .add_item_link(&req.id, kind, &req.r#ref, label, &me.actor())?;
+            Ok((
+                json!({ "link": out(c::ItemLink::from(link))? }),
+                req.id.clone(),
+            ))
+        },
+    )
 }
 
-fn unlink(app: &Arc<AppState>, me: &Me, req: c::ItemUnlinkRequest) -> anyhow::Result<Value> {
+fn unlink(app: &Arc<AppState>, me: &Me, req: c::ItemRemoveLink) -> anyhow::Result<Value> {
     own_item(app, me, &req.id)?;
     let kind = LinkKind::from_wire(req.kind)?;
-    let removed = app
-        .db
-        .remove_item_link(&req.id, kind, &req.r#ref, &me.actor())?;
-    Ok(json!({ "removed": removed }))
+    published(
+        app,
+        &me.bot.project_id,
+        ChangeKind::ItemUpserted,
+        None,
+        || {
+            let removed = app
+                .db
+                .remove_item_link(&req.id, kind, &req.r#ref, &me.actor())?;
+            Ok((json!({ "removed": removed }), req.id.clone()))
+        },
+    )
 }
 
-fn block(app: &Arc<AppState>, me: &Me, req: c::ItemBlockRequest) -> anyhow::Result<Value> {
+fn block(app: &Arc<AppState>, me: &Me, req: c::ItemBlock) -> anyhow::Result<Value> {
     if let Some(by) = &req.by {
         own_item(app, me, by)?;
     }
@@ -193,7 +231,7 @@ fn block(app: &Arc<AppState>, me: &Me, req: c::ItemBlockRequest) -> anyhow::Resu
     })
 }
 
-fn unblock(app: &Arc<AppState>, me: &Me, req: c::ItemUnblockRequest) -> anyhow::Result<Value> {
+fn unblock(app: &Arc<AppState>, me: &Me, req: c::ItemUnblock) -> anyhow::Result<Value> {
     let actor = me.actor();
     let guard = |item: &Item, who: &Who| guards::check_block(item, who, false, None);
     guarded(app, me, &req.id, req.expected_version, guard, |t| {
@@ -201,7 +239,7 @@ fn unblock(app: &Arc<AppState>, me: &Me, req: c::ItemUnblockRequest) -> anyhow::
     })
 }
 
-fn assign(app: &Arc<AppState>, me: &Me, req: c::ItemAssignRequest) -> anyhow::Result<Value> {
+fn assign(app: &Arc<AppState>, me: &Me, req: c::ItemAssign) -> anyhow::Result<Value> {
     let assignee = req.bot.as_deref().map(|b| bot_id(app, me, b)).transpose()?;
     let actor = me.actor();
     let guard = |_: &Item, who: &Who| guards::check_lead(who);
@@ -210,7 +248,7 @@ fn assign(app: &Arc<AppState>, me: &Me, req: c::ItemAssignRequest) -> anyhow::Re
     })
 }
 
-fn rank(app: &Arc<AppState>, me: &Me, req: c::ItemRankRequest) -> anyhow::Result<Value> {
+fn rank(app: &Arc<AppState>, me: &Me, req: c::ItemRank) -> anyhow::Result<Value> {
     for other in [&req.after, &req.before].into_iter().flatten() {
         own_item(app, me, other)?;
     }
@@ -222,7 +260,7 @@ fn rank(app: &Arc<AppState>, me: &Me, req: c::ItemRankRequest) -> anyhow::Result
     })
 }
 
-fn check_ac(app: &Arc<AppState>, me: &Me, req: c::ItemCheckAcRequest) -> anyhow::Result<Value> {
+fn check_ac(app: &Arc<AppState>, me: &Me, req: c::ItemCheckAc) -> anyhow::Result<Value> {
     let passed = c::VerificationResult::try_from(req.result) == Ok(c::VerificationResult::Pass);
     let actor = me.actor();
     guarded(

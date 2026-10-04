@@ -1,0 +1,11 @@
+{
+  "reqId": "23",
+  "boardRequest": {
+    "itemLink": {
+      "id": "H-017",
+      "kind": "LINK_KIND_BRANCH",
+      "ref": "B5-mcp-board",
+      "label": "branch"
+    }
+  }
+}

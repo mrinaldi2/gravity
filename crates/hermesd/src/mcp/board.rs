@@ -10,7 +10,9 @@ use serde_json::{json, Value};
 
 use crate::actor::Actor;
 use crate::app::AppState;
-use crate::board::model::{Item, Platform, Role, Unmet};
+use crate::board::contract::model_list;
+use crate::board::feed::{Change, ChangeKind};
+use crate::board::model::{Item, ItemType, Platform, Priority, Role, Unmet};
 use crate::board::moves::{item_move as move_item, item_move_check, MoveRequest, Moved};
 use crate::db::Write;
 
@@ -72,10 +74,10 @@ pub(super) fn call(
     let project = me.bot.project_id.as_str();
     match name {
         "board_get" => board_get(app, &me),
-        "item_get" => item_get(app, &me, decode("ItemGetRequest", args, project)?),
-        "item_query" => item_query(app, &me, decode("ItemQueryRequest", args, project)?),
-        "item_move" => item_move(app, &me, decode("ItemMoveRequest", args, project)?),
-        "item_move_check" => check(app, &me, decode("ItemMoveCheckRequest", args, project)?),
+        "item_get" => item_get(app, &me, decode("ItemGet", args, project)?),
+        "item_query" => item_query(app, &me, decode("ItemQuery", args, project)?),
+        "item_move" => item_move(app, &me, decode("ItemMove", args, project)?),
+        "item_move_check" => check(app, &me, decode("ItemMoveCheck", args, project)?),
         _ => super::board_edit::call(app, &me, name, args),
     }
 }
@@ -116,6 +118,30 @@ pub(super) fn conflict(current: Item) -> anyhow::Error {
         "conflict: the item changed since you read it; it is now version {version}. \
          Check it and retry with expected_version {version}.\n{item}"
     )
+}
+
+/// Run a bot's board write holding the feed (B4), and push the changed
+/// item's card once it has committed, so open boards see bots' changes. The
+/// write returns the item it changed; an error (a refusal, a conflict)
+/// changed nothing and pushes nothing.
+pub(super) fn published<T>(
+    app: &Arc<AppState>,
+    project_id: &str,
+    kind: ChangeKind,
+    from_column: Option<String>,
+    write: impl FnOnce() -> anyhow::Result<(T, String)>,
+) -> anyhow::Result<T> {
+    let mut feed = app.board.writer();
+    let (out, item_id) = write()?;
+    let card = app.db.board_read(|t| t.card(&item_id))?;
+    feed.publish(Change {
+        project_id,
+        kind,
+        item_id: &item_id,
+        card,
+        from_column,
+    });
+    Ok(out)
 }
 
 /// An item of the caller's project; another project's items don't exist here.
@@ -192,7 +218,7 @@ fn board_get(app: &Arc<AppState>, me: &Me) -> anyhow::Result<Value> {
     Ok(json!({ "key": settings.key, "columns": columns, "cards": cards }))
 }
 
-fn item_get(app: &Arc<AppState>, me: &Me, req: c::ItemGetRequest) -> anyhow::Result<Value> {
+fn item_get(app: &Arc<AppState>, me: &Me, req: c::ItemGet) -> anyhow::Result<Value> {
     own_item(app, me, &req.id)?;
     let item = app
         .db
@@ -211,7 +237,7 @@ fn item_get(app: &Arc<AppState>, me: &Me, req: c::ItemGetRequest) -> anyhow::Res
     Ok(json!({ "item": item_out(item)?, "links": out(links)?, "history": out(history)? }))
 }
 
-fn item_query(app: &Arc<AppState>, me: &Me, req: c::ItemQueryRequest) -> anyhow::Result<Value> {
+fn item_query(app: &Arc<AppState>, me: &Me, req: c::ItemQuery) -> anyhow::Result<Value> {
     let project = &me.bot.project_id;
     let cards = match req.text.as_deref().filter(|t| !t.trim().is_empty()) {
         Some(text) => app.db.search_items(project, text)?,
@@ -222,30 +248,23 @@ fn item_query(app: &Arc<AppState>, me: &Me, req: c::ItemQueryRequest) -> anyhow:
         .as_deref()
         .map(|a| bot_id(app, me, a))
         .transpose()?;
-    let item_type = req
-        .r#type
-        .map(crate::board::model::ItemType::from_wire)
-        .transpose()?;
-    let platform = req.platform.map(Platform::from_wire).transpose()?;
+    let types = model_list(req.types, ItemType::from_wire)?;
+    let priorities = model_list(req.priorities, Priority::from_wire)?;
+    let platforms = model_list(req.platforms, Platform::from_wire)?;
     let cards: Vec<c::ItemCard> = cards
         .into_iter()
-        .filter(|card| {
-            req.column
-                .as_ref()
-                .is_none_or(|col| &card.column_key == col)
-        })
-        .filter(|card| item_type.is_none_or(|t| card.item_type == t))
-        .filter(|card| platform.is_none_or(|p| card.platforms.contains(&p)))
+        .filter(|card| req.column_keys.is_empty() || req.column_keys.contains(&card.column_key))
+        .filter(|card| types.is_empty() || types.contains(&card.item_type))
+        .filter(|card| priorities.is_empty() || priorities.contains(&card.priority))
+        .filter(|card| platforms.is_empty() || platforms.iter().any(|p| card.platforms.contains(p)))
         .filter(|card| assignee.is_none() || card.assignee == assignee)
-        .filter(|card| req.label.as_ref().is_none_or(|l| card.labels.contains(l)))
         .filter(|card| req.blocked.is_none_or(|b| card.blocked == b))
-        .filter(|card| req.stale.is_none_or(|s| card.stale == s))
         .map(c::ItemCard::from)
         .collect();
     Ok(json!({ "cards": out(cards)? }))
 }
 
-fn item_move(app: &Arc<AppState>, me: &Me, req: c::ItemMoveRequest) -> anyhow::Result<Value> {
+fn item_move(app: &Arc<AppState>, me: &Me, req: c::ItemMove) -> anyhow::Result<Value> {
     own_item(app, me, &req.id)?;
     let request = MoveRequest {
         id: &req.id,
@@ -254,14 +273,22 @@ fn item_move(app: &Arc<AppState>, me: &Me, req: c::ItemMoveRequest) -> anyhow::R
         reason: req.reason.as_deref(),
         override_reason: req.override_reason.as_deref(),
     };
-    match move_item(&app.db, &request, &me.actor())? {
-        Moved::Done(item) => Ok(json!({ "item": item_out(*item)? })),
-        Moved::Refused(unmet) => Err(refused(unmet)),
-        Moved::Conflict(current) => Err(conflict(*current)),
-    }
+    let from = app.db.get_item(&req.id)?.map(|item| item.column_key);
+    let project = me.bot.project_id.as_str();
+    published(
+        app,
+        project,
+        ChangeKind::ItemMoved,
+        from,
+        || match move_item(&app.db, &request, &me.actor())? {
+            Moved::Done(item) => Ok((json!({ "item": item_out(*item)? }), req.id.clone())),
+            Moved::Refused(unmet) => Err(refused(unmet)),
+            Moved::Conflict(current) => Err(conflict(*current)),
+        },
+    )
 }
 
-fn check(app: &Arc<AppState>, me: &Me, req: c::ItemMoveCheckRequest) -> anyhow::Result<Value> {
+fn check(app: &Arc<AppState>, me: &Me, req: c::ItemMoveCheck) -> anyhow::Result<Value> {
     own_item(app, me, &req.id)?;
     let columns = item_move_check(&app.db, &req.id, &me.actor())?
         .into_iter()

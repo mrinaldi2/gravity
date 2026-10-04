@@ -9,6 +9,7 @@ use bus::{
 use serde_json::{json, Value};
 
 use crate::app::AppState;
+use crate::board::feed::ChangeKind;
 use crate::messaging;
 use crate::messaging::Dm;
 
@@ -195,8 +196,17 @@ pub(super) fn send_message(
                 &new_chain,
             )?;
             if let Some(item) = &item {
-                app.db
-                    .link_task_item(&task.id, item, &super::board::bot_actor(&me))?;
+                let actor = super::board::bot_actor(&me);
+                super::board::published(
+                    app,
+                    &me.project_id,
+                    ChangeKind::ItemUpserted,
+                    None,
+                    || {
+                        app.db.link_task_item(&task.id, item, &actor)?;
+                        Ok(((), item.clone()))
+                    },
+                )?;
             }
             Ok(json!({ "message_id": msg.id, "num": msg.num, "task_id": task.id }))
         }

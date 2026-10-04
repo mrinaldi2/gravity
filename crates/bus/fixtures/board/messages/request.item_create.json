@@ -1,0 +1,23 @@
+{
+  "reqId": "20",
+  "boardRequest": {
+    "itemCreate": {
+      "projectId": "p-hermes",
+      "type": "ITEM_TYPE_BUG",
+      "title": "Crash on open",
+      "description": "## Steps to reproduce\n\n1. Open the app",
+      "platforms": [
+        "PLATFORM_DESKTOP"
+      ],
+      "size": "SIZE_S",
+      "priority": "PRIORITY_P1",
+      "labels": [
+        "crash"
+      ],
+      "parentId": "H-001",
+      "acceptanceCriteria": [
+        "Opens without crashing"
+      ]
+    }
+  }
+}

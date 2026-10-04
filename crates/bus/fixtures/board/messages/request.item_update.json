@@ -1,0 +1,22 @@
+{
+  "reqId": "21",
+  "boardRequest": {
+    "itemUpdate": {
+      "id": "H-017",
+      "expectedVersion": "7",
+      "title": "Board and dashboard",
+      "description": "Updated",
+      "platforms": {
+        "values": [
+          "PLATFORM_DAEMON"
+        ]
+      },
+      "size": "SIZE_M",
+      "priority": "PRIORITY_P2",
+      "labels": {
+        "values": []
+      },
+      "parentId": ""
+    }
+  }
+}

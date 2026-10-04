@@ -11,6 +11,7 @@ use bus::*;
 use serde_json::{json, Value};
 
 use crate::app::AppState;
+use crate::board::feed::ChangeKind;
 use crate::db::{Actor, DecisionFilter};
 use crate::decisions::{self, Detail, RaiseRequest};
 
@@ -80,8 +81,11 @@ pub(super) fn raise_decision(
     )?;
     if let Some(item) = &item {
         let actor = super::board::bot_actor(&me);
-        app.db
-            .link_decision_item(&raised.decision.id, item, &actor)?;
+        let decision = &raised.decision.id;
+        super::board::published(app, &me.project_id, ChangeKind::ItemUpserted, None, || {
+            app.db.link_decision_item(decision, item, &actor)?;
+            Ok(((), item.clone()))
+        })?;
     }
     let mut out = json!({ "decision": summary(&raised.decision) });
     if !raised.similar.is_empty() {

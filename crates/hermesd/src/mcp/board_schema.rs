@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use bus::contract::board::REQUEST_SCHEMAS;
+use bus::contract::board::MESSAGE_SCHEMAS;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Map, Value};
 
@@ -27,36 +27,72 @@ pub(super) struct BoardTool {
     pub name: &'static str,
     pub message: &'static str,
     pub audience: Audience,
+    /// The tool's description; empty means the message's own comment.
+    pub about: &'static str,
 }
 
 const fn tool(name: &'static str, message: &'static str, audience: Audience) -> BoardTool {
+    shared(name, message, audience, "")
+}
+
+/// A tool whose message the WebSocket surface shares, described for bots.
+const fn shared(
+    name: &'static str,
+    message: &'static str,
+    audience: Audience,
+    about: &'static str,
+) -> BoardTool {
     BoardTool {
         name,
         message,
         audience,
+        about,
     }
 }
 
 pub(super) const BOARD_TOOLS: &[BoardTool] = &[
-    tool("board_get", "BoardGetRequest", Audience::Everyone),
-    tool("item_get", "ItemGetRequest", Audience::Everyone),
-    tool("item_query", "ItemQueryRequest", Audience::Everyone),
-    tool("item_create", "ItemCreateRequest", Audience::Everyone),
-    tool("item_update", "ItemUpdateRequest", Audience::Everyone),
-    tool("item_move", "ItemMoveRequest", Audience::Everyone),
-    tool(
-        "item_move_check",
-        "ItemMoveCheckRequest",
+    shared(
+        "board_get",
+        "BoardGet",
         Audience::Everyone,
+        "Your project's board: its columns with their WIP, and every card.",
     ),
-    tool("item_comment", "ItemCommentRequest", Audience::Everyone),
-    tool("item_link", "ItemLinkRequest", Audience::Everyone),
-    tool("item_unlink", "ItemUnlinkRequest", Audience::Everyone),
-    tool("item_block", "ItemBlockRequest", Audience::Everyone),
-    tool("item_unblock", "ItemUnblockRequest", Audience::Everyone),
-    tool("item_assign", "ItemAssignRequest", Audience::Lead),
-    tool("item_rank", "ItemRankRequest", Audience::Lead),
-    tool("item_check_ac", "ItemCheckAcRequest", Audience::Tester),
+    shared(
+        "item_get",
+        "ItemGet",
+        Audience::Everyone,
+        "One item in full, with its links and latest history. Read it before changing it: \
+            every change names the version you read.",
+    ),
+    shared(
+        "item_query",
+        "ItemQuery",
+        Audience::Everyone,
+        "Cards matching every filter given, in board order.",
+    ),
+    tool("item_create", "ItemCreate", Audience::Everyone),
+    tool("item_update", "ItemUpdate", Audience::Everyone),
+    shared(
+        "item_move",
+        "ItemMove",
+        Audience::Everyone,
+        "Move an item to another column. Refused with every unmet guard and its fix; \
+            item_move_check shows them in advance.",
+    ),
+    shared(
+        "item_move_check",
+        "ItemMoveCheck",
+        Audience::Everyone,
+        "What stands between an item and each other column, for you.",
+    ),
+    tool("item_comment", "ItemAddComment", Audience::Everyone),
+    tool("item_link", "ItemAddLink", Audience::Everyone),
+    tool("item_unlink", "ItemRemoveLink", Audience::Everyone),
+    tool("item_block", "ItemBlock", Audience::Everyone),
+    tool("item_unblock", "ItemUnblock", Audience::Everyone),
+    tool("item_assign", "ItemAssign", Audience::Lead),
+    tool("item_rank", "ItemRank", Audience::Lead),
+    tool("item_check_ac", "ItemCheckAc", Audience::Tester),
 ];
 
 impl Audience {
@@ -72,7 +108,7 @@ impl Audience {
 fn schemas() -> &'static Map<String, Value> {
     static SCHEMAS: OnceLock<Map<String, Value>> = OnceLock::new();
     SCHEMAS.get_or_init(|| {
-        serde_json::from_str(REQUEST_SCHEMAS).expect("build.rs writes a JSON object")
+        serde_json::from_str(MESSAGE_SCHEMAS).expect("build.rs writes a JSON object")
     })
 }
 
@@ -125,7 +161,7 @@ pub(super) fn board_tool_list(roles: &[Role]) -> Vec<Value> {
                 .collect();
             json!({
                 "name": t.name,
-                "description": schema["description"],
+                "description": if t.about.is_empty() { schema["description"].clone() } else { json!(t.about) },
                 "inputSchema": {"type": "object", "properties": properties, "required": required},
             })
         })
@@ -257,12 +293,10 @@ mod tests {
     use bus::contract::board as c;
 
     #[test]
-    fn every_request_has_a_tool_and_every_enum_resolves() {
-        let mut messages: Vec<&str> = BOARD_TOOLS.iter().map(|t| t.message).collect();
-        messages.sort_unstable();
-        let mut generated: Vec<&str> = schemas().keys().map(String::as_str).collect();
-        generated.sort_unstable();
-        assert_eq!(messages, generated);
+    fn every_tool_has_its_message_and_every_enum_resolves() {
+        for tool in BOARD_TOOLS {
+            assert!(schemas().contains_key(tool.message), "{}", tool.message);
+        }
         // Panics on an enum with no spellings.
         let all = board_tool_list(&[Role::Lead, Role::Tester]);
         assert_eq!(all.len(), BOARD_TOOLS.len());
@@ -289,7 +323,7 @@ mod tests {
     fn short_names_decode_and_come_back_short() {
         let args = json!({"type": "bug", "title": "Crash", "platforms": ["ios", "DESKTOP"],
                           "priority": "p1", "size": "S"});
-        let req: c::ItemCreateRequest = decode("ItemCreateRequest", &args, "p1").unwrap();
+        let req: c::ItemCreate = decode("ItemCreate", &args, "p1").unwrap();
         assert_eq!(req.project_id, "p1");
         assert_eq!(req.r#type, c::ItemType::Bug as i32);
         assert_eq!(
@@ -298,8 +332,8 @@ mod tests {
         );
         assert_eq!(req.priority, Some(c::Priority::P1 as i32));
 
-        let update: c::ItemUpdateRequest = decode(
-            "ItemUpdateRequest",
+        let update: c::ItemUpdate = decode(
+            "ItemUpdate",
             &json!({"id": "H-1", "expected_version": 3, "labels": []}),
             "p1",
         )
@@ -311,22 +345,16 @@ mod tests {
         );
         assert!(update.platforms.is_none(), "a missing list is no change");
 
-        let err = decode::<c::ItemCreateRequest>(
-            "ItemCreateRequest",
-            &json!({"type": "story", "title": "x"}),
-            "p",
-        )
-        .unwrap_err()
-        .to_string();
+        let err =
+            decode::<c::ItemCreate>("ItemCreate", &json!({"type": "story", "title": "x"}), "p")
+                .unwrap_err()
+                .to_string();
         assert!(err.contains("epic, feature, bug, spike, chore"), "{err}");
-        let err = decode::<c::ItemMoveRequest>("ItemMoveRequest", &json!({"id": "H-1"}), "p")
+        let err = decode::<c::ItemMove>("ItemMove", &json!({"id": "H-1"}), "p")
             .unwrap_err()
             .to_string();
         assert!(err.contains("'expected_version' is required") || err.contains("'to' is required"));
-        assert!(
-            decode::<c::ItemGetRequest>("ItemGetRequest", &json!({"id": "H-1", "x": 1}), "p")
-                .is_err()
-        );
+        assert!(decode::<c::ItemGet>("ItemGet", &json!({"id": "H-1", "x": 1}), "p").is_err());
 
         let out =
             friendly(json!({"category": "COLUMN_CATEGORY_DOING", "roles": ["ROLE_REVIEWER_ARCH"]}));

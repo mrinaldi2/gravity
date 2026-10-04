@@ -1,0 +1,11 @@
+{
+  "reqId": "28",
+  "boardRequest": {
+    "itemRank": {
+      "id": "H-017",
+      "expectedVersion": "7",
+      "after": "H-012",
+      "before": "H-020"
+    }
+  }
+}

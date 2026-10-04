@@ -4,7 +4,15 @@
 // the same id, and pushes under `req_id` 0. A refusal that is not a guard
 // (no grant, unknown item, bad arguments) is the envelope's `Error` instead.
 //
-// Grants: reads and watching need `read`; `item_move` needs `control`.
+// Grants: reads and watching need `read`; `item_move` and the edits need
+// `control`.
+//
+// Bots send the same requests as MCP tool arguments in proto3 JSON, and the
+// MCP tool schemas are generated from these messages: a field marked
+// `optional`, a repeated field or a list wrapper may be left out, every
+// other field is required. Enums also accept their short names ("doing",
+// "reviewer.arch"). MCP takes the project from the bot's credentials and
+// drops `project_id`.
 syntax = "proto3";
 
 package hermes.board.v1;
@@ -21,6 +29,17 @@ message BoardRequest {
     ItemMove item_move = 6;
     BoardWatch board_watch = 7;
     BoardUnwatch board_unwatch = 8;
+    // Item edits; bots send these as MCP tools of the same names.
+    ItemCreate item_create = 9;
+    ItemUpdate item_update = 10;
+    ItemAddComment item_comment = 11;
+    ItemAddLink item_link = 12;
+    ItemRemoveLink item_unlink = 13;
+    ItemBlock item_block = 14;
+    ItemUnblock item_unblock = 15;
+    ItemAssign item_assign = 16;
+    ItemRank item_rank = 17;
+    ItemCheckAc item_check_ac = 18;
   }
 }
 
@@ -40,6 +59,8 @@ message BoardResponse {
     MoveResult moved = 6;
     // To `board_unwatch`.
     BoardUnwatched unwatched = 7;
+    // To the item edits.
+    EditResult edited = 8;
   }
 }
 
@@ -114,6 +135,109 @@ message BoardUnwatch {
   string project_id = 1;
 }
 
+// --- Item edits -------------------------------------------------------------
+
+// Platforms, where "unset" and "none" must differ.
+message PlatformList {
+  repeated Platform values = 1;
+}
+
+// A new item in the inbox. Its type's template fills the description.
+message ItemCreate {
+  string project_id = 1;
+  ItemType type = 2;
+  string title = 3;
+  // Markdown; left out, the template's section headings.
+  optional string description = 4;
+  repeated Platform platforms = 5;
+  optional Size size = 6;
+  // P2 when left out.
+  optional Priority priority = 7;
+  repeated string labels = 8;
+  // The epic this belongs to.
+  optional string parent_id = 9;
+  repeated string acceptance_criteria = 10;
+}
+
+// Change an item's fields; never its column or rank.
+message ItemUpdate {
+  string id = 1;
+  // The version you read; a stale one is refused with the current item.
+  uint64 expected_version = 2;
+  optional string title = 3;
+  optional string description = 4;
+  PlatformList platforms = 5;
+  optional Size size = 6;
+  optional Priority priority = 7;
+  StringList labels = 8;
+  optional string parent_id = 9;
+}
+
+message ItemAddComment {
+  string id = 1;
+  string body = 2;
+  // The comment this answers.
+  optional string reply_to = 3;
+}
+
+// Link an item to a task, decision, artifact, branch, PR or other item.
+message ItemAddLink {
+  string id = 1;
+  LinkKind kind = 2;
+  // What it points at: a task id, an artifact path, a branch name, an item id.
+  string ref = 3;
+  optional string label = 4;
+}
+
+message ItemRemoveLink {
+  string id = 1;
+  LinkKind kind = 2;
+  string ref = 3;
+}
+
+// Flag an item blocked; it keeps its column.
+message ItemBlock {
+  string id = 1;
+  uint64 expected_version = 2;
+  string reason = 3;
+  // The blocking item, when it is one.
+  optional string by = 4;
+}
+
+message ItemUnblock {
+  string id = 1;
+  uint64 expected_version = 2;
+}
+
+// Lead: set or clear an item's assignee.
+message ItemAssign {
+  string id = 1;
+  uint64 expected_version = 2;
+  // A bot id or name; left out, unassigned.
+  optional string bot = 3;
+}
+
+// Lead: place an item between two others in its column.
+message ItemRank {
+  string id = 1;
+  uint64 expected_version = 2;
+  // The item it goes after; left out, the top.
+  optional string after = 3;
+  // The item it goes before; left out, the bottom.
+  optional string before = 4;
+}
+
+// Tester: record an acceptance criterion's result.
+message ItemCheckAc {
+  string id = 1;
+  uint64 expected_version = 2;
+  // The criterion's index, from item_get.
+  uint32 index = 3;
+  VerificationResult result = 4;
+  // The machine it was checked on.
+  optional string machine = 5;
+}
+
 // --- Responses --------------------------------------------------------------
 
 message BoardSnapshot {
@@ -165,6 +289,18 @@ message ColumnCheck {
 message MoveResult {
   oneof outcome {
     // The move happened; the item as it is now.
+    Item done = 1;
+    // Guards not met; nothing was written.
+    MoveRefused refused = 2;
+    // The item changed since `expected_version`; the item as it is now.
+    Item conflict = 3;
+  }
+}
+
+// An edit's outcome, shaped like a move's.
+message EditResult {
+  oneof outcome {
+    // The item as it is after the edit.
     Item done = 1;
     // Guards not met; nothing was written.
     MoveRefused refused = 2;

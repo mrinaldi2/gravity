@@ -1,7 +1,7 @@
 //! Generates the wire contract's Rust types from `proto/` (ADR-001 §1):
 //! protox compiles the files in pure Rust, prost emits the messages and
 //! pbjson their proto3 JSON (serde) form, used by fixtures and MCP; the
-//! request messages also get JSON Schemas for the MCP tools (`build_schema.rs`).
+//! messages also get JSON Schemas for the MCP tools (`build_schema.rs`).
 
 use std::path::PathBuf;
 
@@ -25,8 +25,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let descriptor_path = out.join("contract_descriptors.bin");
     std::fs::write(&descriptor_path, descriptors.encode_to_vec())?;
     std::fs::write(
-        out.join("board_requests.schema.json"),
-        serde_json::to_string_pretty(&schema::request_schemas(&descriptors))?,
+        out.join("board_messages.schema.json"),
+        serde_json::to_string_pretty(&schema::message_schemas(&descriptors))?,
     )?;
 
     prost_build::Config::new()

@@ -7,6 +7,7 @@ use bus::{MessageKind, TaskState, MAX_MESSAGE_BYTES};
 use serde_json::{json, Value};
 
 use crate::app::AppState;
+use crate::board::feed::ChangeKind;
 use crate::board::model::LinkKind;
 use crate::events::Push;
 use crate::messaging;
@@ -90,10 +91,13 @@ pub(super) fn complete_task(
     }
     if let Some(item) = &item {
         let actor = super::board::bot_actor(&me);
-        for path in &artifacts {
-            app.db
-                .add_item_link(item, LinkKind::Artifact, path, None, &actor)?;
-        }
+        super::board::published(app, &me.project_id, ChangeKind::ItemUpserted, None, || {
+            for path in &artifacts {
+                app.db
+                    .add_item_link(item, LinkKind::Artifact, path, None, &actor)?;
+            }
+            Ok(((), item.clone()))
+        })?;
     }
     // A worker's task closing frees its slot for the queue.
     app.workers.nudge();

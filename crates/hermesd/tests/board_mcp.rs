@@ -229,3 +229,79 @@ async fn bots_work_an_item_through_the_board_over_mcp() {
         .iter()
         .any(|c| c["id"] == id.as_str()));
 }
+
+#[tokio::test]
+async fn bot_writes_over_mcp_reach_watching_boards() {
+    use bus::contract::board::{self as c, board_request::Request};
+    use common::board::{call, next_push};
+    use common::WsClient;
+
+    let (pair, mut bots) = project_with_bots(&["Team Lead", "Desktop Dev"]).await;
+    let [lead, dev] = &mut bots[..] else {
+        unreachable!()
+    };
+    let project = pair
+        .d
+        .app
+        .db
+        .get_bot(&pair.ids[0])
+        .unwrap()
+        .unwrap()
+        .project_id;
+    pair.d
+        .app
+        .db
+        .ensure_board(&project, "d-test", Some("H"))
+        .unwrap();
+    let mut watcher = WsClient::connect(&pair.d).await;
+    call(
+        &mut watcher,
+        Request::BoardWatch(c::BoardWatch {
+            project_id: project.clone(),
+        }),
+    )
+    .await;
+
+    let created = dev
+        .call(
+            "item_create",
+            json!({"type": "chore", "title": "Pushed", "platforms": ["infra"]}),
+        )
+        .await;
+    let id = created["item"]["id"].as_str().unwrap().to_string();
+    let event = next_push(&mut watcher)
+        .await
+        .expect("a push for the create");
+    assert_eq!(
+        (event.seq, event.kind),
+        (1, c::BoardEventKind::ItemUpserted as i32)
+    );
+    assert_eq!(event.item_id, id);
+    assert_eq!(event.card.expect("card").title, "Pushed");
+
+    // A refusal writes nothing and pushes nothing; the next change is seq 2.
+    let raw = dev
+        .call_raw(
+            "item_move",
+            json!({"id": id, "to": "ready", "expected_version": version(&created["item"])}),
+        )
+        .await;
+    error_text(&raw);
+    let cancelled = lead
+        .call(
+            "item_move",
+            json!({"id": id, "to": "cancelled", "reason": "not needed",
+                   "expected_version": version(&created["item"])}),
+        )
+        .await;
+    let event = next_push(&mut watcher).await.expect("a push for the move");
+    assert_eq!(
+        (event.seq, event.kind),
+        (2, c::BoardEventKind::ItemMoved as i32)
+    );
+    assert_eq!(event.from_column.as_deref(), Some("inbox"));
+    assert_eq!(
+        event.card.expect("card").version,
+        version(&cancelled["item"])
+    );
+}

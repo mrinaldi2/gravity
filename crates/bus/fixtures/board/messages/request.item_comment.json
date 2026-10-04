@@ -1,0 +1,10 @@
+{
+  "reqId": "22",
+  "boardRequest": {
+    "itemComment": {
+      "id": "H-017",
+      "body": "Looks good.",
+      "replyTo": "c-1"
+    }
+  }
+}
