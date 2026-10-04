@@ -131,8 +131,10 @@ fn stop_daemon(pid: u32, executables: &[PathBuf]) -> anyhow::Result<()> {
         .map(|executable| format!("$p.Path -eq {}", quote(executable)))
         .collect::<Vec<_>>()
         .join(" -or ");
+    // taskkill /F returns before the process is gone; wait for it, since
+    // the caller moves or replaces what it runs from next.
     let script = format!(
-        "$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; if ($p -and ({ours})) {{ & taskkill.exe /PID {pid} /T /F | Out-Null; exit $LASTEXITCODE }}; exit 0"
+        "$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; if ($p -and ({ours})) {{ & taskkill.exe /PID {pid} /T /F | Out-Null; if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}; if (-not $p.WaitForExit(30000)) {{ exit 1 }} }}; exit 0"
     );
     let out = Command::new("powershell.exe")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
@@ -238,33 +240,50 @@ pub fn stop_legacy(paths: &ServicePaths) -> anyhow::Result<Option<Legacy>> {
         }
         let name = task_name_in(crate::brand::LEGACY_WINDOWS_TASK, &home)?;
         tracing::info!(task = %name, "stopping the pre-rename task");
-        let _ = Command::new("schtasks.exe")
-            .args(["/end", "/tn", &name])
-            .output()?;
-        let pid_path = home.join(crate::brand::legacy_daemon_file("-task.pid"));
-        if let Ok(pid) = std::fs::read_to_string(&pid_path) {
-            let pid: u32 = pid.trim().parse().context("invalid managed daemon PID")?;
-            let bin = home.join("bin");
-            stop_daemon(pid, &[bin.join("gravityd.exe"), bin.join("hermesd.exe")])?;
-        }
-        let deadline = Instant::now() + Duration::from_secs(30);
-        loop {
-            match crate::home::lock_legacy(&home) {
-                Ok(_lock) => break,
-                Err(error) if Instant::now() >= deadline => {
-                    return Err(error).context("waiting for the pre-rename daemon to stop")
-                }
-                Err(_) => std::thread::sleep(Duration::from_millis(100)),
+        // Disabled before it is ended: the task restarts on failure, and a
+        // killed launcher can count as one, bringing the old daemon back
+        // in the middle of the migration.
+        run_task(&["/change", "/tn", &name, "/disable"])?;
+        if let Err(error) = stop_legacy_task(&name, &home) {
+            if let Err(enable) = run_task(&["/change", "/tn", &name, "/enable"]) {
+                tracing::warn!(%enable, task = %name, "could not re-enable the pre-rename task");
             }
+            return Err(error);
         }
         tasks.push((name, home));
     }
     Ok((!tasks.is_empty()).then_some(Legacy { tasks }))
 }
 
+/// Ends the (already disabled) old task and returns once its daemon has
+/// exited and released the home.
+fn stop_legacy_task(name: &str, home: &Path) -> anyhow::Result<()> {
+    let _ = Command::new("schtasks.exe")
+        .args(["/end", "/tn", name])
+        .output()?;
+    let pid_path = home.join(crate::brand::legacy_daemon_file("-task.pid"));
+    if let Ok(pid) = std::fs::read_to_string(&pid_path) {
+        let pid: u32 = pid.trim().parse().context("invalid managed daemon PID")?;
+        let bin = home.join("bin");
+        // Returns once that process has exited.
+        stop_daemon(pid, &[bin.join("gravityd.exe"), bin.join("hermesd.exe")])?;
+    }
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        match crate::home::lock_legacy(home) {
+            Ok(_lock) => return Ok(()),
+            Err(error) if Instant::now() >= deadline => {
+                return Err(error).context("waiting for the pre-rename daemon to stop")
+            }
+            Err(_) => std::thread::sleep(Duration::from_millis(100)),
+        }
+    }
+}
+
 /// Starts the old task again, after a failed migration was rolled back.
 pub fn restart_legacy(_paths: &ServicePaths, legacy: &Legacy) -> anyhow::Result<()> {
     for (name, _) in &legacy.tasks {
+        run_task(&["/change", "/tn", name, "/enable"])?;
         run_task(&["/run", "/tn", name])?;
     }
     Ok(())

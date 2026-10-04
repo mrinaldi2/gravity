@@ -76,3 +76,65 @@ fn launcher_quotes_apostrophes() {
         r"'C:\O''Brien\gravity.exe'"
     );
 }
+
+/// `stop_legacy` moves the home right after this returns, so the process
+/// must be gone, not merely told to go.
+#[test]
+fn stopping_a_daemon_waits_for_it_to_exit() {
+    let ping =
+        PathBuf::from(std::env::var("SystemRoot").expect("SystemRoot")).join(r"System32\PING.EXE");
+    let mut child = Command::new(&ping)
+        .args(["-n", "60", "127.0.0.1"])
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn ping");
+    stop_daemon(child.id(), &[ping]).expect("stopped");
+    assert!(child.try_wait().expect("status").is_some());
+}
+
+/// The legacy task restarts on failure, so it must be disabled before it is
+/// ended and enabled again only by a rollback. Creates a throwaway task named
+/// for a temporary home; run on Windows with `--ignored`.
+#[test]
+#[ignore = "creates and deletes a scheduled task"]
+fn the_legacy_task_is_disabled_while_stopped_and_enabled_on_restart() {
+    let root = tempfile::tempdir().expect("temporary home");
+    let home = root.path().join("legacy");
+    std::fs::create_dir_all(&home).expect("home");
+    std::fs::write(
+        home.join(crate::brand::legacy_daemon_file("-task.xml")),
+        b"x",
+    )
+    .expect("marker");
+    let name = task_name_in(crate::brand::LEGACY_WINDOWS_TASK, &home).expect("name");
+    run_task(&[
+        "/create",
+        "/tn",
+        &name,
+        "/tr",
+        "cmd.exe /c exit 0",
+        "/sc",
+        "once",
+        "/st",
+        "23:59",
+        "/f",
+    ])
+    .expect("create");
+    let state = |name: &str| -> String {
+        let out = Command::new("schtasks.exe")
+            .args(["/query", "/tn", name, "/fo", "csv", "/nh"])
+            .output()
+            .expect("query");
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+
+    let paths = ServicePaths::new(home.clone(), root.path().join("user"));
+    let legacy = stop_legacy(&paths).expect("stop").expect("found");
+    let stopped = state(&name);
+    restart_legacy(&paths, &legacy).expect("restart");
+    let restarted = state(&name);
+    remove_legacy(&paths, legacy).expect("remove");
+
+    assert!(stopped.contains("Disabled"), "{stopped}");
+    assert!(!restarted.contains("Disabled"), "{restarted}");
+}
