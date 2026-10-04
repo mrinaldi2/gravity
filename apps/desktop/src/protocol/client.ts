@@ -1,4 +1,6 @@
 import type { AttachResult, DaemonApi } from "./api";
+import type { BoardCall, BoardReply } from "./board";
+import { decodeBoardFrame, encodeBoardRequest, PROTO_ENCODING } from "./board";
 import { CLIENT_ID, DaemonError, PROTOCOL_VERSION } from "./connection";
 import type { ConnectionStatus, Endpoint } from "./connection";
 import type { Grant } from "./entities";
@@ -15,9 +17,10 @@ import { dispatchPush, emptyHandlers } from "./push";
 import type { ClientRequestBody, FireBody, RequestBody } from "./requests";
 import { isReply, parseServerMessage, replyIs } from "./wire";
 import { CONTRACTS } from "./contracts";
+import type { BoardEvent } from "./gen/hermes/board/v1/requests_pb";
 
-interface PendingRequest {
-  readonly resolve: (reply: ServerReply) => void;
+interface Pending<T> {
+  readonly resolve: (reply: T) => void;
   readonly reject: (error: Error) => void;
 }
 
@@ -46,6 +49,7 @@ function isHandshakeVerdict(status: ConnectionStatus): boolean {
  * - typed push subscription via `on(...)`
  * - automatic reconnect with exponential backoff
  * - per-bot `after_seq` cursor tracking for terminal replay
+ * - the board surface: protobuf envelopes in binary frames on the same socket
  */
 export class DaemonClient implements DaemonApi {
   private endpoint: Endpoint;
@@ -55,7 +59,10 @@ export class DaemonClient implements DaemonApi {
   private running = false;
   private backoffMs = MIN_BACKOFF_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly pending = new Map<string, PendingRequest>();
+  private readonly pending = new Map<string, Pending<ServerReply>>();
+  /** Board requests in flight, keyed by the binary envelope's `req_id`. */
+  private readonly boardPending = new Map<bigint, Pending<BoardReply>>();
+  private readonly boardHandlers = new Set<(event: BoardEvent) => void>();
   private readonly cursors = new Map<string, number>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
   private readonly handlers: PushHandlerSets = emptyHandlers();
@@ -68,6 +75,7 @@ export class DaemonClient implements DaemonApi {
   grants: readonly Grant[] = [];
   /** Device id when authenticated with a device token, null for the owner token. */
   deviceId: string | null = null;
+  encodings: readonly string[] = [];
 
   constructor(endpoint: Endpoint, getToken: () => Promise<string>) {
     this.endpoint = endpoint;
@@ -155,6 +163,37 @@ export class DaemonClient implements DaemonApi {
     ws.send(JSON.stringify({ ...body, req_id: this.newReqId() }));
   }
 
+  board(call: BoardCall): Promise<BoardReply> {
+    const ws = this.ws;
+    if (this.status !== "connected" || ws === null || ws.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new DaemonError("disconnected", "not connected to daemon"));
+    }
+    if (!this.encodings.includes(PROTO_ENCODING)) {
+      return Promise.reject(
+        new DaemonError("unsupported", "the board needs a newer Hermes service"),
+      );
+    }
+    return new Promise<BoardReply>((resolve, reject) => {
+      const reqId = BigInt(this.newReqId());
+      this.boardPending.set(reqId, { resolve, reject });
+      try {
+        ws.send(encodeBoardRequest(reqId, call));
+      } catch (error) {
+        this.boardPending.delete(reqId);
+        reject(
+          error instanceof Error ? error : new DaemonError("disconnected", "failed to send frame"),
+        );
+      }
+    });
+  }
+
+  onBoardEvent(handler: (event: BoardEvent) => void): () => void {
+    this.boardHandlers.add(handler);
+    return () => {
+      this.boardHandlers.delete(handler);
+    };
+  }
+
   /**
    * Attaches to a bot terminal, resuming from the last seen sequence number
    * when the caller still has the matching screen (`resume`). Callers with a
@@ -212,12 +251,15 @@ export class DaemonClient implements DaemonApi {
       return;
     }
     this.ws = ws;
+    ws.binaryType = "arraybuffer";
     ws.addEventListener("open", () => {
       void this.handshake(ws);
     });
     ws.addEventListener("message", (event: MessageEvent) => {
       if (typeof event.data === "string") {
         this.handleFrame(event.data);
+      } else if (event.data instanceof ArrayBuffer) {
+        this.handleBinaryFrame(new Uint8Array(event.data));
       }
     });
     ws.addEventListener("close", () => {
@@ -267,6 +309,7 @@ export class DaemonClient implements DaemonApi {
       this.serverVersion = reply.server_version;
       this.grants = reply.grants;
       this.deviceId = reply.device_id;
+      this.encodings = reply.encodings ?? [];
       this.backoffMs = MIN_BACKOFF_MS;
       this.setStatus("connected");
     } catch (error) {
@@ -324,6 +367,29 @@ export class DaemonClient implements DaemonApi {
     this.dispatchPush(message);
   }
 
+  private handleBinaryFrame(bytes: Uint8Array): void {
+    const frame = decodeBoardFrame(bytes);
+    if (frame === null) {
+      return;
+    }
+    if (frame.kind === "event") {
+      for (const handler of this.boardHandlers) {
+        handler(frame.event);
+      }
+      return;
+    }
+    const pending = this.boardPending.get(frame.reqId);
+    if (pending === undefined) {
+      return;
+    }
+    this.boardPending.delete(frame.reqId);
+    if (frame.kind === "error") {
+      pending.reject(new DaemonError(frame.code, frame.message));
+    } else {
+      pending.resolve(frame.response);
+    }
+  }
+
   private dispatchPush(push: ServerPush): void {
     // The replay cursor is the client's own state, so it is tracked here
     // rather than in the shared router.
@@ -334,8 +400,9 @@ export class DaemonClient implements DaemonApi {
   }
 
   private failPending(error: Error): void {
-    const entries = [...this.pending.values()];
+    const entries = [...this.pending.values(), ...this.boardPending.values()];
     this.pending.clear();
+    this.boardPending.clear();
     for (const entry of entries) {
       entry.reject(error);
     }

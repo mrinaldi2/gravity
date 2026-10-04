@@ -1,6 +1,8 @@
 import type { AttachResult, DaemonApi } from "../protocol/api";
+import type { BoardCall, BoardReply } from "../protocol/board";
 import type { ConnectionStatus, Endpoint } from "../protocol/connection";
 import type { Grant } from "../protocol/entities";
+import type { BoardEvent } from "../protocol/gen/hermes/board/v1/requests_pb";
 import type {
   PushOf,
   ReplyOf,
@@ -21,6 +23,9 @@ export interface RecordedRequest {
 /** Answers one request type. Throw to simulate a daemon error. */
 type Responder = (body: RequestBody) => ServerReply;
 
+/** Answers one board request arm. Throw (a `DaemonError`) to simulate an `Envelope.error`. */
+type BoardResponder = (call: BoardCall) => BoardReply | Promise<BoardReply>;
+
 /**
  * In-memory `DaemonApi` for component tests: requests are answered from a
  * per-type responder table and pushes can be emitted on demand. Replies are
@@ -33,9 +38,11 @@ export class FakeDaemon implements DaemonApi {
   serverVersion = "0.1.0-test";
   grants: readonly Grant[] = ["read", "control"];
   deviceId: string | null = null;
+  encodings: readonly string[] = ["proto"];
 
   readonly requests: RecordedRequest[] = [];
   readonly fired: FireBody[] = [];
+  readonly boardCalls: BoardCall[] = [];
   attachResult: AttachResult = { seq: 0, resumed: false };
   /** The `resume` flag of every attach, in order. */
   readonly attachResumes: boolean[] = [];
@@ -47,12 +54,26 @@ export class FakeDaemon implements DaemonApi {
   private heldAttaches: (() => void)[] = [];
   private readonly responders = new Map<string, Responder>();
   private readonly handlers: PushHandlerSets = emptyHandlers();
+  private readonly boardResponders = new Map<string, BoardResponder>();
+  private readonly boardHandlers = new Set<(event: BoardEvent) => void>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
 
   /** Registers the reply for one request type; later calls replace earlier ones. */
   onRequest(type: RequestBody["type"], responder: Responder): this {
     this.responders.set(type, responder);
     return this;
+  }
+
+  /** Registers the reply for one board request arm; later calls replace earlier ones. */
+  onBoard(arm: BoardCall["case"], responder: BoardResponder): this {
+    this.boardResponders.set(arm, responder);
+    return this;
+  }
+
+  emitBoardEvent(event: BoardEvent): void {
+    for (const handler of this.boardHandlers) {
+      handler(event);
+    }
   }
 
   emit<K extends ServerPushType>(type: K, push: PushOf<K>): void {
@@ -116,6 +137,22 @@ export class FakeDaemon implements DaemonApi {
       return Promise.resolve(reply);
     }
     return Promise.reject(new Error(`fake replied '${reply.type}', expected '${expect}'`));
+  }
+
+  async board(call: BoardCall): Promise<BoardReply> {
+    this.boardCalls.push(call);
+    const responder = this.boardResponders.get(call.case);
+    if (responder === undefined) {
+      throw new Error(`no fake board responder for '${call.case}'`);
+    }
+    return responder(call);
+  }
+
+  onBoardEvent(handler: (event: BoardEvent) => void): () => void {
+    this.boardHandlers.add(handler);
+    return () => {
+      this.boardHandlers.delete(handler);
+    };
   }
 
   fire(body: FireBody): void {
