@@ -25,6 +25,11 @@ async fn main() -> anyhow::Result<()> {
         );
         return Ok(());
     }
+    // `service install` runs a staged binary with this to check it starts.
+    if args.first().map(String::as_str) == Some("--version") {
+        println!("hermesd {}", hermesd::app::DAEMON_VERSION);
+        return Ok(());
+    }
     let config_path = flag_value(&args, "--config");
     let negotiate_port = args.iter().any(|arg| arg == "--negotiate-port");
 
@@ -81,8 +86,7 @@ async fn main() -> anyhow::Result<()> {
                 Some("install") => {
                     let source =
                         flag_value(&args, "--binary").map_or_else(std::env::current_exe, Ok)?;
-                    hermesd::service::install(&source, &paths)?;
-                    hermesd::service::reload(&paths)?;
+                    hermesd::service::install_and_start(&source, &paths, cfg.port)?;
                     println!(
                         "hermesd installed to {} and running ({})",
                         paths.bin_path().display(),
@@ -103,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
                         "no hermesd service installed at {}",
                         paths.plist_path().display()
                     );
-                    hermesd::service::reload(&paths)?;
+                    hermesd::service::restart(&paths, cfg.port)?;
                     println!("hermesd restarted ({})", hermesd::service::SERVICE_LABEL);
                 }
                 Some("status") => {

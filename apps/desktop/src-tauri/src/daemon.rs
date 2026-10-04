@@ -71,6 +71,16 @@ fn managed_daemon_is_installed(home: &Path, user_home: &Path) -> bool {
     }) && managed_marker(home, user_home).is_file()
 }
 
+/// The service definition survived but its binary did not (an interrupted
+/// copy, a quarantine): the task or agent has nothing to start.
+fn managed_daemon_needs_repair(home: &Path, user_home: &Path) -> bool {
+    managed_marker(home, user_home).is_file()
+        && !["hermesd", "gravityd"].iter().any(|name| {
+            home.join(format!("bin/{name}{}", std::env::consts::EXE_SUFFIX))
+                .is_file()
+        })
+}
+
 fn managed_marker(home: &Path, user_home: &Path) -> PathBuf {
     if cfg!(windows) {
         home.join("gravityd-task.xml")
@@ -129,7 +139,8 @@ pub fn local_daemon_is_managed(port: u16) -> bool {
 /// for the daemon to actually exit.
 #[tauri::command]
 pub async fn restart_local_daemon() -> Result<(), String> {
-    if !managed_daemon_is_installed(&daemon_home()?, &user_home()?) {
+    // `service restart` reinstalls a missing binary from the bundled copy.
+    if !managed_marker(&daemon_home()?, &user_home()?).is_file() {
         return Err("no app-managed daemon is installed on this machine".to_string());
     }
     run_bundled_service("restart", "daemon restart failed")
@@ -164,6 +175,15 @@ pub fn install_local_daemon(current_version: Option<String>) -> Result<(), Strin
 pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
     let home = daemon_home()?;
     if !managed_daemon_is_installed(&home, &user_home()?) {
+        return Ok(());
+    }
+    install_bundled_local_daemon()
+}
+
+/// Reinstalls the managed daemon from the bundled sidecar when its binary has
+/// gone missing, so a broken upgrade heals on the next app launch.
+pub(crate) fn repair_local_daemon_if_broken() -> Result<(), String> {
+    if !managed_daemon_needs_repair(&daemon_home()?, &user_home()?) {
         return Ok(());
     }
     install_bundled_local_daemon()
@@ -320,6 +340,24 @@ mod tests {
         std::fs::write(&plist, b"plist").expect("launchd plist");
 
         assert!(managed_daemon_is_installed(&home, &user_home));
+        std::fs::remove_dir_all(root).expect("test cleanup");
+    }
+
+    #[test]
+    fn a_service_without_its_binary_needs_repair() {
+        let root = daemon_test_home("repair");
+        let home = root.join("gravity");
+        let user_home = root.join("user");
+        let marker = managed_marker(&home, &user_home);
+        assert!(!managed_daemon_needs_repair(&home, &user_home));
+        std::fs::create_dir_all(marker.parent().expect("marker parent")).expect("marker directory");
+        std::fs::write(&marker, b"task").expect("service marker");
+        assert!(managed_daemon_needs_repair(&home, &user_home));
+
+        let legacy = home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX));
+        std::fs::create_dir_all(legacy.parent().expect("binary parent")).expect("binary directory");
+        std::fs::write(&legacy, b"daemon").expect("legacy daemon binary");
+        assert!(!managed_daemon_needs_repair(&home, &user_home));
         std::fs::remove_dir_all(root).expect("test cleanup");
     }
 
