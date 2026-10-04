@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 bus = { path = "../bus" }
+prost = "0.14"
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }

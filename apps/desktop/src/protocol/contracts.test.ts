@@ -1,77 +1,82 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { equals, fromBinary, fromJson, toBinary } from "@bufbuild/protobuf";
+import type { DescMessage, JsonValue } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 import { CONTRACTS } from "./contracts";
-import type { BoardContract } from "./generated/board";
+import {
+  BoardColumnSchema,
+  BoardSettingsSchema,
+  file_hermes_board_v1_board,
+  ItemCardSchema,
+  ItemCommentSchema,
+  ItemEventSchema,
+  ItemLinkSchema,
+  ItemSchema,
+  ProjectRoleSchema,
+  TemplateSchema,
+  UnmetSchema,
+} from "./gen/hermes/board/v1/board_pb";
 
 // The repo root, from apps/desktop where vitest runs.
-const ROOT = join(process.cwd(), "..", "..");
+const FIXTURES = join(process.cwd(), "..", "..", "crates", "bus", "fixtures", "board");
 
-interface ObjectSchema {
-  readonly properties?: Readonly<Record<string, unknown>>;
-  readonly required?: readonly string[];
-}
+const ENTITIES: Readonly<Record<string, DescMessage>> = {
+  card: ItemCardSchema,
+  column: BoardColumnSchema,
+  comment: ItemCommentSchema,
+  event: ItemEventSchema,
+  item: ItemSchema,
+  link: ItemLinkSchema,
+  role: ProjectRoleSchema,
+  settings: BoardSettingsSchema,
+  template: TemplateSchema,
+  unmet: UnmetSchema,
+};
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+function isJsonObject(value: unknown): value is { readonly [key: string]: JsonValue } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function readJson(path: string): unknown {
-  return JSON.parse(readFileSync(path, "utf8"));
-}
-
-/** The definition a root property points at, e.g. `item` → `Item`. */
-function definitionFor(schema: Record<string, unknown>, field: string): ObjectSchema {
-  const properties = isRecord(schema["properties"]) ? schema["properties"] : {};
-  const property = properties[field];
-  const ref = isRecord(property) && typeof property["$ref"] === "string" ? property["$ref"] : "";
-  const definitions = isRecord(schema["definitions"]) ? schema["definitions"] : {};
-  const definition = definitions[ref.replace("#/definitions/", "")];
-  if (!isRecord(definition)) {
-    throw new Error(`no definition for ${field}`);
+function readJson(name: string): { readonly [key: string]: JsonValue } {
+  const parsed: unknown = JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), "utf8"));
+  if (!isJsonObject(parsed)) {
+    throw new Error(`${name}.json is not an object`);
   }
-  return definition;
+  return parsed;
 }
-
-const ENTITIES: readonly (keyof BoardContract)[] = [
-  "card",
-  "column",
-  "comment",
-  "event",
-  "item",
-  "link",
-  "role",
-  "settings",
-  "template",
-  "unmet",
-];
 
 describe("board contract", () => {
-  const schema = readJson(join(ROOT, "contract", "board.schema.json"));
-  if (!isRecord(schema)) {
-    throw new Error("schema is not an object");
-  }
-
-  it("sends the version the schema declares", () => {
-    const declared = isRecord(schema["x-contract"]) ? schema["x-contract"]["version"] : undefined;
-    expect(CONTRACTS["board"]).toBe(declared);
+  it("speaks board contract version 1", () => {
+    expect(CONTRACTS["board"]).toBe(1);
   });
 
-  it("has a golden fixture for every entity and nothing else", () => {
-    const files = readdirSync(join(ROOT, "crates", "bus", "fixtures", "board"))
+  it("has a golden fixture for every entity and the enum list, nothing else", () => {
+    const files = readdirSync(FIXTURES)
       .filter((name) => name.endsWith(".json"))
       .map((name) => name.replace(/\.json$/, ""));
-    expect(new Set(files)).toEqual(new Set(ENTITIES));
+    expect(new Set(files)).toEqual(new Set([...Object.keys(ENTITIES), "enums"]));
   });
 
-  it.each(ENTITIES)("decodes the %s fixture with the generated shape", (entity) => {
-    const fixture = readJson(join(ROOT, "crates", "bus", "fixtures", "board", `${entity}.json`));
-    if (!isRecord(fixture)) {
-      throw new Error(`${entity}.json is not an object`);
-    }
-    const definition = definitionFor(schema, entity);
-    const known = Object.keys(definition.properties ?? {});
-    expect(Object.keys(fixture).filter((key) => !known.includes(key))).toEqual([]);
-    expect((definition.required ?? []).filter((key) => !(key in fixture))).toEqual([]);
+  it.each(Object.keys(ENTITIES))(
+    "decodes the %s fixture with the generated parser and round-trips it",
+    (name) => {
+      const schema = ENTITIES[name];
+      if (schema === undefined) {
+        throw new Error(`no schema for ${name}`);
+      }
+      const message = fromJson(schema, readJson(name));
+      expect(equals(schema, fromBinary(schema, toBinary(schema, message)), message)).toBe(true);
+    },
+  );
+
+  it("lists every value of every enum", () => {
+    const fromProto = Object.fromEntries(
+      file_hermes_board_v1_board.enums.map((e) => [
+        e.name,
+        e.values.filter((v) => v.number !== 0).map((v) => v.name),
+      ]),
+    );
+    expect(readJson("enums")).toEqual(fromProto);
   });
 });

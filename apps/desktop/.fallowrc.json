@@ -15,7 +15,7 @@
   ],
   "ignoreExports": [
     {
-      "file": "src/protocol/generated/**",
+      "file": "src/protocol/gen/**",
       "exports": ["*"]
     }
   ]
