@@ -125,11 +125,17 @@ fn update(app: &Arc<AppState>, me: &Me, req: c::ItemUpdate) -> anyhow::Result<Va
     let criteria: Option<Vec<String>> = req
         .acceptance_criteria
         .map(|l| l.values.iter().map(|t| t.trim().to_string()).collect());
-    if criteria
-        .as_ref()
-        .is_some_and(|c| c.iter().any(String::is_empty))
-    {
-        anyhow::bail!("an acceptance criterion can't be blank");
+    if let Some(criteria) = &criteria {
+        anyhow::ensure!(
+            !criteria.iter().any(String::is_empty),
+            "an acceptance criterion can't be blank"
+        );
+        let distinct: std::collections::HashSet<&String> = criteria.iter().collect();
+        // A check is kept by text, so two equal texts would share one.
+        anyhow::ensure!(
+            distinct.len() == criteria.len(),
+            "two acceptance criteria have the same text"
+        );
     }
     let edit = ItemEdit {
         title: req.title.as_deref(),

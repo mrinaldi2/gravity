@@ -385,6 +385,14 @@ async fn bots_add_and_edit_acceptance_criteria_to_meet_the_dor() {
         )
         .await;
     assert!(error_text(&raw).contains("blank"));
+    let raw = lead
+        .call_raw(
+            "item_update",
+            json!({"id": id, "expected_version": version(&edited["item"]),
+                   "acceptance_criteria": ["builds", "builds"]}),
+        )
+        .await;
+    assert!(error_text(&raw).contains("same text"));
     let ready = lead
         .call(
             "item_move",

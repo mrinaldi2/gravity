@@ -47,6 +47,20 @@ fn live_project(app: &AppState, project_id: &str) -> anyhow::Result<Project> {
         .ok_or_else(|| refuse("not_found", "project not found"))
 }
 
+/// One home per board (H-020 §1.3, ARCH-R9 M1′). A linked project's board
+/// lives on the side the other one dials, so a project whose board is here
+/// can't be linked through a peer this daemon dials: the board would end up
+/// on both sides.
+fn board_stays_home(app: &AppState, peer: &Peer, project_id: &str) -> anyhow::Result<()> {
+    if peer.url.is_some() && app.db.board_settings(project_id)?.is_some() {
+        return Err(refuse(
+            "conflict",
+            "this project's board lives here; link it from the other computer instead",
+        ));
+    }
+    Ok(())
+}
+
 // ---- this side asks ----
 
 /// Links a project here with one on the peer: `remote_project_id` names an
@@ -61,6 +75,7 @@ pub async fn link(
 ) -> anyhow::Result<Project> {
     let project = live_project(app, project_id)?;
     let peer = live_peer(app, peer_id)?;
+    board_stays_home(app, &peer, project_id)?;
     if !app.peers.is_online(peer_id) {
         return Err(refuse("unavailable", format!("{} is offline", peer.name)));
     }
@@ -242,6 +257,7 @@ pub(super) fn serve_link(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> any
     let project = match frame.get("remote_project_id").and_then(Value::as_str) {
         Some(id) => {
             let project = live_project(app, id)?;
+            board_stays_home(app, peer, &project.id)?;
             if app.db.project_link(&project.id, &peer.id)?.is_some() {
                 return Err(refuse(
                     "conflict",
