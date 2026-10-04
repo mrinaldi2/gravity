@@ -1,5 +1,6 @@
 //! The guard's verdicts on worktrees, inline code and the moved home.
 
+#[cfg(unix)]
 use std::path::PathBuf;
 
 use serde_json::json;
