@@ -5,8 +5,9 @@
   Push $0
   Push $1
   DetailPrint "Hermes service: ${ACTION}"
-  ; install stops the old daemon, then waits for the new one's health check.
-  nsExec::ExecToStack /TIMEOUT=180000 '"$INSTDIR\hermesd.exe" service ${ACTION}'
+  ; install stops the old daemon, may migrate the home, then waits for the
+  ; new one's health check.
+  nsExec::ExecToStack /TIMEOUT=900000 '"$INSTDIR\hermesd.exe" service ${ACTION}'
   Pop $0
   Pop $1
   ${If} $0 != 0
@@ -26,9 +27,10 @@
 ; app. The Hermes installs beside it, so take that install over here: close
 ; the old app and remove its program files, shortcuts and registry entries.
 ; The background service is left to POSTINSTALL, whose "service install"
-; replaces it, and user data (%USERPROFILE%\.gravity, and the app data under
-; the unchanged bundle id) is never touched. Every step is guarded, so a
-; second run finds nothing and does nothing.
+; replaces it. User data is never touched here: not the daemon home, nor
+; the app's own data, which the app copies to its new bundle id on first
+; launch. Every step is guarded, so a second run finds nothing and does
+; nothing.
 !define LEGACY_PRODUCTNAME "Gravity"
 !define LEGACY_UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${LEGACY_PRODUCTNAME}"
 
@@ -122,7 +124,23 @@
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-  !insertmacro GRAVITY_SERVICE install
+  ; A home from before the rename makes "service install" move it and
+  ; restart every bot, so ask first, Cancel by default. Declining installs
+  ; the app only; the old service keeps running and the app asks again.
+  ; A silent install proceeds, like a headless "service install".
+  Push $R9
+  StrCpy $R9 "install"
+  ${If} ${FileExists} "$PROFILE\.gravity\bus.sqlite"
+  ${AndIfNot} ${FileExists} "$PROFILE\.thehermes\*.*"
+    MessageBox MB_OKCANCEL|MB_ICONQUESTION|MB_DEFBUTTON2 "Updating the Hermes service moves $PROFILE\.gravity to $PROFILE\.thehermes and restarts every bot (about 30 seconds, plus a backup of the database and transcripts).$\r$\n$\r$\nClose terminals, editors and Explorer windows open in that folder first.$\r$\n$\r$\nChoose Cancel to install the app only; it asks again when it starts." /SD IDOK IDOK +2
+    StrCpy $R9 "skip"
+  ${EndIf}
+  ${If} $R9 == "install"
+    !insertmacro GRAVITY_SERVICE install
+  ${Else}
+    DetailPrint "Hermes service: not updated; the app asks again when it starts"
+  ${EndIf}
+  Pop $R9
   ; Releases before the rename shipped the sidecar as gravityd.exe; the
   ; service now runs hermesd.exe from the daemon home, so drop the old copy.
   Delete "$INSTDIR\gravityd.exe"

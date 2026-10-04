@@ -27,12 +27,12 @@ fn at(stamp: &str) -> DateTime<Utc> {
 fn mangles_the_workspace_path_the_way_claude_code_does() {
     let dir = transcript_dir(
         Path::new("/Users/me"),
-        Path::new("/Users/me/.gravity/projects/labs/bots/chief/workspace"),
+        Path::new("/Users/me/.thehermes/projects/labs/bots/chief/workspace"),
     );
     assert_eq!(
         dir,
         Path::new("/Users/me/.claude/projects")
-            .join("-Users-me--gravity-projects-labs-bots-chief-workspace")
+            .join("-Users-me--thehermes-projects-labs-bots-chief-workspace")
     );
 }
 
@@ -40,9 +40,9 @@ fn mangles_the_workspace_path_the_way_claude_code_does() {
 fn mangles_underscores_like_claude_code() {
     let dir = transcript_dir(
         Path::new("/Users/me"),
-        Path::new("/Users/me/.gravity/projects/my_app/bots/q_a/workspace"),
+        Path::new("/Users/me/.thehermes/projects/my_app/bots/q_a/workspace"),
     );
-    assert!(dir.ends_with("-Users-me--gravity-projects-my-app-bots-q-a-workspace"));
+    assert!(dir.ends_with("-Users-me--thehermes-projects-my-app-bots-q-a-workspace"));
 }
 
 #[test]

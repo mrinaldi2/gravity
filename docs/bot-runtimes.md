@@ -10,7 +10,7 @@ resumes that provider's saved conversation.
 ![Runtime picker verified in the native Windows app](images/bot-runtime-picker.png)
 
 Existing bots and new bots use Claude Code by default. For a Codex-only installation,
-set this in `~/.gravity/gravityd.toml` and restart the daemon:
+set this in `~/.thehermes/hermesd.toml` and restart the daemon:
 
 ```toml
 default_bot_runtime = "codex_cli"

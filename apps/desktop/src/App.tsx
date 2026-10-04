@@ -14,6 +14,7 @@ import { useToasts } from "./app/useToasts";
 import type { AddToast } from "./app/useToasts";
 import { useUpdates } from "./app/useUpdates";
 import CommandPalette from "./components/CommandPalette";
+import HomeMigrationConfirm from "./components/overlay/HomeMigrationConfirm";
 import MainPane from "./components/MainPane";
 import SearchOverlay from "./components/SearchOverlay";
 import SettingsOverlay from "./components/settings/SettingsOverlay";
@@ -80,6 +81,7 @@ function SetupGate({ setup, toasts, onDismissToast, children }: SetupGateProps):
     <div className="app">
       <SetupScreen onConnect={setup.connectToDaemon} />
       <Toasts toasts={toasts} onDismiss={onDismissToast} />
+      <HomeMigrationConfirm />
     </div>
   );
 }
@@ -202,6 +204,7 @@ export default function App(): ReactElement {
         ) : null}
         <SettingsLayer client={client} daemon={daemon} overlays={overlays} addToast={addToast} />
         <Toasts toasts={toasts} onDismiss={dismissToast} />
+        <HomeMigrationConfirm />
       </div>
     </SetupGate>
   );

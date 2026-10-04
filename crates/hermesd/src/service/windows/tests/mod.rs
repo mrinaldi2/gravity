@@ -3,7 +3,8 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use super::reap::{reap, stop_daemon};
-use super::task::{quote, render_task};
+use super::sequence::Identity;
+use super::task::{quote, render_task, run_task, task_name_for, task_name_in};
 use super::*;
 
 mod upgrade;
@@ -111,4 +112,101 @@ fn launcher_quotes_apostrophes() {
         quote(Path::new("C:/O'Brien/gravity.exe")),
         r"'C:\O''Brien\gravity.exe'"
     );
+}
+
+/// The old and new tasks never share a name, so deleting the old one can
+/// not touch the new one.
+#[test]
+fn task_names_carry_the_label_user_and_home() {
+    let new = task_name_for(SERVICE_LABEL, "S-1-5-21-1", r"c:\users\u\.thehermes");
+    let old = task_name_for(
+        crate::brand::LEGACY_WINDOWS_TASK,
+        "S-1-5-21-1",
+        r"c:\users\u\.gravity",
+    );
+    assert!(new.starts_with("The Hermes-S-1-5-21-1-"));
+    assert!(old.starts_with("Gravity-S-1-5-21-1-"));
+    assert_eq!(new.len(), "The Hermes-S-1-5-21-1-".len() + 12);
+}
+
+#[test]
+fn legacy_homes_cover_an_explicit_home_and_the_default() {
+    let paths = ServicePaths::new(PathBuf::from(r"C:\h"), PathBuf::from(r"C:\Users\u"));
+    assert_eq!(
+        paths.legacy_homes(),
+        vec![
+            PathBuf::from(r"C:\h"),
+            PathBuf::from(r"C:\Users\u").join(".gravity")
+        ]
+    );
+    let default = ServicePaths::new(
+        PathBuf::from(r"C:\Users\u").join(".gravity"),
+        PathBuf::from(r"C:\Users\u"),
+    );
+    assert_eq!(default.legacy_homes().len(), 1);
+}
+
+/// The migration moves the home right after a stop returns, so the process
+/// must be gone, not merely told to go.
+#[test]
+fn stopping_a_daemon_waits_for_it_to_exit() {
+    let ping =
+        PathBuf::from(std::env::var("SystemRoot").expect("SystemRoot")).join(r"System32\PING.EXE");
+    let mut child = Command::new(&ping)
+        .args(["-n", "60", "127.0.0.1"])
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn ping");
+    stop_daemon(child.id(), &[ping]).expect("stopped");
+    assert!(child.try_wait().expect("status").is_some());
+}
+
+/// The legacy task restarts on failure, so it must be disabled before it is
+/// ended and enabled again only by a rollback. Creates a throwaway task named
+/// for a temporary home; run on Windows with `--ignored`.
+#[test]
+#[ignore = "creates and deletes a scheduled task"]
+fn the_legacy_task_is_disabled_while_stopped_and_enabled_on_restart() {
+    let root = tempfile::tempdir().expect("temporary home");
+    let home = root.path().join("legacy");
+    std::fs::create_dir_all(&home).expect("home");
+    std::fs::write(
+        home.join(crate::brand::legacy_daemon_file("-task.xml")),
+        b"x",
+    )
+    .expect("marker");
+    let name = task_name_in(crate::brand::LEGACY_WINDOWS_TASK, &home).expect("name");
+    run_task(&[
+        "/create",
+        "/tn",
+        &name,
+        "/tr",
+        "cmd.exe /c exit 0",
+        "/sc",
+        "once",
+        "/st",
+        "23:59",
+        "/f",
+    ])
+    .expect("create");
+    let state = |name: &str| -> String {
+        let out = Command::new("schtasks.exe")
+            .args(["/query", "/tn", name, "/fo", "csv", "/nh"])
+            .output()
+            .expect("query");
+        String::from_utf8_lossy(&out.stdout).to_string()
+    };
+
+    let paths = ServicePaths::new(home.clone(), root.path().join("user"));
+    let host = TaskScheduler::new(&paths, &home, 0, host::System).expect("host");
+    assert_eq!(host.installed(), [Identity::Legacy]);
+    host.disable(Identity::Legacy).expect("disable");
+    host.stop(Identity::Legacy).expect("stop");
+    let stopped = state(&name);
+    host.start(Identity::Legacy).expect("restart");
+    let restarted = state(&name);
+    host.remove(Identity::Legacy).expect("remove");
+
+    assert!(stopped.contains("Disabled"), "{stopped}");
+    assert!(!restarted.contains("Disabled"), "{restarted}");
 }

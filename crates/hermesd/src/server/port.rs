@@ -75,7 +75,7 @@ async fn bind_port(
 /// Whether this launch may negotiate its port away.
 ///
 /// Negotiation is opt-in from the managed service (`--negotiate-port`), can be
-/// switched off in `gravityd.toml`, and never applies to a daemon bound to
+/// switched off in `hermesd.toml`, and never applies to a daemon bound to
 /// anything but loopback: a client on another machine is configured with a port
 /// and has no way to learn that it moved.
 pub fn port_policy(cfg: &crate::config::Config, requested: bool) -> PortPolicy {
@@ -83,7 +83,7 @@ pub fn port_policy(cfg: &crate::config::Config, requested: bool) -> PortPolicy {
         return PortPolicy::Strict;
     }
     if !cfg.negotiate_port {
-        tracing::info!("port negotiation disabled in gravityd.toml");
+        tracing::info!("port negotiation disabled in hermesd.toml");
         return PortPolicy::Strict;
     }
     if let Some(addr) = cfg.bind.iter().find(|ip| !ip.is_loopback()) {
@@ -120,7 +120,7 @@ async fn bind_with_grace(
     if policy == PortPolicy::Strict || !port_unavailable(&error) {
         return Err(anyhow::Error::new(error).context(format!(
             "binding port {configured_port}: another process or an operating-system \
-             reservation may block this port; choose an available `port` in gravityd.toml"
+             reservation may block this port; choose an available `port` in hermesd.toml"
         )));
     }
 

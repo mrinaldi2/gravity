@@ -83,6 +83,7 @@ pub fn settings(daemon_port: u16, bot_token_env: &str) -> serde_json::Value {
             "deny": [
                 "Read(../**)",
                 crate::paths::secrets_deny_rule(),
+                crate::paths::legacy_secrets_deny_rule(),
                 "Bash(rm -rf /*)"
             ]
         },

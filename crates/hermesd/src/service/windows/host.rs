@@ -1,143 +1,265 @@
-//! What an install asks of Task Scheduler and the daemon it starts.
-use std::path::Path;
+//! The Task Scheduler side of an install: the pre-rename `Gravity-…` task
+//! and the current `The Hermes-…` one, stopping either with its whole
+//! process tree, and registering one. `schtasks.exe` sits behind
+//! [`Schtasks`], so tests never create a task.
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
 
-use super::task::{run_task, stop, task_exists, task_name};
+use super::reap::{reap, stop_daemon};
+use super::sequence::{Host, Identity};
+use super::stage::remove_if_present;
+use super::task::{task_name, task_name_for, task_name_in, write_task_files};
 use super::ServicePaths;
 
-/// The Task Scheduler and daemon operations an install drives, apart from
-/// the files it moves, so tests can run the whole sequence without a task.
-pub(super) trait Host {
-    /// Keeps RestartOnFailure from relaunching a daemon while it is stopped.
-    fn disable(&self) -> anyhow::Result<()>;
-    /// Ends the task and waits until no managed daemon process is left.
-    fn stop(&self) -> anyhow::Result<()>;
-    /// (Re)creates the task, enabled, from the definition on disk.
-    fn register(&self) -> anyhow::Result<()>;
-    fn start(&self) -> anyhow::Result<()>;
-    fn delete(&self) -> anyhow::Result<()>;
-    /// What `binary --version` reports.
-    fn version_of(&self, binary: &Path) -> anyhow::Result<String>;
-    /// Waits for `/health` to report `version`.
-    fn wait_healthy(&self, version: &str) -> anyhow::Result<()>;
+/// The Task Scheduler calls an install makes, plus the version and health
+/// probes, which tests replace as well.
+pub(super) trait Schtasks {
+    fn run(&self, args: &[&str]) -> anyhow::Result<()>;
+    fn exists(&self, name: &str) -> bool;
+    /// Waits for the task to leave the Running state. `/end` returns before
+    /// Task Scheduler has finished ending the launcher, and a `/run` in
+    /// that interval reports success while IgnoreNew drops it.
+    fn wait_ended(&self, name: &str) -> anyhow::Result<()>;
+    fn version_of(&self, binary: &Path) -> anyhow::Result<String> {
+        super::stage::version_of(binary)
+    }
+    fn wait_healthy(&self, home: &Path, port: u16, version: &str) -> anyhow::Result<()> {
+        super::sequence::wait_healthy(home, port, version)
+    }
 }
 
-pub(super) struct TaskScheduler<'a> {
+/// The real `schtasks.exe`.
+pub(super) struct System;
+
+impl Schtasks for System {
+    fn run(&self, args: &[&str]) -> anyhow::Result<()> {
+        super::task::run_task(args)
+    }
+    fn exists(&self, name: &str) -> bool {
+        super::task::task_exists(name)
+    }
+    fn wait_ended(&self, name: &str) -> anyhow::Result<()> {
+        let script = format!(
+            "$s = New-Object -ComObject Schedule.Service; $s.Connect(); $t = $s.GetFolder('\\').GetTask('{}'); $until = [DateTime]::UtcNow.AddSeconds(30); while ($t.State -ne 3) {{ if ([DateTime]::UtcNow -ge $until) {{ exit 1 }}; Start-Sleep -Milliseconds 100 }}",
+            name.replace('\'', "''")
+        );
+        let out = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .output()?;
+        anyhow::ensure!(out.status.success(), "task {name} did not finish stopping");
+        Ok(())
+    }
+}
+
+/// The tasks an install moves between.
+pub(super) struct TaskScheduler<'a, S: Schtasks> {
     pub(super) paths: &'a ServicePaths,
-    pub(super) name: String,
+    /// The pre-rename tasks and the homes they run from. Named before the
+    /// migration: they hash the old home's resolved path, which the
+    /// compatibility junction changes afterwards.
+    pub(super) legacy: Vec<(String, PathBuf)>,
     pub(super) port: u16,
+    pub(super) schtasks: S,
 }
 
-impl<'a> TaskScheduler<'a> {
-    pub(super) fn new(paths: &'a ServicePaths, port: u16) -> anyhow::Result<Self> {
+impl<'a, S: Schtasks> TaskScheduler<'a, S> {
+    /// Finds the pre-rename tasks: in `old_home` (where the daemon runs
+    /// now), in this home when set explicitly, or in the default old home.
+    pub(super) fn new(
+        paths: &'a ServicePaths,
+        old_home: &Path,
+        port: u16,
+        schtasks: S,
+    ) -> anyhow::Result<Self> {
+        let mut homes = vec![old_home.to_path_buf()];
+        homes.extend(paths.legacy_homes());
+        let mut legacy: Vec<(String, PathBuf)> = Vec::new();
+        for home in homes {
+            let marker = home.join(crate::brand::legacy_daemon_file("-task.xml"));
+            if marker.is_file() && !legacy.iter().any(|(_, known)| *known == home) {
+                let name = legacy_name(&schtasks, &home)?;
+                legacy.push((name, home));
+            }
+        }
         Ok(Self {
-            name: task_name(paths)?,
             paths,
+            legacy,
             port,
+            schtasks,
         })
     }
+
+    /// The tasks of `id`, each with its home and its launcher's PID file.
+    fn tasks(&self, id: Identity) -> anyhow::Result<Vec<(String, PathBuf, PathBuf)>> {
+        Ok(match id {
+            Identity::Legacy => self
+                .legacy
+                .iter()
+                .map(|(name, home)| {
+                    let pid = home.join(crate::brand::legacy_daemon_file("-task.pid"));
+                    (name.clone(), home.clone(), pid)
+                })
+                .collect(),
+            Identity::Current => vec![(
+                task_name(self.paths)?,
+                self.paths.home.clone(),
+                self.paths.pid_path(),
+            )],
+        })
+    }
+
+    /// Ends the task, its daemon's whole process tree, and any daemon
+    /// running from the home's `bin` that no PID file names; then waits
+    /// for the task to finish and the home to be released.
+    fn stop_task(&self, name: &str, home: &Path, pid_path: &Path) -> anyhow::Result<()> {
+        // Ending an idle task returns an error; what follows verifies stop.
+        let _ = self.schtasks.run(&["/end", "/tn", name]);
+        // Never kill a reused PID belonging to another executable. An upgrade
+        // from before the rename stops the task's old `gravityd.exe`.
+        let bin = home.join("bin");
+        let executables = [bin.join("hermesd.exe"), bin.join("gravityd.exe")];
+        if let Ok(pid) = std::fs::read_to_string(pid_path) {
+            let pid: u32 = pid.trim().parse().context("invalid managed daemon PID")?;
+            stop_daemon(pid, &executables)?;
+            remove_if_present(pid_path)?;
+        }
+        // A launcher that died before writing its PID file, or one whose
+        // file was overwritten, leaves a daemon the file does not name.
+        reap(&executables)?;
+        if self.schtasks.exists(name) {
+            self.schtasks.wait_ended(name)?;
+        }
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            match crate::home::lock(home) {
+                Ok(_lock) => return Ok(()),
+                Err(error) if Instant::now() >= deadline => {
+                    return Err(error).context("waiting for the managed daemon to stop")
+                }
+                Err(_) => std::thread::sleep(Duration::from_millis(100)),
+            }
+        }
+    }
 }
 
-const VERSION_TIMEOUT: Duration = Duration::from_secs(15);
-const HEALTH_TIMEOUT: Duration = Duration::from_secs(45);
+/// The pre-rename task for `home`, named from its resolved path as 0.14
+/// did. Once the home has moved (an install that died after the migration),
+/// `home` is a junction that resolves to the new home; the task is then
+/// found under the path it had before.
+fn legacy_name(schtasks: &impl Schtasks, home: &Path) -> anyhow::Result<String> {
+    let label = crate::brand::LEGACY_WINDOWS_TASK;
+    let resolved = task_name_in(label, home)?;
+    if schtasks.exists(&resolved) {
+        return Ok(resolved);
+    }
+    let unresolved = format!(r"\\?\{}", std::path::absolute(home)?.display());
+    let before = task_name_for(
+        label,
+        &crate::permissions::user_sid()?,
+        &unresolved.to_lowercase(),
+    );
+    Ok(if schtasks.exists(&before) {
+        before
+    } else {
+        resolved
+    })
+}
 
-impl Host for TaskScheduler<'_> {
-    fn disable(&self) -> anyhow::Result<()> {
-        // A marker without its task (deleted by hand) has nothing to disable.
-        if !task_exists(&self.name) {
-            return Ok(());
+impl<S: Schtasks> Host for TaskScheduler<'_, S> {
+    fn installed(&self) -> Vec<Identity> {
+        let mut ids = Vec::new();
+        if !self.legacy.is_empty() {
+            ids.push(Identity::Legacy);
         }
-        run_task(&["/change", "/tn", &self.name, "/disable"])
-    }
-
-    fn stop(&self) -> anyhow::Result<()> {
-        stop(self.paths)
-    }
-
-    fn register(&self) -> anyhow::Result<()> {
-        let marker = self.paths.plist_path();
-        run_task(&[
-            "/create",
-            "/tn",
-            &self.name,
-            "/xml",
-            &marker.to_string_lossy(),
-            "/f",
-        ])
-    }
-
-    fn start(&self) -> anyhow::Result<()> {
-        run_task(&["/run", "/tn", &self.name])
-    }
-
-    fn delete(&self) -> anyhow::Result<()> {
-        if !task_exists(&self.name) {
-            return Ok(());
+        if self.paths.plist_path().is_file() {
+            ids.push(Identity::Current);
         }
-        run_task(&["/delete", "/tn", &self.name, "/f"])
+        ids
+    }
+
+    fn disable(&self, id: Identity) -> anyhow::Result<()> {
+        for (name, _, _) in self.tasks(id)? {
+            // A marker without its task (deleted by hand) has nothing to
+            // disable. RestartOnFailure would relaunch a killed launcher.
+            if self.schtasks.exists(&name) {
+                self.schtasks.run(&["/change", "/tn", &name, "/disable"])?;
+            }
+        }
+        Ok(())
+    }
+
+    fn stop(&self, id: Identity) -> anyhow::Result<()> {
+        for (name, home, pid) in self.tasks(id)? {
+            tracing::info!(task = %name, "stopping the managed task");
+            self.stop_task(&name, &home, &pid)?;
+        }
+        Ok(())
+    }
+
+    fn definition_files(&self) -> Vec<PathBuf> {
+        vec![self.paths.launcher_path(), self.paths.plist_path()]
+    }
+
+    fn write_definition(&self) -> anyhow::Result<()> {
+        write_task_files(self.paths)
+    }
+
+    fn start(&self, id: Identity) -> anyhow::Result<()> {
+        match id {
+            // Still registered, only disabled: enable it again.
+            Identity::Legacy => {
+                for (name, _) in &self.legacy {
+                    self.schtasks.run(&["/change", "/tn", name, "/enable"])?;
+                    self.schtasks.run(&["/run", "/tn", name])?;
+                }
+                Ok(())
+            }
+            // (Re)created, enabled, from the definition on disk.
+            Identity::Current => {
+                let name = task_name(self.paths)?;
+                let definition = self.paths.plist_path();
+                self.schtasks.run(&[
+                    "/create",
+                    "/tn",
+                    &name,
+                    "/xml",
+                    &definition.to_string_lossy(),
+                    "/f",
+                ])?;
+                self.schtasks.run(&["/run", "/tn", &name])
+            }
+        }
+    }
+
+    fn remove(&self, id: Identity) -> anyhow::Result<()> {
+        for (name, home, _) in self.tasks(id)? {
+            if self.schtasks.exists(&name) {
+                if let Err(error) = self.schtasks.run(&["/delete", "/tn", &name, "/f"]) {
+                    // A task left behind is disabled; its files go below.
+                    tracing::warn!(%error, task = %name, "could not delete the task");
+                }
+            }
+            if id == Identity::Legacy {
+                // Wherever the migration left them.
+                for dir in [&home, &self.paths.home] {
+                    for suffix in ["-task.xml", "-task.ps1", "-task.pid"] {
+                        remove_if_present(&dir.join(crate::brand::legacy_daemon_file(suffix)))?;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     fn version_of(&self, binary: &Path) -> anyhow::Result<String> {
-        let mut child = Command::new(binary)
-            .arg("--version")
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .with_context(|| format!("running {} --version", binary.display()))?;
-        let deadline = Instant::now() + VERSION_TIMEOUT;
-        while child.try_wait()?.is_none() {
-            if Instant::now() >= deadline {
-                let _ = child.kill();
-                let _ = child.wait();
-                anyhow::bail!("{} --version did not exit", binary.display());
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        let out = child.wait_with_output()?;
-        anyhow::ensure!(
-            out.status.success(),
-            "{} --version failed",
-            binary.display()
-        );
-        parse_version(&String::from_utf8_lossy(&out.stdout))
+        self.schtasks.version_of(binary)
     }
 
     fn wait_healthy(&self, version: &str) -> anyhow::Result<()> {
-        let deadline = Instant::now() + HEALTH_TIMEOUT;
-        let mut seen = None;
-        loop {
-            // The daemon publishes a negotiated port once it is listening.
-            let port = crate::home::runtime_port(&self.paths.home).unwrap_or(self.port);
-            seen = crate::server::probe_health(port, Duration::from_secs(1)).or(seen);
-            if seen.as_deref() == Some(version) {
-                return Ok(());
-            }
-            if Instant::now() >= deadline {
-                anyhow::bail!(
-                    "the new daemon did not pass its health check within {}s (expected {version}, saw {})",
-                    HEALTH_TIMEOUT.as_secs(),
-                    seen.as_deref().unwrap_or("nothing")
-                );
-            }
-            std::thread::sleep(Duration::from_millis(250));
-        }
+        self.schtasks
+            .wait_healthy(&self.paths.home, self.port, version)
     }
-}
-
-/// The version in `hermesd --version` output (`hermesd 0.14.3`).
-pub(super) fn parse_version(output: &str) -> anyhow::Result<String> {
-    let version = output
-        .split_whitespace()
-        .last()
-        .context("the binary reported no version")?;
-    anyhow::ensure!(
-        version.starts_with(|c: char| c.is_ascii_digit()),
-        "unexpected version output: {}",
-        output.trim()
-    );
-    Ok(version.to_string())
 }

@@ -74,7 +74,7 @@ Streaming happens only while some client watches that bot.
 
 ## Configuration
 
-`[browser]` in `gravityd.toml`:
+`[browser]` in `hermesd.toml`:
 
 | Key | Default | Meaning |
 |---|---|---|

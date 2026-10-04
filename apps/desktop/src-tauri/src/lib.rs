@@ -1,5 +1,6 @@
 mod daemon;
 mod dictation;
+mod legacy_storage;
 mod shortcut;
 mod updater;
 
@@ -7,7 +8,7 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-/// Reads the daemon client token from `~/.gravity/secrets/client.token`.
+/// Reads the daemon client token from `~/.thehermes/secrets/client.token`.
 #[tauri::command]
 fn read_client_token() -> Result<String, String> {
     let path = daemon::daemon_home()?.join("secrets/client.token");
@@ -86,7 +87,7 @@ fn open_url(url: &str) -> Result<(), String> {
 /// Shows a project's directory in the OS file manager.
 ///
 /// Takes the immutable `dir_name` rather than a path so the webview cannot ask
-/// the shell to open somewhere outside `~/.gravity/projects/`.
+/// the shell to open somewhere outside `~/.thehermes/projects/`.
 #[tauri::command]
 fn reveal_project(dir_name: String) -> Result<(), String> {
     if dir_name.is_empty() || dir_name.contains('/') || dir_name.contains('\\') {
@@ -169,6 +170,8 @@ fn handle_run_event(_app: &AppHandle, _event: tauri::RunEvent) {}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before any webview exists, so it opens on the carried-over storage.
+    legacy_storage::migrate();
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -192,6 +195,7 @@ pub fn run() {
             shortcut::set_toggle_window_shortcut,
             daemon::daemon_health,
             daemon::install_local_daemon,
+            daemon::migration::home_migration_summary,
             daemon::local_daemon_is_managed,
             daemon::restart_local_daemon,
             daemon::local_daemon_port,

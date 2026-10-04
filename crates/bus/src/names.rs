@@ -2,7 +2,7 @@
 //!
 //! A bot name is an address: bots reach each other with `send_message(to:
 //! "name")`. It is also the seed for the bot's directory
-//! under `~/.gravity/projects/<project>/bots/`. Those two roles pull in
+//! under `~/.thehermes/projects/<project>/bots/`. Those two roles pull in
 //! different directions — the address wants to be human-readable, the
 //! directory wants to be filesystem-safe — so the name is validated for the
 //! first and *sanitized* for the second.

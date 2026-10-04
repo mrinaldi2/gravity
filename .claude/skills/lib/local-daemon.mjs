@@ -27,7 +27,7 @@ export function localDaemon(home, endpoint) {
     throw new Error("Set GRAVITY_HOME to the disposable daemon home created for this run");
   }
   const canonicalHome = realpathSync(home);
-  const installedHome = resolve(realpathSync(homedir()), ".gravity");
+  const installedHome = resolve(realpathSync(homedir()), ".thehermes");
   let canonicalInstalledHome = installedHome;
   try {
     canonicalInstalledHome = realpathSync(installedHome);
@@ -39,7 +39,7 @@ export function localDaemon(home, endpoint) {
   if (canonicalHome === canonicalInstalledHome) {
     throw new Error("The installed daemon home is forbidden; create a disposable home");
   }
-  const port = readFileSync(join(canonicalHome, "gravityd.port"), "utf8").trim();
+  const port = readFileSync(join(canonicalHome, "hermesd.port"), "utf8").trim();
   if (port !== url.port) {
     throw new Error("Endpoint does not match the disposable daemon's published port");
   }

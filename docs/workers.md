@@ -40,7 +40,7 @@ slot while waiting on children that are stuck in the queue.
 
 ## Limits
 
-Workers have a cap of their own, `max_workers_per_project` in `gravityd.toml`
+Workers have a cap of their own, `max_workers_per_project` in `hermesd.toml`
 (default 4). It counts the workers running on this machine, per project. It
 is separate from `max_bots_per_project`, so a project whose permanent bots
 fill their cap can still fan out. Workers do not count toward that cap.

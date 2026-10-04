@@ -5,7 +5,7 @@
 //
 //   node scripts/terminal-metrics.mjs [--out file.json] [--port N]
 //
-// Reads the port and client token from ~/.gravity like the desktop does.
+// Reads the port and client token from ~/.thehermes like the desktop does.
 import fs from "node:fs";
 import os from "node:os";
 import headless from "@xterm/headless";
@@ -21,8 +21,8 @@ const flag = (name) => {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : undefined;
 };
-const home = process.env.GRAVITY_HOME ?? `${os.homedir()}/.gravity`;
-const port = Number(flag("--port") ?? fs.readFileSync(`${home}/gravityd.port`, "utf8").trim());
+const home = process.env.GRAVITY_HOME ?? `${os.homedir()}/.thehermes`;
+const port = Number(flag("--port") ?? fs.readFileSync(`${home}/hermesd.port`, "utf8").trim());
 const token = fs.readFileSync(`${home}/secrets/client.token`, "utf8").trim();
 const outPath = flag("--out");
 

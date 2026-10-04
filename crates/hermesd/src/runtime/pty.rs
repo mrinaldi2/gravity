@@ -73,6 +73,14 @@ impl RuntimeAdapter for PtyAdapter {
             .spawn_command(cmd)
             .context("spawn terminal CLI")?;
         drop(pair.slave);
+        // The child leads its own session and group; recorded so `service
+        // install` can stop what it leaves running after the daemon is gone.
+        #[cfg(unix)]
+        let group = child.process_id();
+        #[cfg(unix)]
+        if let Some(group) = group {
+            crate::holders::session_started(group);
+        }
 
         let mut reader = pair.master.try_clone_reader().context("clone pty reader")?;
         let writer = pair.master.take_writer().context("take pty writer")?;
@@ -115,6 +123,9 @@ impl RuntimeAdapter for PtyAdapter {
             #[cfg(unix)]
             {
                 let code = child.wait().ok().map(|s| s.exit_code() as i32);
+                if let Some(group) = group {
+                    crate::holders::session_ended(group);
+                }
                 let _ = out_tx.send(SessionEvent::Exited { code });
             }
         });

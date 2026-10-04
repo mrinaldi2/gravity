@@ -234,12 +234,12 @@ as dock badges, global shortcuts, and opening project directories.
 
 ## Filesystem layout
 
-The daemon state root defaults to `~/.gravity` and can be changed with
+The daemon state root defaults to `~/.thehermes` and can be changed with
 `GRAVITY_HOME` or configuration. A typical installation contains:
 
 ```text
-~/.gravity/
-  gravityd.toml
+~/.thehermes/
+  hermesd.toml
   bus.sqlite
   bin/hermesd
   secrets/

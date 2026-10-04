@@ -51,49 +51,29 @@ fn sidecar_path_for_exe(exe: &Path) -> Result<PathBuf, String> {
     Ok(dir.join(format!("hermesd{}", std::env::consts::EXE_SUFFIX)))
 }
 
-/// Must match `LAUNCHD_LABEL` in `crates/hermesd/src/service.rs`.
-const LAUNCHD_LABEL: &str = "in.mikolajczuk.gravityd";
+mod home;
+pub(crate) mod migration;
 
-pub(crate) fn user_home() -> Result<PathBuf, String> {
-    let variable = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
-    std::env::var_os(variable)
-        .map(PathBuf::from)
-        .ok_or_else(|| format!("{variable} is not set"))
-}
-
-/// Mirrors `ServicePaths::bin_path`, `legacy_bin_path` and `plist_path` in
-/// `crates/hermesd/src/service.rs`. An install from before the rename still
-/// counts, so the app's update reaches it and `service install` replaces it.
-fn managed_daemon_is_installed(home: &Path, user_home: &Path) -> bool {
-    ["hermesd", "gravityd"].iter().any(|name| {
-        home.join(format!("bin/{name}{}", std::env::consts::EXE_SUFFIX))
-            .is_file()
-    }) && managed_marker(home, user_home).is_file()
-}
-
-/// The service definition survived but its binary did not (an interrupted
-/// copy, a quarantine): the task or agent has nothing to start.
-fn managed_daemon_needs_repair(home: &Path, user_home: &Path) -> bool {
-    managed_marker(home, user_home).is_file()
-        && !["hermesd", "gravityd"].iter().any(|name| {
-            home.join(format!("bin/{name}{}", std::env::consts::EXE_SUFFIX))
-                .is_file()
-        })
-}
-
-fn managed_marker(home: &Path, user_home: &Path) -> PathBuf {
-    if cfg!(windows) {
-        home.join("gravityd-task.xml")
-    } else {
-        user_home
-            .join("Library/LaunchAgents")
-            .join(format!("{LAUNCHD_LABEL}.plist"))
-    }
-}
+#[cfg(test)]
+use home::managed_markers;
+use home::{
+    daemon_file, managed_daemon_is_installed, managed_daemon_needs_repair, managed_marker_exists,
+    migration_pending,
+};
+pub(crate) use home::{daemon_home, user_home};
 
 /// Runs the bundled sidecar's own `service <action>`, the same code path the
 /// CLI uses.
 fn run_bundled_service(action: &str, failure: &str) -> Result<(), String> {
+    let out = run_sidecar(&["service", action])?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("{failure}: {}", stderr.trim()));
+    }
+    Ok(())
+}
+
+fn run_sidecar(args: &[&str]) -> Result<std::process::Output, String> {
     let sidecar = sidecar_path()?;
     let mut command = std::process::Command::new(&sidecar);
     #[cfg(windows)]
@@ -101,15 +81,10 @@ fn run_bundled_service(action: &str, failure: &str) -> Result<(), String> {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    let out = command
-        .args(["service", action])
+    command
+        .args(args)
         .output()
-        .map_err(|err| format!("failed to run {}: {err}", sidecar.display()))?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("{failure}: {}", stderr.trim()));
-    }
-    Ok(())
+        .map_err(|err| format!("failed to run {}: {err}", sidecar.display()))
 }
 
 fn install_bundled_local_daemon() -> Result<(), String> {
@@ -140,7 +115,7 @@ pub fn local_daemon_is_managed(port: u16) -> bool {
 #[tauri::command]
 pub async fn restart_local_daemon() -> Result<(), String> {
     // `service restart` reinstalls a missing binary from the bundled copy.
-    if !managed_marker(&daemon_home()?, &user_home()?).is_file() {
+    if !managed_marker_exists(&daemon_home()?, &user_home()?) {
         return Err("no app-managed daemon is installed on this machine".to_string());
     }
     run_bundled_service("restart", "daemon restart failed")
@@ -164,17 +139,31 @@ fn reject_daemon_downgrade(current_version: Option<&str>) -> Result<(), String> 
     Ok(())
 }
 
+/// A migrating install moves the home and restarts every bot, so it runs
+/// only once the user confirmed the summary from [`home_migration_summary`].
+/// A headless `hermesd service install` asks nothing.
 #[tauri::command]
-pub fn install_local_daemon(current_version: Option<String>) -> Result<(), String> {
+pub fn install_local_daemon(
+    current_version: Option<String>,
+    confirmed_migration: Option<bool>,
+) -> Result<(), String> {
     reject_daemon_downgrade(current_version.as_deref())?;
+    if confirmed_migration != Some(true) && migration_pending(&user_home()?) {
+        return Err(
+            "updating the Hermes service moves your data to its new home; confirm it in the app first"
+                .to_string(),
+        );
+    }
     install_bundled_local_daemon()
 }
 
 /// Updates an app-managed launchd daemon, but never creates a local service
-/// for a machine that only connects to a remote daemon.
+/// for a machine that only connects to a remote daemon. An update that would
+/// migrate the home is left for the relaunched app, which asks first.
 pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
     let home = daemon_home()?;
-    if !managed_daemon_is_installed(&home, &user_home()?) {
+    let user_home = user_home()?;
+    if !managed_daemon_is_installed(&home, &user_home) || migration_pending(&user_home) {
         return Ok(());
     }
     install_bundled_local_daemon()
@@ -182,36 +171,39 @@ pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
 
 /// Reinstalls the managed daemon from the bundled sidecar when its binary has
 /// gone missing, so a broken upgrade heals on the next app launch.
+///
+/// A repair stays a repair: it never moves the home. While a migration is
+/// pending it does nothing, and the install that migrates runs only after
+/// the user confirmed it ([`install_local_daemon`]); `--no-migrate` makes the
+/// sidecar refuse rather than migrate should the two checks ever disagree.
 pub(crate) fn repair_local_daemon_if_broken() -> Result<(), String> {
-    if !managed_daemon_needs_repair(&daemon_home()?, &user_home()?) {
+    let user_home = user_home()?;
+    if !repair_needed(&daemon_home()?, &user_home, migration_pending(&user_home)) {
         return Ok(());
     }
-    install_bundled_local_daemon()
+    let out = run_sidecar(&["service", "install", "--no-migrate"])?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("daemon repair failed: {}", stderr.trim()));
+    }
+    Ok(())
+}
+
+fn repair_needed(home: &Path, user_home: &Path, migration_pending: bool) -> bool {
+    !migration_pending && managed_daemon_needs_repair(home, user_home)
 }
 
 /// Must match `hermesd`'s own config default and `DEFAULT_ENDPOINT` in the
 /// client.
 const DEFAULT_PORT: u16 = 49777;
 
-/// Root of the daemon's state, mirroring `hermesd`'s own resolution in
-/// `crates/hermesd/src/brand.rs`: `THEHERMES_HOME`, then `GRAVITY_HOME`.
-pub(crate) fn daemon_home() -> Result<PathBuf, String> {
-    let set = ["THEHERMES_HOME", "GRAVITY_HOME"]
-        .iter()
-        .find_map(std::env::var_os);
-    if let Some(home) = set {
-        return Ok(PathBuf::from(home));
-    }
-    Ok(user_home()?.join(".gravity"))
-}
-
 /// The port the daemon installed on this machine actually serves on.
 ///
-/// A managed daemon publishes its selected port in `gravityd.port`, including
+/// A managed daemon publishes its selected port in `hermesd.port`, including
 /// any fallback negotiated because the configured port was occupied.
 ///
 /// An install predating the 49777 default still has `port = 7777` in its
-/// `gravityd.toml`, and `service install` deliberately keeps an existing config,
+/// `hermesd.toml`, and `service install` deliberately keeps an existing config,
 /// so the daemon keeps serving on the old port after an upgrade. The wizard
 /// has to ask the config rather than assume the current default, or it polls
 /// a port nothing will ever answer on.
@@ -224,14 +216,14 @@ pub fn local_daemon_port() -> u16 {
 }
 
 fn daemon_port_from_home(home: &Path) -> u16 {
-    if let Ok(text) = std::fs::read_to_string(home.join("gravityd.port")) {
+    if let Ok(text) = std::fs::read_to_string(daemon_file(home, ".port")) {
         if let Ok(port) = text.trim().parse::<u16>() {
             if port > 0 {
                 return port;
             }
         }
     }
-    let Ok(text) = std::fs::read_to_string(home.join("gravityd.toml")) else {
+    let Ok(text) = std::fs::read_to_string(daemon_file(home, ".toml")) else {
         return DEFAULT_PORT;
     };
     let Ok(parsed) = text.parse::<toml::Table>() else {
@@ -270,13 +262,13 @@ fn tail_of(path: &Path) -> Option<String> {
 }
 
 /// The daemon's most recent log, so a failed install can say *why* it never
-/// came up. The daemon logs to stderr, so `gravityd.err.log` normally holds
+/// came up. The daemon logs to stderr, so `hermesd.err.log` normally holds
 /// everything; the stdout log is a fallback for a build that logged there.
 /// `None` means there is nothing to show.
 #[tauri::command]
 pub fn daemon_log_tail() -> Option<String> {
     let logs = daemon_home().ok()?.join("logs");
-    tail_of(&logs.join("gravityd.err.log")).or_else(|| tail_of(&logs.join("gravityd.out.log")))
+    tail_of(&daemon_file(&logs, ".err.log")).or_else(|| tail_of(&daemon_file(&logs, ".out.log")))
 }
 
 #[cfg(test)]

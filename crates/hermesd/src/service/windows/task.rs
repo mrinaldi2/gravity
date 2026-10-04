@@ -1,22 +1,29 @@
-//! The Task Scheduler task that launches the daemon at logon, and stopping it.
+//! The Task Scheduler task that launches the daemon at logon.
 use std::path::Path;
 use std::process::Command;
-use std::time::{Duration, Instant};
 
 use anyhow::Context;
 
-use super::reap::{reap, stop_daemon};
 use super::{ServicePaths, SERVICE_LABEL};
 
 pub(super) fn task_name(paths: &ServicePaths) -> anyhow::Result<String> {
-    use sha2::{Digest, Sha256};
-    let home = paths.home.canonicalize()?.to_string_lossy().to_lowercase();
-    let hash = hex::encode(Sha256::digest(home.as_bytes()));
-    Ok(format!(
-        "{SERVICE_LABEL}-{}-{}",
-        crate::permissions::user_sid()?,
-        &hash[..12]
+    task_name_in(SERVICE_LABEL, &paths.home)
+}
+
+pub(super) fn task_name_in(label: &str, home: &Path) -> anyhow::Result<String> {
+    let home = home.canonicalize()?.to_string_lossy().to_lowercase();
+    Ok(task_name_for(
+        label,
+        &crate::permissions::user_sid()?,
+        &home,
     ))
+}
+
+/// `<label>-<user SID>-<hash of the home>`: one task per user and home.
+pub(super) fn task_name_for(label: &str, sid: &str, canonical_home: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let hash = hex::encode(Sha256::digest(canonical_home.as_bytes()));
+    format!("{label}-{sid}-{}", &hash[..12])
 }
 
 pub(super) fn quote(path: &Path) -> String {
@@ -76,50 +83,10 @@ pub(super) fn task_exists(name: &str) -> bool {
         .is_ok_and(|out| out.status.success())
 }
 
-pub(super) fn stop(paths: &ServicePaths) -> anyhow::Result<()> {
-    let name = task_name(paths)?;
-    // Ending an idle task returns an error; the home lock below verifies stop.
-    let _ = Command::new("schtasks.exe")
-        .args(["/end", "/tn", &name])
-        .output()?;
-    // Never kill a reused PID belonging to another executable. An upgrade
-    // from before the rename stops the task's old `gravityd.exe`.
-    let executables = [paths.bin_path(), paths.legacy_bin_path()];
-    if let Ok(pid) = std::fs::read_to_string(paths.pid_path()) {
-        let pid: u32 = pid.trim().parse().context("invalid managed daemon PID")?;
-        stop_daemon(pid, &executables)?;
-        std::fs::remove_file(paths.pid_path())?;
-    }
-    // A launcher that died before writing its PID file, or one from a run
-    // whose file was overwritten, leaves a daemon the file does not name.
-    reap(&executables)?;
-    // /end returns before Task Scheduler has finished ending the launcher.
-    // /run during that interval reports success but IgnoreNew drops the run.
-    if task_exists(&name) {
-        let script = format!(
-            "$s = New-Object -ComObject Schedule.Service; $s.Connect(); $t = $s.GetFolder('\\').GetTask('{name}'); $until = [DateTime]::UtcNow.AddSeconds(30); while ($t.State -ne 3) {{ if ([DateTime]::UtcNow -ge $until) {{ exit 1 }}; Start-Sleep -Milliseconds 100 }}"
-        );
-        let out = Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-            .output()?;
-        anyhow::ensure!(out.status.success(), "managed task did not finish stopping");
-    }
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        match crate::home::lock(&paths.home) {
-            Ok(_lock) => return Ok(()),
-            Err(error) if Instant::now() >= deadline => {
-                return Err(error).context("waiting for the managed daemon to stop")
-            }
-            Err(_) => std::thread::sleep(Duration::from_millis(100)),
-        }
-    }
-}
-
 pub(super) fn write_task_files(paths: &ServicePaths) -> anyhow::Result<()> {
     let launcher = format!(
         "$ErrorActionPreference = 'Stop'\n$env:{} = {}\n$p = Start-Process -FilePath {} -ArgumentList '--negotiate-port' -WindowStyle Hidden -PassThru -RedirectStandardOutput {} -RedirectStandardError {}\n[IO.File]::WriteAllText({}, [string]$p.Id)\n$p.WaitForExit()\nexit $p.ExitCode\n",
-        crate::brand::env_name("HOME"), quote(&paths.home), quote(&paths.bin_path()), quote(&paths.log_dir().join("gravityd.out.log")), quote(&paths.log_dir().join("gravityd.err.log")), quote(&paths.pid_path())
+        crate::brand::env_name("HOME"), quote(&paths.home), quote(&paths.bin_path()), quote(&paths.log_dir().join(crate::brand::daemon_file(".out.log"))), quote(&paths.log_dir().join(crate::brand::daemon_file(".err.log"))), quote(&paths.pid_path())
     );
     std::fs::write(paths.launcher_path(), launcher)?;
     let sid = crate::permissions::user_sid()?;

@@ -1,7 +1,7 @@
-# Gravity daemon configuration — copy to ~/.gravity/gravityd.toml
+# The Hermes daemon configuration — copy to ~/.thehermes/hermesd.toml
 # Every key is optional; defaults shown.
 
-# home = "/Users/you/.gravity"
+# home = "/Users/you/.thehermes"
 
 # Bind addresses. Add your Tailscale interface IP for remote clients;
 # never bind 0.0.0.0.

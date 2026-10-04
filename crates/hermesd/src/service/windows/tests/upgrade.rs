@@ -1,210 +1,223 @@
-use std::path::{Path, PathBuf};
+//! The install through the real Task Scheduler host, with a fake
+//! `schtasks.exe`: the pre-rename task migrated, and a failure at each step
+//! rolled back to it.
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::path::Path;
 
-use anyhow::Context;
-
-use super::super::host::{parse_version, Host, TaskScheduler};
-use super::super::upgrade::{upgrade, verify_copy, with_suffix};
+use super::super::host::{Schtasks, TaskScheduler};
+use super::super::sequence::tests::Moving;
+use super::super::sequence::Identity;
 use super::super::*;
 
-/// Records what an install asks of Task Scheduler and, at the health
-/// check, which files were in place.
-struct FakeHost {
-    bin: PathBuf,
-    legacy: PathBuf,
-    ops: std::cell::RefCell<Vec<String>>,
-    version: Option<&'static str>,
-    healthy: bool,
-    stops: bool,
+/// Task Scheduler as far as an install can tell: each task's name, whether
+/// it is enabled and whether it runs. `fail` names the call that errors:
+/// `<verb> <label>` (`/create The Hermes`, `wait Gravity`), `version` or
+/// `health`.
+#[derive(Default)]
+struct FakeSchtasks {
+    tasks: RefCell<BTreeMap<String, (bool, bool)>>,
+    calls: RefCell<Vec<String>>,
+    fail: Option<String>,
 }
 
-impl FakeHost {
-    fn new(paths: &ServicePaths) -> Self {
-        Self {
-            bin: paths.bin_path(),
-            legacy: paths.legacy_bin_path(),
-            ops: Default::default(),
-            version: Some("9.9.9"),
-            healthy: true,
-            stops: true,
+/// `Gravity` or `The Hermes`: the label a task name starts with.
+fn label(name: &str) -> &str {
+    name.split("-S-").next().unwrap_or(name)
+}
+
+impl FakeSchtasks {
+    fn call(&self, call: String) -> anyhow::Result<()> {
+        self.calls.borrow_mut().push(call.clone());
+        anyhow::ensure!(
+            self.fail.as_deref() != Some(call.as_str()),
+            "injected failure at {call}"
+        );
+        Ok(())
+    }
+    /// Each task's label, enabled and running.
+    fn state(&self) -> Vec<(String, bool, bool)> {
+        self.tasks
+            .borrow()
+            .iter()
+            .map(|(name, (enabled, running))| (label(name).to_string(), *enabled, *running))
+            .collect()
+    }
+}
+
+impl Schtasks for FakeSchtasks {
+    fn run(&self, args: &[&str]) -> anyhow::Result<()> {
+        let (verb, name) = (args[0], args[2]);
+        let verb = match args.get(3) {
+            Some(flag) if verb == "/change" => format!("{verb}{flag}"),
+            _ => verb.to_string(),
+        };
+        self.call(format!("{verb} {}", label(name)))?;
+        let mut tasks = self.tasks.borrow_mut();
+        match verb.as_str() {
+            "/create" => {
+                tasks.insert(name.to_string(), (true, false));
+            }
+            "/delete" => {
+                tasks.remove(name).context("no such task")?;
+            }
+            _ => {
+                let task = tasks.get_mut(name).context("no such task")?;
+                match verb.as_str() {
+                    "/change/enable" => task.0 = true,
+                    "/change/disable" => task.0 = false,
+                    "/end" => task.1 = false,
+                    "/run" => {
+                        anyhow::ensure!(task.0, "the task is disabled");
+                        task.1 = true;
+                    }
+                    other => anyhow::bail!("unexpected {other}"),
+                }
+            }
         }
-    }
-    fn record(&self, op: impl Into<String>) {
-        self.ops.borrow_mut().push(op.into());
-    }
-    fn ops(&self) -> Vec<String> {
-        self.ops.borrow().clone()
-    }
-}
-
-impl Host for FakeHost {
-    fn disable(&self) -> anyhow::Result<()> {
-        self.record("disable");
         Ok(())
     }
-    fn stop(&self) -> anyhow::Result<()> {
-        self.record("stop");
-        anyhow::ensure!(self.stops, "daemon would not stop");
-        Ok(())
+    fn exists(&self, name: &str) -> bool {
+        self.tasks.borrow().contains_key(name)
     }
-    fn register(&self) -> anyhow::Result<()> {
-        self.record("register");
-        Ok(())
-    }
-    fn start(&self) -> anyhow::Result<()> {
-        self.record("start");
-        Ok(())
-    }
-    fn delete(&self) -> anyhow::Result<()> {
-        self.record("delete");
-        Ok(())
+    fn wait_ended(&self, name: &str) -> anyhow::Result<()> {
+        self.call(format!("wait {}", label(name)))
     }
     fn version_of(&self, binary: &Path) -> anyhow::Result<String> {
-        let name = binary.file_name().unwrap().to_string_lossy();
-        self.record(format!("version {name}"));
-        self.version.map(str::to_string).context("not a daemon")
+        self.call("version".into())?;
+        anyhow::ensure!(binary.is_file(), "{} is missing", binary.display());
+        Ok("9.9.9".into())
     }
-    fn wait_healthy(&self, version: &str) -> anyhow::Result<()> {
-        self.record(format!(
-            "health {version} bin={} old={} legacy={}",
-            std::fs::read_to_string(&self.bin).unwrap_or_default(),
-            std::fs::read_to_string(with_suffix(&self.bin, ".old")).unwrap_or_default(),
-            self.legacy.exists()
-        ));
-        anyhow::ensure!(self.healthy, "no health");
+    fn wait_healthy(&self, home: &Path, _port: u16, version: &str) -> anyhow::Result<()> {
+        self.call("health".into())?;
+        let bin = std::fs::read_to_string(home.join("bin/hermesd.exe"))?;
+        anyhow::ensure!(bin == "new" && version == "9.9.9", "wrong daemon: {bin}");
         Ok(())
     }
 }
 
-/// A temporary home with an installed task running `old` contents.
-fn installed(root: &Path, binary: Option<&str>, legacy: bool) -> ServicePaths {
-    let paths = ServicePaths::new(root.join("home"), root.to_path_buf());
-    std::fs::create_dir_all(paths.home.join("bin")).unwrap();
-    std::fs::write(paths.plist_path(), "old task").unwrap();
-    std::fs::write(paths.launcher_path(), "old launcher").unwrap();
-    if let Some(contents) = binary {
-        std::fs::write(paths.bin_path(), contents).unwrap();
+/// The pre-rename task, registered and running from the old home.
+fn legacy_task(moving: &Moving) -> (ServicePaths, FakeSchtasks) {
+    let plan = moving.plan();
+    let paths = ServicePaths::new(plan.to.clone(), plan.user_home.clone());
+    for suffix in ["-task.xml", "-task.ps1"] {
+        let file = plan.from.join(crate::brand::legacy_daemon_file(suffix));
+        std::fs::write(file, "legacy task").unwrap();
     }
-    if legacy {
-        std::fs::write(paths.legacy_bin_path(), "legacy").unwrap();
-    }
-    paths
+    let name = task::task_name_in(crate::brand::LEGACY_WINDOWS_TASK, &plan.from).unwrap();
+    let schtasks = FakeSchtasks::default();
+    schtasks.tasks.borrow_mut().insert(name, (true, true));
+    (paths, schtasks)
 }
 
-fn source(root: &Path, contents: &str) -> PathBuf {
-    let source = root.join("bundled-hermesd.exe");
-    std::fs::write(&source, contents).unwrap();
-    source
+/// An install's result, the tasks it left (label, enabled, running) and the
+/// calls it made.
+type Outcome = (anyhow::Result<()>, Vec<(String, bool, bool)>, Vec<String>);
+
+/// Runs the install.
+fn install_moving(moving: &Moving, paths: &ServicePaths, schtasks: FakeSchtasks) -> Outcome {
+    let plan = moving.plan();
+    let host = TaskScheduler::new(paths, &plan.from, 0, schtasks).unwrap();
+    let result = install_with(&moving.source, paths, &plan.from, Some(plan), &host);
+    let calls = host.schtasks.calls.borrow().clone();
+    (result, host.schtasks.state(), calls)
 }
 
 #[test]
-fn upgrade_disables_the_old_task_before_stopping_it() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = installed(root.path(), Some("old"), false);
-    let host = FakeHost::new(&paths);
-    upgrade(&source(root.path(), "new"), &paths, &host).unwrap();
+fn a_pre_rename_task_is_migrated_and_deleted_once_the_new_one_is_healthy() {
+    let moving = Moving::new();
+    let (paths, schtasks) = legacy_task(&moving);
+    let (result, tasks, calls) = install_moving(&moving, &paths, schtasks);
+    result.unwrap();
     assert_eq!(
-        host.ops(),
+        calls,
         [
-            "version hermesd.exe.new",
-            "disable",
-            "stop",
-            "register",
-            "start",
-            "health 9.9.9 bin=new old=old legacy=false",
+            "version",
+            "/change/disable Gravity",
+            "/end Gravity",
+            "wait Gravity",
+            "/create The Hermes",
+            "/run The Hermes",
+            "health",
+            "/delete Gravity",
         ]
     );
-}
-
-#[test]
-fn a_staged_binary_that_fails_verification_stops_nothing() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = installed(root.path(), Some("old"), true);
-    let mut host = FakeHost::new(&paths);
-    host.version = None;
-    let error = upgrade(&source(root.path(), "new"), &paths, &host).unwrap_err();
-    assert!(
-        format!("{error:#}").contains("nothing was stopped"),
-        "{error:#}"
-    );
-    assert_eq!(host.ops(), ["version hermesd.exe.new"]);
-    assert_eq!(std::fs::read_to_string(paths.bin_path()).unwrap(), "old");
-    assert!(paths.legacy_bin_path().exists());
-    assert!(!with_suffix(&paths.bin_path(), ".new").exists());
-}
-
-#[test]
-fn verification_rejects_a_short_or_altered_copy() {
-    let root = tempfile::tempdir().unwrap();
-    let source = source(root.path(), "daemon bytes");
-    let copy = root.path().join("copy");
-    std::fs::write(&copy, "daemon").unwrap();
-    assert!(format!("{:#}", verify_copy(&source, &copy).unwrap_err()).contains("bytes"));
-    std::fs::write(&copy, "DAEMON bytes").unwrap();
-    assert!(format!("{:#}", verify_copy(&source, &copy).unwrap_err()).contains("checksum"));
-    std::fs::write(&copy, "daemon bytes").unwrap();
-    verify_copy(&source, &copy).unwrap();
-}
-
-#[test]
-fn version_output_is_parsed_and_checked() {
-    assert_eq!(parse_version("hermesd 0.14.3\r\n").unwrap(), "0.14.3");
-    assert!(parse_version("").is_err());
-    assert!(parse_version("usage: hermesd").is_err());
-}
-
-#[test]
-fn version_check_runs_the_binary() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = ServicePaths::new(root.path().to_path_buf(), root.path().to_path_buf());
-    let host = TaskScheduler {
-        paths: &paths,
-        name: String::new(),
-        port: 0,
-    };
-    assert!(host.version_of(&root.path().join("absent.exe")).is_err());
-    // cmd.exe ignores --version and exits without printing a version.
-    let cmd = PathBuf::from(std::env::var("ComSpec").expect("ComSpec"));
-    assert!(host.version_of(&cmd).is_err());
-}
-
-#[test]
-fn a_healthy_upgrade_drops_the_backups_and_the_pre_rename_binary() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = installed(root.path(), Some("old"), true);
-    let host = FakeHost::new(&paths);
-    upgrade(&source(root.path(), "new"), &paths, &host).unwrap();
-    // The legacy binary and .old were still there while health was pending.
-    assert!(host
-        .ops()
-        .contains(&"health 9.9.9 bin=new old=old legacy=true".to_string()));
-    assert_eq!(std::fs::read_to_string(paths.bin_path()).unwrap(), "new");
-    for leftover in [
-        with_suffix(&paths.bin_path(), ".old"),
-        with_suffix(&paths.bin_path(), ".new"),
-        with_suffix(&paths.launcher_path(), ".old"),
-        with_suffix(&paths.plist_path(), ".old"),
-        paths.legacy_bin_path(),
-    ] {
-        assert!(!leftover.exists(), "{} left behind", leftover.display());
+    assert_eq!(tasks, [("The Hermes".to_string(), true, true)]);
+    for suffix in ["-task.xml", "-task.ps1"] {
+        let legacy = crate::brand::legacy_daemon_file(suffix);
+        assert!(!paths.home.join(&legacy).exists(), "{legacy} left");
     }
-    assert_ne!(std::fs::read(paths.plist_path()).unwrap(), b"old task");
+    assert!(paths.plist_path().is_file() && paths.launcher_path().is_file());
+    moving.assert_moved();
 }
 
+/// Each step failing, through Task Scheduler's host: the old task is
+/// enabled and running again, the new one is deleted, and the home and
+/// binary are back as they were.
 #[test]
-fn a_failed_health_check_restores_and_restarts_the_old_daemon() {
+fn a_failure_at_each_step_restarts_the_pre_rename_task() {
+    let steps: [(&str, Option<&str>, &str); 7] = [
+        ("stage", None, "copying daemon binary"),
+        ("verify", Some("version"), "nothing was stopped"),
+        ("stop", Some("wait Gravity"), "it was left running"),
+        ("migrate", None, "injected crash at Database"),
+        ("swap", None, "hermesd.exe.old"),
+        ("register", Some("/create The Hermes"), "at /create"),
+        ("health", Some("health"), "injected failure at health"),
+    ];
+    for (step, fail, expected) in steps {
+        let mut moving = Moving::new();
+        let (paths, mut schtasks) = legacy_task(&moving);
+        schtasks.fail = fail.map(str::to_string);
+        let stuck = moving.plan().from.join("bin/hermesd.exe.old");
+        match step {
+            "stage" => moving.source = moving.plan().user_home.join("absent"),
+            "migrate" => moving.crash_migration_at("Database"),
+            // A directory where the old binary is kept blocks the swap.
+            "swap" => std::fs::create_dir_all(stuck.join("stuck")).unwrap(),
+            _ => {}
+        }
+        let (result, tasks, calls) = install_moving(&moving, &paths, schtasks);
+        let error = format!("{:#}", result.expect_err(step));
+        assert!(error.contains(expected), "{step}: {error}");
+        if step == "swap" {
+            std::fs::remove_dir_all(&stuck).unwrap();
+        }
+        moving.assert_rolled_back();
+        assert_eq!(
+            tasks,
+            [("Gravity".to_string(), true, true)],
+            "{step}: {error}\n{calls:?}"
+        );
+        let task_file = moving
+            .plan()
+            .from
+            .join(crate::brand::legacy_daemon_file("-task.xml"));
+        assert!(task_file.is_file(), "{step}");
+        assert!(!paths.home.exists(), "{step}");
+    }
+}
+
+/// 0.15.0 → 0.15.1: the same task before and after, no migration.
+#[test]
+fn a_failed_same_task_upgrade_restores_the_previous_definition_and_binary() {
     let root = tempfile::tempdir().unwrap();
-    let paths = installed(root.path(), Some("old"), true);
-    let mut host = FakeHost::new(&paths);
-    host.healthy = false;
-    let error = upgrade(&source(root.path(), "new"), &paths, &host).unwrap_err();
-    assert!(
-        format!("{error:#}").contains("previous daemon was restored"),
-        "{error:#}"
-    );
-    assert_eq!(
-        host.ops()[6..],
-        ["disable", "stop", "register", "start"].map(String::from)
-    );
+    let paths = ServicePaths::new(root.path().join("home"), root.path().to_path_buf());
+    std::fs::create_dir_all(paths.home.join("bin")).unwrap();
+    std::fs::write(paths.bin_path(), "old").unwrap();
+    std::fs::write(paths.plist_path(), "old task").unwrap();
+    std::fs::write(paths.launcher_path(), "old launcher").unwrap();
+    let source = root.path().join("bundled.exe");
+    std::fs::write(&source, "new").unwrap();
+    let schtasks = FakeSchtasks {
+        fail: Some("health".into()),
+        ..Default::default()
+    };
+    let name = task::task_name(&paths).unwrap();
+    schtasks.tasks.borrow_mut().insert(name, (true, true));
+    let host = TaskScheduler::new(&paths, &paths.home, 0, schtasks).unwrap();
+    assert_eq!(host.installed(), [Identity::Current]);
+    install_with(&source, &paths, &paths.home, None, &host).unwrap_err();
     assert_eq!(std::fs::read_to_string(paths.bin_path()).unwrap(), "old");
     assert_eq!(
         std::fs::read_to_string(paths.plist_path()).unwrap(),
@@ -214,82 +227,25 @@ fn a_failed_health_check_restores_and_restarts_the_old_daemon() {
         std::fs::read_to_string(paths.launcher_path()).unwrap(),
         "old launcher"
     );
-    assert!(paths.legacy_bin_path().exists());
-    assert!(!with_suffix(&paths.bin_path(), ".old").exists());
-}
-
-#[test]
-fn a_pre_rename_install_keeps_its_binary_until_the_new_one_is_healthy() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = installed(root.path(), None, true);
-    let mut host = FakeHost::new(&paths);
-    host.healthy = false;
-    upgrade(&source(root.path(), "new"), &paths, &host).unwrap_err();
-    // The old launcher still starts gravityd.exe, which was never touched.
-    assert!(paths.legacy_bin_path().exists());
-    assert!(!paths.bin_path().exists());
     assert_eq!(
-        std::fs::read_to_string(paths.launcher_path()).unwrap(),
-        "old launcher"
+        host.schtasks.state(),
+        [("The Hermes".to_string(), true, true)]
     );
-}
-
-#[test]
-fn a_daemon_that_will_not_stop_is_left_running_on_its_old_binary() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = installed(root.path(), Some("old"), false);
-    let mut host = FakeHost::new(&paths);
-    host.stops = false;
-    upgrade(&source(root.path(), "new"), &paths, &host).unwrap_err();
-    assert_eq!(
-        host.ops()[1..],
-        ["disable", "stop", "register", "start"].map(String::from)
-    );
-    assert_eq!(std::fs::read_to_string(paths.bin_path()).unwrap(), "old");
-    assert!(!with_suffix(&paths.bin_path(), ".new").exists());
-}
-
-#[test]
-fn a_failed_first_install_removes_its_task() {
-    let root = tempfile::tempdir().unwrap();
-    let paths = ServicePaths::new(root.path().join("home"), root.path().to_path_buf());
-    let mut host = FakeHost::new(&paths);
-    host.healthy = false;
-    upgrade(&source(root.path(), "new"), &paths, &host).unwrap_err();
-    assert_eq!(
-        host.ops(),
-        [
-            "version hermesd.exe.new",
-            "register",
-            "start",
-            "health 9.9.9 bin=new old= legacy=false",
-            "disable",
-            "stop",
-            "delete",
-        ]
-    );
-    assert!(!paths.bin_path().exists());
-    assert!(!paths.plist_path().exists());
-    assert!(!paths.launcher_path().exists());
 }
 
 #[test]
 fn restart_reinstalls_a_missing_binary_from_the_bundled_copy() {
     let root = tempfile::tempdir().unwrap();
-    let paths = installed(root.path(), None, false);
-    let host = FakeHost::new(&paths);
-    restart_with(&paths, &source(root.path(), "bundled"), &host).unwrap();
+    let paths = ServicePaths::new(root.path().join("home"), root.path().to_path_buf());
+    std::fs::create_dir_all(&paths.home).unwrap();
+    std::fs::write(paths.plist_path(), "task").unwrap();
+    let bundled = root.path().join("bundled.exe");
+    std::fs::write(&bundled, "new").unwrap();
+    let host = TaskScheduler::new(&paths, &paths.home, 0, FakeSchtasks::default()).unwrap();
+    sequence::restart(&bundled, &layout(&paths, &paths.home), &host).unwrap();
+    assert_eq!(std::fs::read_to_string(paths.bin_path()).unwrap(), "new");
     assert_eq!(
-        std::fs::read_to_string(paths.bin_path()).unwrap(),
-        "bundled"
-    );
-    assert_eq!(host.ops()[1..3], ["disable", "stop"].map(String::from));
-
-    let host = FakeHost::new(&paths);
-    restart_with(&paths, &source(root.path(), "other"), &host).unwrap();
-    assert_eq!(host.ops(), ["stop", "start"]);
-    assert_eq!(
-        std::fs::read_to_string(paths.bin_path()).unwrap(),
-        "bundled"
+        host.schtasks.state(),
+        [("The Hermes".to_string(), true, true)]
     );
 }

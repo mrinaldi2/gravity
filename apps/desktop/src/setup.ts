@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { confirmHomeMigration, InstallCancelled } from "./app/homeMigration";
 import { isLocalEndpoint } from "./protocol/connection";
 import type { Endpoint } from "./protocol/connection";
 import { DEFAULT_ENDPOINT } from "./settings";
@@ -78,17 +79,43 @@ export async function daemonLogTail(): Promise<string> {
 }
 
 /**
+ * The dry-run summary of the home migration this machine's install would
+ * run, or `null` when it migrates nothing.
+ */
+async function homeMigrationSummary(): Promise<string | null> {
+  const summary: unknown = await invoke("home_migration_summary");
+  return typeof summary === "string" ? summary : null;
+}
+
+/**
  * Installs and starts the bundled daemon as a launchd user agent on this
- * machine. Throws with a human-readable message on failure.
+ * machine. An install that would move `~/.gravity` asks first and throws
+ * {@link InstallCancelled} when declined. Throws with a human-readable
+ * message on failure.
  */
 export async function installLocalDaemon(currentVersion?: string): Promise<void> {
+  let confirmedMigration = false;
   try {
-    if (currentVersion === undefined) {
+    const summary = await homeMigrationSummary();
+    if (summary !== null) {
+      if (!(await confirmHomeMigration(summary))) {
+        throw new InstallCancelled();
+      }
+      confirmedMigration = true;
+    }
+    const args = {
+      ...(currentVersion === undefined ? {} : { currentVersion }),
+      ...(confirmedMigration ? { confirmedMigration } : {}),
+    };
+    if (Object.keys(args).length === 0) {
       await invoke("install_local_daemon");
     } else {
-      await invoke("install_local_daemon", { currentVersion });
+      await invoke("install_local_daemon", args);
     }
   } catch (error) {
+    if (error instanceof InstallCancelled) {
+      throw error;
+    }
     throw new Error(typeof error === "string" ? error : "daemon install failed", {
       cause: error,
     });

@@ -8,7 +8,7 @@ use anyhow::{bail, Context};
 use crate::config::Config;
 use crate::db::Db;
 
-/// Create a backup directory containing `bus.sqlite`, `gravityd.toml` (if any),
+/// Create a backup directory containing `bus.sqlite`, `hermesd.toml` (if any),
 /// per-project/bot config files, and a manifest. Secrets and workspaces are
 /// excluded.
 pub fn backup(cfg: &Config, db: &Db, out: &Path) -> anyhow::Result<PathBuf> {
@@ -20,9 +20,10 @@ pub fn backup(cfg: &Config, db: &Db, out: &Path) -> anyhow::Result<PathBuf> {
     db.backup_to(&out.join("bus.sqlite"))
         .context("SQLite online backup")?;
 
-    let cfg_path = cfg.home.join("gravityd.toml");
+    let cfg_name = crate::brand::daemon_file(".toml");
+    let cfg_path = cfg.home.join(&cfg_name);
     if cfg_path.exists() {
-        std::fs::copy(&cfg_path, out.join("gravityd.toml"))?;
+        std::fs::copy(&cfg_path, out.join(&cfg_name))?;
     }
 
     // Bot configuration files, not workspaces and never `secrets/`.

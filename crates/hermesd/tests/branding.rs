@@ -29,12 +29,14 @@ fn mcp_config_carries_the_bots_own_browser() {
     assert!(mcp["mcpServers"][brand::ACTIVE_MCP_SERVER].is_object());
 }
 
-/// The home does not move in this release, so the secrets rule still names it.
+/// The home moved to `~/.thehermes`; `~/.gravity` stays a symlink to it for a
+/// release, so the secrets rule guards both spellings.
 #[test]
 fn hook_settings_use_the_new_token_and_guard_the_current_home() {
     let tmp = tempfile::tempdir().expect("tmp");
     write_hook_settings(tmp.path(), 49777, brand::BOT_TOKEN_ENV).expect("write");
     let raw = std::fs::read_to_string(tmp.path().join(".claude/settings.json")).expect("read");
+    assert!(raw.contains("Read(~/.thehermes/secrets/**)"));
     assert!(raw.contains("Read(~/.gravity/secrets/**)"));
     #[cfg(unix)]
     {
@@ -47,7 +49,9 @@ fn hook_settings_use_the_new_token_and_guard_the_current_home() {
 fn the_bus_is_registered_as_hermes_bus() {
     assert_eq!(brand::ACTIVE_MCP_SERVER, "hermes-bus");
     assert_eq!(brand::DISPLAY_NAME, "The Hermes");
-    assert_eq!(brand::HOME_DIR_NAME, ".gravity");
+    assert_eq!(brand::HOME_DIR_NAME, ".thehermes");
+    assert_eq!(brand::LAUNCHD_LABEL, "com.manuelrinaldi.thehermesd");
+    assert_eq!(brand::WINDOWS_TASK, "The Hermes");
 }
 
 /// A bot provisioned before the rename has `gravity-bus` in its `mcp.json`.

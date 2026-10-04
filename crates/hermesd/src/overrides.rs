@@ -3,7 +3,7 @@
 //! `Config` is cloned by value into the app state and the supervisor at boot,
 //! so a value the control plane can change at runtime needs a shared handle
 //! instead. The override is persisted in the `meta` table and re-applied on
-//! startup, which keeps the user's hand-written `gravityd.toml` untouched.
+//! startup, which keeps the user's hand-written `hermesd.toml` untouched.
 
 use std::sync::{Arc, Mutex};
 

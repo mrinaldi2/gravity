@@ -72,12 +72,22 @@ const MAX_CHARS: usize = 200;
 /// `~/.claude/projects`. Underscores count: a workspace under `my_app` is
 /// filed as `my-app`.
 pub(crate) fn transcript_dir(home: &Path, workspace: &Path) -> PathBuf {
-    let mangled: String = workspace
-        .to_string_lossy()
+    claude_projects_dir(home).join(claude_project_key(workspace))
+}
+
+/// Where Claude Code files every project's transcripts and auto-memory.
+pub(crate) fn claude_projects_dir(home: &Path) -> PathBuf {
+    home.join(".claude").join("projects")
+}
+
+/// The directory name Claude Code derives from an absolute path. Shared by
+/// the chat and activity readers and the home migration, which renames these
+/// directories when the workspaces move.
+pub(crate) fn claude_project_key(path: &Path) -> String {
+    path.to_string_lossy()
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    home.join(".claude").join("projects").join(mangled)
+        .collect()
 }
 
 /// The most recently written `.jsonl` in `dir`, if any.

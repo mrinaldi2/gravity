@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactElement } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { runAppUpdate } from "../../app/appUpdate";
+import { InstallCancelled } from "../../app/homeMigration";
 import type { AddToast } from "../../app/useToasts";
 import { captureException } from "../../analytics";
 import { isLocalEndpoint } from "../../protocol/connection";
@@ -146,6 +147,9 @@ export default function AboutSettings(props: AboutSettingsProps): ReactElement {
         "The Hermes service on this computer is restarting.",
       );
     } catch (error) {
+      if (error instanceof InstallCancelled) {
+        return;
+      }
       captureException(error, "daemon_update");
       const body = error instanceof Error ? error.message : "update failed";
       addToast("error", "Couldn't update the Hermes service", body, { sticky: true });

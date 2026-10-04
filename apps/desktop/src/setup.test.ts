@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { InstallCancelled, onHomeMigrationRequest } from "./app/homeMigration";
 import { DEFAULT_ENDPOINT } from "./settings";
 import { daemonLogTail, installLocalDaemon, localDaemonEndpoint, probeDaemon } from "./setup";
 
@@ -58,6 +59,36 @@ describe("installLocalDaemon", () => {
     invoke.mockResolvedValue(null);
     await expect(installLocalDaemon("0.7.0")).resolves.toBeUndefined();
     expect(invoke).toHaveBeenCalledWith("install_local_daemon", { currentVersion: "0.7.0" });
+  });
+
+  it("does not migrate the home without a yes", async () => {
+    inTauri();
+    invoke.mockImplementation((command) =>
+      Promise.resolve(command === "home_migration_summary" ? "Moves ~/.gravity" : null),
+    );
+    await expect(installLocalDaemon("0.14.0")).rejects.toBeInstanceOf(InstallCancelled);
+    expect(invoke).not.toHaveBeenCalledWith("install_local_daemon", expect.anything());
+  });
+
+  it("migrates once the summary is confirmed", async () => {
+    inTauri();
+    invoke.mockImplementation((command) =>
+      Promise.resolve(command === "home_migration_summary" ? "Moves ~/.gravity" : null),
+    );
+    const summaries: string[] = [];
+    const stop = onHomeMigrationRequest((request) => {
+      if (request !== null) {
+        summaries.push(request.summary);
+        request.answer(true);
+      }
+    });
+    await expect(installLocalDaemon("0.14.0")).resolves.toBeUndefined();
+    stop();
+    expect(summaries).toEqual(["Moves ~/.gravity"]);
+    expect(invoke).toHaveBeenCalledWith("install_local_daemon", {
+      currentVersion: "0.14.0",
+      confirmedMigration: true,
+    });
   });
 
   it("surfaces the daemon's error string", async () => {

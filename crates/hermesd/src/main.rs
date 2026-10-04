@@ -15,6 +15,28 @@ fn flag_value(args: &[String], flag: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+/// `hermesd migrate-home [--dry-run | --rollback] [--from <dir>] [--to <dir>]`.
+fn migrate_home(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
+    use hermesd::migrate_home::{self as migrate, Plan};
+    let default = Plan::default_for(cfg);
+    let plan = Plan::new(
+        flag_value(args, "--from").unwrap_or(default.from),
+        flag_value(args, "--to").unwrap_or(default.to),
+        default.user_home,
+    );
+    let mut out = std::io::stdout();
+    if args.iter().any(|a| a == "--dry-run") {
+        if !migrate::dry_run(&plan, &mut out)? {
+            std::process::exit(1);
+        }
+    } else if args.iter().any(|a| a == "--rollback") {
+        migrate::rollback(&plan, &mut out)?;
+    } else {
+        migrate::run(&plan, &mut out)?;
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -51,7 +73,20 @@ async fn main() -> anyhow::Result<()> {
 
     let mut cfg = Config::load(config_path.as_deref())?;
 
+    // Everything but the service and the migration itself would otherwise
+    // start a fresh, empty home next to the one holding the data.
+    if !matches!(
+        args.first().map(String::as_str),
+        Some("service" | "migrate-home")
+    ) {
+        hermesd::migrate_home::refuse_unmigrated(&cfg)?;
+    }
+
     match args.first().map(String::as_str) {
+        Some("migrate-home") => {
+            migrate_home(&cfg, &args)?;
+            return Ok(());
+        }
         Some("backup") => {
             let out = flag_value(&args, "--out").unwrap_or_else(|| {
                 cfg.home.join("backups").join(format!(
@@ -83,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
             // used to run the install.
             if args.iter().any(|a| a == "--help" || a == "-h") {
                 println!(
-                    "usage: hermesd service <install [--binary <path>]|uninstall|restart|status>"
+                    "usage: hermesd service <install [--binary <path>] [--no-migrate]|uninstall|restart|status>"
                 );
                 return Ok(());
             }
@@ -91,7 +126,25 @@ async fn main() -> anyhow::Result<()> {
                 Some("install") => {
                     let source =
                         flag_value(&args, "--binary").map_or_else(std::env::current_exe, Ok)?;
-                    hermesd::service::install_and_start(&source, &paths, cfg.port)?;
+                    // `--no-migrate` (the app's launch-time repair) reinstalls
+                    // the binary only; moving the home needs the user's yes.
+                    let pending = hermesd::migrate_home::pending(&cfg)?;
+                    if args.iter().any(|a| a == "--no-migrate") {
+                        if let Some(plan) = &pending {
+                            anyhow::bail!(
+                                "{} still has to move to {}; run `hermesd service install` \
+                                 without --no-migrate to move it",
+                                plan.from.display(),
+                                plan.to.display()
+                            );
+                        }
+                    }
+                    hermesd::service::install_and_start(
+                        &source,
+                        &paths,
+                        cfg.port,
+                        pending.as_ref(),
+                    )?;
                     println!(
                         "hermesd installed to {} and running ({})",
                         paths.bin_path().display(),
@@ -130,6 +183,8 @@ async fn main() -> anyhow::Result<()> {
     // Before the port: two daemons on one home run two supervisors against one
     // database, and negotiation means a collision no longer stops the second.
     let _home_lock = hermesd::home::lock(&cfg.home)?;
+    #[cfg(unix)]
+    hermesd::holders::track_sessions_in(&cfg.home);
     let policy = hermesd::server::port_policy(&cfg, negotiate_port);
     let bound = hermesd::server::bind(&cfg.bind, cfg.port, policy).await?;
     cfg.port = bound.port();

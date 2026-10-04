@@ -32,7 +32,7 @@ fn recognizes_only_complete_managed_daemon_installs() {
     let home = root.join("gravity");
     let user_home = root.join("user");
     let bin = home.join(format!("bin/hermesd{}", std::env::consts::EXE_SUFFIX));
-    let plist = managed_marker(&home, &user_home);
+    let plist = managed_markers(&home, &user_home)[0].clone();
     std::fs::create_dir_all(bin.parent().expect("binary parent")).expect("binary directory");
     std::fs::write(&bin, b"daemon").expect("daemon binary");
     assert!(!managed_daemon_is_installed(&home, &user_home));
@@ -50,31 +50,13 @@ fn recognizes_a_managed_install_from_before_the_rename() {
     let home = root.join("gravity");
     let user_home = root.join("user");
     let legacy = home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX));
-    let plist = managed_marker(&home, &user_home);
+    let plist = managed_markers(&home, &user_home)[0].clone();
     std::fs::create_dir_all(legacy.parent().expect("binary parent")).expect("binary directory");
     std::fs::create_dir_all(plist.parent().expect("plist parent")).expect("plist directory");
     std::fs::write(&legacy, b"daemon").expect("legacy daemon binary");
     std::fs::write(&plist, b"plist").expect("launchd plist");
 
     assert!(managed_daemon_is_installed(&home, &user_home));
-    std::fs::remove_dir_all(root).expect("test cleanup");
-}
-
-#[test]
-fn a_service_without_its_binary_needs_repair() {
-    let root = daemon_test_home("repair");
-    let home = root.join("gravity");
-    let user_home = root.join("user");
-    let marker = managed_marker(&home, &user_home);
-    assert!(!managed_daemon_needs_repair(&home, &user_home));
-    std::fs::create_dir_all(marker.parent().expect("marker parent")).expect("marker directory");
-    std::fs::write(&marker, b"task").expect("service marker");
-    assert!(managed_daemon_needs_repair(&home, &user_home));
-
-    let legacy = home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX));
-    std::fs::create_dir_all(legacy.parent().expect("binary parent")).expect("binary directory");
-    std::fs::write(&legacy, b"daemon").expect("legacy daemon binary");
-    assert!(!managed_daemon_needs_repair(&home, &user_home));
     std::fs::remove_dir_all(root).expect("test cleanup");
 }
 
@@ -92,8 +74,8 @@ fn rejects_known_daemon_downgrades() {
 #[test]
 fn runtime_port_takes_precedence_over_the_configured_port() {
     let home = daemon_test_home("runtime-port");
-    std::fs::write(home.join("gravityd.toml"), "port = 49777\n").expect("configured port");
-    std::fs::write(home.join("gravityd.port"), "50123\n").expect("runtime port");
+    std::fs::write(home.join("hermesd.toml"), "port = 49777\n").expect("configured port");
+    std::fs::write(home.join("hermesd.port"), "50123\n").expect("runtime port");
 
     assert_eq!(daemon_port_from_home(&home), 50_123);
     std::fs::remove_dir_all(home).expect("test cleanup");
@@ -108,12 +90,12 @@ fn only_the_managed_daemon_on_its_own_port_counts_as_managed() {
     let home = root.join("gravity");
     let user_home = root.join("user");
     let bin = home.join(format!("bin/hermesd{}", std::env::consts::EXE_SUFFIX));
-    let plist = managed_marker(&home, &user_home);
+    let plist = managed_markers(&home, &user_home)[0].clone();
     std::fs::create_dir_all(bin.parent().expect("binary parent")).expect("binary directory");
     std::fs::create_dir_all(plist.parent().expect("plist parent")).expect("plist directory");
     std::fs::write(&bin, b"daemon").expect("daemon binary");
     std::fs::write(&plist, b"plist").expect("launchd plist");
-    std::fs::write(home.join("gravityd.port"), "49777\n").expect("runtime port");
+    std::fs::write(home.join("hermesd.port"), "49777\n").expect("runtime port");
 
     assert!(managed_daemon_is_installed(&home, &user_home));
     assert_eq!(daemon_port_from_home(&home), 49_777);
@@ -126,9 +108,31 @@ fn only_the_managed_daemon_on_its_own_port_counts_as_managed() {
 #[test]
 fn invalid_runtime_port_falls_back_to_the_configured_port() {
     let home = daemon_test_home("invalid-runtime-port");
+    // An unmigrated home, as the app sees it before `service install`.
     std::fs::write(home.join("gravityd.toml"), "port = 7777\n").expect("configured port");
     std::fs::write(home.join("gravityd.port"), "stale\n").expect("runtime port");
 
     assert_eq!(daemon_port_from_home(&home), 7777);
     std::fs::remove_dir_all(home).expect("test cleanup");
+}
+
+#[test]
+fn a_service_without_its_binary_needs_repair() {
+    let root = daemon_test_home("repair");
+    let home = root.join("gravity");
+    let user_home = root.join("user");
+    let marker = managed_markers(&home, &user_home)[1].clone();
+    assert!(!managed_daemon_needs_repair(&home, &user_home));
+    std::fs::create_dir_all(marker.parent().expect("marker parent")).expect("marker directory");
+    std::fs::write(&marker, b"task").expect("service marker");
+    assert!(managed_daemon_needs_repair(&home, &user_home));
+    assert!(repair_needed(&home, &user_home, false));
+    // Moving the home needs the user's yes; a launch-time repair waits.
+    assert!(!repair_needed(&home, &user_home, true));
+
+    let legacy = home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX));
+    std::fs::create_dir_all(legacy.parent().expect("binary parent")).expect("binary directory");
+    std::fs::write(&legacy, b"daemon").expect("legacy daemon binary");
+    assert!(!managed_daemon_needs_repair(&home, &user_home));
+    std::fs::remove_dir_all(root).expect("test cleanup");
 }

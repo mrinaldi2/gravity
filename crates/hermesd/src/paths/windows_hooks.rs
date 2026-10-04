@@ -55,7 +55,7 @@ exit 0
     }
     Ok(serde_json::json!({
         "crossSessionInbound": "accept",
-        "permissions": { "allow": [], "deny": ["Read(../**)", crate::paths::secrets_deny_rule(), "Bash(rm -rf /*)"] },
+        "permissions": { "allow": [], "deny": ["Read(../**)", crate::paths::secrets_deny_rule(), crate::paths::legacy_secrets_deny_rule(), "Bash(rm -rf /*)"] },
         "hooks": hooks
     }))
 }

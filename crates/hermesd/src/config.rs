@@ -15,7 +15,7 @@ pub(crate) const DEFAULT_AUTO_COMPACT_WINDOW: u32 = 250_000;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
-    /// Root of all daemon state (`~/.gravity`).
+    /// Root of all daemon state (`~/.thehermes`).
     pub home: PathBuf,
     /// Addresses to bind. Localhost plus, optionally, a Tailscale interface.
     pub bind: Vec<IpAddr>,
@@ -26,7 +26,7 @@ pub struct Config {
     /// allowlisted. Set from `configured_port` unless a fallback was
     /// negotiated at startup.
     pub port: u16,
-    /// The port `gravityd.toml` asked for, kept so a negotiated fallback can be
+    /// The port `hermesd.toml` asked for, kept so a negotiated fallback can be
     /// reported as the compromise it is rather than passed off as the setting.
     #[serde(skip)]
     pub configured_port: u16,
@@ -224,7 +224,13 @@ impl Default for Config {
     }
 }
 
-fn default_home() -> PathBuf {
+/// Whether `THEHERMES_HOME` (or `GRAVITY_HOME`) points the daemon at a home
+/// of the user's choosing; only the default home is migrated automatically.
+pub fn home_is_overridden() -> bool {
+    crate::brand::env_var_os("HOME").is_some()
+}
+
+pub fn default_home() -> PathBuf {
     resolve_home(
         crate::brand::env_var_os("HOME").map(PathBuf::from),
         dirs_home(),
@@ -245,7 +251,7 @@ impl Config {
     pub fn load(path: Option<&Path>) -> anyhow::Result<Self> {
         let path = match path {
             Some(p) => p.to_path_buf(),
-            None => default_home().join("gravityd.toml"),
+            None => default_home().join(crate::brand::daemon_file(".toml")),
         };
         if path.exists() {
             let raw = std::fs::read_to_string(&path)
@@ -292,7 +298,7 @@ mod tests {
     fn gravity_home_uses_the_new_namespace() {
         assert_eq!(
             resolve_home(None, PathBuf::from("/Users/tester")),
-            PathBuf::from("/Users/tester/.gravity")
+            PathBuf::from("/Users/tester/.thehermes")
         );
         assert_eq!(
             resolve_home(

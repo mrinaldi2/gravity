@@ -24,7 +24,7 @@ impl RuntimeAdapter for MixedAdapter {
             bus::BotRuntime::CodexCli => (&self.codex_bin, "codex_bin"),
         };
         super::executable::version(bin).map(|_| ()).map_err(|error| {
-            anyhow::anyhow!("{error:#}. Install the CLI or set {setting} to its executable path in gravityd.toml.")
+            anyhow::anyhow!("{error:#}. Install the CLI or set {setting} to its executable path in hermesd.toml.")
         })
     }
     fn capabilities(&self) -> Capabilities {
