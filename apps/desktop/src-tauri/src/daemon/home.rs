@@ -71,16 +71,32 @@ fn migration_pending_in(user_home: &Path) -> bool {
         .map(|dir| dir.join("migrate-home.json"))
         .find(|path| path.is_file());
     if let Some(state) = state {
-        let completed = std::fs::read_to_string(state)
-            .ok()
-            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-            .is_some_and(|value| !value["completed_at"].is_null());
-        return !completed;
+        return !migration_completed(&state);
     }
     legacy
         .symlink_metadata()
         .is_ok_and(|meta| meta.is_dir() && !meta.file_type().is_symlink())
         && legacy.join("bus.sqlite").is_file()
+}
+
+/// Whether the `migrate-home.json` at `state` records a finished run.
+fn migration_completed(state: &Path) -> bool {
+    std::fs::read_to_string(state)
+        .ok()
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        .is_some_and(|value| !value["completed_at"].is_null())
+}
+
+/// An install that died between the home migration and its commit: the
+/// home has moved (`migrate-home.json` complete), the pre-rename service is
+/// still registered, and the current service or its binary is missing.
+/// `service install --no-migrate` finishes the switch-over; nothing moves.
+pub(crate) fn switch_over_interrupted(home: &Path, user_home: &Path) -> bool {
+    let [current, legacy] = managed_markers(home, user_home);
+    let binary = home.join(format!("bin/{FILE_STEM}{}", std::env::consts::EXE_SUFFIX));
+    migration_completed(&home.join("migrate-home.json"))
+        && legacy.is_file()
+        && !(current.is_file() && binary.is_file())
 }
 
 /// `hermesd<suffix>` in `home`, or `gravityd<suffix>` when only the

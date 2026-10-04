@@ -23,6 +23,13 @@ pub(super) trait Launchctl {
     fn bootstrap(&self, plist: &Path) -> anyhow::Result<()>;
     /// Whether launchd has the agent `label` loaded, running or not.
     fn is_loaded(&self, label: &str) -> bool;
+    /// Marks `label` disabled in launchd's override database, which outlives
+    /// a logout: its plist no longer loads at login, and `bootstrap` refuses
+    /// it until [`Launchctl::enable`].
+    fn disable(&self, label: &str) -> anyhow::Result<()>;
+    /// Undoes [`Launchctl::disable`]. Enabling an enabled agent is not an
+    /// error.
+    fn enable(&self, label: &str) -> anyhow::Result<()>;
     fn version_of(&self, binary: &Path) -> anyhow::Result<String> {
         super::stage::version_of(binary)
     }
@@ -64,6 +71,14 @@ impl Launchctl for System {
             .is_ok_and(|out| out.status.success())
     }
 
+    fn disable(&self, label: &str) -> anyhow::Result<()> {
+        override_state("disable", label)
+    }
+
+    fn enable(&self, label: &str) -> anyhow::Result<()> {
+        override_state("enable", label)
+    }
+
     fn bootout(&self, plist: &Path) -> anyhow::Result<()> {
         let domain = gui_domain()?;
         let out = Command::new("launchctl")
@@ -98,6 +113,21 @@ impl Launchctl for System {
         );
         Ok(())
     }
+}
+
+/// `launchctl enable|disable gui/<uid>/<label>`.
+fn override_state(verb: &str, label: &str) -> anyhow::Result<()> {
+    let target = format!("{}/{label}", gui_domain()?);
+    let out = Command::new("launchctl")
+        .args([verb, &target])
+        .output()
+        .with_context(|| format!("running launchctl {verb}"))?;
+    anyhow::ensure!(
+        out.status.success(),
+        "launchctl {verb} {target} failed: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(())
 }
 
 pub(super) fn parse_agent_pid(print: &str) -> Option<u32> {
@@ -167,10 +197,16 @@ impl<L: Launchctl> Host for Launchd<'_, L> {
             .collect()
     }
 
-    fn disable(&self, _id: Identity) -> anyhow::Result<()> {
+    fn disable(&self, id: Identity) -> anyhow::Result<()> {
         // `bootout` unloads the agent, so KeepAlive cannot relaunch it, and
-        // its plist stays for a rollback to load again.
-        Ok(())
+        // its plist stays for a rollback to load again. The pre-rename plist
+        // would also load again at the next login, should the install die
+        // before it is removed, and run against the moved home; disabling
+        // its label keeps it down, as Task Scheduler's `/disable` does.
+        match id {
+            Identity::Legacy => self.launchctl.disable(label(id)),
+            Identity::Current => Ok(()),
+        }
     }
 
     fn stop(&self, id: Identity) -> anyhow::Result<()> {
@@ -218,6 +254,11 @@ impl<L: Launchctl> Host for Launchd<'_, L> {
     }
 
     fn start(&self, id: Identity) -> anyhow::Result<()> {
+        // launchd refuses to bootstrap a disabled label; a rollback enables
+        // the pre-rename agent [`Host::disable`] disabled.
+        if id == Identity::Legacy {
+            self.launchctl.enable(label(id))?;
+        }
         // An agent whose bootout failed is still loaded; bootstrapping it
         // again would fail although it is where a rollback wants it.
         if self.launchctl.is_loaded(label(id)) {

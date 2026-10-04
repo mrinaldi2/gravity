@@ -136,3 +136,45 @@ fn a_service_without_its_binary_needs_repair() {
     assert!(!managed_daemon_needs_repair(&home, &user_home));
     std::fs::remove_dir_all(root).expect("test cleanup");
 }
+
+/// An install that died after `migrate-home` but before its commit leaves
+/// the moved home with the pre-rename service still registered. The next
+/// launch finishes the switch-over; a finished one is left alone.
+#[test]
+fn an_interrupted_switch_over_after_the_move_needs_repair() {
+    let root = daemon_test_home("switch-over");
+    let home = root.join(".thehermes");
+    let user_home = root.join("user");
+    let [current, legacy] = managed_markers(&home, &user_home);
+    let state = home.join("migrate-home.json");
+    let exe = std::env::consts::EXE_SUFFIX;
+    for file in [&current, &legacy, &state] {
+        std::fs::create_dir_all(file.parent().expect("parent")).expect("directory");
+    }
+    std::fs::create_dir_all(home.join("bin")).expect("bin directory");
+    // Crashed before the swap: the old binary moved with the home.
+    std::fs::write(home.join(format!("bin/gravityd{exe}")), b"old").expect("old binary");
+    std::fs::write(&legacy, b"legacy").expect("legacy marker");
+    std::fs::write(&state, r#"{"completed_at":null}"#).expect("state");
+    assert!(
+        !switch_over_interrupted(&home, &user_home),
+        "run unfinished"
+    );
+    std::fs::write(&state, r#"{"completed_at":"now"}"#).expect("state");
+    assert!(!managed_daemon_needs_repair(&home, &user_home));
+    assert!(switch_over_interrupted(&home, &user_home));
+    assert!(repair_needed(&home, &user_home, false));
+
+    // Crashed after registering the new service: its binary is in place
+    // too, but the pre-rename service was never removed.
+    std::fs::write(home.join(format!("bin/hermesd{exe}")), b"new").expect("new binary");
+    assert!(repair_needed(&home, &user_home, false));
+    std::fs::write(&current, b"current").expect("current marker");
+    assert!(!repair_needed(&home, &user_home, false), "already switched");
+    std::fs::remove_file(&current).expect("remove current marker");
+
+    // The commit removed the pre-rename service: nothing left to finish.
+    std::fs::remove_file(&legacy).expect("remove legacy marker");
+    assert!(!repair_needed(&home, &user_home, false));
+    std::fs::remove_dir_all(root).expect("test cleanup");
+}
