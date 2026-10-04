@@ -365,3 +365,48 @@ fn the_guard_is_told_worktrees_not_trusted_paths_are_writable() {
         "installing replaces the app: {tester}"
     );
 }
+
+/// R2 rehearsal: after `migrate-home` the home is `~/.thehermes` and the
+/// config `hermesd.toml`. The profile follows the configured home, and the
+/// config lock covers both names, in the settings and in the guard.
+#[test]
+fn a_moved_home_keeps_its_locks_on_the_renamed_config() {
+    let settings = generate(&SettingsInput {
+        profile: PermissionProfile::Standard,
+        extras: &[],
+        project_name: "Hermes",
+        home: Path::new("/Users/me/.thehermes"),
+        workspace: Path::new("/Users/me/.thehermes/projects/p/bots/dev/workspace"),
+        artifacts: None,
+        trusted_paths: &[],
+        repo_url: None,
+        port: 49777,
+        guard_command: "'/bin/hermesd' guard".to_string(),
+        extra_environment: &[],
+        interim: None,
+    });
+    let deny = rules(&settings, "deny");
+    for rule in [
+        "Read(//Users/me/.thehermes/secrets/**)",
+        "Bash(*.thehermes/secrets*)",
+        "Edit(//Users/me/.thehermes/hermesd.toml)",
+        "Edit(//Users/me/.thehermes/gravityd.toml)",
+    ] {
+        assert!(
+            deny.contains(&rule.to_string()),
+            "{rule} missing: {deny:#?}"
+        );
+    }
+    assert!(!deny.iter().any(|r| r.contains(".gravity/")), "{deny:#?}");
+
+    let mut ctx = guard_cases::ctx();
+    ctx.home = PathBuf::from("/Users/me/.thehermes");
+    for name in CONFIG_FILES {
+        let input = json!({
+            "tool_name": "Edit",
+            "tool_input": { "file_path": format!("/Users/me/.thehermes/{name}") },
+            "cwd": "/Users/me",
+        });
+        assert!(decide(&input, &ctx).is_some(), "{name} is not guarded");
+    }
+}

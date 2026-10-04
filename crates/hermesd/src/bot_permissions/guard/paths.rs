@@ -88,15 +88,19 @@ pub fn real(path: &Path) -> PathBuf {
 impl GuardContext {
     /// The paths no tool call may touch.
     pub(super) fn protected(&self) -> Vec<PathBuf> {
-        let lexical = [
+        let mut lexical = vec![
             self.home.join("secrets"),
-            self.home.join("gravityd.toml"),
             self.home.join("bot-settings.json"),
             self.user_home.join(".ssh"),
             self.user_home.join(".claude.json"),
             self.user_home.join(".claude").join("settings.json"),
             self.user_home.join(".claude").join("settings.local.json"),
         ];
+        lexical.extend(
+            crate::bot_permissions::CONFIG_FILES
+                .iter()
+                .map(|name| self.home.join(name)),
+        );
         let mut all: Vec<PathBuf> = lexical.iter().map(|p| real(p)).collect();
         all.extend(lexical);
         all
