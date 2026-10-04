@@ -56,12 +56,14 @@ fn agent_pid_is_read_from_launchctl_print() {
     );
 }
 
-/// `launchctl` as far as an install can tell: which plists are loaded.
-/// `fail` names the call that errors (`bootout <file>`, `bootstrap <file>`,
-/// `version`, `health`).
+/// `launchctl` as far as an install can tell: which plists are loaded and
+/// which labels are disabled. `fail` names the call that errors
+/// (`bootout <file>`, `bootstrap <file>`, `disable <label>`, `version`,
+/// `health`).
 #[derive(Default)]
 struct FakeLaunchctl {
     loaded: RefCell<BTreeSet<String>>,
+    disabled: RefCell<BTreeSet<String>>,
     calls: RefCell<Vec<String>>,
     fail: Option<String>,
 }
@@ -78,6 +80,9 @@ impl FakeLaunchctl {
     fn loaded(&self) -> Vec<String> {
         self.loaded.borrow().iter().cloned().collect()
     }
+    fn disabled(&self) -> Vec<String> {
+        self.disabled.borrow().iter().cloned().collect()
+    }
 }
 
 fn file_name(path: &Path) -> String {
@@ -91,6 +96,16 @@ impl Launchctl for FakeLaunchctl {
     fn is_loaded(&self, label: &str) -> bool {
         self.loaded.borrow().contains(&format!("{label}.plist"))
     }
+    fn disable(&self, label: &str) -> anyhow::Result<()> {
+        self.call(format!("disable {label}"))?;
+        self.disabled.borrow_mut().insert(label.into());
+        Ok(())
+    }
+    fn enable(&self, label: &str) -> anyhow::Result<()> {
+        self.call(format!("enable {label}"))?;
+        self.disabled.borrow_mut().remove(label);
+        Ok(())
+    }
     fn bootout(&self, plist: &Path) -> anyhow::Result<()> {
         self.call(format!("bootout {}", file_name(plist)))?;
         self.loaded.borrow_mut().remove(&file_name(plist));
@@ -99,6 +114,11 @@ impl Launchctl for FakeLaunchctl {
     fn bootstrap(&self, plist: &Path) -> anyhow::Result<()> {
         self.call(format!("bootstrap {}", file_name(plist)))?;
         anyhow::ensure!(plist.is_file(), "{} does not exist", plist.display());
+        let label = file_name(plist).trim_end_matches(".plist").to_string();
+        anyhow::ensure!(
+            !self.disabled.borrow().contains(&label),
+            "service is disabled"
+        );
         anyhow::ensure!(
             self.loaded.borrow_mut().insert(file_name(plist)),
             "service already loaded"
@@ -120,6 +140,7 @@ impl Launchctl for FakeLaunchctl {
 
 const LEGACY: &str = "in.mikolajczuk.gravityd.plist";
 const CURRENT: &str = "com.manuelrinaldi.thehermesd.plist";
+const LEGACY_LABEL: &str = "in.mikolajczuk.gravityd";
 
 fn launchd_with(
     paths: &ServicePaths,
@@ -145,28 +166,42 @@ fn legacy_agent(moving: &Moving) -> (ServicePaths, FakeLaunchctl) {
     (paths, launchctl)
 }
 
-/// Runs the install; returns its result, the loaded plists and the calls.
-fn install_moving(
-    moving: &Moving,
-    paths: &ServicePaths,
-    launchctl: FakeLaunchctl,
-) -> (anyhow::Result<()>, Vec<String>, Vec<String>) {
+/// What an install left behind in launchd.
+struct Outcome {
+    result: anyhow::Result<()>,
+    loaded: Vec<String>,
+    disabled: Vec<String>,
+    calls: Vec<String>,
+}
+
+fn install_moving(moving: &Moving, paths: &ServicePaths, launchctl: FakeLaunchctl) -> Outcome {
     let host = launchd_with(paths, moving.plan().from.clone(), launchctl);
     let result = install_with(&moving.source, paths, Some(moving.plan()), &host);
     let calls = host.launchctl.calls.borrow().clone();
-    (result, host.launchctl.loaded(), calls)
+    Outcome {
+        result,
+        loaded: host.launchctl.loaded(),
+        disabled: host.launchctl.disabled(),
+        calls,
+    }
 }
 
 #[test]
 fn a_pre_rename_agent_is_migrated_and_removed_once_the_new_one_is_healthy() {
     let moving = Moving::new();
     let (paths, launchctl) = legacy_agent(&moving);
-    let (result, loaded, calls) = install_moving(&moving, &paths, launchctl);
+    let Outcome {
+        result,
+        loaded,
+        disabled,
+        calls,
+    } = install_moving(&moving, &paths, launchctl);
     result.unwrap();
     assert_eq!(
         calls,
         [
             "version".to_string(),
+            format!("disable {LEGACY_LABEL}"),
             format!("bootout {LEGACY}"),
             format!("bootstrap {CURRENT}"),
             "health".into(),
@@ -174,6 +209,9 @@ fn a_pre_rename_agent_is_migrated_and_removed_once_the_new_one_is_healthy() {
         ]
     );
     assert_eq!(loaded, [CURRENT]);
+    // Disabled for good: had the install died before removing its plist,
+    // the next login would not have loaded it.
+    assert_eq!(disabled, [LEGACY_LABEL]);
     assert!(!paths.legacy_plist_path().exists());
     let plist = std::fs::read_to_string(paths.plist_path()).unwrap();
     assert!(plist.contains(&format!("<string>{}</string>", paths.bin_path().display())));
@@ -183,13 +221,18 @@ fn a_pre_rename_agent_is_migrated_and_removed_once_the_new_one_is_healthy() {
 }
 
 /// Each step of the install failing, through launchd's host: the old agent
-/// is loaded again from its plist, the new one is gone, and the home and
-/// binary are back as they were.
+/// is enabled and loaded again from its plist, the new one is gone, and the
+/// home and binary are back as they were.
 #[test]
 fn a_failure_at_each_step_reloads_the_pre_rename_agent() {
-    let steps: [(&str, Option<String>, &str); 7] = [
+    let steps: [(&str, Option<String>, &str); 8] = [
         ("stage", None, "copying daemon binary"),
         ("verify", Some("version".into()), "nothing was stopped"),
+        (
+            "disable",
+            Some(format!("disable {LEGACY_LABEL}")),
+            "it was left running",
+        ),
         (
             "stop",
             Some(format!("bootout {LEGACY}")),
@@ -221,10 +264,15 @@ fn a_failure_at_each_step_reloads_the_pre_rename_agent() {
             }
             _ => {}
         }
-        let (result, loaded, calls) = install_moving(&moving, &paths, launchctl);
+        let Outcome {
+            result,
+            loaded,
+            disabled,
+            calls,
+        } = install_moving(&moving, &paths, launchctl);
         let error = format!("{:#}", result.expect_err(step));
         assert!(error.contains(expected), "{step}: {error}");
-        if !matches!(step, "stage" | "verify" | "stop") {
+        if !matches!(step, "stage" | "verify" | "disable" | "stop") {
             assert!(
                 error.contains("previous daemon was restored"),
                 "{step}: {error}"
@@ -235,12 +283,13 @@ fn a_failure_at_each_step_reloads_the_pre_rename_agent() {
         }
         moving.assert_rolled_back();
         assert_eq!(loaded, [LEGACY], "{step}: {error}\n{calls:?}");
+        assert!(disabled.is_empty(), "{step}: still disabled {calls:?}");
         assert!(paths.legacy_plist_path().is_file(), "{step}");
         assert!(!paths.plist_path().exists(), "{step}: new plist left");
         let stopped = calls.contains(&format!("bootout {LEGACY}"));
         assert_eq!(
             stopped,
-            !matches!(step, "stage" | "verify"),
+            !matches!(step, "stage" | "verify" | "disable"),
             "{step}: {calls:?}"
         );
     }
