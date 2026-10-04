@@ -24,10 +24,18 @@ export interface BoardModel {
   readonly seq: bigint;
 }
 
+function byOrd(columns: readonly BoardColumn[]): BoardColumn[] {
+  // `sort` on a fresh copy, not `toSorted`: the build targets ES2021.
+  const sorted = [...columns];
+  // oxlint-disable-next-line unicorn/no-array-sort
+  sorted.sort((a, b) => a.ord - b.ord);
+  return sorted;
+}
+
 export function fromSnapshot(snapshot: BoardSnapshot): BoardModel {
   return {
     settings: snapshot.settings,
-    columns: [...snapshot.columns].sort((a, b) => a.ord - b.ord),
+    columns: byOrd(snapshot.columns),
     cards: new Map(snapshot.cards.map((card) => [card.id, card])),
     roles: snapshot.roles,
     seq: snapshot.seq,
@@ -124,7 +132,9 @@ export class BoardSync {
    */
   refresh(): void {
     if (!this.loading) {
-      this.onChange(this.model === null ? { kind: "loading" } : { kind: "ready", model: this.model });
+      this.onChange(
+        this.model === null ? { kind: "loading" } : { kind: "ready", model: this.model },
+      );
       void this.load(this.model === null ? "boardWatch" : "boardGet");
     }
   }
@@ -156,7 +166,9 @@ export class BoardSync {
     }
     this.model = fromSnapshot(snapshot);
     this.loading = false;
-    const held = [...this.held].sort((a, b) => (a.seq < b.seq ? -1 : a.seq > b.seq ? 1 : 0));
+    const held = [...this.held];
+    // oxlint-disable-next-line unicorn/no-array-sort
+    held.sort((a, b) => (a.seq < b.seq ? -1 : a.seq > b.seq ? 1 : 0));
     this.held = [];
     for (const event of held) {
       if (!this.apply(event)) {

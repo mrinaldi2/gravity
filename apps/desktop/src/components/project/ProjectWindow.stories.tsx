@@ -24,6 +24,5 @@ function Window({ tab }: { readonly tab: UpcomingTab }): ReactElement {
 }
 
 export const Dashboard: Story = () => <Window tab="dashboard" />;
-export const Board: Story = () => <Window tab="board" />;
 export const Releases: Story = () => <Window tab="releases" />;
 export const Meetings: Story = () => <Window tab="meetings" />;

@@ -11,6 +11,7 @@ import type { Project, ProjectRepo } from "../protocol/entities";
 import BotView from "./BotView";
 import ControlCenterView from "./control/ControlCenterView";
 import type { Permissions } from "./permissions/usePermissions";
+import BoardView from "./board/BoardView";
 import ConversationsView from "./conversations/ConversationsView";
 import ComingSoon, { isUpcomingTab } from "./project/ComingSoon";
 import ProjectWindow from "./project/ProjectWindow";
@@ -94,6 +95,17 @@ function ProjectPane(props: ProjectPaneProps): ReactElement {
   let content: ReactElement;
   if (isUpcomingTab(tab)) {
     content = <ComingSoon tab={tab} />;
+  } else if (tab === "board") {
+    content = (
+      <BoardView
+        client={client}
+        project={project}
+        bots={bots}
+        connected={connected}
+        canControl={canControl}
+        addToast={props.addToast}
+      />
+    );
   } else if (tab === "conversations") {
     content = client.capabilities.includes("agent_conversations") ? (
       <ConversationsView client={client} project={project} bots={bots} connected={connected} />

@@ -54,7 +54,7 @@ export async function boardCall<K extends keyof BoardReplies>(
   throw new DaemonError("protocol_error", `expected ${expect} reply, got ${reply.case ?? "none"}`);
 }
 
-export function encodeBoardRequest(reqId: bigint, call: BoardCall): Uint8Array {
+function encodeBoardRequest(reqId: bigint, call: BoardCall): Uint8Array {
   return toBinary(
     EnvelopeSchema,
     create(EnvelopeSchema, {
@@ -65,7 +65,7 @@ export function encodeBoardRequest(reqId: bigint, call: BoardCall): Uint8Array {
 }
 
 /** A decoded server frame on the board surface. */
-export type BoardFrame =
+type BoardFrame =
   | { readonly kind: "response"; readonly reqId: bigint; readonly response: BoardReply }
   | {
       readonly kind: "error";
@@ -76,7 +76,7 @@ export type BoardFrame =
   | { readonly kind: "event"; readonly event: BoardEvent };
 
 /** Decodes one binary frame; null for garbage or arms a client never receives. */
-export function decodeBoardFrame(bytes: Uint8Array): BoardFrame | null {
+function decodeBoardFrame(bytes: Uint8Array): BoardFrame | null {
   let envelope;
   try {
     envelope = fromBinary(EnvelopeSchema, bytes);
@@ -95,5 +95,69 @@ export function decodeBoardFrame(bytes: Uint8Array): BoardFrame | null {
         : null;
     default:
       return null;
+  }
+}
+
+interface PendingBoard {
+  readonly resolve: (reply: BoardReply) => void;
+  readonly reject: (error: Error) => void;
+}
+
+/** The board's binary frames on a socket: requests in flight and push subscribers. */
+export class BoardChannel {
+  private readonly pending = new Map<bigint, PendingBoard>();
+  private readonly handlers = new Set<(event: BoardEvent) => void>();
+
+  send(ws: WebSocket, reqId: bigint, call: BoardCall): Promise<BoardReply> {
+    return new Promise<BoardReply>((resolve, reject) => {
+      this.pending.set(reqId, { resolve, reject });
+      try {
+        ws.send(encodeBoardRequest(reqId, call));
+      } catch (error) {
+        this.pending.delete(reqId);
+        reject(
+          error instanceof Error ? error : new DaemonError("disconnected", "failed to send frame"),
+        );
+      }
+    });
+  }
+
+  on(handler: (event: BoardEvent) => void): () => void {
+    this.handlers.add(handler);
+    return () => {
+      this.handlers.delete(handler);
+    };
+  }
+
+  receive(bytes: Uint8Array): void {
+    const frame = decodeBoardFrame(bytes);
+    if (frame === null) {
+      return;
+    }
+    if (frame.kind === "event") {
+      for (const handler of this.handlers) {
+        handler(frame.event);
+      }
+      return;
+    }
+    const pending = this.pending.get(frame.reqId);
+    if (pending === undefined) {
+      return;
+    }
+    this.pending.delete(frame.reqId);
+    if (frame.kind === "error") {
+      pending.reject(new DaemonError(frame.code, frame.message));
+    } else {
+      pending.resolve(frame.response);
+    }
+  }
+
+  /** Rejects every request in flight, e.g. when the socket closes. */
+  failAll(error: Error): void {
+    const entries = [...this.pending.values()];
+    this.pending.clear();
+    for (const entry of entries) {
+      entry.reject(error);
+    }
   }
 }

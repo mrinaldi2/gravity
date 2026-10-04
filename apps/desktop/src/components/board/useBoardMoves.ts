@@ -12,7 +12,7 @@ export interface Anchor {
   readonly y: number;
 }
 
-export type MoveUi =
+type MoveUi =
   | { readonly kind: "none" }
   | {
       readonly kind: "menu";
@@ -149,21 +149,23 @@ export function useBoardMoves({ api, columns, refresh, addToast }: Options): Boa
       if (to === undefined || toKey === card.columnKey) {
         return;
       }
-      checksFor(card).then(
-        (checks) => {
-          const plan = planMove(checks.get(toKey) ?? []);
-          if (plan.kind === "go") {
-            void commit(card, to, anchor);
-          } else if (plan.kind === "input") {
-            setUi({ ...plan, card, to, anchor });
-          } else {
-            setUi({ kind: "refused", card, to, anchor, unmet: plan.unmet });
-          }
-        },
-        (error: unknown) => {
+      void (async () => {
+        let checks: ColumnChecks;
+        try {
+          checks = await checksFor(card);
+        } catch (error) {
           addToast("error", `Couldn't move ${card.id}`, errorText(error));
-        },
-      );
+          return;
+        }
+        const plan = planMove(checks.get(toKey) ?? []);
+        if (plan.kind === "go") {
+          await commit(card, to, anchor);
+        } else if (plan.kind === "input") {
+          setUi({ ...plan, card, to, anchor });
+        } else {
+          setUi({ kind: "refused", card, to, anchor, unmet: plan.unmet });
+        }
+      })();
     },
     [columns, checksFor, commit, addToast],
   );
@@ -171,19 +173,19 @@ export function useBoardMoves({ api, columns, refresh, addToast }: Options): Boa
   const openMenu = useCallback(
     (card: ItemCard, anchor: Anchor): void => {
       setUi({ kind: "menu", card, anchor, checks: null });
-      checksFor(card).then(
-        (checks) => {
+      void (async () => {
+        try {
+          const checks = await checksFor(card);
           setUi((current) =>
             current.kind === "menu" && current.card.id === card.id
               ? { ...current, checks }
               : current,
           );
-        },
-        (error: unknown) => {
+        } catch (error) {
           setUi(NONE);
           addToast("error", `Couldn't check moves for ${card.id}`, errorText(error));
-        },
-      );
+        }
+      })();
     },
     [checksFor, addToast],
   );

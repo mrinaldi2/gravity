@@ -44,9 +44,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function numbersIn<T extends number>(value: unknown, known: (n: number) => n is T): readonly T[] {
-  return Array.isArray(value)
-    ? value.filter((n): n is T => typeof n === "number" && known(n))
-    : [];
+  return Array.isArray(value) ? value.filter((n): n is T => typeof n === "number" && known(n)) : [];
 }
 
 const isPlatform = (n: number): n is Platform => n in Platform && n !== Platform.UNSPECIFIED;

@@ -11,7 +11,7 @@ type Listener = (event: Event) => void;
 interface ScriptedWebSocket {
   readyState: number;
   addEventListener(type: string, listener: Listener): void;
-  send(data: string): void;
+  send(data: string | Uint8Array): void;
   close(): void;
   open(): void;
   receive(payload: unknown): void;
@@ -26,6 +26,8 @@ export class FakeSocket implements ScriptedWebSocket {
 
   readonly url: string;
   readonly sent: string[] = [];
+  /** Binary frames (protobuf envelopes), kept apart from the JSON ones. */
+  readonly sentBinary: Uint8Array[] = [];
   readyState: number = FakeSocket.OPEN;
   closed = false;
 
@@ -41,8 +43,12 @@ export class FakeSocket implements ScriptedWebSocket {
     set.add(listener);
   }
 
-  send(data: string): void {
-    this.sent.push(data);
+  send(data: string | Uint8Array): void {
+    if (typeof data === "string") {
+      this.sent.push(data);
+    } else {
+      this.sentBinary.push(data);
+    }
   }
 
   close(): void {

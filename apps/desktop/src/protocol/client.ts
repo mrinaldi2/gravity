@@ -1,6 +1,6 @@
 import type { AttachResult, DaemonApi } from "./api";
 import type { BoardCall, BoardReply } from "./board";
-import { decodeBoardFrame, encodeBoardRequest, PROTO_ENCODING } from "./board";
+import { BoardChannel, PROTO_ENCODING } from "./board";
 import { CLIENT_ID, DaemonError, PROTOCOL_VERSION } from "./connection";
 import type { ConnectionStatus, Endpoint } from "./connection";
 import type { Grant } from "./entities";
@@ -19,8 +19,8 @@ import { isReply, parseServerMessage, replyIs } from "./wire";
 import { CONTRACTS } from "./contracts";
 import type { BoardEvent } from "./gen/hermes/board/v1/requests_pb";
 
-interface Pending<T> {
-  readonly resolve: (reply: T) => void;
+interface PendingRequest {
+  readonly resolve: (reply: ServerReply) => void;
   readonly reject: (error: Error) => void;
 }
 
@@ -59,10 +59,8 @@ export class DaemonClient implements DaemonApi {
   private running = false;
   private backoffMs = MIN_BACKOFF_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly pending = new Map<string, Pending<ServerReply>>();
-  /** Board requests in flight, keyed by the binary envelope's `req_id`. */
-  private readonly boardPending = new Map<bigint, Pending<BoardReply>>();
-  private readonly boardHandlers = new Set<(event: BoardEvent) => void>();
+  private readonly pending = new Map<string, PendingRequest>();
+  private readonly boardChannel = new BoardChannel();
   private readonly cursors = new Map<string, number>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
   private readonly handlers: PushHandlerSets = emptyHandlers();
@@ -173,25 +171,11 @@ export class DaemonClient implements DaemonApi {
         new DaemonError("unsupported", "the board needs a newer Hermes service"),
       );
     }
-    return new Promise<BoardReply>((resolve, reject) => {
-      const reqId = BigInt(this.newReqId());
-      this.boardPending.set(reqId, { resolve, reject });
-      try {
-        ws.send(encodeBoardRequest(reqId, call));
-      } catch (error) {
-        this.boardPending.delete(reqId);
-        reject(
-          error instanceof Error ? error : new DaemonError("disconnected", "failed to send frame"),
-        );
-      }
-    });
+    return this.boardChannel.send(ws, BigInt(this.newReqId()), call);
   }
 
   onBoardEvent(handler: (event: BoardEvent) => void): () => void {
-    this.boardHandlers.add(handler);
-    return () => {
-      this.boardHandlers.delete(handler);
-    };
+    return this.boardChannel.on(handler);
   }
 
   /**
@@ -259,7 +243,7 @@ export class DaemonClient implements DaemonApi {
       if (typeof event.data === "string") {
         this.handleFrame(event.data);
       } else if (event.data instanceof ArrayBuffer) {
-        this.handleBinaryFrame(new Uint8Array(event.data));
+        this.boardChannel.receive(new Uint8Array(event.data));
       }
     });
     ws.addEventListener("close", () => {
@@ -367,29 +351,6 @@ export class DaemonClient implements DaemonApi {
     this.dispatchPush(message);
   }
 
-  private handleBinaryFrame(bytes: Uint8Array): void {
-    const frame = decodeBoardFrame(bytes);
-    if (frame === null) {
-      return;
-    }
-    if (frame.kind === "event") {
-      for (const handler of this.boardHandlers) {
-        handler(frame.event);
-      }
-      return;
-    }
-    const pending = this.boardPending.get(frame.reqId);
-    if (pending === undefined) {
-      return;
-    }
-    this.boardPending.delete(frame.reqId);
-    if (frame.kind === "error") {
-      pending.reject(new DaemonError(frame.code, frame.message));
-    } else {
-      pending.resolve(frame.response);
-    }
-  }
-
   private dispatchPush(push: ServerPush): void {
     // The replay cursor is the client's own state, so it is tracked here
     // rather than in the shared router.
@@ -400,9 +361,9 @@ export class DaemonClient implements DaemonApi {
   }
 
   private failPending(error: Error): void {
-    const entries = [...this.pending.values(), ...this.boardPending.values()];
+    const entries = [...this.pending.values()];
     this.pending.clear();
-    this.boardPending.clear();
+    this.boardChannel.failAll(error);
     for (const entry of entries) {
       entry.reject(error);
     }

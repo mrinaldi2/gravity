@@ -4,9 +4,9 @@
 import type { BoardColumn, ItemCard } from "../../protocol/gen/hermes/board/v1/board_pb";
 import { WipScope } from "../../protocol/gen/hermes/board/v1/board_pb";
 
-export type WipState = "none" | "under" | "full" | "over";
+type WipState = "none" | "under" | "full" | "over";
 
-export interface AssigneeLoad {
+interface AssigneeLoad {
   readonly botId: string;
   readonly count: number;
 }
@@ -52,9 +52,9 @@ export function wipSummary(
       counts.set(card.assignee, (counts.get(card.assignee) ?? 0) + 1);
     }
   }
-  const loads = [...counts]
-    .map(([botId, count]) => ({ botId, count }))
-    .sort((a, b) => b.count - a.count || a.botId.localeCompare(b.botId));
+  const loads = [...counts].map(([botId, count]) => ({ botId, count }));
+  // oxlint-disable-next-line unicorn/no-array-sort
+  loads.sort((a, b) => b.count - a.count || a.botId.localeCompare(b.botId));
   const state = loads.reduce<WipState>((worst, load) => {
     const next = stateOf(load.count, limit);
     return RANK[next] > RANK[worst] ? next : worst;
@@ -77,9 +77,7 @@ export function wipDescription(name: string, summary: WipSummary): string {
     parts.push(`${summary.shown} shown`);
   }
   if (summary.limit !== undefined) {
-    parts.push(
-      summary.perAssignee ? `limit ${summary.limit} per bot` : `limit ${summary.limit}`,
-    );
+    parts.push(summary.perAssignee ? `limit ${summary.limit} per bot` : `limit ${summary.limit}`);
     if (summary.state === "full") {
       parts.push("full");
     } else if (summary.state === "over") {
