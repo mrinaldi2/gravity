@@ -5,7 +5,8 @@
   Push $0
   Push $1
   DetailPrint "Hermes service: ${ACTION}"
-  nsExec::ExecToStack /TIMEOUT=60000 '"$INSTDIR\hermesd.exe" service ${ACTION}'
+  ; install stops the old daemon, then waits for the new one's health check.
+  nsExec::ExecToStack /TIMEOUT=180000 '"$INSTDIR\hermesd.exe" service ${ACTION}'
   Pop $0
   Pop $1
   ${If} $0 != 0

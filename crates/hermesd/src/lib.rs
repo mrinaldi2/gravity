@@ -36,7 +36,7 @@ pub mod server;
 #[cfg(not(windows))]
 pub mod service;
 #[cfg(windows)]
-#[path = "service/windows.rs"]
+#[path = "service/windows/mod.rs"]
 pub mod service;
 pub mod supervisor;
 pub mod terminal;

@@ -174,6 +174,15 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .manage(shortcut::ToggleShortcut::default())
+        .setup(|_app| {
+            // Off the main thread: a repair stops and restarts the service.
+            std::thread::spawn(|| {
+                if let Err(err) = daemon::repair_local_daemon_if_broken() {
+                    eprintln!("managed daemon repair failed: {err}");
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             read_client_token,
             set_dock_badge,
