@@ -77,6 +77,11 @@ async fn main() -> anyhow::Result<()> {
         );
         return Ok(());
     }
+    // `service install` runs a staged binary with this to check it starts.
+    if args.first().map(String::as_str) == Some("--version") {
+        println!("hermesd {}", hermesd::app::DAEMON_VERSION);
+        return Ok(());
+    }
     let config_path = flag_value(&args, "--config");
     let negotiate_port = args.iter().any(|arg| arg == "--negotiate-port");
 
@@ -134,6 +139,14 @@ async fn main() -> anyhow::Result<()> {
         Some("service") => {
             let paths =
                 hermesd::service::ServicePaths::new(cfg.home.clone(), cfg.user_home.clone());
+            // Flags are not otherwise parsed here; `service install --help`
+            // used to run the install.
+            if args.iter().any(|a| a == "--help" || a == "-h") {
+                println!(
+                    "usage: hermesd service <install [--binary <path>]|uninstall|restart|status>"
+                );
+                return Ok(());
+            }
             match args.get(1).map(String::as_str) {
                 Some("install") => {
                     let source =
@@ -145,8 +158,7 @@ async fn main() -> anyhow::Result<()> {
                         cfg.home.clone(),
                         cfg.user_home.clone(),
                     );
-                    hermesd::service::install(&source, &paths)?;
-                    hermesd::service::reload(&paths)?;
+                    hermesd::service::install_and_start(&source, &paths, cfg.port)?;
                     println!(
                         "hermesd installed to {} and running ({})",
                         paths.bin_path().display(),
@@ -167,7 +179,7 @@ async fn main() -> anyhow::Result<()> {
                         "no hermesd service installed at {}",
                         paths.plist_path().display()
                     );
-                    hermesd::service::reload(&paths)?;
+                    hermesd::service::restart(&paths, cfg.port)?;
                     println!("hermesd restarted ({})", hermesd::service::SERVICE_LABEL);
                 }
                 Some("status") => {

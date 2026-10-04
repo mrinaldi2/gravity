@@ -56,7 +56,10 @@ pub(crate) mod migration;
 
 #[cfg(test)]
 use home::managed_markers;
-use home::{daemon_file, managed_daemon_is_installed, migration_pending};
+use home::{
+    daemon_file, managed_daemon_is_installed, managed_daemon_needs_repair, managed_marker_exists,
+    migration_pending,
+};
 pub(crate) use home::{daemon_home, user_home};
 
 /// Runs the bundled sidecar's own `service <action>`, the same code path the
@@ -111,7 +114,8 @@ pub fn local_daemon_is_managed(port: u16) -> bool {
 /// for the daemon to actually exit.
 #[tauri::command]
 pub async fn restart_local_daemon() -> Result<(), String> {
-    if !managed_daemon_is_installed(&daemon_home()?, &user_home()?) {
+    // `service restart` reinstalls a missing binary from the bundled copy.
+    if !managed_marker_exists(&daemon_home()?, &user_home()?) {
         return Err("no app-managed daemon is installed on this machine".to_string());
     }
     run_bundled_service("restart", "daemon restart failed")
@@ -160,6 +164,15 @@ pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
     let home = daemon_home()?;
     let user_home = user_home()?;
     if !managed_daemon_is_installed(&home, &user_home) || migration_pending(&user_home) {
+        return Ok(());
+    }
+    install_bundled_local_daemon()
+}
+
+/// Reinstalls the managed daemon from the bundled sidecar when its binary has
+/// gone missing, so a broken upgrade heals on the next app launch.
+pub(crate) fn repair_local_daemon_if_broken() -> Result<(), String> {
+    if !managed_daemon_needs_repair(&daemon_home()?, &user_home()?) {
         return Ok(());
     }
     install_bundled_local_daemon()
@@ -244,122 +257,4 @@ pub fn daemon_log_tail() -> Option<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn daemon_test_home(name: &str) -> PathBuf {
-        let home = std::env::temp_dir().join(format!(
-            "hermes-desktop-daemon-{name}-{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&home);
-        std::fs::create_dir_all(&home).expect("temporary home");
-        home
-    }
-
-    #[test]
-    fn discovers_the_renamed_sidecar_next_to_the_app_binary() {
-        let exe = Path::new("/Applications/The Hermes.app/Contents/MacOS/The Hermes");
-        assert_eq!(
-            sidecar_path_for_exe(exe).expect("sidecar path"),
-            PathBuf::from(format!(
-                "/Applications/The Hermes.app/Contents/MacOS/hermesd{}",
-                std::env::consts::EXE_SUFFIX
-            ))
-        );
-    }
-
-    #[test]
-    fn recognizes_only_complete_managed_daemon_installs() {
-        let root =
-            std::env::temp_dir().join(format!("hermes-desktop-daemon-test-{}", std::process::id()));
-        // A previous run that panicked mid-test leaves the plist behind, and
-        // pids are reused.
-        let _ = std::fs::remove_dir_all(&root);
-        let home = root.join("gravity");
-        let user_home = root.join("user");
-        let bin = home.join(format!("bin/hermesd{}", std::env::consts::EXE_SUFFIX));
-        let plist = managed_markers(&home, &user_home)[0].clone();
-        std::fs::create_dir_all(bin.parent().expect("binary parent")).expect("binary directory");
-        std::fs::write(&bin, b"daemon").expect("daemon binary");
-        assert!(!managed_daemon_is_installed(&home, &user_home));
-
-        std::fs::create_dir_all(plist.parent().expect("plist parent")).expect("plist directory");
-        std::fs::write(&plist, b"plist").expect("launchd plist");
-        assert!(managed_daemon_is_installed(&home, &user_home));
-
-        std::fs::remove_dir_all(root).expect("test cleanup");
-    }
-
-    #[test]
-    fn recognizes_a_managed_install_from_before_the_rename() {
-        let root = daemon_test_home("pre-rename");
-        let home = root.join("gravity");
-        let user_home = root.join("user");
-        let legacy = home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX));
-        let plist = managed_markers(&home, &user_home)[0].clone();
-        std::fs::create_dir_all(legacy.parent().expect("binary parent")).expect("binary directory");
-        std::fs::create_dir_all(plist.parent().expect("plist parent")).expect("plist directory");
-        std::fs::write(&legacy, b"daemon").expect("legacy daemon binary");
-        std::fs::write(&plist, b"plist").expect("launchd plist");
-
-        assert!(managed_daemon_is_installed(&home, &user_home));
-        std::fs::remove_dir_all(root).expect("test cleanup");
-    }
-
-    #[test]
-    fn rejects_known_daemon_downgrades() {
-        let bundled = Version::parse(env!("CARGO_PKG_VERSION")).expect("bundled version");
-        let newer = Version::new(bundled.major + 1, 0, 0).to_string();
-
-        assert!(reject_daemon_downgrade(None).is_ok());
-        assert!(reject_daemon_downgrade(Some(&bundled.to_string())).is_ok());
-        assert!(reject_daemon_downgrade(Some(&newer)).is_err());
-        assert!(reject_daemon_downgrade(Some("dev")).is_err());
-    }
-
-    #[test]
-    fn runtime_port_takes_precedence_over_the_configured_port() {
-        let home = daemon_test_home("runtime-port");
-        std::fs::write(home.join("hermesd.toml"), "port = 49777\n").expect("configured port");
-        std::fs::write(home.join("hermesd.port"), "50123\n").expect("runtime port");
-
-        assert_eq!(daemon_port_from_home(&home), 50_123);
-        std::fs::remove_dir_all(home).expect("test cleanup");
-    }
-
-    /// The dev script runs a workspace-private daemon as a plain child process
-    /// on its own port, so the restart control must stay hidden there even
-    /// when a managed install exists for the same home.
-    #[test]
-    fn only_the_managed_daemon_on_its_own_port_counts_as_managed() {
-        let root = daemon_test_home("is-managed");
-        let home = root.join("gravity");
-        let user_home = root.join("user");
-        let bin = home.join(format!("bin/hermesd{}", std::env::consts::EXE_SUFFIX));
-        let plist = managed_markers(&home, &user_home)[0].clone();
-        std::fs::create_dir_all(bin.parent().expect("binary parent")).expect("binary directory");
-        std::fs::create_dir_all(plist.parent().expect("plist parent")).expect("plist directory");
-        std::fs::write(&bin, b"daemon").expect("daemon binary");
-        std::fs::write(&plist, b"plist").expect("launchd plist");
-        std::fs::write(home.join("hermesd.port"), "49777\n").expect("runtime port");
-
-        assert!(managed_daemon_is_installed(&home, &user_home));
-        assert_eq!(daemon_port_from_home(&home), 49_777);
-        // The daemon the dev script starts answers elsewhere.
-        assert_ne!(daemon_port_from_home(&home), 55_041);
-
-        std::fs::remove_dir_all(root).expect("test cleanup");
-    }
-
-    #[test]
-    fn invalid_runtime_port_falls_back_to_the_configured_port() {
-        let home = daemon_test_home("invalid-runtime-port");
-        // An unmigrated home, as the app sees it before `service install`.
-        std::fs::write(home.join("gravityd.toml"), "port = 7777\n").expect("configured port");
-        std::fs::write(home.join("gravityd.port"), "stale\n").expect("runtime port");
-
-        assert_eq!(daemon_port_from_home(&home), 7777);
-        std::fs::remove_dir_all(home).expect("test cleanup");
-    }
-}
+mod tests;

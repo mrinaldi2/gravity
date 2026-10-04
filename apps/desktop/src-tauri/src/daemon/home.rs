@@ -106,6 +106,22 @@ pub(crate) fn managed_daemon_is_installed(home: &Path, user_home: &Path) -> bool
         .any(|marker| marker.is_file())
 }
 
+/// The service definition survived but its binary did not (an interrupted
+/// copy, a quarantine): the task or agent has nothing to start.
+pub(crate) fn managed_daemon_needs_repair(home: &Path, user_home: &Path) -> bool {
+    managed_marker_exists(home, user_home)
+        && ![FILE_STEM, LEGACY_FILE_STEM].iter().any(|name| {
+            home.join(format!("bin/{name}{}", std::env::consts::EXE_SUFFIX))
+                .is_file()
+        })
+}
+
+pub(crate) fn managed_marker_exists(home: &Path, user_home: &Path) -> bool {
+    managed_markers(home, user_home)
+        .iter()
+        .any(|marker| marker.is_file())
+}
+
 pub(crate) fn managed_markers(home: &Path, user_home: &Path) -> [PathBuf; 2] {
     if cfg!(windows) {
         [

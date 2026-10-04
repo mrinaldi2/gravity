@@ -345,6 +345,21 @@ fn bootstrap(plist: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// `service install`: stages the installation, then (re)starts the agent.
+pub fn install_and_start(
+    source: &Path,
+    paths: &ServicePaths,
+    _configured_port: u16,
+) -> anyhow::Result<()> {
+    install(source, paths)?;
+    reload(paths)
+}
+
+/// `service restart`.
+pub fn restart(paths: &ServicePaths, _configured_port: u16) -> anyhow::Result<()> {
+    reload(paths)
+}
+
 /// Prints a human-readable status line per component and returns whether the
 /// daemon looks fully installed and reachable.
 pub fn status(paths: &ServicePaths, configured_port: u16) -> bool {
