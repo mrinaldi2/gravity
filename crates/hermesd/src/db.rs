@@ -22,6 +22,7 @@ pub mod agent_talk;
 mod board;
 mod board_edit;
 mod board_items;
+mod board_moves;
 mod board_notes;
 #[cfg(test)]
 mod board_schema_tests;

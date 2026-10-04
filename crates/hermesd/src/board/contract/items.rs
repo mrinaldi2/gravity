@@ -116,3 +116,25 @@ impl TryFrom<c::ItemCard> for m::ItemCard {
         })
     }
 }
+
+impl From<m::Unmet> for c::Unmet {
+    fn from(v: m::Unmet) -> Self {
+        c::Unmet {
+            code: v.code,
+            text: v.text,
+            fix: v.fix,
+        }
+    }
+}
+
+impl TryFrom<c::Unmet> for m::Unmet {
+    type Error = MapError;
+
+    fn try_from(v: c::Unmet) -> Result<Self, MapError> {
+        Ok(m::Unmet {
+            code: v.code,
+            text: v.text,
+            fix: v.fix,
+        })
+    }
+}

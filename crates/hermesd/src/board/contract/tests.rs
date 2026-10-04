@@ -36,6 +36,7 @@ fn every_fixture_survives_the_mapping() {
     through_the_model::<c::ItemComment, m::ItemComment>("comment");
     through_the_model::<c::ItemEvent, m::ItemEvent>("event");
     through_the_model::<c::Template, m::Template>("template");
+    through_the_model::<c::Unmet, m::Unmet>("unmet");
 }
 
 /// A newer client's enum value, or an unset one, is refused, not guessed.

@@ -11,6 +11,7 @@ use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use super::board::{from_text, to_json_list, to_text};
 use super::board_items::{item_in, rank_last, record, Event, Write};
 use super::{ts, Actor, Db};
+use crate::board::guards::WIP_OVERRIDE_LABEL;
 use crate::board::rank;
 
 /// Fields an edit may change; `None` leaves a field as it is.
@@ -160,13 +161,15 @@ impl Db {
     }
 
     /// Put an item into another column, last in its rank order. Entering a
-    /// done column stamps `done_at`; leaving one clears it.
+    /// done column stamps `done_at`; leaving one clears it. `wip_override`
+    /// flags the card for as long as it sits in the column it went over in.
     pub fn move_item(
         &self,
         id: &str,
         expected: u64,
         to_column: &str,
         note: Option<&str>,
+        wip_override: bool,
         actor: &Actor<'_>,
     ) -> anyhow::Result<Write<Item>> {
         versioned(self, id, expected, |tx| {
@@ -192,6 +195,17 @@ impl Db {
                                  done_at = ?6 WHERE id = ?1",
                 params![id, to_column, to_text(&category), rank, at, done_at],
             )?;
+            let mut labels = before.labels.clone();
+            labels.retain(|l| l != WIP_OVERRIDE_LABEL);
+            if wip_override {
+                labels.push(WIP_OVERRIDE_LABEL.to_string());
+            }
+            if labels != before.labels {
+                tx.execute(
+                    "UPDATE item SET labels = ?2 WHERE id = ?1",
+                    params![id, serde_json::to_string(&labels)?],
+                )?;
+            }
             record(
                 tx,
                 id,

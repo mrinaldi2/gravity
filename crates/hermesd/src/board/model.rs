@@ -235,6 +235,15 @@ pub struct Template {
     pub body: serde_json::Value,
 }
 
+/// A guard condition a move does not meet yet, with what would fix it. The
+/// UI shows these texts as they are.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unmet {
+    pub code: String,
+    pub text: String,
+    pub fix: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
