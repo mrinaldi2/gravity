@@ -1,22 +1,22 @@
 {
   "id": "H-017",
-  "type": "feature",
+  "type": "ITEM_TYPE_FEATURE",
   "title": "Board and dashboard",
-  "priority": "P1",
-  "size": "M",
+  "priority": "PRIORITY_P1",
+  "size": "SIZE_M",
   "rank": "a0V",
-  "column_key": "doing",
+  "columnKey": "doing",
   "assignee": "b-desktop-dev",
   "platforms": [
-    "daemon",
-    "desktop"
+    "PLATFORM_DAEMON",
+    "PLATFORM_DESKTOP"
   ],
   "labels": [
     "dashboard"
   ],
   "blocked": true,
   "stale": false,
-  "ac_checked": 1,
-  "ac_total": 2,
-  "version": 7
+  "acChecked": 1,
+  "acTotal": 2,
+  "version": "7"
 }

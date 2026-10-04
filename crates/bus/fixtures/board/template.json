@@ -1,6 +1,6 @@
 {
-  "project_id": "p1",
-  "kind": "item_type",
+  "projectId": "p1",
+  "kind": "TEMPLATE_KIND_ITEM_TYPE",
   "name": "feature",
   "version": 1,
   "body": {

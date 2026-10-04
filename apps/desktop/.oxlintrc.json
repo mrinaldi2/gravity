@@ -11,7 +11,7 @@
     "browser": true,
     "es2022": true
   },
-  "ignorePatterns": ["dist/**", "src-tauri/**", "src/protocol/generated/**"],
+  "ignorePatterns": ["dist/**", "src-tauri/**", "src/protocol/gen/**"],
   "rules": {
     "eslint/max-lines": [
       "error",

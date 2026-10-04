@@ -2,6 +2,8 @@ packages:
   - "."
 
 allowBuilds:
+  # buf ships its binary in a platform package; the postinstall is not needed.
+  "@bufbuild/buf": false
   "@posthog/cli": true
   "@swc/core": false
   core-js: false

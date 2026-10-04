@@ -87,14 +87,13 @@ jobs:
         run: pnpm check
 
   contract:
-    name: wire contract drift
+    name: wire contract (buf)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
+        with:
+          # buf breaking compares against main.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -110,19 +109,18 @@ jobs:
         working-directory: apps/desktop
         run: pnpm install --frozen-lockfile
 
-      # The schema code builds only with `schema`, outside the default gates.
-      - name: Lint the contract crate
-        run: cargo clippy -p bus --features schema --all-targets -- -D warnings
-
-      # contract/*.schema.json must match the Rust types, and the generated
-      # TypeScript must match the schema.
-      - name: Schema is current
-        run: cargo run -q -p bus --features schema --bin contract -- --check
-
-      # Includes the check that fixtures/board/enums.json lists every variant.
-      - name: Contract tests with the schema
-        run: cargo test -p bus --features schema
-
-      - name: TypeScript is current
+      # buf lint, then the committed TypeScript in src/protocol/gen must match
+      # what buf generates from proto/. Rust is generated at build time and
+      # the fixtures are decoded by cargo test and vitest in the tests workflow.
+      - name: Lint and generation drift
         working-directory: apps/desktop
-        run: pnpm contract:check
+        run: pnpm proto:check
+
+      # A breaking change needs a contract version bump (ADR-001 §1).
+      - name: Breaking changes against main
+        run: |
+          if git cat-file -e origin/main:buf.yaml 2>/dev/null; then
+            apps/desktop/node_modules/.bin/buf breaking --against ".git#ref=origin/main"
+          else
+            echo "main has no protos yet; nothing to compare"
+          fi

@@ -15,8 +15,10 @@
   ],
   "ignoreExports": [
     {
-      "file": "src/protocol/generated/**",
+      "file": "src/protocol/gen/**",
       "exports": ["*"]
     }
-  ]
+  ],
+  "ignoreDependencies": ["@bufbuild/buf", "@bufbuild/protoc-gen-es", "@xterm/headless"],
+  "ignoreFindings": ["src/protocol/gen/**"]
 }

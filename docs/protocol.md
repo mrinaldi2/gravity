@@ -40,13 +40,19 @@ when bots can spawn temporary workers (`temporary` on bots, `repo` on projects,
 see [workers](workers.md)).
 
 `hello_ok.contracts` maps each typed surface to its contract version, e.g.
-`{"board": 1}`. Those surfaces are defined once as Rust types in
-`crates/bus/src/contract/`, exported as JSON Schema to `contract/<surface>.schema.json`
-(`cargo run -p bus --features schema --bin contract`) and generated into
-TypeScript (`apps/desktop/src/protocol/generated/`) and Swift; golden fixtures
-live in `crates/bus/fixtures/<surface>/`. A client may send its own
-`"contracts"` map in `hello`. An additive change keeps a surface's number; a
-breaking change bumps it.
+`{"board": 1}`. Those surfaces are defined once in protobuf under
+`proto/hermes/<surface>/v1/` (ADR-001): Rust is generated at build time by
+`crates/bus/build.rs`, TypeScript by `pnpm --dir apps/desktop proto:gen` into
+`apps/desktop/src/protocol/gen/`, and Swift in the iOS repo from vendored copies.
+Golden proto-JSON fixtures live in `crates/bus/fixtures/<surface>/`. A client may
+send its own `"contracts"` map in `hello`. Within a version, changes follow
+protobuf's compatibility rules; when `buf breaking` fails, the version is bumped.
+
+`hello_ok.encodings` lists the binary encodings the daemon accepts, today
+`["proto"]`. Text frames stay this JSON protocol. A binary frame carries one
+`hermes.wire.v1.Envelope` (`req_id` plus a `body` oneof per typed surface) and
+is answered with an `Envelope` under the same `req_id`. No surface is served in
+binary yet, so every envelope is answered with an `Error` body.
 
 `contracts: {surface: N}` is the **highest** version each side speaks, and it
 stays an integer forever. A side that still serves older versions adds

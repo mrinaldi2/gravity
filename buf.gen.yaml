@@ -1,0 +1,12 @@
+# TypeScript for the desktop app. The plugin is pinned in
+# apps/desktop/pnpm-lock.yaml; run `pnpm --dir apps/desktop proto:gen`.
+# Rust is generated at build time by crates/bus/build.rs (protox + prost).
+version: v2
+inputs:
+  - directory: proto
+plugins:
+  - local: apps/desktop/node_modules/.bin/protoc-gen-es
+    out: apps/desktop/src/protocol/gen
+    opt:
+      - target=ts
+      - import_extension=none

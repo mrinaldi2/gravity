@@ -1,12 +1,29 @@
 //! The only place the board meets the wire contract: conversions between the
-//! repository's types (`board::model`) and the contract's (`bus::contract`).
-//! A codegen switch (protobuf, ruling dcf069e2) rewrites this file and nothing
-//! else. Enum matches are exhaustive in both directions, so a variant added on
-//! either side fails to compile until it is mapped.
+//! repository's types (`board::model`) and the protobuf messages generated
+//! from `proto/hermes/board/v1` (`bus::contract::board`).
+//!
+//! model → contract is infallible. contract → model is `TryFrom`: protobuf
+//! enums are open (a newer client may send a number this build does not
+//! know) and message fields may be unset, so a value the model cannot hold is
+//! refused rather than guessed. Enum matches are exhaustive both ways, so a
+//! variant added on either side fails to compile until it is mapped.
 
 use bus::contract::board as c;
+use bus::contract::pbjson_types::Timestamp;
+use chrono::{DateTime, Utc};
 
 use super::model as m;
+
+/// A contract value the model has no place for.
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum MapError {
+    #[error("{0} is unset or not a known value")]
+    UnknownEnum(&'static str),
+    #[error("{0} is missing")]
+    Missing(&'static str),
+    #[error("{0} is out of range")]
+    OutOfRange(&'static str),
+}
 
 macro_rules! map_enum {
     ($name:ident { $($variant:ident),+ $(,)? }) => {
@@ -18,11 +35,29 @@ macro_rules! map_enum {
             }
         }
 
-        impl From<c::$name> for m::$name {
-            fn from(value: c::$name) -> Self {
+        impl From<m::$name> for i32 {
+            fn from(value: m::$name) -> Self {
+                c::$name::from(value) as i32
+            }
+        }
+
+        impl TryFrom<c::$name> for m::$name {
+            type Error = MapError;
+
+            fn try_from(value: c::$name) -> Result<Self, MapError> {
                 match value {
-                    $(c::$name::$variant => m::$name::$variant),+
+                    c::$name::Unspecified => Err(MapError::UnknownEnum(stringify!($name))),
+                    $(c::$name::$variant => Ok(m::$name::$variant)),+
                 }
+            }
+        }
+
+        impl m::$name {
+            /// From the number a message field carries.
+            pub fn from_wire(number: i32) -> Result<Self, MapError> {
+                c::$name::try_from(number)
+                    .map_err(|_| MapError::UnknownEnum(stringify!($name)))?
+                    .try_into()
             }
         }
     };
@@ -99,158 +134,42 @@ map_enum!(TemplateKind {
     MeetingType
 });
 
-fn all<A, B: From<A>>(items: Vec<A>) -> Vec<B> {
-    items.into_iter().map(B::from).collect()
+pub(crate) fn stamp(at: DateTime<Utc>) -> Option<Timestamp> {
+    Some(Timestamp {
+        seconds: at.timestamp(),
+        nanos: i32::try_from(at.timestamp_subsec_nanos()).unwrap_or(0),
+    })
 }
 
-/// A struct mapped field by field in both directions; `[list]` fields map
-/// their elements, `(opt)` fields their contents.
-macro_rules! map_struct {
-    ($name:ident { $($field:ident),* } lists { $($list:ident),* } opts { $($opt:ident),* } plain { $($plain:ident),* }) => {
-        impl From<m::$name> for c::$name {
-            fn from(v: m::$name) -> Self {
-                c::$name {
-                    $($field: v.$field.into(),)*
-                    $($list: all(v.$list),)*
-                    $($opt: v.$opt.map(Into::into),)*
-                    $($plain: v.$plain,)*
-                }
-            }
-        }
-
-        impl From<c::$name> for m::$name {
-            fn from(v: c::$name) -> Self {
-                m::$name {
-                    $($field: v.$field.into(),)*
-                    $($list: all(v.$list),)*
-                    $($opt: v.$opt.map(Into::into),)*
-                    $($plain: v.$plain,)*
-                }
-            }
-        }
-    };
+pub(crate) fn at(value: Option<Timestamp>, field: &'static str) -> Result<DateTime<Utc>, MapError> {
+    let t = value.ok_or(MapError::Missing(field))?;
+    let nanos = u32::try_from(t.nanos).map_err(|_| MapError::OutOfRange(field))?;
+    DateTime::from_timestamp(t.seconds, nanos).ok_or(MapError::OutOfRange(field))
 }
 
-map_struct!(BoardColumn { category, wip_scope } lists {} opts {}
-    plain { project_id, key, name, ord, wip_limit, visible });
-map_struct!(ProjectRole { role } lists {} opts {} plain { project_id, bot_id, machine });
-map_struct!(Blocked {} lists {} opts {} plain { by, reason, since });
-map_struct!(AcceptanceCriterion {} lists {} opts {}
-    plain { idx, text, checked, checked_by, checked_at, machine });
-map_struct!(ItemPerson { role } lists {} opts {} plain { bot_id });
-map_struct!(ItemVerification { result } lists {} opts {} plain { machine, by, at, note });
-map_struct!(Item { item_type, priority, category }
-    lists { platforms, acceptance_criteria, people, verifications }
-    opts { size, blocked }
-    plain { id, seq, title, description, rank, column_key, assignee, parent_id, release_id,
-            labels, created_by, created_at, updated_at, state_entered_at, done_at, version });
-map_struct!(ItemCard { item_type, priority } lists { platforms } opts { size }
-    plain { id, title, rank, column_key, assignee, labels, blocked, stale, ac_checked, ac_total,
-            version });
-map_struct!(ItemLink { kind } lists {} opts {} plain { item_id, target, label, created_by, at });
-map_struct!(ItemComment {} lists {} opts {} plain { id, item_id, author, body, reply_to, at });
-map_struct!(ItemEvent { kind } lists {} opts {}
-    plain { id, item_id, at, actor, from, to, field, note });
-map_struct!(Template { kind } lists {} opts {} plain { project_id, name, version, body });
-
-impl From<m::BoardSettings> for c::BoardSettings {
-    fn from(v: m::BoardSettings) -> Self {
-        c::BoardSettings {
-            project_id: v.project_id,
-            key: v.key,
-            next_seq: v.next_seq,
-            stale_after_hours: v.stale_after_hours,
-            required_machines: v
-                .required_machines
-                .into_iter()
-                .map(|(p, ms)| (p.into(), ms))
-                .collect(),
-            home_daemon_id: v.home_daemon_id,
-            version: v.version,
-        }
-    }
+pub(crate) fn maybe_at(
+    value: Option<Timestamp>,
+    field: &'static str,
+) -> Result<Option<DateTime<Utc>>, MapError> {
+    value.map(|t| at(Some(t), field)).transpose()
 }
 
-impl From<c::BoardSettings> for m::BoardSettings {
-    fn from(v: c::BoardSettings) -> Self {
-        m::BoardSettings {
-            project_id: v.project_id,
-            key: v.key,
-            next_seq: v.next_seq,
-            stale_after_hours: v.stale_after_hours,
-            required_machines: v
-                .required_machines
-                .into_iter()
-                .map(|(p, ms)| (p.into(), ms))
-                .collect(),
-            home_daemon_id: v.home_daemon_id,
-            version: v.version,
-        }
-    }
+pub(crate) fn wire_list<E: Into<i32>>(values: Vec<E>) -> Vec<i32> {
+    values.into_iter().map(Into::into).collect()
 }
 
+pub(crate) fn model_list<E>(
+    numbers: Vec<i32>,
+    from: fn(i32) -> Result<E, MapError>,
+) -> Result<Vec<E>, MapError> {
+    numbers.into_iter().map(from).collect()
+}
+
+pub(crate) fn all<A, B: TryFrom<A, Error = MapError>>(items: Vec<A>) -> Result<Vec<B>, MapError> {
+    items.into_iter().map(B::try_from).collect()
+}
+
+mod entities;
+mod items;
 #[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
-
-    use serde::de::DeserializeOwned;
-
-    use super::*;
-
-    fn fixture<T: DeserializeOwned>(name: &str) -> T {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join(format!("../bus/fixtures/board/{name}.json"));
-        serde_json::from_str(&std::fs::read_to_string(&path).expect("fixture")).expect("decodes")
-    }
-
-    /// contract → model → contract changes nothing, for every golden fixture.
-    fn through_the_model<C, M>(name: &str)
-    where
-        C: DeserializeOwned + Clone + PartialEq + std::fmt::Debug + From<M>,
-        M: From<C>,
-    {
-        let wire: C = fixture(name);
-        let back: C = M::from(wire.clone()).into();
-        assert_eq!(back, wire, "{name}");
-    }
-
-    #[test]
-    fn every_fixture_survives_the_mapping() {
-        through_the_model::<c::BoardSettings, m::BoardSettings>("settings");
-        through_the_model::<c::BoardColumn, m::BoardColumn>("column");
-        through_the_model::<c::ProjectRole, m::ProjectRole>("role");
-        through_the_model::<c::Item, m::Item>("item");
-        through_the_model::<c::ItemCard, m::ItemCard>("card");
-        through_the_model::<c::ItemLink, m::ItemLink>("link");
-        through_the_model::<c::ItemComment, m::ItemComment>("comment");
-        through_the_model::<c::ItemEvent, m::ItemEvent>("event");
-        through_the_model::<c::Template, m::Template>("template");
-    }
-
-    /// The stored spelling of every variant is its wire spelling, so rows
-    /// written before a codegen switch still read as the same values.
-    #[test]
-    fn stored_and_wire_spellings_agree() {
-        fn same<M: Copy, C: serde::Serialize + From<M>>(
-            all: &[M],
-            text: impl Fn(M) -> &'static str,
-        ) {
-            for value in all {
-                let wire = serde_json::to_value(C::from(*value)).expect("encodes");
-                assert_eq!(wire, serde_json::Value::String(text(*value).to_string()));
-            }
-        }
-        same::<_, c::ColumnCategory>(m::ColumnCategory::ALL, m::ColumnCategory::as_str);
-        same::<_, c::WipScope>(m::WipScope::ALL, m::WipScope::as_str);
-        same::<_, c::Role>(m::Role::ALL, m::Role::as_str);
-        same::<_, c::ItemType>(m::ItemType::ALL, m::ItemType::as_str);
-        same::<_, c::Platform>(m::Platform::ALL, m::Platform::as_str);
-        same::<_, c::Size>(m::Size::ALL, m::Size::as_str);
-        same::<_, c::Priority>(m::Priority::ALL, m::Priority::as_str);
-        same::<_, c::PersonRole>(m::PersonRole::ALL, m::PersonRole::as_str);
-        same::<_, c::VerificationResult>(m::VerificationResult::ALL, m::VerificationResult::as_str);
-        same::<_, c::LinkKind>(m::LinkKind::ALL, m::LinkKind::as_str);
-        same::<_, c::ItemEventKind>(m::ItemEventKind::ALL, m::ItemEventKind::as_str);
-        same::<_, c::TemplateKind>(m::TemplateKind::ALL, m::TemplateKind::as_str);
-    }
-}
+mod tests;

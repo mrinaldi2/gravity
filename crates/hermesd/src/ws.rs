@@ -20,6 +20,7 @@ use crate::app::{AppState, DAEMON_VERSION, PROTOCOL_VERSION};
 use crate::browser::view::Viewer;
 
 mod admin;
+mod binary;
 mod browser;
 mod chat;
 mod commands;
@@ -114,7 +115,15 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
     let (viewer, frames) = Viewer::new(out_tx.clone());
 
     // Writer task: everything outbound goes through one sink.
-    let writer = tokio::spawn(writer::write_out(sink, out_rx, frames, PING_INTERVAL));
+    // Binary frames (protobuf envelopes) have their own queue to the writer.
+    let (bin_tx, bin_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    let writer = tokio::spawn(writer::write_out(
+        sink,
+        out_rx,
+        bin_rx,
+        frames,
+        PING_INTERVAL,
+    ));
 
     // Handshake: first frame must be a valid hello.
     let session = match tokio::time::timeout(IDLE_TIMEOUT, stream.next()).await {
@@ -210,6 +219,11 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
                     continue;
                 };
                 conn.dispatch(&req);
+            }
+            WsMessage::Binary(bytes) => {
+                if bytes.len() <= MAX_FRAME_BYTES && bin_tx.send(binary::reply(&bytes)).is_err() {
+                    break;
+                }
             }
             WsMessage::Close(_) => break,
             _ => {}
@@ -321,6 +335,8 @@ fn handshake(
         "server_version": DAEMON_VERSION,
         "capabilities": crate::app::CAPABILITIES,
         "contracts": contracts,
+        // Binary frames carry protobuf envelopes for typed surfaces.
+        "encodings": bus::contract::ENCODINGS,
         "grants": cap_strs,
         "device_id": device_id,
         // The id peers learn, so a client paired with two daemons can tell

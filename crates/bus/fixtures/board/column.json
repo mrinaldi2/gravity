@@ -1,10 +1,10 @@
 {
-  "project_id": "p1",
+  "projectId": "p1",
   "key": "review",
   "name": "Review",
   "ord": 3,
-  "category": "review",
-  "wip_limit": 2,
-  "wip_scope": "column",
+  "category": "COLUMN_CATEGORY_REVIEW",
+  "wipLimit": 2,
+  "wipScope": "WIP_SCOPE_COLUMN",
   "visible": true
 }

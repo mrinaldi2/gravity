@@ -10,18 +10,18 @@ serde_json = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
-schemars = { version = "1", features = ["chrono04"], optional = true }
+prost = "0.14"
+pbjson = "0.9"
+pbjson-types = "0.9"
 
 [dev-dependencies]
 sha2 = { workspace = true }
 hex = { workspace = true }
 
-[features]
-# JSON Schema for the wire contract. Off in the daemon build, so schemars is
-# a build tool here, not something hermesd ships.
-schema = ["dep:schemars"]
-
-[[bin]]
-name = "contract"
-path = "src/bin/contract.rs"
-required-features = ["schema"]
+[build-dependencies]
+# The contract in proto/ is compiled at build time in pure Rust, so neither
+# protoc nor buf is needed to build the daemon.
+protox = "0.9"
+prost-build = "0.14"
+prost = "0.14"
+pbjson-build = "0.9"

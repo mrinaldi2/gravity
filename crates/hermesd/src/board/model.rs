@@ -1,7 +1,7 @@
 //! The board's own types: what the repository stores and returns and what the
 //! service layer works with. The wire contract has its own generated types;
 //! `board::contract` maps between the two, so a change of contract codegen
-//! (schemars today, protobuf next, ruling dcf069e2) touches only that mapping.
+//! (protobuf since ruling dcf069e2) touches only that mapping.
 
 use std::collections::BTreeMap;
 

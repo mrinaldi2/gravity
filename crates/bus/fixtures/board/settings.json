@@ -1,20 +1,26 @@
 {
-  "project_id": "p1",
+  "projectId": "p1",
   "key": "H",
-  "next_seq": 22,
-  "stale_after_hours": 24,
-  "required_machines": {
-    "daemon": [
-      "mac"
-    ],
-    "desktop": [
-      "mac",
-      "win-pc"
-    ],
-    "ios": [
-      "iphone"
-    ]
+  "nextSeq": 22,
+  "staleAfterHours": 24,
+  "requiredMachines": {
+    "daemon": {
+      "values": [
+        "mac"
+      ]
+    },
+    "desktop": {
+      "values": [
+        "mac",
+        "win-pc"
+      ]
+    },
+    "ios": {
+      "values": [
+        "iphone"
+      ]
+    }
   },
-  "home_daemon_id": "d-mac",
-  "version": 3
+  "homeDaemonId": "d-mac",
+  "version": "3"
 }

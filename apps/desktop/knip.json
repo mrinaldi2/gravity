@@ -13,5 +13,6 @@
     "config": ["playwright.config.ts"],
     "entry": ["tests/visual/*.spec.ts"]
   },
-  "ignore": ["src/protocol/generated/**"]
+  "ignore": ["src/protocol/gen/**"],
+  "ignoreDependencies": ["@bufbuild/buf", "@bufbuild/protoc-gen-es"]
 }
