@@ -119,3 +119,11 @@ pub fn move_to(id: &str, to: &str, version: u64, reason: Option<&str>) -> Reques
         override_reason: None,
     })
 }
+
+/// An MCP item's version: proto3 JSON writes 64-bit integers as strings.
+pub fn version(item: &serde_json::Value) -> u64 {
+    match &item["version"] {
+        serde_json::Value::String(s) => s.parse().expect("version"),
+        v => v.as_u64().expect("version"),
+    }
+}
