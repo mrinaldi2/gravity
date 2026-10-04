@@ -1,5 +1,5 @@
 [package]
-name = "gravity-desktop"
+name = "hermes-desktop"
 version = "0.13.0"
 description = "Gravity desktop client"
 license = "MIT"
@@ -9,7 +9,7 @@ edition = "2021"
 [workspace]
 
 [lib]
-name = "gravity_desktop_lib"
+name = "hermes_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

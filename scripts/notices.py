@@ -24,7 +24,7 @@ OUTPUTS = {
     "marketing": "apps/marketing/public/THIRD_PARTY_NOTICES.txt",
 }
 INPUTS = [
-    "Cargo.lock", "Cargo.toml", "crates/gravityd/Cargo.toml", "crates/bus/Cargo.toml",
+    "Cargo.lock", "Cargo.toml", "crates/hermesd/Cargo.toml", "crates/bus/Cargo.toml",
     "apps/desktop/src-tauri/Cargo.lock", "apps/desktop/src-tauri/Cargo.toml",
     "apps/desktop/src-tauri/tauri.conf.json", "apps/desktop/package.json",
     "apps/desktop/pnpm-lock.yaml", "apps/desktop/vite.config.ts",

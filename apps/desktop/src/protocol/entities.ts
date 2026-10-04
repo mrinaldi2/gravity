@@ -1,4 +1,4 @@
-// Domain entities exchanged over the gravityd control plane (protocol v2).
+// Domain entities exchanged over the hermesd control plane (protocol v2).
 // See docs/protocol.md.
 
 export interface Project {

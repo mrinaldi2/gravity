@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a new Gravity release — pick the version, land the version-bump PR, tag it, watch the release workflow, and verify the DMG, the Windows installer, the gravityd tarball and any configured updater manifest were published. Use when someone asks to release, ship, cut, publish or tag a new version, bump the version, or when a `v*` release run needs monitoring or diagnosing.
+description: Cut a new Gravity release — pick the version, land the version-bump PR, tag it, watch the release workflow, and verify the DMG, the Windows installer, the hermesd tarball and any configured updater manifest were published. Use when someone asks to release, ship, cut, publish or tag a new version, bump the version, or when a `v*` release run needs monitoring or diagnosing.
 ---
 
 # Releasing Gravity
@@ -8,7 +8,7 @@ description: Cut a new Gravity release — pick the version, land the version-bu
 A release is an annotated `v*` tag on `main`; use the configured signing
 identity for official tags. Pushing that tag runs
 `.github/workflows/release.yml`. It builds the desktop app on GitHub-hosted
-macOS ARM64 and Windows x64 runners in parallel, packages `gravityd`, and a
+macOS ARM64 and Windows x64 runners in parallel, packages `hermesd`, and a
 final job creates the GitHub release once both builds pass.
 Signing, notarization and updater artifacts are configurable; see
 `docs/public-builds.md` for the required variables and secrets. Verify that
@@ -121,7 +121,7 @@ gh release view vX.Y.Z --json name,url,assets
 # Fetch the updater endpoint configured for this distribution, if enabled.
 ```
 
-Expect the DMG, the Windows `x64-setup.exe` and the `gravityd` tarball. With
+Expect the DMG, the Windows `x64-setup.exe` and the `hermesd` tarball. With
 updater signing enabled, also expect `.app.tar.gz`, the `.sig` for it and for
 the Windows installer, and `latest.json` with `darwin-aarch64` and
 `windows-x86_64` entries. Fetch the configured manifest and

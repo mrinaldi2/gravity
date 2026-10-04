@@ -31,7 +31,7 @@ export GRAVITY_HOME="$SHOT_DIR/daemon"
 export GRAVITY_WS=ws://127.0.0.1:49888/ws
 mkdir -p "$GRAVITY_HOME" "$SHOT_DIR/shots"
 CLAUDE_BIN=$(command -v Codex)
-cargo build -p gravityd
+cargo build -p hermesd
 ./scripts/prepare-sidecar.sh
 cat > "$GRAVITY_HOME/gravityd.toml" <<EOF
 home = "$GRAVITY_HOME"
@@ -42,7 +42,7 @@ runtime = "pty"
 claude_bin = "$CLAUDE_BIN"
 supervision_interval_ms = 1000
 EOF
-./target/debug/gravityd --config "$GRAVITY_HOME/gravityd.toml" > "$SHOT_DIR/gravityd.log" 2>&1 &
+./target/debug/hermesd --config "$GRAVITY_HOME/gravityd.toml" > "$SHOT_DIR/gravityd.log" 2>&1 &
 SHOT_DAEMON_PID=$!
 ```
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Control-plane driver for a local gravityd: create projects/bots and speak
+// Control-plane driver for a local hermesd: create projects/bots and speak
 // as the user, over the same WebSocket protocol the desktop app uses.
 // Requires Node 22+ (global WebSocket).
 //

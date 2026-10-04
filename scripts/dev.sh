@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Local development run: a workspace-private gravityd plus the desktop frontend.
+# Local development run: a workspace-private hermesd plus the desktop frontend.
 #
 #   scripts/dev.sh          the real Tauri window against a private daemon
 #   scripts/dev.sh web      frontend in the browser (Vite) — fastest loop
@@ -12,7 +12,7 @@ set -euo pipefail
 #
 # Ports come from CONDUCTOR_PORT (Conductor hands each workspace ten):
 #   CONDUCTOR_PORT     frontend / Tauri devUrl
-#   CONDUCTOR_PORT+1   gravityd HTTP + WebSocket + MCP
+#   CONDUCTOR_PORT+1   hermesd HTTP + WebSocket + MCP
 #
 # GRAVITY_RUNTIME=double swaps the real `claude` CLI for the deterministic echo
 # runtime — use it for UI and terminal work that should not spend tokens.
@@ -38,7 +38,7 @@ runtime = "$RUNTIME"
 supervision_interval_ms = 1000
 EOF
 
-cargo build -p gravityd --manifest-path "$ROOT/Cargo.toml"
+cargo build -p hermesd --manifest-path "$ROOT/Cargo.toml"
 
 # Job control puts each background child in its own process group, so cleanup
 # can signal the whole group. `tauri dev` in particular spawns Vite and the app
@@ -46,7 +46,7 @@ cargo build -p gravityd --manifest-path "$ROOT/Cargo.toml"
 # holds the strict port against the next run.
 set -m
 
-"$ROOT/target/debug/gravityd" > "$GRAVITY_HOME/dev.log" 2>&1 &
+"$ROOT/target/debug/hermesd" > "$GRAVITY_HOME/dev.log" 2>&1 &
 GRAVITY_PID=$!
 CLIENT_PID=""
 
@@ -72,7 +72,7 @@ for _ in $(seq 1 50); do
     break
   fi
   if ! kill -0 "$GRAVITY_PID" 2>/dev/null; then
-    echo "gravityd exited during startup; last log lines:" >&2
+    echo "hermesd exited during startup; last log lines:" >&2
     tail -n 20 "$GRAVITY_HOME/dev.log" >&2
     exit 1
   fi
@@ -80,7 +80,7 @@ for _ in $(seq 1 50); do
 done
 
 TOKEN="$(cat "$GRAVITY_HOME/secrets/client.token" 2>/dev/null || true)"
-echo "gravityd  runtime=$RUNTIME port=$DAEMON_PORT home=$GRAVITY_HOME log=$GRAVITY_HOME/dev.log"
+echo "hermesd  runtime=$RUNTIME port=$DAEMON_PORT home=$GRAVITY_HOME log=$GRAVITY_HOME/dev.log"
 
 # Baked into the bundle by Vite so a fresh client connects to this daemon
 # instead of the installed one, and skips the setup wizard.
@@ -89,7 +89,7 @@ export VITE_GRAVITY_DEV_TOKEN="$TOKEN"
 
 if [ "$MODE" = "app" ]; then
   TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
-  if [ ! -x "$ROOT/apps/desktop/src-tauri/binaries/gravityd-$TRIPLE" ]; then
+  if [ ! -x "$ROOT/apps/desktop/src-tauri/binaries/hermesd-$TRIPLE" ]; then
     "$ROOT/scripts/prepare-sidecar.sh"
   fi
   cd "$ROOT/apps/desktop"

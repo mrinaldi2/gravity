@@ -44,7 +44,7 @@ jobs:
       - name: Stage debug daemon sidecar
         run: |
           New-Item -ItemType Directory -Force -Path apps/desktop/src-tauri/binaries | Out-Null
-          Copy-Item -LiteralPath target/debug/gravityd.exe -Destination apps/desktop/src-tauri/binaries/gravityd-x86_64-pc-windows-msvc.exe
+          Copy-Item -LiteralPath target/debug/hermesd.exe -Destination apps/desktop/src-tauri/binaries/hermesd-x86_64-pc-windows-msvc.exe
       - name: Check native shell
         run: |
           cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check

@@ -148,14 +148,14 @@ describe("analytics", () => {
     const token = "a".repeat(64);
     const sent = beforeSend({
       properties: {
-        $exception_values: [`ENOENT: /Users/alice/.gravity/bin/gravityd`],
+        $exception_values: [`ENOENT: /Users/alice/.gravity/bin/hermesd`],
         $exception_list: [{ type: "Error", value: `auth failed for ${token}` }],
         log_tail: `/Users/alice/.gravity/logs failed with ${token}`,
       },
     });
 
     expect(sent?.properties["$exception_values"]).toEqual([
-      "ENOENT: /Users/~/.gravity/bin/gravityd",
+      "ENOENT: /Users/~/.gravity/bin/hermesd",
     ]);
     expect(sent?.properties["$exception_list"]).toEqual([
       { type: "Error", value: "auth failed for [redacted]" },

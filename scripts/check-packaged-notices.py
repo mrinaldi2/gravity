@@ -21,7 +21,7 @@ def check(app, daemon):
     resources = app / "Contents/Resources"
     require_equal((resources / "THIRD_PARTY_NOTICES.txt").read_bytes(), desktop_notice, "app")
     require_equal((resources / "LICENSE").read_bytes(), license_text, "app MIT license")
-    embedded = subprocess.check_output([app / "Contents/MacOS/gravityd", "--third-party-notices"])
+    embedded = subprocess.check_output([app / "Contents/MacOS/hermesd", "--third-party-notices"])
     require_equal(embedded, daemon_notice, "sidecar")
     with tarfile.open(daemon) as archive:
         for filename, expected in [("THIRD_PARTY_NOTICES.txt", daemon_notice), ("LICENSE", license_text)]:

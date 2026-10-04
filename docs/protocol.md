@@ -1,4 +1,4 @@
-# gravityd control plane protocol (v2)
+# hermesd control plane protocol (v2)
 
 Transport: WebSocket at `ws://<host>:49777/ws`. All frames are JSON text frames.
 Every client→server message has a `req_id` (string, client-chosen, unique per connection).

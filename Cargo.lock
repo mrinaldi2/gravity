@@ -515,39 +515,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gravityd"
-version = "0.13.0"
-dependencies = [
- "anyhow",
- "axum",
- "base64",
- "bus",
- "bytes",
- "chrono",
- "chrono-tz",
- "cron",
- "futures",
- "hex",
- "libc",
- "portable-pty",
- "rand",
- "reqwest",
- "rusqlite",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-tungstenite",
- "toml",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
 name = "h2"
 version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -588,6 +555,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af"
 dependencies = [
  "hashbrown 0.14.5",
+]
+
+[[package]]
+name = "hermesd"
+version = "0.13.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64",
+ "bus",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "cron",
+ "futures",
+ "hex",
+ "libc",
+ "portable-pty",
+ "rand",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-tungstenite",
+ "toml",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

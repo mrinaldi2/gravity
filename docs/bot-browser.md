@@ -1,7 +1,7 @@
 # Each bot's own browser
 
-Status: implemented in the daemon (`crates/gravityd/src/browser/`) and the
-desktop app (the bot's Browser tab). Tests: `crates/gravityd/tests/agent_browser.rs`.
+Status: implemented in the daemon (`crates/hermesd/src/browser/`) and the
+desktop app (the bot's Browser tab). Tests: `crates/hermesd/tests/agent_browser.rs`.
 
 ## Why
 

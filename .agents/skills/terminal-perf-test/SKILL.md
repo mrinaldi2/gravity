@@ -1,11 +1,11 @@
 ---
 name: terminal-perf-test
-description: Verify terminal rendering performance and correctness (WebGL renderer, bot-switch terminal cache, forced-repaint nudge, replay bottom-pin) by running the real desktop app in Chrome against a local gravityd with the double runtime, seeding heavy ANSI output, and stress-testing switching/scrolling/streaming. Use when changing TerminalPane, terminalCache, the daemon's attach/replay/resize path, or investigating terminal CPU, lag, black screens, or rendering artifacts.
+description: Verify terminal rendering performance and correctness (WebGL renderer, bot-switch terminal cache, forced-repaint nudge, replay bottom-pin) by running the real desktop app in Chrome against a local hermesd with the double runtime, seeding heavy ANSI output, and stress-testing switching/scrolling/streaming. Use when changing TerminalPane, terminalCache, the daemon's attach/replay/resize path, or investigating terminal CPU, lag, black screens, or rendering artifacts.
 ---
 
 # Terminal rendering performance test
 
-Runs the real stack locally — `gravityd` with the deterministic `double` runtime, the
+Runs the real stack locally — `hermesd` with the deterministic `double` runtime, the
 Vite-served desktop frontend in Chrome — then seeds terminals with more output
 than the daemon's 1 MiB scrollback ring and stress-tests the paths that have
 historically broken: bulk replay after eviction, rapid bot switching, live
@@ -15,7 +15,7 @@ Why the double runtime: it echoes every `input` byte back as terminal output
 (so a driver script can pump arbitrary ANSI at any rate), and it prints a
 `[resize CxR]` marker for every pty resize — making the forced-repaint nudge
 (shrink to rows-1, restore ~50 ms later; see `REPAINT_NUDGE_DELAY` in
-`crates/gravityd/src/supervisor.rs`) visible on screen.
+`crates/hermesd/src/supervisor.rs`) visible on screen.
 
 ## Setup
 
@@ -29,7 +29,7 @@ PERF_DIR=$(mktemp -d "${TMPDIR:-/tmp}/gravity-perf.XXXXXX")
 PERF_DIR=$(cd "$PERF_DIR" && pwd -P)
 export GRAVITY_HOME="$PERF_DIR"
 export GRAVITY_WS=ws://127.0.0.1:49555/ws
-cargo build -p gravityd
+cargo build -p hermesd
 cat > "$GRAVITY_HOME/gravityd.toml" <<EOF
 home = "$GRAVITY_HOME"
 bind = ["127.0.0.1"]
@@ -38,7 +38,7 @@ negotiate_port = false
 runtime = "double"
 supervision_interval_ms = 500
 EOF
-./target/debug/gravityd --config "$GRAVITY_HOME/gravityd.toml" > "$PERF_DIR/gravityd.log" 2>&1 &
+./target/debug/hermesd --config "$GRAVITY_HOME/gravityd.toml" > "$PERF_DIR/gravityd.log" 2>&1 &
 PERF_DAEMON_PID=$!
 ```
 

@@ -1,11 +1,11 @@
 ---
 name: bus-live-test
-description: Test gravityd's cross-session bot communication against a live daemon, in two modes — synthetic (double runtime, drive the MCP bus directly as the bots, free and deterministic) and real (pty runtime spawning billed Codex sessions, observing genuine bot behavior). Use when changing send_message/complete_task, the bus guardrails (reply caps, fan-out, hop limits, terminal kinds, deadlines/expiry), delivery, the system prompt's bus sections, or the artifacts flow — or when someone asks to demo, smoke-test, or observe bot-to-bot traffic on a dev daemon.
+description: Test hermesd's cross-session bot communication against a live daemon, in two modes — synthetic (double runtime, drive the MCP bus directly as the bots, free and deterministic) and real (pty runtime spawning billed Codex sessions, observing genuine bot behavior). Use when changing send_message/complete_task, the bus guardrails (reply caps, fan-out, hop limits, terminal kinds, deadlines/expiry), delivery, the system prompt's bus sections, or the artifacts flow — or when someone asks to demo, smoke-test, or observe bot-to-bot traffic on a dev daemon.
 ---
 
 # Live bus / cross-session communication test
 
-Runs a real `gravityd` on a throwaway home and exercises bot-to-bot traffic
+Runs a real `hermesd` on a throwaway home and exercises bot-to-bot traffic
 end to end. Two modes, cheapest first:
 
 - **Synthetic** (`runtime = "double"`): no Codex sessions; you act as the
@@ -20,7 +20,7 @@ end to end. Two modes, cheapest first:
 ## Shared setup
 
 ```bash
-cargo build -p gravityd
+cargo build -p hermesd
 umask 077
 BUS_HOME=$(mktemp -d "${TMPDIR:-/tmp}/gravity-bus.XXXXXX")
 BUS_HOME=$(cd "$BUS_HOME" && pwd -P)
@@ -35,7 +35,7 @@ supervision_interval_ms = 1000
 [scheduler]
 tick_interval_ms = 2000      # fast expiry sweeps; default is 30s
 EOF
-./target/debug/gravityd --config "$BUS_HOME/gravityd.toml" > "$BUS_HOME/gravityd.log" 2>&1 &
+./target/debug/hermesd --config "$BUS_HOME/gravityd.toml" > "$BUS_HOME/gravityd.log" 2>&1 &
 BUS_DAEMON_PID=$!
 ```
 

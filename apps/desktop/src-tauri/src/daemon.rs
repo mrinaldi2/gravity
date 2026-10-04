@@ -33,7 +33,7 @@ pub fn daemon_health(host: String, port: u16) -> Option<DaemonHealth> {
     })
 }
 
-/// The bundled `gravityd` sidecar, which Tauri places next to the app
+/// The bundled `hermesd` sidecar, which Tauri places next to the app
 /// binary inside `Contents/MacOS`.
 fn sidecar_path() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|err| format!("cannot locate the app: {err}"))?;
@@ -48,10 +48,10 @@ fn sidecar_path_for_exe(exe: &Path) -> Result<PathBuf, String> {
     let dir = exe
         .parent()
         .ok_or_else(|| "the app path has no parent".to_string())?;
-    Ok(dir.join(format!("gravityd{}", std::env::consts::EXE_SUFFIX)))
+    Ok(dir.join(format!("hermesd{}", std::env::consts::EXE_SUFFIX)))
 }
 
-/// Must match `LAUNCHD_LABEL` in `crates/gravityd/src/service.rs`.
+/// Must match `LAUNCHD_LABEL` in `crates/hermesd/src/service.rs`.
 const LAUNCHD_LABEL: &str = "in.mikolajczuk.gravityd";
 
 pub(crate) fn user_home() -> Result<PathBuf, String> {
@@ -61,11 +61,14 @@ pub(crate) fn user_home() -> Result<PathBuf, String> {
         .ok_or_else(|| format!("{variable} is not set"))
 }
 
-/// Mirrors `ServicePaths::bin_path` and `plist_path` in `crates/gravityd/src/service.rs`.
+/// Mirrors `ServicePaths::bin_path`, `legacy_bin_path` and `plist_path` in
+/// `crates/hermesd/src/service.rs`. An install from before the rename still
+/// counts, so the app's update reaches it and `service install` replaces it.
 fn managed_daemon_is_installed(home: &Path, user_home: &Path) -> bool {
-    home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX))
-        .is_file()
-        && managed_marker(home, user_home).is_file()
+    ["hermesd", "gravityd"].iter().any(|name| {
+        home.join(format!("bin/{name}{}", std::env::consts::EXE_SUFFIX))
+            .is_file()
+    }) && managed_marker(home, user_home).is_file()
 }
 
 fn managed_marker(home: &Path, user_home: &Path) -> PathBuf {
@@ -166,11 +169,11 @@ pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
     install_bundled_local_daemon()
 }
 
-/// Must match `gravityd`'s own config default and `DEFAULT_ENDPOINT` in the
+/// Must match `hermesd`'s own config default and `DEFAULT_ENDPOINT` in the
 /// client.
 const DEFAULT_PORT: u16 = 49777;
 
-/// Root of the daemon's state, mirroring `gravityd`'s own resolution.
+/// Root of the daemon's state, mirroring `hermesd`'s own resolution.
 pub(crate) fn daemon_home() -> Result<PathBuf, String> {
     if let Some(home) = std::env::var_os("GRAVITY_HOME") {
         return Ok(PathBuf::from(home));
@@ -221,7 +224,7 @@ fn daemon_port_from_home(home: &Path) -> u16 {
 /// How many distinct trailing log lines to show when an install fails.
 ///
 /// Four covered a bare panic, but the daemon now logs its startup sequence
-/// (`gravityd starting`, `listening`, `gravityd stopping`), and a restart loop
+/// (`hermesd starting`, `listening`, `hermesd stopping`), and a restart loop
 /// only reads as one across several lines.
 const LOG_TAIL_LINES: usize = 12;
 
@@ -258,7 +261,7 @@ mod tests {
 
     fn daemon_test_home(name: &str) -> PathBuf {
         let home = std::env::temp_dir().join(format!(
-            "gravity-desktop-daemon-{name}-{}",
+            "hermes-desktop-daemon-{name}-{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&home);
@@ -272,7 +275,7 @@ mod tests {
         assert_eq!(
             sidecar_path_for_exe(exe).expect("sidecar path"),
             PathBuf::from(format!(
-                "/Applications/Gravity.app/Contents/MacOS/gravityd{}",
+                "/Applications/Gravity.app/Contents/MacOS/hermesd{}",
                 std::env::consts::EXE_SUFFIX
             ))
         );
@@ -280,16 +283,14 @@ mod tests {
 
     #[test]
     fn recognizes_only_complete_managed_daemon_installs() {
-        let root = std::env::temp_dir().join(format!(
-            "gravity-desktop-daemon-test-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("hermes-desktop-daemon-test-{}", std::process::id()));
         // A previous run that panicked mid-test leaves the plist behind, and
         // pids are reused.
         let _ = std::fs::remove_dir_all(&root);
         let home = root.join("gravity");
         let user_home = root.join("user");
-        let bin = home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX));
+        let bin = home.join(format!("bin/hermesd{}", std::env::consts::EXE_SUFFIX));
         let plist = managed_marker(&home, &user_home);
         std::fs::create_dir_all(bin.parent().expect("binary parent")).expect("binary directory");
         std::fs::write(&bin, b"daemon").expect("daemon binary");
@@ -299,6 +300,22 @@ mod tests {
         std::fs::write(&plist, b"plist").expect("launchd plist");
         assert!(managed_daemon_is_installed(&home, &user_home));
 
+        std::fs::remove_dir_all(root).expect("test cleanup");
+    }
+
+    #[test]
+    fn recognizes_a_managed_install_from_before_the_rename() {
+        let root = daemon_test_home("pre-rename");
+        let home = root.join("gravity");
+        let user_home = root.join("user");
+        let legacy = home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX));
+        let plist = managed_marker(&home, &user_home);
+        std::fs::create_dir_all(legacy.parent().expect("binary parent")).expect("binary directory");
+        std::fs::create_dir_all(plist.parent().expect("plist parent")).expect("plist directory");
+        std::fs::write(&legacy, b"daemon").expect("legacy daemon binary");
+        std::fs::write(&plist, b"plist").expect("launchd plist");
+
+        assert!(managed_daemon_is_installed(&home, &user_home));
         std::fs::remove_dir_all(root).expect("test cleanup");
     }
 
@@ -331,7 +348,7 @@ mod tests {
         let root = daemon_test_home("is-managed");
         let home = root.join("gravity");
         let user_home = root.join("user");
-        let bin = home.join(format!("bin/gravityd{}", std::env::consts::EXE_SUFFIX));
+        let bin = home.join(format!("bin/hermesd{}", std::env::consts::EXE_SUFFIX));
         let plist = managed_marker(&home, &user_home);
         std::fs::create_dir_all(bin.parent().expect("binary parent")).expect("binary directory");
         std::fs::create_dir_all(plist.parent().expect("plist parent")).expect("plist directory");

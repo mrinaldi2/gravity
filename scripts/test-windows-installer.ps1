@@ -12,10 +12,10 @@ if ((Test-Path -LiteralPath $uninstallKey) -or (Test-Path -LiteralPath $productK
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('gravity-installer-smoke-' + [guid]::NewGuid())
 $installDir = Join-Path $testRoot 'app with spaces'
 $stateDir = Join-Path $testRoot 'daemon state'
-$daemon = Join-Path $installDir 'gravityd.exe'
+$daemon = Join-Path $installDir 'hermesd.exe'
 $uninstaller = Join-Path $installDir 'uninstall.exe'
 $previousGravityHome = $env:GRAVITY_HOME
-$expectedDaemon = Join-Path $repoRoot 'apps/desktop/src-tauri/binaries/gravityd-x86_64-pc-windows-msvc.exe'
+$expectedDaemon = Join-Path $repoRoot 'apps/desktop/src-tauri/binaries/hermesd-x86_64-pc-windows-msvc.exe'
 $expectedHash = (Get-FileHash -LiteralPath $expectedDaemon -Algorithm SHA256).Hash
 
 function Wait-For([scriptblock]$Condition, [string]$Failure) {
@@ -39,7 +39,7 @@ function Install-App {
             return $health.status -eq 'ok'
         } catch { return $false }
     } 'Installer did not start a healthy bundled daemon.'
-    foreach ($binary in @($daemon, (Join-Path $stateDir 'bin/gravityd.exe'))) {
+    foreach ($binary in @($daemon, (Join-Path $stateDir 'bin/hermesd.exe'))) {
         if ((Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash -ne $expectedHash) {
             throw 'Installed daemon differs from the installer sidecar.'
         }
@@ -47,7 +47,7 @@ function Install-App {
     if (!(Test-Path -LiteralPath (Join-Path $stateDir 'gravityd-task.xml'))) {
         throw 'Installer did not register the daemon task.'
     }
-    $app = Join-Path $installDir 'gravity-desktop.exe'
+    $app = Join-Path $installDir 'hermes-desktop.exe'
     if (Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq $app }) {
         throw 'The silent install must start the daemon without launching the desktop.'
     }
@@ -59,9 +59,9 @@ function Uninstall-App {
     # NSIS may relaunch the uninstaller from a temporary directory.
     Wait-For {
         return !(Test-Path -LiteralPath $uninstallKey) -and
-            !(Test-Path -LiteralPath (Join-Path $installDir 'gravity-desktop.exe')) -and
+            !(Test-Path -LiteralPath (Join-Path $installDir 'hermes-desktop.exe')) -and
             !(Test-Path -LiteralPath (Join-Path $stateDir 'gravityd-task.xml')) -and
-            !(Test-Path -LiteralPath (Join-Path $stateDir 'bin/gravityd.exe'))
+            !(Test-Path -LiteralPath (Join-Path $stateDir 'bin/hermesd.exe'))
     } 'Uninstaller left the app or managed daemon installed.'
 }
 

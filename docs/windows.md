@@ -25,7 +25,7 @@ and uninstall after manual daemon removal, using an isolated test home with no
 real bots.
 
 The Windows installer installs and starts the bundled daemon under
-`%USERPROFILE%\.gravity\bin\gravityd.exe` and registers a Task Scheduler task
+`%USERPROFILE%\.gravity\bin\hermesd.exe` and registers a Task Scheduler task
 for the current user. No separate daemon download or command is needed. Running
 the installer again refreshes the managed daemon even when the app version has
 not changed, restarting bot sessions while preserving projects and configuration.
@@ -42,9 +42,9 @@ launches and remotely reachable daemons require an available configured port.
 
 ```powershell
 # After installation:
-& "$env:USERPROFILE/.gravity/bin/gravityd.exe" service status
-& "$env:USERPROFILE/.gravity/bin/gravityd.exe" service restart
-& "$env:USERPROFILE/.gravity/bin/gravityd.exe" service uninstall
+& "$env:USERPROFILE/.gravity/bin/hermesd.exe" service status
+& "$env:USERPROFILE/.gravity/bin/hermesd.exe" service restart
+& "$env:USERPROFILE/.gravity/bin/hermesd.exe" service uninstall
 ```
 
 The desktop uninstaller also stops and removes its managed daemon task.
@@ -78,7 +78,7 @@ Windows' newer online dictation is not used, so the setting for Online speech
 recognition does not matter.
 
 For development without model credentials, set `runtime = "double"` in a private
-`gravityd.toml` and run `cargo run -p gravityd -- --config <path>`. The double uses
+`gravityd.toml` and run `cargo run -p hermesd -- --config <path>`. The double uses
 an authenticated named pipe and exercises the same message-delivery path.
 
 Run `pnpm run verify` before proposing a change. The visual suite uses the pinned

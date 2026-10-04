@@ -1,4 +1,4 @@
-// Read-only probe of the live gravityd control plane: times list requests and
+// Read-only probe of the live hermesd control plane: times list requests and
 // measures what an uncursored `attach` replays per bot.
 import fs from "node:fs";
 import os from "node:os";

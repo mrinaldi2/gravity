@@ -1,4 +1,4 @@
-// Drives a dev gravityd over its WS control plane for terminal-rendering
+// Drives a dev hermesd over its WS control plane for terminal-rendering
 // performance tests. Requires the daemon to run with `runtime = "double"`:
 // the double echoes every input byte back as terminal output, and prints
 // `[resize CxR]` markers for every pty resize it receives, which makes the

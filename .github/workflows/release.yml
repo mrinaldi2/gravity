@@ -1,7 +1,7 @@
 name: release
 
 # Builds a production release: the macOS DMG, the Windows installer and a
-# macOS gravityd tarball (binary + config + launchd agent + installer).
+# macOS hermesd tarball (binary + config + launchd agent + installer).
 # Pushing a `v*` tag publishes a GitHub release; a manual dispatch only
 # uploads the artifacts to the run, for dry runs. Builds start without a Rust
 # cache: releases are rare, and keeping one warm would cost main-branch minutes.
@@ -100,30 +100,30 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Build gravityd
+      - name: Build hermesd
         run: |
           pnpm notices:check --check-toolchain
-          cargo build --locked --release -p gravityd
+          cargo build --locked --release -p hermesd
 
-      - name: Package gravityd
+      - name: Package hermesd
         run: |
-          stage="stage/gravityd-$VERSION"
+          stage="stage/hermesd-$VERSION"
           mkdir -p dist "$stage"
-          cp target/release/gravityd "$stage/gravityd"
+          cp target/release/hermesd "$stage/hermesd"
           cp LICENSE "$stage/"
           cp third-party/DAEMON_NOTICES.txt "$stage/THIRD_PARTY_NOTICES.txt"
           cp ops/gravityd.example.toml "$stage/"
-          cp scripts/install-gravityd.sh "$stage/"
-          chmod +x "$stage/install-gravityd.sh"
-          tar -czf "dist/gravityd-$VERSION-aarch64-apple-darwin.tar.gz" -C stage "gravityd-$VERSION"
+          cp scripts/install-hermesd.sh "$stage/"
+          chmod +x "$stage/install-hermesd.sh"
+          tar -czf "dist/hermesd-$VERSION-aarch64-apple-darwin.tar.gz" -C stage "hermesd-$VERSION"
 
       # The desktop bundle ships the daemon as a signed sidecar; the app's
       # first-run wizard installs it as a launchd user agent.
-      - name: Stage gravityd sidecar
+      - name: Stage hermesd sidecar
         run: |
           triple="$(rustc -vV | sed -n 's/^host: //p')"
           mkdir -p apps/desktop/src-tauri/binaries
-          cp target/release/gravityd "apps/desktop/src-tauri/binaries/gravityd-$triple"
+          cp target/release/hermesd "apps/desktop/src-tauri/binaries/hermesd-$triple"
 
       - name: Install desktop dependencies
         working-directory: apps/desktop
@@ -181,10 +181,10 @@ jobs:
       - name: Collect DMG and updater artifact
         run: |
           bundle=apps/desktop/src-tauri/target/release/bundle
-          mv "$bundle"/dmg/*.dmg "dist/gravity-desktop-$VERSION-aarch64.dmg"
+          mv "$bundle"/dmg/*.dmg "dist/hermes-desktop-$VERSION-aarch64.dmg"
           if [[ "$UPDATER_ENABLED" == "true" ]]; then
-            mv "$bundle"/macos/*.app.tar.gz "dist/gravity-desktop-$VERSION-aarch64.app.tar.gz"
-            mv "$bundle"/macos/*.app.tar.gz.sig "dist/gravity-desktop-$VERSION-aarch64.app.tar.gz.sig"
+            mv "$bundle"/macos/*.app.tar.gz "dist/hermes-desktop-$VERSION-aarch64.app.tar.gz"
+            mv "$bundle"/macos/*.app.tar.gz.sig "dist/hermes-desktop-$VERSION-aarch64.app.tar.gz.sig"
           fi
 
       # Tauri notarizes and staples the .app; notarize the DMG container too
@@ -192,7 +192,7 @@ jobs:
       - name: Notarize DMG
         if: env.SIGNED == 'true'
         run: |
-          dmg="dist/gravity-desktop-$VERSION-aarch64.dmg"
+          dmg="dist/hermes-desktop-$VERSION-aarch64.dmg"
           xcrun notarytool submit "$dmg" \
             --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" --wait
@@ -202,7 +202,7 @@ jobs:
         run: |
           python3 scripts/check-packaged-notices.py \
             --app apps/desktop/src-tauri/target/release/bundle/macos/Gravity.app \
-            --daemon "dist/gravityd-$VERSION-aarch64-apple-darwin.tar.gz"
+            --daemon "dist/hermesd-$VERSION-aarch64-apple-darwin.tar.gz"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -233,7 +233,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Stage gravityd sidecar
+      - name: Stage hermesd sidecar
         run: ./scripts/prepare-sidecar.ps1
 
       - name: Install desktop dependencies
@@ -266,9 +266,9 @@ jobs:
         run: |
           nsis=apps/desktop/src-tauri/target/release/bundle/nsis
           mkdir -p dist
-          mv "$nsis"/*-setup.exe "dist/gravity-desktop-$VERSION-x64-setup.exe"
+          mv "$nsis"/*-setup.exe "dist/hermes-desktop-$VERSION-x64-setup.exe"
           if [[ "$UPDATER_ENABLED" == "true" ]]; then
-            mv "$nsis"/*-setup.exe.sig "dist/gravity-desktop-$VERSION-x64-setup.exe.sig"
+            mv "$nsis"/*-setup.exe.sig "dist/hermes-desktop-$VERSION-x64-setup.exe.sig"
           fi
 
       - uses: actions/upload-artifact@v4
@@ -295,8 +295,8 @@ jobs:
         if: needs.prepare.outputs.updater == 'true'
         run: |
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
-          mac="gravity-desktop-$VERSION-aarch64.app.tar.gz"
-          win="gravity-desktop-$VERSION-x64-setup.exe"
+          mac="hermes-desktop-$VERSION-aarch64.app.tar.gz"
+          win="hermes-desktop-$VERSION-x64-setup.exe"
           jq -n \
             --arg version "$VERSION" \
             --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -342,12 +342,12 @@ jobs:
           ### Daemon only (headless Mac mini / server)
 
           ```sh
-          # Download the gravityd tarball attached to this release first.
-          tar -xzf gravityd-VERSION-aarch64-apple-darwin.tar.gz
-          gravityd-VERSION/gravityd service install
+          # Download the hermesd tarball attached to this release first.
+          tar -xzf hermesd-VERSION-aarch64-apple-darwin.tar.gz
+          hermesd-VERSION/hermesd service install
           ```
 
-          Installs `gravityd` under `~/.gravity/bin`, writes a default
+          Installs `hermesd` under `~/.gravity/bin`, writes a default
           config to `~/.gravity/gravityd.toml` (kept if it already exists), and
           starts the launchd user agent `in.mikolajczuk.gravityd`. No sudo needed.
           EOF

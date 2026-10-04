@@ -1,7 +1,7 @@
 # Gravity
 
 Always-on, multi-bot desktop app with Claude Code or Codex CLI as the agent runtime.
-A Rust daemon (`gravityd`) runs on macOS or Windows; the Tauri desktop client attaches
+A Rust daemon (`hermesd`) runs on macOS or Windows; the Tauri desktop client attaches
 from any machine. See the [architecture](docs/architecture.md) for the system
 design and the [control-plane protocol](docs/protocol.md) for client APIs.
 Native Windows x64 builds and local-daemon setup are described in
@@ -19,7 +19,7 @@ Choose each bot's CLI in **Bot info → Bot runtime**. See
 
 ```
 crates/bus/       shared types, SQLite schema, envelope format
-crates/gravityd/      daemon: runtime adapters, durable delivery, scheduler,
+crates/hermesd/      daemon: runtime adapters, durable delivery, scheduler,
                   MCP bridge, WebSocket control plane
 apps/desktop/     Tauri v2 + React + xterm.js client
 docs/             architecture, WS protocol v2, public-build configuration
@@ -35,7 +35,7 @@ required). See [CONTRIBUTING.md](CONTRIBUTING.md) for setup.
 
 ```sh
 # Daemon
-cargo build --release            # target/release/gravityd
+cargo build --release            # target/release/hermesd
 cargo test --workspace           # unit + integration (uses the runtime double)
 cargo clippy --workspace --all-targets
 cargo fmt --all --check
@@ -44,7 +44,7 @@ cargo fmt --all --check
 cd apps/desktop
 pnpm install
 pnpm typecheck && pnpm build     # frontend
-../../scripts/prepare-sidecar.sh # stage gravityd as the bundled sidecar (once,
+../../scripts/prepare-sidecar.sh # stage hermesd as the bundled sidecar (once,
                                  # and after daemon changes)
 pnpm tauri dev                   # run the app
 ```
@@ -52,7 +52,7 @@ pnpm tauri dev                   # run the app
 ## Code rules & tooling
 
 **No source file may exceed 400 lines.** Split by concern instead of growing a
-file: `crates/gravityd/src/db/`, `crates/gravityd/src/ws/` and `apps/desktop/src/app/`
+file: `crates/hermesd/src/db/`, `crates/hermesd/src/ws/` and `apps/desktop/src/app/`
 are the reference examples.
 
 ```sh
@@ -119,7 +119,7 @@ the release `x64-setup.exe` installer. The app bundles
 the daemon as a signed sidecar; on first launch a setup wizard either installs
 it as a launchd user agent on this Mac (one click, no sudo) or attaches to a
 remote daemon with a device token. Headless machines skip the app:
-`./gravityd service install` from the release tarball does the same
+`./hermesd service install` from the release tarball does the same
 install, and `service status` / `service restart` / `service uninstall` manage
 it.
 
@@ -139,8 +139,8 @@ nothing touches `~/.gravity`, so it can run beside the installed production
 daemon and beside other checkouts:
 
 ```sh
-./scripts/dev.sh                     # gravityd + the real Tauri window
-./scripts/dev.sh web                 # gravityd + Vite frontend in the browser
+./scripts/dev.sh                     # hermesd + the real Tauri window
+./scripts/dev.sh web                 # hermesd + Vite frontend in the browser
 GRAVITY_RUNTIME=double ./scripts/dev.sh # deterministic echo runtime, no tokens spent
 ```
 
@@ -160,7 +160,7 @@ frontend dependencies.
 ```sh
 mkdir -p ~/.gravity
 cp ops/gravityd.example.toml ~/.gravity/gravityd.toml   # optional; defaults are sane
-cargo run -p gravityd                                   # or: gravityd --config <path>
+cargo run -p hermesd                                   # or: hermesd --config <path>
 curl http://127.0.0.1:49777/health
 ```
 
@@ -176,10 +176,10 @@ connection settings. Revoking the device immediately prevents reconnection.
 ### Backup & restore
 
 ```sh
-gravityd backup                       # ~/.gravity/backups/backup-<timestamp>
-gravityd backup --out /path/to/dir
-gravityd restore --from /path/to/dir  # refuses if a db exists
-gravityd restore --from /path/to/dir --overwrite   # moves current db aside first
+hermesd backup                       # ~/.gravity/backups/backup-<timestamp>
+hermesd backup --out /path/to/dir
+hermesd restore --from /path/to/dir  # refuses if a db exists
+hermesd restore --from /path/to/dir --overwrite   # moves current db aside first
 ```
 
 Backups use SQLite's online backup API and include configuration manifests
@@ -191,11 +191,11 @@ daily by default — see `[retention]` in `gravityd.toml`.
 
 ```sh
 cargo build --release
-./target/release/gravityd service install   # binary → ~/.gravity/bin, launchd user agent
+./target/release/hermesd service install   # binary → ~/.gravity/bin, launchd user agent
 sudo pmset -a sleep 0 disablesleep 1    # keep the mini awake
 ```
 
-`service install` copies the invoked binary to `~/.gravity/bin/gravityd`,
+`service install` copies the invoked binary to `~/.gravity/bin/hermesd`,
 writes `~/.gravity/gravityd.toml` if missing, and bootstraps the
 `in.mikolajczuk.gravityd` launchd agent — rerun it after a rebuild to upgrade in
 place. `service restart` bounces that agent without touching the install, which

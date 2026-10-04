@@ -6,7 +6,7 @@
     <string>in.mikolajczuk.gravityd</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/gravityd</string>
+        <string>/usr/local/bin/hermesd</string>
     </array>
     <key>RunAtLoad</key>
     <true/>

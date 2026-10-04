@@ -38,7 +38,7 @@ function isHandshakeVerdict(status: ConnectionStatus): boolean {
 }
 
 /**
- * WebSocket client for the gravityd control plane.
+ * WebSocket client for the hermesd control plane.
  *
  * - `hello` handshake with token + protocol version
  * - request/response correlation by `req_id`

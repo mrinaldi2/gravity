@@ -2,8 +2,8 @@
 
 Status: the daemon side (pairing, linking, forwarding, task mirroring,
 artifact transfer and linked projects) is implemented and covered by
-`crates/gravityd/tests/peer_bots.rs` and `crates/gravityd/tests/linked_projects.rs`.
-The desktop UI is not built yet; pair and link with `gravityd peer …` until
+`crates/hermesd/tests/peer_bots.rs` and `crates/hermesd/tests/linked_projects.rs`.
+The desktop UI is not built yet; pair and link with `hermesd peer …` until
 it is. Requests are listed in [protocol.md](protocol.md).
 
 A team can span two Gravity daemons. The motivating case is an app built for
@@ -23,17 +23,17 @@ On the Windows PC, add its Tailscale address to `bind` in `gravityd.toml`
 Mac:
 
 ```sh
-gravityd peer invite mac
+hermesd peer invite mac
 ```
 
 On the Mac, add the PC with that invite, check that the link is up, and link
 the Windows bot into the project the lead works in:
 
 ```sh
-gravityd peer add win-pc "ws://100.x.y.z:49777/peer#…"
-gravityd peer list
-gravityd peer bots win-pc
-gravityd peer link win-pc windev --project my-app
+hermesd peer add win-pc "ws://100.x.y.z:49777/peer#…"
+hermesd peer list
+hermesd peer bots win-pc
+hermesd peer link win-pc windev --project my-app
 ```
 
 The lead can now `send_message(to: "windev", kind: "task", …)`. The first
@@ -371,7 +371,7 @@ their `daemon_id`, so they can pair again.
 ## Delivery plan
 
 1. **Peers and forwarding (daemon).** The schema, `daemon_id`, pairing and
-   revocation as control-plane requests (plus `gravityd peer …` commands that
+   revocation as control-plane requests (plus `hermesd peer …` commands that
    drive the local daemon, so this is usable before the UI lands), the `/peer`
    route and dialer, linking, and forwarding of every message kind with task
    mirroring. Tested with two in-process daemons on the double runtime.

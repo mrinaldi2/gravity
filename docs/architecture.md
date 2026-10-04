@@ -19,7 +19,7 @@ private network. It binds to loopback on port `49777` by default.
 ```mermaid
 flowchart LR
     Client["Desktop client: Tauri, React, xterm.js"]
-    subgraph Daemon["gravityd"]
+    subgraph Daemon["hermesd"]
         WS["WebSocket control plane"]
         Supervisor["Supervisor and PTY adapter"]
         Bus["Messaging and delivery worker"]
@@ -45,11 +45,11 @@ flowchart LR
 | Component | Responsibility | Source |
 | --- | --- | --- |
 | Shared bus crate | Entity types, SQLite migrations, message envelopes | [crates/bus/src/lib.rs:1](../crates/bus/src/lib.rs#L1) |
-| Daemon assembly | Shared state, HTTP routes, background workers | [crates/gravityd/src/server.rs:1](../crates/gravityd/src/server.rs#L1) |
-| Supervisor | Session lifecycle, crash recovery, terminal state | [crates/gravityd/src/supervisor.rs:1](../crates/gravityd/src/supervisor.rs#L1) |
-| Runtime adapters | Start, probe, input, resize, and terminate sessions | [crates/gravityd/src/runtime/mod.rs:1](../crates/gravityd/src/runtime/mod.rs#L1) |
-| Delivery worker | Lease queued messages, deliver, retry, report failures | [crates/gravityd/src/delivery.rs:1](../crates/gravityd/src/delivery.rs#L1) |
-| Scheduler | Scheduled occurrences, signals, run completion, retries | [crates/gravityd/src/scheduler.rs:1](../crates/gravityd/src/scheduler.rs#L1) |
+| Daemon assembly | Shared state, HTTP routes, background workers | [crates/hermesd/src/server.rs:1](../crates/hermesd/src/server.rs#L1) |
+| Supervisor | Session lifecycle, crash recovery, terminal state | [crates/hermesd/src/supervisor.rs:1](../crates/hermesd/src/supervisor.rs#L1) |
+| Runtime adapters | Start, probe, input, resize, and terminate sessions | [crates/hermesd/src/runtime/mod.rs:1](../crates/hermesd/src/runtime/mod.rs#L1) |
+| Delivery worker | Lease queued messages, deliver, retry, report failures | [crates/hermesd/src/delivery.rs:1](../crates/hermesd/src/delivery.rs#L1) |
+| Scheduler | Scheduled occurrences, signals, run completion, retries | [crates/hermesd/src/scheduler.rs:1](../crates/hermesd/src/scheduler.rs#L1) |
 | Desktop frontend | Project and bot views, terminal rendering, connection state | [apps/desktop/src/App.tsx:1](../apps/desktop/src/App.tsx#L1) |
 | Native shell | Local daemon installation, native window controls, updates | [apps/desktop/src-tauri/src/lib.rs:1](../apps/desktop/src-tauri/src/lib.rs#L1) |
 
@@ -224,7 +224,7 @@ The daemon state root defaults to `~/.gravity` and can be changed with
 ~/.gravity/
   gravityd.toml
   bus.sqlite
-  bin/gravityd
+  bin/hermesd
   secrets/
     client.token
     bot-<id>.token

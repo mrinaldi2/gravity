@@ -1,4 +1,4 @@
-// Drives a sandbox gravityd over its WS control plane while staging a
+// Drives a sandbox hermesd over its WS control plane while staging a
 // marketing screenshot. Talks to the throwaway daemon only — never the
 // installed one on 49777.
 //

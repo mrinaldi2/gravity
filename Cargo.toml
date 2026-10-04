@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/bus", "crates/gravityd"]
+members = ["crates/bus", "crates/hermesd"]
 
 [workspace.package]
 version = "0.13.0"

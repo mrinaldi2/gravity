@@ -20,7 +20,7 @@ function posthogSourceMaps(): readonly PluginOption[] {
       host: process.env["POSTHOG_HOST"] ?? "https://eu.i.posthog.com",
       sourcemaps: {
         enabled: true,
-        releaseName: "gravity-desktop",
+        releaseName: "hermes-desktop",
         releaseVersion: process.env["POSTHOG_RELEASE_VERSION"],
         deleteAfterUpload: true,
       },

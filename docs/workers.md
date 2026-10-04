@@ -1,7 +1,7 @@
 # Temporary workers
 
 Status: implemented in the daemon and covered by
-`crates/gravityd/tests/workers.rs` and `crates/gravityd/tests/worker_repo.rs`.
+`crates/hermesd/tests/workers.rs` and `crates/hermesd/tests/worker_repo.rs`.
 The desktop app marks workers in the bot list, and its project settings show
 the project's workers (running, queued, recently finished, each cancellable)
 and set the shared repository.

@@ -9,12 +9,12 @@ try {
     if ($LASTEXITCODE -ne 0 -or !$hostLine) { throw 'Cannot determine Rust host triple' }
     $triple = $hostLine.Substring(6)
     if (!$triple.EndsWith('windows-msvc')) { throw 'Use a native Windows MSVC Rust toolchain' }
-    cargo build --release --locked -p gravityd
+    cargo build --release --locked -p hermesd
     if ($LASTEXITCODE -ne 0) { throw 'Daemon build failed' }
     $destination = Join-Path $repoRoot 'apps/desktop/src-tauri/binaries'
     New-Item -ItemType Directory -Force -Path $destination | Out-Null
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'target/release/gravityd.exe') -Destination (Join-Path $destination "gravityd-$triple.exe")
-    Write-Output "Staged gravityd-$triple.exe"
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'target/release/hermesd.exe') -Destination (Join-Path $destination "hermesd-$triple.exe")
+    Write-Output "Staged hermesd-$triple.exe"
 } finally {
     Pop-Location
 }

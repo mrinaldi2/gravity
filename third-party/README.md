@@ -78,7 +78,7 @@ generator inputs, overrides and notice bundles. Changing supported platforms or
 marketing runtime imports requires updating the generator and this document.
 
 The app carries `Contents/Resources/THIRD_PARTY_NOTICES.txt`; daemon archives
-carry `THIRD_PARTY_NOTICES.txt` and Gravity's `LICENSE`. `gravityd
+carry `THIRD_PARTY_NOTICES.txt` and Gravity's `LICENSE`. `hermesd
 --third-party-notices` prints the embedded daemon notice even after the binary is
 installed or copied separately. Manual release dispatches verify the packaged
 copies before artifact upload; publishing still requires a release tag.

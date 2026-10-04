@@ -163,7 +163,7 @@ export default function AboutSettings(props: AboutSettingsProps): ReactElement {
       <div className="settings-row">
         <div className="settings-row-text">
           <div className="settings-row-label">Daemon</div>
-          <div className="settings-row-help">The gravityd this app is connected to.</div>
+          <div className="settings-row-help">The hermesd this app is connected to.</div>
         </div>
         <div className="settings-row-control">
           <span className="settings-value">

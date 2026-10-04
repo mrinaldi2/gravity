@@ -71,7 +71,7 @@ export default function ConnectionSettings(props: ConnectionSettingsProps): Reac
         <div className="settings-row-text">
           <div className="settings-row-label">Daemon address</div>
           <div className="settings-row-help">
-            The machine running gravityd. Use a Tailscale hostname to attach from another machine.
+            The machine running hermesd. Use a Tailscale hostname to attach from another machine.
           </div>
           <div className="settings-inline-fields">
             <input

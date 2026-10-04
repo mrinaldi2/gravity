@@ -130,8 +130,7 @@ function RestartRow({ onToast }: RestartRowProps): ReactElement {
         <div className="settings-row-text">
           <div className="settings-row-label">Restart daemon</div>
           <div className="settings-row-help">
-            Bounces gravityd on this machine. Every bot session running right now is killed
-            mid-turn.
+            Bounces hermesd on this machine. Every bot session running right now is killed mid-turn.
           </div>
         </div>
         <button

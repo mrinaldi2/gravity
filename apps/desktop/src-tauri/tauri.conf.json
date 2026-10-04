@@ -38,7 +38,7 @@
       "../../../LICENSE": "LICENSE"
     },
     "externalBin": [
-      "binaries/gravityd"
+      "binaries/hermesd"
     ],
     "icon": [
       "icons/32x32.png",
