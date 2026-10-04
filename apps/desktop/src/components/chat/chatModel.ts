@@ -83,7 +83,8 @@ export function triggerView(trigger: Trigger): TriggerView {
       };
     case "bus":
       return {
-        label: `${BUS_KIND_LABEL[trigger.msg_kind] ?? "Message from"} ${trigger.from}`,
+        // "You" is a label; mid-sentence it reads "you" (ux-glossary rule 4).
+        label: `${BUS_KIND_LABEL[trigger.msg_kind] ?? "Message from"} ${trigger.from === "You" ? "you" : trigger.from}`,
         text: trigger.text,
         own: false,
       };

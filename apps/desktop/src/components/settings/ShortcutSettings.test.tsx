@@ -13,7 +13,7 @@ vi.mock("../../windowShortcut", async (importOriginal) => {
 });
 
 function recorder(): HTMLElement {
-  return screen.getByRole("button", { name: "Show or hide window shortcut" });
+  return screen.getByRole("button", { description: "Show or hide Hermes" });
 }
 
 describe("ShortcutSettings", () => {

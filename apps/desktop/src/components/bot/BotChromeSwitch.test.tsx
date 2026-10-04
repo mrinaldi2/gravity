@@ -25,7 +25,7 @@ describe("BotChromeSwitch", () => {
         onToast={onToast}
       />,
     );
-    const toggle = screen.getByRole("checkbox", { name: /your Chrome/ });
+    const toggle = screen.getByRole("checkbox", { name: /^Can use your Chrome/ });
     expect(toggle).not.toBeChecked();
     await userEvent.click(toggle);
     expect(client.requests.at(-1)?.body).toEqual({
@@ -52,7 +52,7 @@ describe("BotChromeSwitch", () => {
         onToast={onToast}
       />,
     );
-    await userEvent.click(screen.getByRole("checkbox", { name: /your Chrome/ }));
+    await userEvent.click(screen.getByRole("checkbox", { name: /^Can use your Chrome/ }));
     expect(onToast).toHaveBeenCalledWith(
       "error",
       "Could not change Chrome access",

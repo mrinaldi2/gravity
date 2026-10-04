@@ -81,7 +81,9 @@ fn build(
     let from = match msg.sender.kind {
         // The daemon's own notices (expiries, renames, introductions) describe
         // this daemon's view. The peer produces its own for its side.
-        SenderKind::User if msg.sender.name == "system" => return Ok(None),
+        SenderKind::User if msg.sender.name == crate::messaging::DAEMON_SENDER_NAME => {
+            return Ok(None)
+        }
         SenderKind::User => FromFrame::User,
         SenderKind::Bot => {
             let id = msg.sender.bot_id.as_deref().unwrap_or_default();

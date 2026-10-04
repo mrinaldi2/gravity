@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { MutableRefObject } from "react";
 import { notifyNatively } from "../notify";
 import type { DaemonApi } from "../protocol/api";
+import { toolDisplayName } from "../toolNames";
 import type { Conversation } from "../protocol/entities";
 import type { Selection } from "./selection";
 import type { EntitiesApi } from "./useEntities";
@@ -93,7 +94,14 @@ function subscribe(ref: MutableRefObject<PushDeps>): Array<() => void> {
     }),
     client.on("approval_pending", (push) => {
       const deps = ref.current;
-      deps.addToast("warn", `${deps.botName(push.bot_id)} needs approval`, push.detail, {
+      // Never `push.detail`: older daemons put Claude Code's own wording there
+      // (ux-glossary rule 9).
+      const name = deps.botName(push.bot_id);
+      const title =
+        push.tool === undefined
+          ? `${name} needs approval`
+          : `${name} wants to run ${toolDisplayName(push.tool)}`;
+      deps.addToast("warn", title, "", {
         action: {
           label: "View",
           run: () => {

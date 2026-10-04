@@ -93,8 +93,8 @@ describe("SettingsOverlay", () => {
     renderOverlay("general");
     expect(screen.getByLabelText("Terminal font size")).toBeInTheDocument();
     expect(screen.getByLabelText("Terminal font")).toBeInTheDocument();
-    expect(screen.getByLabelText("Dock badge")).toBeChecked();
-    expect(screen.getByRole("button", { name: "Show or hide window shortcut" })).toHaveTextContent(
+    expect(screen.getByRole("checkbox", { name: /^Dock badge/ })).toBeChecked();
+    expect(screen.getByRole("button", { description: "Show or hide Hermes" })).toHaveTextContent(
       "Not set",
     );
   });

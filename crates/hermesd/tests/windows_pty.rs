@@ -279,6 +279,6 @@ async fn codex_startup_failure_is_reported_in_state_and_terminal() {
         .into_iter()
         .flat_map(|frame| frame.data)
         .collect();
-    assert!(String::from_utf8_lossy(&output).contains("[Gravity] Runtime failed to start"));
+    assert!(String::from_utf8_lossy(&output).contains("[Hermes] Engine couldn't start"));
     assert_eq!(daemon.app.supervisor.active_total(), 0);
 }

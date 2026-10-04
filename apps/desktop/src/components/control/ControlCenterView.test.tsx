@@ -216,13 +216,13 @@ describe("ControlCenterView", () => {
     const { daemon } = seeded;
     renderView(seeded);
     await screen.findByRole("heading", { name: "First" });
-    await userEvent.click(screen.getByRole("button", { name: "Later" }));
-    await userEvent.type(screen.getByLabelText("Hold until"), "2026-09-20");
+    await userEvent.click(screen.getByRole("button", { name: "Put on hold…" }));
+    await userEvent.type(screen.getByLabelText("On hold until"), "2026-09-20");
     await userEvent.type(
       screen.getByPlaceholderText(/What you want to know first/),
       "What does hourly cost?",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Hold" }));
+    await userEvent.click(screen.getByRole("button", { name: "Put on hold" }));
     await waitFor(() => {
       const hold = daemon.requests.find((item) => item.body.type === "hold_decision")?.body;
       expect(hold).toMatchObject({ decision_id: "d1", comment: "What does hourly cost?" });

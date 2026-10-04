@@ -50,7 +50,7 @@ describe("ConversationsView", () => {
     expect(reply).toHaveClass("conv-right");
     expect(within(fromLead ?? document.body).getByText("lead")).toBeInTheDocument();
     expect(within(reply ?? document.body).getByText("windev @ win-pc")).toBeInTheDocument();
-    expect(within(fromLead ?? document.body).getByText("open")).toBeInTheDocument();
+    expect(within(fromLead ?? document.body).getByText("Open")).toBeInTheDocument();
     expect(within(reply ?? document.body).getByText("reply")).toBeInTheDocument();
   });
 

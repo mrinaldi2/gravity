@@ -77,12 +77,16 @@ pub fn user_sender() -> Sender {
     }
 }
 
+/// The stored sender name of the daemon's own notices. The owner reads them
+/// as from [`crate::brand::SHORT_NAME`].
+pub const DAEMON_SENDER_NAME: &str = "system";
+
 /// The daemon speaking for itself: introductions, rename announcements,
 /// released and expired tasks.
 pub fn daemon_sender() -> Sender {
     Sender {
         kind: SenderKind::User,
         bot_id: None,
-        name: "system".to_string(),
+        name: DAEMON_SENDER_NAME.to_string(),
     }
 }

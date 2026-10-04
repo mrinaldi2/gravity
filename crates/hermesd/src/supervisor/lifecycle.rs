@@ -375,20 +375,20 @@ impl Supervisor {
             (was_stopping, h.consecutive_crashes)
         };
         if was_stopping {
-            self.set_state(bot_id, BotState::Stopped, "stopped by daemon");
+            self.set_state(bot_id, BotState::Stopped, "Stopped by the Hermes service");
             return;
         }
-        let reason = format!("runtime exited with code {code:?}");
+        let reason = code.map_or_else(
+            || "Engine exited unexpectedly".to_string(),
+            |code| format!("Engine exited with code {code}"),
+        );
         self.set_state(bot_id, BotState::Crashed, &reason);
         // Only the first crash of a streak notifies: the reconciler retries
         // forever, and a bot that cannot start would otherwise toast on every
         // attempt.
         if crashes == 1 {
-            self.inner.events.push(Push::notice(
-                "error",
-                "Bot crashed",
-                format!("bot {bot_id}: {reason}"),
-            ));
+            let title = format!("{} crashed", self.bot_name(bot_id));
+            self.inner.events.push(Push::notice("error", title, reason));
         }
     }
 }

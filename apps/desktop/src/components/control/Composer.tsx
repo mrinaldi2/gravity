@@ -67,11 +67,11 @@ export default function Composer({
 
         {composer.holdOpen ? (
           <div className="cc-hold">
-            <span className="cc-hold-label">Hold until</span>
+            <span className="cc-hold-label">On hold until</span>
             <input
               type="date"
               className="cc-hold-date"
-              aria-label="Hold until"
+              aria-label="On hold until"
               value={composer.holdDate}
               onChange={(event) => composer.setHoldDate(event.target.value)}
             />
@@ -87,7 +87,7 @@ export default function Composer({
               disabled={!canControl || busy}
               onClick={onHold}
             >
-              Hold
+              Put on hold
             </button>
           </div>
         ) : null}
@@ -106,7 +106,7 @@ export default function Composer({
             className="cc-link"
             onClick={() => composer.setHoldOpen(!composer.holdOpen)}
           >
-            Later
+            Put on hold…
           </button>
           <span className="cc-composer-spacer" />
           <button
