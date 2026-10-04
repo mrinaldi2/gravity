@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import * as fx from "../../test/fixtures";
 import { botSpy, toastSpy } from "../../test/spies";
+import { fmtTimestamp } from "../../util";
 import BotHistory from "./BotHistory";
 
 function renderHistory(daemon: FakeDaemon, canControl = true) {
@@ -123,7 +124,12 @@ describe("BotHistory", () => {
     await open(user);
 
     await user.click(await screen.findByRole("button", { name: "Revert" }));
-    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    const revision = fx.botRevision();
+    const dialog = screen.getByRole("dialog", {
+      name: `Revert to ${fmtTimestamp(revision.created_at)}?`,
+    });
+    expect(dialog).not.toHaveAccessibleName(new RegExp(revision.created_at));
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(daemon.requests.some((r) => r.body.type === "revert_bot_revision")).toBe(false);

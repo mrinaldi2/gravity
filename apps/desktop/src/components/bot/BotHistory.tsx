@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReactElement } from "react";
 import type { DaemonApi } from "../../protocol/api";
 import type { Bot, BotRevision, NotifyLevel } from "../../protocol/entities";
-import { errText } from "../../util";
+import { errText, fmtTimestamp } from "../../util";
 import ConfirmDialog from "../overlay/ConfirmDialog";
 
 /**
@@ -136,7 +136,7 @@ export default function BotHistory({
       </ul>
       {confirming === null ? null : (
         <ConfirmDialog
-          title={`Revert to ${confirming.created_at}?`}
+          title={`Revert to ${fmtTimestamp(confirming.created_at)}?`}
           body={`The ${confirming.field} goes back to what it was before this change. The current ${confirming.field} is kept in History.`}
           confirmLabel="Revert"
           onConfirm={() => {
