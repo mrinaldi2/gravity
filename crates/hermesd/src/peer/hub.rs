@@ -196,6 +196,7 @@ impl PeerHub {
             // daemon restarted) starts with no feeds: stop the mirrors fed
             // over the old link now, so `link_up` asks for them again.
             self.terms.link_down(&peer_id);
+            self.browsers.link_down(&app, &peer_id);
         }
         tracing::info!(peer_id, "peer link up");
         let _ = app.db.touch_peer(&peer_id);
@@ -268,12 +269,12 @@ impl PeerHub {
             links.remove(&peer_id);
         }
         drop(links);
-        // A link replaced by a newer one leaves the terminal feeds and
-        // mirrors alone: they belong to the new link by now.
+        // A link replaced by a newer one leaves the terminal and browser
+        // feeds and mirrors alone: they belong to the new link by now.
         if current {
             self.terms.link_down(&peer_id);
+            self.browsers.link_down(&app, &peer_id);
         }
-        self.browsers.link_down(&app, &peer_id);
         let _ = app.db.touch_peer(&peer_id);
         tracing::info!(peer_id, "peer link down");
     }
