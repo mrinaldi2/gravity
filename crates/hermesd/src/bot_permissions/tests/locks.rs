@@ -69,16 +69,19 @@ fn the_guard_is_told_worktrees_not_trusted_paths_are_writable() {
         repo_url: None,
     };
     let trusted = start(PermissionProfile::Trusted, &[]).guard_command();
+    // The trusted path as the platform joins and quotes it.
+    let developer = super::super::quote(&cfg.user_home.join("Developer").display().to_string());
     assert!(
-        trusted.contains("--worktrees '/Users/me/Developer'"),
+        trusted.contains(&format!("--worktrees {developer}")),
         "{trusted}"
     );
     assert!(
-        !trusted.contains("--writable '/Users/me/Developer'"),
+        !trusted.contains(&format!("--writable {developer}")),
         "{trusted}"
     );
     assert!(!trusted.contains("--full") && !trusted.contains("--allow-main"));
-    assert!(trusted.contains("--bot 'Desktop Dev'"), "{trusted}");
+    let bot = super::super::quote("Desktop Dev");
+    assert!(trusted.contains(&format!("--bot {bot}")), "{trusted}");
     assert!(!trusted.contains("--releases"), "{trusted}");
     let publishers: [&[PermissionExtra]; 2] =
         [&[PermissionExtra::Publish], &[PermissionExtra::ReleaseMain]];
