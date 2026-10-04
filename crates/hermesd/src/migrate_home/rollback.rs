@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context};
 
-use super::{daemon_stopped, disk, sql, steps, Action, Plan, Step, STATE_FILE};
+use super::{daemon_stopped, disk, files, sql, steps, Action, Plan, Step, STATE_FILE};
 
 fn is_real_dir(path: &std::path::Path) -> bool {
     path.symlink_metadata()
@@ -29,6 +29,7 @@ pub fn rollback(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<()> {
         writeln!(out, "undo {action:?}")?;
         match &action {
             Action::Symlink { path } => steps::remove_link(path)?,
+            Action::File { path, original } => files::write(path, original)?,
             Action::Database { .. } => {
                 sql::apply(&plan.to.join("bus.sqlite"), &plan.reversed(), false)?;
             }

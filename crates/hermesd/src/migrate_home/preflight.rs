@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use super::{disk, sql, steps, Plan, State, Step};
+use super::{disk, files, sql, steps, Plan, State, Step};
 
 /// Space kept free beyond the backup itself.
 const DISK_MARGIN: u64 = 512 * 1024 * 1024;
@@ -38,6 +38,9 @@ pub fn dry_run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<bool> {
         for (column, rows) in sql::count(&db, &plan.path_pairs())? {
             writeln!(out, "rewrite   {column}: {rows} row(s)")?;
         }
+    }
+    for file in files::pending(plan, home) {
+        writeln!(out, "rewrite   {}", file.display())?;
     }
     let transcripts = steps::transcript_dirs(plan)?;
     let mut needed = disk::tree_size(&db) + DISK_MARGIN;

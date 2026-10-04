@@ -43,6 +43,8 @@ pub enum Action {
     Database { from: String, to: String },
     /// A compatibility link created at `path`.
     Symlink { path: PathBuf },
+    /// A file's text rewritten; `original` is what it held before.
+    File { path: PathBuf, original: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

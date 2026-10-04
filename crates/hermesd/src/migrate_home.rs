@@ -8,7 +8,8 @@
 //! 2. **Move** the home directory.
 //! 3. **Rename** the daemon's own files (`gravityd.toml` → `hermesd.toml`, …).
 //! 4. **Rewrite** home paths in the database, in one transaction, and set
-//!    `meta.home_migrated`.
+//!    `meta.home_migrated`; then in `hermesd.toml` and the files in the home
+//!    its `claude_args` name (`bot-settings.json`).
 //! 5. **Rename** Claude Code's transcript and memory dirs, keyed by the
 //!    mangled workspace path, so every bot keeps `--continue`, chat history
 //!    and its auto-memory.
@@ -23,6 +24,7 @@
 //! and the migration checks both lock files before it moves anything.
 
 mod disk;
+mod files;
 mod preflight;
 #[cfg(test)]
 mod resume_tests;
@@ -288,6 +290,7 @@ fn run_step(plan: &Plan, state: &mut State, step: Step) -> anyhow::Result<()> {
                 })?;
             }
             sql::apply(&db, &pairs, true)?;
+            files::rewrite(plan, state)?;
         }
         Step::Transcripts => {
             steps::move_transcripts(plan, state)?;

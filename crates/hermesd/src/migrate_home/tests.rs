@@ -297,3 +297,56 @@ fn a_workspace_left_under_the_old_home_fails_the_database_step() {
         f.old_ws.to_string_lossy()
     );
 }
+
+/// `claude_args` naming a settings file in the old home, and the settings
+/// naming the home again, as on this Mac. Both are rewritten (they work only
+/// through the link otherwise) and restored byte for byte on rollback.
+#[test]
+fn config_and_the_settings_it_names_are_rewritten_and_restored() {
+    let f = fixture();
+    let from = &f.plan.from;
+    let config = format!(
+        "port = 7777\nclaude_args = [\"--settings\", \"{}/bot-settings.json\"]\n",
+        from.display()
+    );
+    let settings = format!(
+        "{{\"autoMode\": \"every bot's own workspace under ~/.gravity/ and {}/projects\"}}\n",
+        from.display()
+    );
+    std::fs::write(from.join("gravityd.toml"), &config).expect("config");
+    std::fs::write(from.join("bot-settings.json"), &settings).expect("settings");
+
+    let mut out = Vec::new();
+    dry_run(&f.plan, &mut out).expect("dry run");
+    let out = String::from_utf8(out).expect("utf8");
+    assert!(out.contains("gravityd.toml\n"), "{out}");
+    assert!(out.contains("bot-settings.json\n"), "{out}");
+
+    run(&f.plan, &mut Vec::new()).expect("migrate");
+    let to = &f.plan.to;
+    let config_now = std::fs::read_to_string(to.join("hermesd.toml")).expect("config");
+    assert!(
+        config_now.contains(&format!("\"{}/bot-settings.json\"", to.display())),
+        "{config_now}"
+    );
+    let settings_now = std::fs::read_to_string(to.join("bot-settings.json")).expect("settings");
+    assert!(
+        settings_now.contains("under ~/.thehermes/ and"),
+        "{settings_now}"
+    );
+    assert!(
+        settings_now.contains(&format!("{}/projects", to.display())),
+        "{settings_now}"
+    );
+    assert!(!settings_now.contains(".gravity"), "{settings_now}");
+
+    rollback(&f.plan, &mut Vec::new()).expect("rollback");
+    assert_eq!(
+        std::fs::read_to_string(from.join("gravityd.toml")).expect("config"),
+        config
+    );
+    assert_eq!(
+        std::fs::read_to_string(from.join("bot-settings.json")).expect("settings"),
+        settings
+    );
+}
