@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use crate::actor::Actor;
 use crate::app::AppState;
 use crate::board::contract::model_list;
-use crate::board::feed::{Change, ChangeKind};
+use crate::board::feed::{card_after_commit, Change, ChangeKind};
 use crate::board::model::{Item, ItemType, Platform, Priority, Role, Unmet};
 use crate::board::moves::{item_move as move_item, item_move_check, MoveRequest, Moved};
 use crate::db::Write;
@@ -133,7 +133,8 @@ pub(super) fn published<T>(
 ) -> anyhow::Result<T> {
     let mut feed = app.board.writer();
     let (out, item_id) = write()?;
-    let card = app.db.board_read(|t| t.card(&item_id))?;
+    // Committed: from here on nothing may fail, or the push is lost.
+    let card = card_after_commit(&app.db, &item_id);
     feed.publish(Change {
         project_id,
         kind,

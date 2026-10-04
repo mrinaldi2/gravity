@@ -4,7 +4,7 @@
 
 use crate::board::model::{Item, ItemComment, ItemEventKind, ItemLink, LinkKind};
 use bus::{new_id, now};
-use rusqlite::params;
+use rusqlite::{params, Connection};
 
 use super::board::to_text;
 use super::board_edit::versioned;
@@ -142,4 +142,49 @@ impl BoardTx<'_> {
             Ok(())
         })
     }
+}
+
+/// Replace an item's acceptance criteria with `texts`, in order. A criterion
+/// whose text is unchanged keeps its check; a new one starts unchecked.
+pub(super) fn replace_ac(
+    tx: &Connection,
+    before: &Item,
+    texts: &[String],
+    actor: &Actor<'_>,
+) -> anyhow::Result<()> {
+    let old: Vec<&str> = before
+        .acceptance_criteria
+        .iter()
+        .map(|a| a.text.as_str())
+        .collect();
+    if old == texts {
+        return Ok(());
+    }
+    tx.execute("DELETE FROM item_ac WHERE item_id = ?1", params![before.id])?;
+    for (idx, text) in texts.iter().enumerate() {
+        let kept = before.acceptance_criteria.iter().find(|a| &a.text == text);
+        tx.execute(
+            "INSERT INTO item_ac(item_id, idx, text, checked, checked_by, checked_at, machine)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                before.id,
+                idx as u32,
+                text,
+                kept.is_some_and(|a| a.checked),
+                kept.and_then(|a| a.checked_by.as_deref()),
+                kept.and_then(|a| a.checked_at).map(ts),
+                kept.and_then(|a| a.machine.as_deref()),
+            ],
+        )?;
+    }
+    let (from, to) = (serde_json::to_string(&old)?, serde_json::to_string(texts)?);
+    let event = Event {
+        kind: ItemEventKind::Edited,
+        from: Some(&from),
+        to: Some(&to),
+        field: Some("acceptance_criteria"),
+        note: None,
+    };
+    record(tx, &before.id, actor, event)?;
+    Ok(())
 }

@@ -171,6 +171,9 @@ message ItemUpdate {
   optional Priority priority = 7;
   StringList labels = 8;
   optional string parent_id = 9;
+  // The whole list, replacing the old one. A criterion whose text stays the
+  // same keeps its check. Fixed once the item reaches Verify.
+  StringList acceptance_criteria = 10;
 }
 
 message ItemAddComment {
@@ -343,6 +346,8 @@ message BoardEvent {
   uint64 seq = 2;
   BoardEventKind kind = 3;
   string item_id = 4;
+  // The item's card after the change. Unset on an upsert or a move only when
+  // the daemon could not read it back: refetch the item.
   optional ItemCard card = 5;
   optional string from_column = 6;
 }

@@ -122,6 +122,15 @@ fn update(app: &Arc<AppState>, me: &Me, req: c::ItemUpdate) -> anyhow::Result<Va
         .map(|l| model_list(l.values, Platform::from_wire))
         .transpose()?;
     let priority = req.priority.map(Priority::from_wire).transpose()?;
+    let criteria: Option<Vec<String>> = req
+        .acceptance_criteria
+        .map(|l| l.values.iter().map(|t| t.trim().to_string()).collect());
+    if criteria
+        .as_ref()
+        .is_some_and(|c| c.iter().any(String::is_empty))
+    {
+        anyhow::bail!("an acceptance criterion can't be blank");
+    }
     let edit = ItemEdit {
         title: req.title.as_deref(),
         description: req.description.as_deref(),
@@ -129,6 +138,7 @@ fn update(app: &Arc<AppState>, me: &Me, req: c::ItemUpdate) -> anyhow::Result<Va
         size: req.size.map(Size::from_wire).transpose()?.map(Some),
         priority,
         labels: req.labels.as_ref().map(|l| l.values.as_slice()),
+        acceptance_criteria: criteria.as_deref(),
         // An empty parent clears it.
         parent_id: req
             .parent_id
@@ -138,11 +148,15 @@ fn update(app: &Arc<AppState>, me: &Me, req: c::ItemUpdate) -> anyhow::Result<Va
     let guard = |item: &Item, who: &Who| {
         // Raising to P0 is the lead's or the owner's call (H-017 §3).
         let to_p0 = priority == Some(Priority::P0) && item.priority != Priority::P0;
-        if to_p0 {
+        let mut unmet = if to_p0 {
             guards::check_lead(who)
         } else {
             Vec::new()
+        };
+        if criteria.is_some() {
+            unmet.extend(guards::check_ac_edit(item));
         }
+        unmet
     };
     let actor = me.actor();
     guarded(app, me, &req.id, req.expected_version, guard, |t| {
