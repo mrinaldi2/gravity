@@ -11,7 +11,7 @@ use std::path::{Component, Path, PathBuf};
 /// `<user_home>/.gravity` nor `<user_home>/.thehermes`, after resolving
 /// symlinks where the path exists and ignoring case where the file system
 /// does.
-pub(super) fn overridden(env_home: Option<&Path>, user_home: &Path) -> bool {
+pub(crate) fn overridden(env_home: Option<&Path>, user_home: &Path) -> bool {
     let Some(home) = env_home else {
         return false;
     };

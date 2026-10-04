@@ -24,6 +24,10 @@ fn migrate_home(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
         flag_value(args, "--to").unwrap_or(default.to),
         default.user_home,
     );
+    println!(
+        "{}",
+        hermesd::config::home_notice(&cfg.home, hermesd::config::home_override_var().as_deref())
+    );
     let mut out = std::io::stdout();
     if args.iter().any(|a| a == "--dry-run") {
         if !migrate::dry_run(&plan, &mut out)? {
@@ -126,6 +130,13 @@ async fn main() -> anyhow::Result<()> {
                 Some("install") => {
                     let source =
                         flag_value(&args, "--binary").map_or_else(std::env::current_exe, Ok)?;
+                    println!(
+                        "{}",
+                        hermesd::config::home_notice(
+                            &cfg.home,
+                            hermesd::config::home_override_var().as_deref()
+                        )
+                    );
                     // `--no-migrate` (the app's launch-time repair) reinstalls
                     // the binary only; moving the home needs the user's yes.
                     let pending = hermesd::migrate_home::pending(&cfg)?;
