@@ -1,13 +1,13 @@
 // Widget 1, Needs you (H-018 §2.1, H-112): only what waits on the owner,
 // most urgent first, each row with one primary action. Releases open their
-// review in a drawer, decisions open in Decisions, items open the board.
-// Rulings a bot recorded for the owner are one row, reviewed in a dialog
-// and confirmed together (UX-016). WIP overrides are the lead's call, so
-// they sit below, folded away. Off the board's home, the home's rows say
-// what to do there.
+// review in a drawer, decisions open in Decisions, items open their drawer
+// (U4). Rulings a bot recorded for the owner are one row, reviewed in a
+// dialog and confirmed together (UX-016). WIP overrides are the lead's
+// call, so they sit below, folded away, each opening its item too. Off the
+// board's home, the home's rows say what to do there.
 
 import { useCallback, useId, useState } from "react";
-import type { ReactElement } from "react";
+import type { MouseEvent, ReactElement } from "react";
 import type { NeedsYou as Row, WipOverride } from "../../protocol/dashboard";
 import type { Release } from "../../protocol/releases";
 import { plural, releaseTitle, testLabel } from "../releases/labels";
@@ -18,9 +18,10 @@ import type { ConfirmOutcome } from "./useConfirmRelayed";
 interface NeedsYouActions {
   readonly onReview: (release: Release) => void;
   readonly onDecision: (decisionId: string) => void;
-  readonly onBoard: () => void;
   /** Confirms exactly these relayed rulings, as the dialog listed them. */
   readonly onConfirmRelayed: (decisionIds: readonly string[]) => Promise<ConfirmOutcome>;
+  /** Opens the item's drawer (U4); `opener` takes focus back on close. */
+  readonly onItem: (itemId: string, opener: HTMLElement) => void;
 }
 
 interface NeedsYouProps extends NeedsYouActions {
@@ -65,7 +66,7 @@ interface RowViewProps {
   readonly action: string;
   /** Starts with `action`, then says what it acts on (UX-010). */
   readonly label: string;
-  readonly onAction: () => void;
+  readonly onAction: (event: MouseEvent<HTMLButtonElement>) => void;
   readonly disabled?: boolean;
   /** Why the action is unavailable, as its tooltip. */
   readonly why?: string;
@@ -178,9 +179,9 @@ function p0Row(r: Extract<Shown, { readonly kind: "p0" }>, props: NeedsYouProps)
       props.columnName(r.column_key),
       r.assignee ? props.botName(r.assignee) : "Unassigned",
     ].join(" · "),
-    action: "Open board",
-    label: `Open board at ${r.id}`,
-    onAction: props.onBoard,
+    action: "Open item",
+    label: `Open item ${r.id}`,
+    onAction: (event) => props.onItem(r.id, event.currentTarget),
     verb: "Open",
   };
 }
@@ -214,6 +215,7 @@ function Overrides(props: {
   readonly overrides: readonly WipOverride[];
   readonly botName: (id: string) => string;
   readonly columnName: (key: string) => string;
+  readonly onItem: (itemId: string, opener: HTMLElement) => void;
 }): ReactElement | null {
   if (props.overrides.length === 0) {
     return null;
@@ -224,8 +226,19 @@ function Overrides(props: {
       <ul>
         {props.overrides.map((o) => (
           <li key={`${o.id}-${o.at}`}>
-            {props.columnName(o.column_key)} · <span className="mono">{o.id}</span> {o.title} —{" "}
-            {o.note} — {actorName(o.actor, props.botName)} · {when(o.at)}
+            <span>
+              {props.columnName(o.column_key)} · <span className="mono">{o.id}</span> {o.title} —{" "}
+              {o.note} — {actorName(o.actor, props.botName)} · {when(o.at)}
+            </span>
+            {/* Each override opens its item, as the P0 row does (UX-016 follow-up 2). */}
+            <button
+              type="button"
+              className="btn btn-small"
+              aria-label={`Open item ${o.id}`}
+              onClick={(event) => props.onItem(o.id, event.currentTarget)}
+            >
+              Open item
+            </button>
           </li>
         ))}
       </ul>
@@ -277,6 +290,7 @@ export default function NeedsYou(props: NeedsYouProps): ReactElement {
         overrides={[...props.overrides, ...legacy]}
         botName={props.botName}
         columnName={props.columnName}
+        onItem={props.onItem}
       />
       {reviewing && relayed ? (
         <RelayedDialog

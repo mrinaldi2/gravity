@@ -1,0 +1,272 @@
+/* The item drawer (U4, H-018 §3.6): 440px on the right, over the board or
+   the dashboard, which stay visible behind it. */
+
+.board-view {
+  position: relative;
+}
+
+.item-drawer {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100%);
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 24px rgb(0 0 0 / 35%);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 10px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+
+.drawer-type {
+  flex: 1;
+  min-width: 0;
+}
+
+.drawer-close {
+  display: inline-flex;
+  padding: 4px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.drawer-close:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 24px;
+}
+
+.drawer-title {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: var(--text-strong);
+}
+
+/* Focus lands here so the title is read (UX-012); it isn't a control. */
+.drawer-title:focus {
+  outline: none;
+}
+
+.drawer-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.drawer-stepper .past {
+  color: var(--text-dim);
+}
+
+.drawer-stepper .now {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.drawer-meta {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.drawer-blocked {
+  color: var(--red);
+}
+
+.drawer-next {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.drawer-next p {
+  margin: 0;
+  color: var(--text-strong);
+}
+
+.drawer-next ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text);
+}
+
+.drawer-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.drawer-tabs button,
+.drawer-filter button {
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.drawer-tabs button.on {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+}
+
+.drawer-tabs button:focus-visible,
+.drawer-filter button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* A description's template sections read as small headings here. */
+.drawer-overview .markdown h1,
+.drawer-overview .markdown h2,
+.drawer-overview .markdown h3 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.drawer-overview .markdown p {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.drawer-overview h4 {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  color: var(--text-strong);
+}
+
+.drawer-ac,
+.drawer-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.drawer-ac li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 3px 0;
+}
+
+.drawer-line {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.drawer-dim,
+.drawer-empty {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.drawer-empty {
+  margin: 8px 0;
+}
+
+.drawer-links {
+  margin: 0;
+  font-size: 13px;
+}
+
+.drawer-link-group {
+  margin-bottom: 8px;
+}
+
+.drawer-links dt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.drawer-links dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.drawer-filter {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.drawer-filter button.on {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+}
+
+.drawer-timeline li {
+  padding: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.drawer-owner {
+  color: var(--text-strong);
+}
+
+.drawer-composer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.drawer-composer textarea {
+  align-self: stretch;
+}
+
+.drawer-composer textarea {
+  width: 100%;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.drawer-error {
+  align-self: stretch;
+  margin: 0;
+  font-size: 12px;
+  color: var(--red);
+}
+
+.board-card {
+  cursor: pointer;
+}

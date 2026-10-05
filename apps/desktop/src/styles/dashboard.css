@@ -195,6 +195,14 @@
   padding-left: 18px;
 }
 
+.dash-info li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+
 /* "Review N rulings…": each relayed ruling before one confirm (UX-016). */
 .relayed-dialog {
   max-width: 520px;

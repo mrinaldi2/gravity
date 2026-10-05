@@ -12,6 +12,7 @@ import {
   offHome,
   quietDashboard,
 } from "../../test/dashboardFixtures";
+import { itemDetail } from "../../test/drawerFixtures";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { project } from "../../test/fixtures";
 import DashboardView from "./DashboardView";
@@ -29,6 +30,14 @@ function setup(data: Dashboard | (() => Dashboard), grants?: readonly Grant[]) {
   }));
   fake.onBoard("boardGet", () => {
     throw new Error("no board here");
+  });
+  fake.onBoard("itemGet", () => {
+    const detail = itemDetail();
+    if (detail.item) {
+      detail.item.id = "H-021";
+      detail.item.title = "Pairing crash on iOS 18.1";
+    }
+    return { case: "item", value: detail };
   });
   const nav = {
     onOpenTab: vi.fn<(tab: ProjectTab) => void>(),
@@ -78,8 +87,15 @@ describe("DashboardView", () => {
 
     await user.click(within(nth(rows, 1)).getByRole("button", { name: /^Answer/ }));
     expect(nav.onOpenDecision).toHaveBeenCalledWith("dec-1");
-    await user.click(within(nth(rows, 3)).getByRole("button", { name: /^Open board/ }));
-    expect(nav.onOpenTab).toHaveBeenCalledWith("board");
+    // An item opens its drawer over the dashboard (U4).
+    const openItem = within(nth(rows, 3)).getByRole("button", { name: "Open item H-021" });
+    await user.click(openItem);
+    const drawer = screen.getByRole("complementary", { name: "Item H-021" });
+    expect(await within(drawer).findByRole("heading", { name: /Pairing crash/ })).toHaveFocus();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary", { name: "Item H-021" })).toBeNull();
+    // Focus goes back to the button that opened it (UX-012).
+    expect(openItem).toHaveFocus();
   });
 
   it("folds the lead's WIP overrides under Needs you, out of its count", async () => {
@@ -138,7 +154,8 @@ describe("DashboardView", () => {
       within(needs)
         .getAllByRole("button")
         .map((b) => b.textContent),
-    ).toEqual(["Open board"]);
+      // The P0 row's, then the folded override's.
+    ).toEqual(["Open item", "Open item"]);
   });
 
   it("with the home away, says this may not be everything, and never 'Nothing'", async () => {
@@ -166,7 +183,9 @@ describe("DashboardView", () => {
       "Review 0.16.0",
       "Answer: Push notifications: pay for an APNs relay?",
       "Review 2 rulings Architect recorded for you",
-      "Open board at H-021",
+      "Open item H-021",
+      // The folded WIP override's (UX-016 follow-up 2).
+      "Open item H-030",
     ]);
     // "Review 2 rulings…" is said without its ellipsis.
     for (const button of buttons) {
@@ -223,6 +242,38 @@ describe("DashboardView", () => {
     await user.keyboard("{Escape}");
     expect(within(drawer).queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("complementary", { name: "Release R-2026-W41" })).toBeInTheDocument();
+    // The next Escape is the drawer's (UX-012).
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("opens a folded WIP override's item in its drawer, and gives focus back on Esc", async () => {
+    const user = userEvent.setup();
+    setup(dashboard());
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    await user.click(within(needs).getByText("1 WIP override this week"));
+    const openItem = within(needs).getByRole("button", { name: "Open item H-030" });
+    expect(openItem).toHaveTextContent("Open item");
+    await user.click(openItem);
+    expect(screen.getByRole("complementary", { name: "Item H-030" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(openItem).toHaveFocus();
+  });
+
+  it("keeps one drawer open at a time, focus going back to the latest opener", async () => {
+    const user = userEvent.setup();
+    setup(dashboard());
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    await user.click(within(needs).getByRole("button", { name: "Review 0.16.0" }));
+    const openItem = within(needs).getByRole("button", { name: "Open item H-021" });
+    await user.click(openItem);
+    expect(screen.queryByRole("complementary", { name: "Release R-2026-W41" })).toBeNull();
+    const drawer = screen.getByRole("complementary", { name: "Item H-021" });
+    await within(drawer).findByRole("heading", { name: /Pairing crash/ });
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(openItem).toHaveFocus();
   });
 
   it("shows the board strip with its limits, then blocked, stale and rework", async () => {

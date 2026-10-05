@@ -7,6 +7,7 @@
 mod common;
 
 use bus::contract::board::{self as c, board_request::Request, board_response::Response};
+use bus::contract::wire::envelope::Body;
 use common::board::*;
 use common::peer_board::board;
 use common::peers::wait_until;
@@ -114,13 +115,40 @@ async fn the_home_relays_its_changes_to_a_linked_computers_clients() {
     assert!(check
         .columns
         .iter()
-        .all(|col| col.unmet.iter().any(|u| u.code == "board.elsewhere")));
+        .all(|col| col.unmet.iter().any(|u| u.code == "board.elsewhere"
+            && u.text == format!("The board lives on mac. Move {} from there.", b.item))));
     let body = call(
         &mut b.p.win_client,
         move_to(&b.item, "doing", item.version, None),
     )
     .await;
-    assert_eq!(error_code(body), "no_board");
+    let Body::Error(e) = body else {
+        panic!("expected a refusal");
+    };
+    assert_eq!(e.code, "no_board");
+    assert_eq!(
+        e.message,
+        format!("The board lives on mac. Move {} from there.", b.item)
+    );
+    let body = call(
+        &mut b.p.win_client,
+        Request::ItemComment(c::ItemAddComment {
+            id: b.item.clone(),
+            body: "hi".into(),
+            reply_to: None,
+        }),
+    )
+    .await;
+    let Body::Error(e) = body else {
+        panic!("expected a refusal");
+    };
+    assert_eq!(
+        e.message,
+        format!(
+            "The board for {} lives on mac. Comment on it from there.",
+            b.item
+        )
+    );
     let releases =
         b.p.win_client
             .request(json!({"type": "list_releases", "project_id": b.win_app}))
