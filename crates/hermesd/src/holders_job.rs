@@ -55,9 +55,34 @@ extern "system" {
     fn TerminateJobObject(job: RawHandle, code: u32) -> i32;
     fn IsProcessInJob(process: RawHandle, job: RawHandle, result: *mut i32) -> i32;
     fn OpenProcess(access: u32, inherit: i32, pid: u32) -> RawHandle;
+    fn TerminateProcess(process: RawHandle, code: u32) -> i32;
 }
 
 const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+const PROCESS_TERMINATE: u32 = 0x1;
+
+/// Terminates `pid` if it is still the process that started at `start`
+/// (H-117 Q3): the handle pins the pid while its start is re-checked.
+pub fn terminate_pid(pid: u32, start: u64) -> bool {
+    // SAFETY: OpenProcess takes no pointers; a non-null result is ours.
+    let raw = unsafe {
+        OpenProcess(
+            PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION,
+            0,
+            pid,
+        )
+    };
+    if raw.is_null() {
+        return false;
+    }
+    // SAFETY: raw is a valid process handle nothing else owns.
+    let process = unsafe { OwnedHandle::from_raw_handle(raw) };
+    if crate::holders::procs::start_of(pid) != Some(start) {
+        return false;
+    }
+    // SAFETY: the handle is live and has PROCESS_TERMINATE.
+    unsafe { TerminateProcess(process.as_raw_handle(), 1) != 0 }
+}
 
 /// A job whose processes all end when it is terminated or dropped.
 pub struct Job(OwnedHandle);
@@ -257,5 +282,24 @@ mod tests {
         });
         assert!(found.iter().any(|e| e.pid == ping.pid), "{found:?}");
         job.terminate().unwrap();
+    }
+
+    /// H-117 Q3: a process is terminated by pid only while it is still the
+    /// one that started at the recorded time.
+    #[test]
+    fn terminate_pid_checks_the_start_time_first() {
+        let mut child = Command::new("ping")
+            .args(["-n", "30", "127.0.0.1"])
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let start = crate::holders::procs::start_of(child.id()).unwrap();
+        assert!(
+            !terminate_pid(child.id(), start + 1),
+            "a different start is refused"
+        );
+        assert!(child.try_wait().unwrap().is_none());
+        assert!(terminate_pid(child.id(), start));
+        child.wait().unwrap();
     }
 }

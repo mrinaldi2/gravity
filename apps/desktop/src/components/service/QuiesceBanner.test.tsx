@@ -9,7 +9,7 @@ import QuiesceLayer from "./QuiesceBanner";
 
 const PAUSED: Quiesce = {
   id: "q1",
-  reason: "install",
+  reason: "install of 0.17.0",
   release_id: "0.17.0",
   started_by: "bot:tester",
   started_at: "2026-10-06T09:00:00Z",
@@ -53,5 +53,14 @@ describe("QuiesceBanner", () => {
     setup(PAUSED, ["read", "control"]);
     await screen.findByRole("status");
     expect(screen.queryByRole("button", { name: "Resume now" })).toBeNull();
+  });
+});
+
+describe("QuiesceBanner services list", () => {
+  it("says when the services list changed since the daemon started", async () => {
+    setup({ ...PAUSED, report: { services_changed: true } });
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "The services list in hermesd.toml changed since the daemon started.",
+    );
   });
 });

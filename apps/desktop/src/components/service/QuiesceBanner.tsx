@@ -38,19 +38,26 @@ interface QuiesceBannerProps {
 }
 
 export function QuiesceBanner({ quiesce, canResume, onResume }: QuiesceBannerProps): ReactElement {
-  const what =
-    quiesce.release_id === null ? quiesce.reason : `the install of ${quiesce.release_id}`;
   return (
     <div className="service-recovery quiesce-banner" role="status">
       <div className="service-recovery-text">
         <div className="service-recovery-title">
-          <span aria-hidden="true">⏸ </span>Every project here is paused for {what}
+          <span aria-hidden="true">⏸ </span>Every project here is paused for the {quiesce.reason}
         </div>
         <div className="service-recovery-body">
           Bots, routines, workers and messages wait until the install finishes. Since{" "}
           {time(quiesce.started_at)}; everything resumes by itself at {time(quiesce.deadline_at)} if
           it doesn't.
         </div>
+        {quiesce.report?.services_changed === true ? (
+          <div className="service-recovery-body">
+            <strong>
+              <span aria-hidden="true">⚠ </span>The services list in hermesd.toml changed since the
+              daemon started.
+            </strong>{" "}
+            The list it started with was used; check the new one before the next install.
+          </div>
+        ) : null}
       </div>
       {canResume ? (
         <div className="service-recovery-actions">

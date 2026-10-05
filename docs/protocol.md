@@ -744,6 +744,35 @@ If the pause stays open past `deadline_at` (30 minutes by default), the daemon r
 - `report.resumed` records how it ended: `{at, outcome, paused_seconds, coalesced_runs, extended_tasks, services_started}`.
 - `outcome` is one of `resumed`, `install_ok`, `rolled_back` or `deadline`.
 
+**Reaping (Q3).** `quiesce start` pauses, then reaps what bot sessions left running.
+- **What is signalled:** only processes the lineage ledger, a `THEHERMES_SESSION` environment tag or a session's Job Object ties to a session. The installing bot's processes are spared.
+- **How:**
+  - each process is re-checked by `(pid, start)` just before every signal;
+  - a group is signalled whole only when every member is the sessions' own;
+  - `TERM`, then `KILL` after 5 s;
+  - on Windows, the session's job is terminated.
+- **What is never done:** nothing is signalled by name or pattern.
+- **Services.** It then stops the services from `[[quiesce.service]]` that are running **and** hold the home (or are marked `always`), using their own stop command. The command's program is looked up in `[quiesce] search_path`, never `PATH`, and runs with a 120 s timeout.
+  - The defaults are colima (`brew services stop colima`) and lima (`limactl stop default`).
+  - VM processes are never signalled.
+  - Resume starts again only what the pause stopped.
+  - The list is read once at daemon start. If `hermesd.toml`'s list changes after that, the change isn't used, and the report and the app's banner say so (`services_changed`).
+- **What still holds the home** goes into `report.unresolved` as `{pid, command, cwd, path, project_id?, bot_id?}` and is never signalled. The install goes ahead only when the list is empty (phase `ready`, else `blocked`). A later `start` for the same release takes up the open pause again.
+
+```toml
+[quiesce]
+deadline_minutes = 30
+search_path = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"]
+
+[[quiesce.service]]
+name = "colima"
+detect = "brew services info colima --json"
+running_match = "\"running\": true"
+holder_match = ["limactl", "colima", "com.apple.Virtualization.VirtualMachine", "qemu-system"]
+stop = "brew services stop colima"
+start = "brew services start colima"
+```
+
 **WebSocket.**
 - `quiesce_status` (read) answers `{type: "quiesce", quiesce: …|null}`.
 - `quiesce_resume` (approve, the owner's **Resume now**) ends the pause.

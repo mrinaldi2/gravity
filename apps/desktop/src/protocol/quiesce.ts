@@ -12,6 +12,12 @@ export interface Quiesce {
   /** When it resumes by itself if the install never finishes. */
   readonly deadline_at: string;
   readonly phase: string;
+  /** What the pause did so far; fields appear as it goes. */
+  readonly report?: {
+    /** `[[quiesce.service]]` changed since the daemon started: the list it
+     *  started with was used, the new one never runs unseen (ARCH-R49). */
+    readonly services_changed?: boolean;
+  };
 }
 
 export type QuiesceRequestBody =

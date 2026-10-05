@@ -9,7 +9,7 @@ export const Paused: Story = () => (
     <QuiesceBanner
       quiesce={{
         id: "q1",
-        reason: "install",
+        reason: "install of 0.17.0",
         release_id: "0.17.0",
         started_by: "bot:tester",
         started_at: "2026-10-06T09:00:00Z",

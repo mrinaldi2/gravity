@@ -65,12 +65,10 @@ pub struct Config {
     pub project_auto_mode_environment: std::collections::BTreeMap<String, Vec<String>>,
     pub default_bot_runtime: bus::BotRuntime,
     /// Context window, in tokens, a bot session may grow to before Claude Code
-    /// auto-compacts it (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`). Bots are
-    /// always-on chat sessions, and every turn re-sends the whole transcript,
-    /// so the model default — up to 1M on a 1M-context model — makes a long
-    /// conversation expensive. `None` leaves the model default in place.
-    /// Claude Code accepts 100k–1M and ignores anything outside that range,
-    /// so values are clamped rather than dropped.
+    /// auto-compacts it (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`). Every turn of an
+    /// always-on bot re-sends the whole transcript, so the model default (up
+    /// to 1M) makes a long conversation expensive. `None` keeps that default.
+    /// Claude Code accepts 100k–1M, so values are clamped, not dropped.
     pub auto_compact_window: Option<u32>,
     /// Pin Claude Code to its classic renderer, so xterm keeps the scrollback
     /// and the wheel scrolls it (`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN`,
@@ -111,9 +109,10 @@ pub struct Config {
     pub releases: crate::board::release::serve::ServeConfig,
     /// How bots prove who they are on the bus (H-044).
     pub auth: crate::bus_auth::AuthConfig,
-    /// The *user's* home, where Claude Code keeps its `~/.claude/projects`
-    /// transcripts. Distinct from `home`, which is the daemon's own state
-    /// directory; separate so tests can point it at a fixture tree.
+    /// Pausing every project for an install, and the services it stops (H-117).
+    pub quiesce: crate::quiesce::services::QuiesceConfig,
+    /// The *user's* home (Claude Code's `~/.claude/projects` transcripts), not
+    /// the daemon's `home`; separate so tests can point it at a fixture tree.
     pub user_home: PathBuf,
 }
 
@@ -227,6 +226,7 @@ impl Default for Config {
             browser: crate::browser::BrowserConfig::default(),
             releases: Default::default(),
             auth: Default::default(),
+            quiesce: Default::default(),
             scheduler: SchedulerConfig::default(),
             supervision_interval_ms: 5_000,
             startup: Default::default(),

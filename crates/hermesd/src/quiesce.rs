@@ -26,7 +26,11 @@ use crate::db::{NewQuiesce, Quiesce};
 use crate::decisions::conflict;
 use crate::events::Push;
 
+pub mod reap;
 pub mod services;
+mod start;
+
+pub use start::start;
 
 /// How long a pause may stay open before it resumes by itself.
 pub const DEFAULT_DEADLINE_MINUTES: i64 = 30;

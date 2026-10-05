@@ -15,7 +15,7 @@ use serde_json::json;
 
 fn request() -> PauseRequest<'static> {
     PauseRequest {
-        reason: "install",
+        reason: "install of 0.17.0",
         release_id: Some("0.17.0"),
         version: Some("0.17.0"),
         exempt_bot: None,
