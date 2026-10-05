@@ -1,7 +1,7 @@
 //! A project's permission profile and each bot's extras (H-031).
 
 use bus::{now, PermissionExtra, PermissionProfile};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{ts, Db};
 
@@ -41,19 +41,13 @@ impl Db {
 
     /// The bot's extras, in a stable order.
     pub fn bot_permission_extras(&self, bot_id: &str) -> anyhow::Result<Vec<PermissionExtra>> {
-        let conn = self.lock();
-        let mut extras: Vec<PermissionExtra> = conn
-            .prepare("SELECT extra FROM bot_permission_extra WHERE bot_id = ?1")?
-            .query_map(params![bot_id], |r| r.get::<_, String>(0))?
-            .collect::<Result<Vec<_>, _>>()?
-            .iter()
-            .filter_map(|text| PermissionExtra::parse(text))
-            .collect();
-        extras.sort();
-        Ok(extras)
+        stored_extras(&self.lock(), bot_id)
     }
 
-    /// Replace the bot's extras with exactly these.
+    /// Replace the bot's extras with exactly these, or fail and keep the old
+    /// ones. Only a duplicate is ignored: `OR IGNORE` would also skip a row the
+    /// CHECK refuses and report success, which restarted the bot on every
+    /// click without granting anything (CE-008 F1).
     pub fn set_bot_permission_extras(
         &self,
         bot_id: &str,
@@ -67,13 +61,35 @@ impl Db {
         )?;
         for extra in extras {
             tx.execute(
-                "INSERT OR IGNORE INTO bot_permission_extra(bot_id, extra) VALUES (?1, ?2)",
+                "INSERT INTO bot_permission_extra(bot_id, extra) VALUES (?1, ?2)
+                 ON CONFLICT(bot_id, extra) DO NOTHING",
                 params![bot_id, extra.as_str()],
             )?;
         }
+        let mut wanted = extras.to_vec();
+        wanted.sort();
+        wanted.dedup();
+        let stored = stored_extras(&tx, bot_id)?;
+        anyhow::ensure!(
+            stored == wanted,
+            "stored extras {stored:?} differ from the requested {wanted:?}"
+        );
         tx.commit()?;
         Ok(())
     }
+}
+
+/// The bot's extras as stored, in a stable order.
+fn stored_extras(conn: &Connection, bot_id: &str) -> anyhow::Result<Vec<PermissionExtra>> {
+    let mut extras: Vec<PermissionExtra> = conn
+        .prepare("SELECT extra FROM bot_permission_extra WHERE bot_id = ?1")?
+        .query_map(params![bot_id], |r| r.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?
+        .iter()
+        .filter_map(|text| PermissionExtra::parse(text))
+        .collect();
+    extras.sort();
+    Ok(extras)
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 //! A bot's extras after H-039: the table accepts `release_main` once an
 //! existing database migrates, and a write the database refuses leaves the bot
-//! running as it was instead of restarting it for extras it never got.
+//! running as it was instead of restarting it for extras it never got, even
+//! when the refusal comes from the old CHECK (CE-008 F1).
 
 mod common;
 
@@ -211,4 +212,64 @@ async fn a_refused_write_neither_restarts_the_bot_nor_regenerates_its_settings()
         "{granted}"
     );
     eventually("the bot restarts with its settings", || generated.exists()).await;
+}
+
+/// What the owner hit on 0.15.0: the old CHECK, no trigger, and the real
+/// handler. The refused `release_main` must come back as an error, not as a
+/// silent skip that restarts the bot and unticks the box (CE-008 F1).
+#[tokio::test]
+async fn the_old_check_refusing_release_main_is_an_error_without_a_restart() {
+    let d = spawn_daemon().await;
+    let mut owner = WsClient::connect(&d).await;
+    let project = owner
+        .request(json!({ "type": "create_project", "name": "Hermes" }))
+        .await;
+    let project_id = project["project"]["id"].as_str().expect("id").to_string();
+    let bot = create_bot(&mut owner, &project_id, "devops").await;
+    let bot_id = bot["id"].as_str().expect("bot id").to_string();
+    let workspace = d
+        .app
+        .db
+        .get_bot(&bot_id)
+        .expect("query")
+        .expect("bot")
+        .workspace_path;
+    let generated = std::path::Path::new(&workspace)
+        .parent()
+        .expect("bot root")
+        .join(hermesd::bot_permissions::SETTINGS_FILE);
+    eventually("the bot starts with its settings", || generated.exists()).await;
+
+    let raw = Connection::open(d.app.cfg.db_path()).expect("raw");
+    raw.execute_batch(OLD_EXTRA_TABLE).expect("old table");
+    raw.execute(
+        "INSERT INTO bot_permission_extra(bot_id, extra) VALUES (?1, 'publish')",
+        params![bot_id],
+    )
+    .expect("publish row");
+    std::fs::remove_file(&generated).expect("remove settings");
+
+    let refused = owner
+        .request(json!({
+            "type": "set_bot_permission_extras", "bot_id": bot_id,
+            "extras": ["publish", "release_main"]
+        }))
+        .await;
+    assert_eq!(refused["type"], "error", "{refused}");
+    assert!(
+        refused["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("could not be saved")),
+        "{refused}"
+    );
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert!(
+        !generated.exists(),
+        "a refused extra must not restart the bot or regenerate its settings"
+    );
+    assert_eq!(
+        d.app.db.bot_permission_extras(&bot_id).expect("extras"),
+        [PermissionExtra::Publish],
+        "the existing grant is kept"
+    );
 }
