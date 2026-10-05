@@ -22,11 +22,15 @@ use model::Release;
 
 pub mod assemble;
 pub mod cancel;
+pub mod cli;
+pub mod confine;
 pub mod deploy;
 pub mod lifecycle;
 pub mod model;
 pub mod package;
+pub mod publish;
 pub mod rule;
+pub mod serve;
 #[cfg(test)]
 mod tests;
 

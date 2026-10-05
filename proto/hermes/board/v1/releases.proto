@@ -110,6 +110,23 @@ message ReleaseAttachBuild {
   optional string install_url = 7;
 }
 
+// DevOps with the Publish extra: copy a build file into the served directory,
+// hash it and attach it with its HTTPS url and install_url (H-020 §6.6).
+// An .ipa also gets its itms-services manifest. A published file is never
+// replaced by a different one.
+message ReleasePublish {
+  string release_id = 1;
+  // Absolute path of the build file, under an allowed publish root.
+  string file = 2;
+  // Taken from the extension when omitted: .ipa "ios", .zip/.dmg "desktop-mac",
+  // .exe/.msi "desktop-win".
+  optional string platform = 3;
+  // Defaults to the version of the platform's build already attached.
+  optional string version = 4;
+  // iOS only: the app's bundle identifier for the manifest.
+  optional string bundle_id = 5;
+}
+
 // DevOps: freeze the package, move its items to Owner testing and ask the owner.
 message ReleaseSubmit {
   string release_id = 1;

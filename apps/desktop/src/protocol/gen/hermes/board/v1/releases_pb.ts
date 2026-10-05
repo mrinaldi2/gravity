@@ -18,7 +18,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file hermes/board/v1/releases.proto.
  */
 export const file_hermes_board_v1_releases: GenFile = /*@__PURE__*/
-  fileDesc("Ch5oZXJtZXMvYm9hcmQvdjEvcmVsZWFzZXMucHJvdG8SD2hlcm1lcy5ib2FyZC52MSIhCgtSZWxlYXNlTGlzdBISCgpwcm9qZWN0X2lkGAEgASgJIiAKClJlbGVhc2VHZXQSEgoKcmVsZWFzZV9pZBgBIAEoCSK0AQoNUmVsZWFzZUNyZWF0ZRISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSHAoPZGlzcGxheV92ZXJzaW9uGAMgASgJSACIAQESDQoFaXRlbXMYBCADKAkSFgoJY2hhbmdlbG9nGAUgASgJSAGIAQESEQoEZnJvbRgGIAEoCUgCiAEBQhIKEF9kaXNwbGF5X3ZlcnNpb25CDAoKX2NoYW5nZWxvZ0IHCgVfZnJvbSJOCglIb3dUb1Rlc3QSFAoHaXRlbV9pZBgBIAEoCUgAiAEBEhAKCHBsYXRmb3JtGAIgASgJEg0KBXN0ZXBzGAMgAygJQgoKCF9pdGVtX2lkIjsKDUhvd1RvVGVzdExpc3QSKgoGdmFsdWVzGAEgAygLMhouaGVybWVzLmJvYXJkLnYxLkhvd1RvVGVzdCKwAQoNUmVsZWFzZVVwZGF0ZRISCgpyZWxlYXNlX2lkGAEgASgJEhwKD2Rpc3BsYXlfdmVyc2lvbhgCIAEoCUgAiAEBEhYKCWNoYW5nZWxvZxgDIAEoCUgBiAEBEjMKC2hvd190b190ZXN0GAQgASgLMh4uaGVybWVzLmJvYXJkLnYxLkhvd1RvVGVzdExpc3RCEgoQX2Rpc3BsYXlfdmVyc2lvbkIMCgpfY2hhbmdlbG9nIt4BCgtSZWxlYXNlVGVzdBISCgpyZWxlYXNlX2lkGAEgASgJEg8KB21hY2hpbmUYAiABKAkSFAoMYnVpbGRfc2hhMjU2GAMgASgJEg4KBnJlc3VsdBgEIAEoCRIaCg1jaGVja3NfcGFzc2VkGAUgASgNSACIAQESGQoMY2hlY2tzX3RvdGFsGAYgASgNSAGIAQESGQoMbG9nX2FydGlmYWN0GAcgASgJSAKIAQFCEAoOX2NoZWNrc19wYXNzZWRCDwoNX2NoZWNrc190b3RhbEIPCg1fbG9nX2FydGlmYWN0IjIKDFJlbGVhc2VQYXVzZRISCgpyZWxlYXNlX2lkGAEgASgJEg4KBnJlYXNvbhgCIAEoCSIjCg1SZWxlYXNlUmVzdW1lEhIKCnJlbGVhc2VfaWQYASABKAkiQwoNUmVsZWFzZUNhbmNlbBISCgpyZWxlYXNlX2lkGAEgASgJEhMKBnJlYXNvbhgCIAEoCUgAiAEBQgkKB19yZWFzb24isQEKElJlbGVhc2VBdHRhY2hCdWlsZBISCgpyZWxlYXNlX2lkGAEgASgJEhAKCHBsYXRmb3JtGAIgASgJEg8KB3ZlcnNpb24YAyABKAkSEAoIYXJ0aWZhY3QYBCABKAkSDgoGc2hhMjU2GAUgASgJEhAKA3VybBgGIAEoCUgAiAEBEhgKC2luc3RhbGxfdXJsGAcgASgJSAGIAQFCBgoEX3VybEIOCgxfaW5zdGFsbF91cmwiIwoNUmVsZWFzZVN1Ym1pdBISCgpyZWxlYXNlX2lkGAEgASgJIjQKDVJlbGVhc2VEZXBsb3kSEgoKcmVsZWFzZV9pZBgBIAEoCRIPCgdtYWNoaW5lGAIgASgJIjYKD1JlbGVhc2VSb2xsYmFjaxISCgpyZWxlYXNlX2lkGAEgASgJEg8KB21hY2hpbmUYAiABKAkiJAoOSW5zdGFsbFJlbGVhc2USEgoKcmVsZWFzZV9pZBgBIAEoCSKOAQoNRGVwbG95Q29uZmlybRISCgpyZWxlYXNlX2lkGAEgASgJEg8KB21hY2hpbmUYAiABKAkSDgoGcmVzdWx0GAMgASgJEhIKBXNtb2tlGAQgASgJSACIAQESGQoMbG9nX2FydGlmYWN0GAUgASgJSAGIAQFCCAoGX3Ntb2tlQg8KDV9sb2dfYXJ0aWZhY3RiBnByb3RvMw");
+  fileDesc("Ch5oZXJtZXMvYm9hcmQvdjEvcmVsZWFzZXMucHJvdG8SD2hlcm1lcy5ib2FyZC52MSIhCgtSZWxlYXNlTGlzdBISCgpwcm9qZWN0X2lkGAEgASgJIiAKClJlbGVhc2VHZXQSEgoKcmVsZWFzZV9pZBgBIAEoCSK0AQoNUmVsZWFzZUNyZWF0ZRISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSHAoPZGlzcGxheV92ZXJzaW9uGAMgASgJSACIAQESDQoFaXRlbXMYBCADKAkSFgoJY2hhbmdlbG9nGAUgASgJSAGIAQESEQoEZnJvbRgGIAEoCUgCiAEBQhIKEF9kaXNwbGF5X3ZlcnNpb25CDAoKX2NoYW5nZWxvZ0IHCgVfZnJvbSJOCglIb3dUb1Rlc3QSFAoHaXRlbV9pZBgBIAEoCUgAiAEBEhAKCHBsYXRmb3JtGAIgASgJEg0KBXN0ZXBzGAMgAygJQgoKCF9pdGVtX2lkIjsKDUhvd1RvVGVzdExpc3QSKgoGdmFsdWVzGAEgAygLMhouaGVybWVzLmJvYXJkLnYxLkhvd1RvVGVzdCKwAQoNUmVsZWFzZVVwZGF0ZRISCgpyZWxlYXNlX2lkGAEgASgJEhwKD2Rpc3BsYXlfdmVyc2lvbhgCIAEoCUgAiAEBEhYKCWNoYW5nZWxvZxgDIAEoCUgBiAEBEjMKC2hvd190b190ZXN0GAQgASgLMh4uaGVybWVzLmJvYXJkLnYxLkhvd1RvVGVzdExpc3RCEgoQX2Rpc3BsYXlfdmVyc2lvbkIMCgpfY2hhbmdlbG9nIt4BCgtSZWxlYXNlVGVzdBISCgpyZWxlYXNlX2lkGAEgASgJEg8KB21hY2hpbmUYAiABKAkSFAoMYnVpbGRfc2hhMjU2GAMgASgJEg4KBnJlc3VsdBgEIAEoCRIaCg1jaGVja3NfcGFzc2VkGAUgASgNSACIAQESGQoMY2hlY2tzX3RvdGFsGAYgASgNSAGIAQESGQoMbG9nX2FydGlmYWN0GAcgASgJSAKIAQFCEAoOX2NoZWNrc19wYXNzZWRCDwoNX2NoZWNrc190b3RhbEIPCg1fbG9nX2FydGlmYWN0IjIKDFJlbGVhc2VQYXVzZRISCgpyZWxlYXNlX2lkGAEgASgJEg4KBnJlYXNvbhgCIAEoCSIjCg1SZWxlYXNlUmVzdW1lEhIKCnJlbGVhc2VfaWQYASABKAkiQwoNUmVsZWFzZUNhbmNlbBISCgpyZWxlYXNlX2lkGAEgASgJEhMKBnJlYXNvbhgCIAEoCUgAiAEBQgkKB19yZWFzb24isQEKElJlbGVhc2VBdHRhY2hCdWlsZBISCgpyZWxlYXNlX2lkGAEgASgJEhAKCHBsYXRmb3JtGAIgASgJEg8KB3ZlcnNpb24YAyABKAkSEAoIYXJ0aWZhY3QYBCABKAkSDgoGc2hhMjU2GAUgASgJEhAKA3VybBgGIAEoCUgAiAEBEhgKC2luc3RhbGxfdXJsGAcgASgJSAGIAQFCBgoEX3VybEIOCgxfaW5zdGFsbF91cmwingEKDlJlbGVhc2VQdWJsaXNoEhIKCnJlbGVhc2VfaWQYASABKAkSDAoEZmlsZRgCIAEoCRIVCghwbGF0Zm9ybRgDIAEoCUgAiAEBEhQKB3ZlcnNpb24YBCABKAlIAYgBARIWCglidW5kbGVfaWQYBSABKAlIAogBAUILCglfcGxhdGZvcm1CCgoIX3ZlcnNpb25CDAoKX2J1bmRsZV9pZCIjCg1SZWxlYXNlU3VibWl0EhIKCnJlbGVhc2VfaWQYASABKAkiNAoNUmVsZWFzZURlcGxveRISCgpyZWxlYXNlX2lkGAEgASgJEg8KB21hY2hpbmUYAiABKAkiNgoPUmVsZWFzZVJvbGxiYWNrEhIKCnJlbGVhc2VfaWQYASABKAkSDwoHbWFjaGluZRgCIAEoCSIkCg5JbnN0YWxsUmVsZWFzZRISCgpyZWxlYXNlX2lkGAEgASgJIo4BCg1EZXBsb3lDb25maXJtEhIKCnJlbGVhc2VfaWQYASABKAkSDwoHbWFjaGluZRgCIAEoCRIOCgZyZXN1bHQYAyABKAkSEgoFc21va2UYBCABKAlIAIgBARIZCgxsb2dfYXJ0aWZhY3QYBSABKAlIAYgBAUIICgZfc21va2VCDwoNX2xvZ19hcnRpZmFjdGIGcHJvdG8z");
 
 /**
  * The project's release packages, newest first.
@@ -388,6 +388,57 @@ export const ReleaseAttachBuildSchema: GenMessage<ReleaseAttachBuild> = /*@__PUR
   messageDesc(file_hermes_board_v1_releases, 10);
 
 /**
+ * DevOps with the Publish extra: copy a build file into the served directory,
+ * hash it and attach it with its HTTPS url and install_url (H-020 §6.6).
+ * An .ipa also gets its itms-services manifest. A published file is never
+ * replaced by a different one.
+ *
+ * @generated from message hermes.board.v1.ReleasePublish
+ */
+export type ReleasePublish = Message<"hermes.board.v1.ReleasePublish"> & {
+  /**
+   * @generated from field: string release_id = 1;
+   */
+  releaseId: string;
+
+  /**
+   * Absolute path of the build file, under an allowed publish root.
+   *
+   * @generated from field: string file = 2;
+   */
+  file: string;
+
+  /**
+   * Taken from the extension when omitted: .ipa "ios", .zip/.dmg "desktop-mac",
+   * .exe/.msi "desktop-win".
+   *
+   * @generated from field: optional string platform = 3;
+   */
+  platform?: string | undefined;
+
+  /**
+   * Defaults to the version of the platform's build already attached.
+   *
+   * @generated from field: optional string version = 4;
+   */
+  version?: string | undefined;
+
+  /**
+   * iOS only: the app's bundle identifier for the manifest.
+   *
+   * @generated from field: optional string bundle_id = 5;
+   */
+  bundleId?: string | undefined;
+};
+
+/**
+ * Describes the message hermes.board.v1.ReleasePublish.
+ * Use `create(ReleasePublishSchema)` to create a new message.
+ */
+export const ReleasePublishSchema: GenMessage<ReleasePublish> = /*@__PURE__*/
+  messageDesc(file_hermes_board_v1_releases, 11);
+
+/**
  * DevOps: freeze the package, move its items to Owner testing and ask the owner.
  *
  * @generated from message hermes.board.v1.ReleaseSubmit
@@ -404,7 +455,7 @@ export type ReleaseSubmit = Message<"hermes.board.v1.ReleaseSubmit"> & {
  * Use `create(ReleaseSubmitSchema)` to create a new message.
  */
 export const ReleaseSubmitSchema: GenMessage<ReleaseSubmit> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 11);
+  messageDesc(file_hermes_board_v1_releases, 12);
 
 /**
  * DevOps: send an approved package to a machine; opens a task to its tester.
@@ -428,7 +479,7 @@ export type ReleaseDeploy = Message<"hermes.board.v1.ReleaseDeploy"> & {
  * Use `create(ReleaseDeploySchema)` to create a new message.
  */
 export const ReleaseDeploySchema: GenMessage<ReleaseDeploy> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 12);
+  messageDesc(file_hermes_board_v1_releases, 13);
 
 /**
  * DevOps: take a package back off a machine; opens a task to its tester.
@@ -452,7 +503,7 @@ export type ReleaseRollback = Message<"hermes.board.v1.ReleaseRollback"> & {
  * Use `create(ReleaseRollbackSchema)` to create a new message.
  */
 export const ReleaseRollbackSchema: GenMessage<ReleaseRollback> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 13);
+  messageDesc(file_hermes_board_v1_releases, 14);
 
 /**
  * Tester: the verified builds of the package DevOps tasked you to install.
@@ -471,7 +522,7 @@ export type InstallRelease = Message<"hermes.board.v1.InstallRelease"> & {
  * Use `create(InstallReleaseSchema)` to create a new message.
  */
 export const InstallReleaseSchema: GenMessage<InstallRelease> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 14);
+  messageDesc(file_hermes_board_v1_releases, 15);
 
 /**
  * Tester (or DevOps): how a deploy or rollback on a machine went.
@@ -514,5 +565,5 @@ export type DeployConfirm = Message<"hermes.board.v1.DeployConfirm"> & {
  * Use `create(DeployConfirmSchema)` to create a new message.
  */
 export const DeployConfirmSchema: GenMessage<DeployConfirm> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 15);
+  messageDesc(file_hermes_board_v1_releases, 16);
 

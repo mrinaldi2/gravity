@@ -21,7 +21,10 @@
 //! - in Full, where nothing else reviews a call: inline interpreter code
 //!   (`python3 -c`, `perl -e`, `node -e`, …), commands read from stdin,
 //!   `eval`, decoded text fed into a substitution, and writes outside the
-//!   bot's own folders.
+//!   bot's own folders;
+//! - a Write, Edit or destructive command into the served release builds,
+//!   for every bot, DevOps included: only the daemon writes there (CE-010
+//!   M3). Reading them stays allowed.
 //!
 //! Hooks run in every permission mode, so this is the boundary that still
 //! holds in Full. It is a parser, not a sandbox: a script file can still
@@ -43,6 +46,7 @@ mod full;
 mod git;
 mod path_key;
 pub(super) mod paths;
+mod served;
 mod targets;
 mod words;
 
@@ -71,6 +75,9 @@ pub struct GuardContext {
     pub allow_main: bool,
     /// The project runs in Full, where the guard is the only check.
     pub full: bool,
+    /// The served release builds and their staging folder: no bot writes
+    /// there. `<home>/releases` is always among them.
+    pub served: Vec<PathBuf>,
 }
 
 /// Why the tool call must not run, or `None` to let it through.
@@ -101,6 +108,12 @@ pub fn decide(input: &Value, ctx: &GuardContext) -> Option<String> {
                 .unwrap_or_default();
             if let Some(path) = ctx.protected_word(file, &scope) {
                 return Some(format!("{path} is protected; ask the owner to change it"));
+            }
+            if let Some(path) = ctx.served_word(file, &scope) {
+                return Some(format!(
+                    "{path} is in the served release builds, which only the daemon writes; \
+                     publish with `hermesd release publish`"
+                ));
             }
             // In Full nothing reviews a write to a shell rc or a launch agent.
             if ctx.full {
@@ -158,7 +171,7 @@ pub fn slug(bot_name: &str) -> String {
 }
 
 /// `hermesd guard --home H --user-home U [--writable P]… [--worktrees P]…
-/// [--bot NAME] [--releases] [--allow-main] [--full]`: read one tool call on
+/// [--served P]… [--bot NAME] [--releases] [--allow-main] [--full]`: read one tool call on
 /// stdin and print a deny when it must not run or can't be read.
 pub fn run(args: &[String]) -> i32 {
     let value_of = |flag: &str| {
@@ -176,14 +189,18 @@ pub fn run(args: &[String]) -> i32 {
     let (Some(home), Some(user_home)) = (value_of("--home"), value_of("--user-home")) else {
         eprintln!(
             "usage: hermesd guard --home <dir> --user-home <dir> [--writable <dir>]… \
-             [--worktrees <dir>]… [--bot <name>] [--releases] [--allow-main] [--full]"
+             [--worktrees <dir>]… [--served <dir>]… [--bot <name>] [--releases] \
+             [--allow-main] [--full]"
         );
         // Exit 2 blocks the call; stderr tells the bot why.
         return 2;
     };
     let mut writable = all_of("--writable");
     writable.extend(temp_dirs());
+    let mut served = all_of("--served");
+    served.push(home.join("releases"));
     let ctx = GuardContext {
+        served,
         home,
         user_home,
         writable,

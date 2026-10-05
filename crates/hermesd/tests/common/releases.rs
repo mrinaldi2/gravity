@@ -6,7 +6,7 @@ use hermesd::board::model::{ItemType, Platform, Priority, ProjectRole, Role};
 use hermesd::db::{MoveTo, NewItem};
 use serde_json::{json, Value};
 
-use super::tasks::{project_with_bots, Pair};
+use super::tasks::{project_with_bots_on, Pair};
 use super::McpClient;
 
 pub struct Releases {
@@ -18,7 +18,12 @@ pub struct Releases {
 }
 
 pub async fn releases(items: usize) -> Releases {
-    let (pair, bots) = project_with_bots(&["Team Lead", "DevOps", "Tester"]).await;
+    releases_on(super::spawn_daemon().await, items).await
+}
+
+/// [`releases`] on a daemon already started, such as one with its own config.
+pub async fn releases_on(d: super::TestDaemon, items: usize) -> Releases {
+    let (pair, bots) = project_with_bots_on(d, &["Team Lead", "DevOps", "Tester"]).await;
     let db = &pair.d.app.db;
     let project = db.get_bot(&pair.ids[0]).unwrap().unwrap().project_id;
     db.ensure_board(&project, &db.daemon_id().unwrap(), Some("H"))

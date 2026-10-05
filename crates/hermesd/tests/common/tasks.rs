@@ -23,7 +23,11 @@ pub struct Pair {
 
 /// A project with the named bots, plus an MCP client per bot.
 pub async fn project_with_bots(names: &[&str]) -> (Pair, Vec<McpClient>) {
-    let d = spawn_daemon().await;
+    project_with_bots_on(spawn_daemon().await, names).await
+}
+
+/// [`project_with_bots`] on a daemon already started.
+pub async fn project_with_bots_on(d: TestDaemon, names: &[&str]) -> (Pair, Vec<McpClient>) {
     let mut c = WsClient::connect(&d).await;
     let project = c
         .request(json!({"type": "create_project", "name": "p"}))

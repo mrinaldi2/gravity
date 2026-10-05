@@ -22,6 +22,7 @@ pub(super) fn input(profile: PermissionProfile, extras: &[PermissionExtra]) -> V
         workspace: Path::new("/Users/me/.gravity/projects/p/bots/devops/workspace"),
         artifacts: Some(Path::new("/Users/me/.gravity/projects/p/artifacts")),
         trusted_paths: &[PathBuf::from("/Users/me/Developer")],
+        served: &[PathBuf::from("/Users/me/.gravity/releases")],
         repo_url: Some("git@github.com:me/hermes.git"),
         port: 49777,
         guard_command: "'/bin/hermesd' guard".to_string(),
@@ -107,6 +108,7 @@ fn trusted_adds_routine_work_and_extras_add_their_powers() {
     assert!(allow.contains(
         &"Bash(/Users/me/.gravity/projects/p/bots/devops/workspace/serve/publish.sh *)".to_string()
     ));
+    assert!(allow.contains(&"Bash(hermesd release publish *)".to_string()));
     let deny = rules(&devops, "deny");
     assert!(deny.contains(
         &"Edit(//Users/me/.gravity/projects/p/bots/devops/workspace/serve/publish.sh)".to_string()
@@ -184,6 +186,7 @@ fn the_interim_settings_are_folded_in_and_not_passed_twice() {
             workspace: Path::new("/w"),
             artifacts: None,
             trusted_paths: &[],
+            served: &[],
             repo_url: None,
             port: 1,
             guard_command: String::new(),
@@ -255,6 +258,7 @@ fn the_owners_trust_lines_survive_removing_the_interim_argument() {
             workspace: Path::new("/w"),
             artifacts: None,
             trusted_paths: &[],
+            served: &[],
             repo_url: None,
             port: 1,
             guard_command: String::new(),

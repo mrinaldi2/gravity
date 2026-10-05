@@ -83,6 +83,14 @@ fn the_guard_is_told_worktrees_not_trusted_paths_are_writable() {
     let bot = super::super::quote("Desktop Dev");
     assert!(trusted.contains(&format!("--bot {bot}")), "{trusted}");
     assert!(!trusted.contains("--releases"), "{trusted}");
+    // Every bot's guard knows the served builds (CE-010 M3).
+    for dir in [
+        "/Users/me/.gravity/releases",
+        "/Users/me/.gravity/.releases-staging",
+    ] {
+        let dir = super::super::quote(&PathBuf::from(dir).display().to_string());
+        assert!(trusted.contains(&format!("--served {dir}")), "{trusted}");
+    }
     let publishers: [&[PermissionExtra]; 2] =
         [&[PermissionExtra::Publish], &[PermissionExtra::ReleaseMain]];
     for extras in publishers {
@@ -115,6 +123,7 @@ fn a_moved_home_keeps_its_locks_on_the_renamed_config() {
         workspace: Path::new("/Users/me/.thehermes/projects/p/bots/dev/workspace"),
         artifacts: None,
         trusted_paths: &[],
+        served: &[],
         repo_url: None,
         port: 49777,
         guard_command: "'/bin/hermesd' guard".to_string(),

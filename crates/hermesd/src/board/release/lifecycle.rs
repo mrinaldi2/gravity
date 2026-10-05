@@ -142,6 +142,17 @@ pub fn pause(
         _ => None,
     }
     .unwrap_or_else(user_sender);
+    tell_installers(app, &release, &sender, &note)?;
+    Ok(release)
+}
+
+/// A note to each tester holding an unfinished deploy of the package.
+pub(super) fn tell_installers(
+    app: &Arc<AppState>,
+    release: &Release,
+    sender: &bus::Sender,
+    note: &str,
+) -> anyhow::Result<()> {
     for d in release
         .deployments
         .iter()
@@ -150,10 +161,10 @@ pub fn pause(
         messaging::send_dm(
             &app.db,
             &app.events,
-            Dm::new(&d.executor, &sender, bus::MessageKind::Note, &note),
+            Dm::new(&d.executor, sender, bus::MessageKind::Note, note),
         )?;
     }
-    Ok(release)
+    Ok(())
 }
 
 pub fn resume(

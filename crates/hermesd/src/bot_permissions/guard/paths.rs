@@ -164,7 +164,7 @@ impl GuardContext {
     /// The paths a word names, resolved from each directory in `scope`:
     /// lexically (with the line's links followed) and on disk. A word with
     /// wildcards keeps them as literal components here.
-    fn candidates(&self, expanded: &str, scope: &Scope) -> Vec<PathBuf> {
+    pub(super) fn candidates(&self, expanded: &str, scope: &Scope) -> Vec<PathBuf> {
         let word = Path::new(expanded);
         let dirs: Vec<&Path> = if word.is_absolute() {
             vec![Path::new("/")]
@@ -253,6 +253,9 @@ impl GuardContext {
             || matches!(path.to_str(), Some("/dev/stdout" | "/dev/stderr"))
         {
             return true;
+        }
+        if self.in_served(path) {
+            return false;
         }
         let inside = |root: &PathBuf| path.starts_with(real(root));
         self.writable.iter().any(inside)

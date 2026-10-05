@@ -107,6 +107,8 @@ pub struct Config {
     pub retention: RetentionConfig,
     /// Each bot's own browser. See [`crate::browser`].
     pub browser: crate::browser::BrowserConfig,
+    /// Serving release builds on the tailnet (H-020 §6.6).
+    pub releases: crate::board::release::serve::ServeConfig,
     /// The *user's* home, where Claude Code keeps its `~/.claude/projects`
     /// transcripts. Distinct from `home`, which is the daemon's own state
     /// directory; separate so tests can point it at a fixture tree.
@@ -221,6 +223,7 @@ impl Default for Config {
             resume_after_restart: true,
             delivery: DeliveryConfig::default(),
             browser: crate::browser::BrowserConfig::default(),
+            releases: Default::default(),
             scheduler: SchedulerConfig::default(),
             supervision_interval_ms: 5_000,
             startup: Default::default(),
@@ -295,16 +298,18 @@ impl Config {
             Some(p) => p.to_path_buf(),
             None => default_home().join(crate::brand::daemon_file(".toml")),
         };
-        if path.exists() {
+        let mut cfg = if path.exists() {
             let raw = std::fs::read_to_string(&path)
                 .with_context(|| format!("reading {}", path.display()))?;
             let mut cfg: Config =
                 toml::from_str(&raw).with_context(|| format!("parsing {}", path.display()))?;
             cfg.configured_port = cfg.port;
-            Ok(cfg)
+            cfg
         } else {
-            Ok(Config::default())
-        }
+            Config::default()
+        };
+        crate::board::release::confine::check_at_load(&mut cfg);
+        Ok(cfg)
     }
 
     pub fn db_path(&self) -> PathBuf {
