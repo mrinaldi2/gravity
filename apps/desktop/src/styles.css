@@ -26,6 +26,7 @@
 @import "./styles/project-window.css";
 @import "./styles/board.css";
 @import "./styles/board-cards.css";
+@import "./styles/releases.css";
 @import "./styles/commands.css";
 @import "./styles/overlays.css";
 @import "./styles/settings.css";

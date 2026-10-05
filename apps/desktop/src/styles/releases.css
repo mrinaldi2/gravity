@@ -1,0 +1,336 @@
+/* Releases (H-018 §4A): the package list, the release review shared with
+   Decisions, and its dialogs. Status always pairs a glyph with a word. */
+
+.releases-view {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+
+.release-list {
+  overflow-y: auto;
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+}
+
+.release-list h3 {
+  margin: 12px 8px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.release-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.release-list-row {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 8px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.release-list-row:hover {
+  background: var(--bg-hover);
+}
+
+.release-list-row.on {
+  background: var(--bg-active);
+}
+
+.release-list-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.release-list-name {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.release-list-row .release-meta {
+  grid-column: 2;
+}
+
+/* The review: header, tests, tabs, then the sticky action bar. */
+.release-review {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 16px 24px 0;
+  overflow-y: auto;
+}
+
+.release-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.release-head h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--text-strong);
+}
+
+.release-pill {
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.release-meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.release-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.release-tone-ok {
+  color: var(--green);
+}
+
+.release-tone-bad {
+  color: var(--red);
+}
+
+.release-tone-you {
+  color: var(--amber);
+}
+
+.release-tone-wait {
+  color: var(--text);
+}
+
+.release-tone-off {
+  color: var(--text-dim);
+}
+
+.release-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.release-banner-bad {
+  border-color: var(--red);
+}
+
+.release-tests {
+  padding: 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.release-tests h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.release-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 6px 0;
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+}
+
+.release-row:first-of-type {
+  border-top: 0;
+}
+
+.release-machine {
+  min-width: 72px;
+  color: var(--text-strong);
+}
+
+.release-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.release-tab {
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.release-tab.on {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+}
+
+.release-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.release-panel {
+  flex: 1;
+}
+
+.release-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.release-item-title {
+  color: var(--text-strong);
+}
+
+.release-include {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.release-changelog {
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.release-howto h4 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.release-howto ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.release-rollout {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.release-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 -24px;
+  padding: 12px 24px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.release-bar-note,
+.release-pending {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* Dialogs. */
+.release-dialog {
+  min-width: 420px;
+  max-width: 520px;
+}
+
+.release-warning {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--amber);
+}
+
+.release-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.release-field textarea,
+.release-field select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.release-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 13px;
+  border: 0;
+}
+
+.release-choice legend {
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.release-returns {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.release-returns li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.release-returns select {
+  margin-left: auto;
+}
