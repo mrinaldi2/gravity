@@ -85,6 +85,8 @@ const REPLY_TYPES: ReadonlySet<string> = new Set(
     bot_commands: true,
     agent_conversations: true,
     agent_conversation: true,
+    releases: true,
+    release: true,
   } satisfies Record<ServerReplyType, true>),
 );
 
