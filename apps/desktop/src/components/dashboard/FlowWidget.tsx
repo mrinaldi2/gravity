@@ -1,9 +1,10 @@
 // The dashboard's Flow widget (B11, H-018 §2.1 "Flow"): how work moves,
-// over this week or four. Throughput with an 8-week sparkline, cycle time
-// p50/p85, rework and expired tasks as stats; cycle time by column, WIP over
-// time and the aging list below. Every chart is one series in the accent
-// colour, every bar names its value on hover, and a table view shows the
-// same numbers as text.
+// over this week or four. Items done with an 8-week sparkline, cycle time
+// in plain words (typical, and what 85% finish within), rework and expired
+// tasks as stats; time in each column, work in progress each day and the
+// aging list below. Every chart is one series in the accent colour with its
+// scale written under it, every bar names its value on hover, and a table
+// view shows the same numbers as text (UX-019).
 
 import { useState } from "react";
 import type { ReactElement } from "react";
@@ -24,6 +25,21 @@ export function duration(seconds: number, count = 1): string {
     return `${Math.round(seconds / 3600)}h`;
   }
   return `${Math.max(1, Math.round(seconds / 60))}m`;
+}
+
+function unit(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+/** "1.6 days", "5 hours", "40 minutes", for sentences. */
+export function spelled(seconds: number): string {
+  if (seconds >= DAY) {
+    return `${(seconds / DAY).toFixed(1)} days`;
+  }
+  if (seconds >= 3600) {
+    return unit(Math.round(seconds / 3600), "hour");
+  }
+  return unit(Math.max(1, Math.round(seconds / 60)), "minute");
 }
 
 function dayLabel(at: string): string {
@@ -59,6 +75,25 @@ function Bars(props: {
   );
 }
 
+function CycleStat(props: { readonly m: FlowMetrics }): ReactElement {
+  const { cycle } = props.m;
+  return (
+    <div className="flow-stat">
+      <span className="flow-stat-label">Cycle time</span>
+      {cycle.count === 0 ? (
+        <span className="flow-stat-value">—</span>
+      ) : (
+        <>
+          <span className="flow-stat-value">
+            <strong>{spelled(cycle.p50)}</strong> typical
+          </span>
+          <span className="flow-stat-note">85% done within {spelled(cycle.p85)}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Stats(props: { readonly m: FlowMetrics }): ReactElement {
   const { m } = props;
   const weeks = m.weekly.map((n, i) => ({
@@ -70,15 +105,13 @@ function Stats(props: { readonly m: FlowMetrics }): ReactElement {
     <div className="flow-stats">
       <div className="flow-stat">
         <span className="flow-stat-label">Throughput</span>
-        <span className="flow-stat-value">{m.throughput}</span>
-        <Bars label="Done per week, last 8 weeks" values={weeks} />
-      </div>
-      <div className="flow-stat">
-        <span className="flow-stat-label">Cycle time</span>
         <span className="flow-stat-value">
-          p50 {duration(m.cycle.p50, m.cycle.count)} · p85 {duration(m.cycle.p85, m.cycle.count)}
+          <strong>{m.throughput}</strong> {m.throughput === 1 ? "item" : "items"} done
         </span>
+        <Bars label="Done per week, last 8 weeks" values={weeks} />
+        <span className="flow-stat-note">Last 8 weeks</span>
       </div>
+      <CycleStat m={m} />
       <div className="flow-stat">
         <span className="flow-stat-label">Rework</span>
         <span className="flow-stat-value">{Math.round(m.rework_rate * 100)}%</span>
@@ -89,26 +122,34 @@ function Stats(props: { readonly m: FlowMetrics }): ReactElement {
       <div className="flow-stat">
         <span className="flow-stat-label">Expired tasks</span>
         <span className="flow-stat-value">{m.expired_tasks}</span>
+        <span className="flow-stat-note">tasks that ran out of time</span>
       </div>
     </div>
   );
 }
 
+/** "Doing: typical 1.2 days, 85% within 2.4 days, 6 items". */
+function columnSentence(c: ColumnTime): string {
+  if (c.count === 0) {
+    return `${c.name}: nothing measured yet`;
+  }
+  const items = `${c.count} ${c.count === 1 ? "item" : "items"}`;
+  return `${c.name}: typical ${spelled(c.p50)}, 85% within ${spelled(c.p85)}, ${items}`;
+}
+
 function ByColumn(props: { readonly columns: readonly ColumnTime[] }): ReactElement {
   const max = Math.max(1, ...props.columns.map((c) => c.p85));
   return (
-    <ul className="flow-columns" aria-label="Cycle time by column">
+    <ul className="flow-columns" aria-label="Time in each column">
       {props.columns.map((c) => (
-        <li
-          key={c.key}
-          title={`${c.name}: p50 ${duration(c.p50, c.count)}, p85 ${duration(c.p85, c.count)}`}
-        >
+        <li key={c.key} title={columnSentence(c)} aria-label={columnSentence(c)}>
           <span className="flow-column-name">{c.name}</span>
           <span className="flow-hbar">
             <span className="flow-bar" style={{ width: `${(c.p50 / max) * 100}%` }} />
           </span>
           <span className="flow-column-value">
-            {duration(c.p50, c.count)} · p85 {duration(c.p85, c.count)}
+            <strong>{duration(c.p50, c.count)}</strong> typical · 85% within{" "}
+            {duration(c.p85, c.count)}
           </span>
         </li>
       ))}
@@ -116,16 +157,24 @@ function ByColumn(props: { readonly columns: readonly ColumnTime[] }): ReactElem
   );
 }
 
-function Wip(props: { readonly daily: readonly FlowDay[] }): ReactElement {
+/** The bars, and their scale in words under them. */
+function Wip(props: { readonly daily: readonly FlowDay[]; readonly days: number }): ReactElement {
+  const now = props.daily.at(-1)?.wip ?? 0;
+  const peak = Math.max(0, ...props.daily.map((d) => d.wip));
   return (
-    <Bars
-      label="In progress at the end of each day"
-      values={props.daily.map((d) => ({
-        key: d.at,
-        value: d.wip,
-        title: `${dayLabel(d.at)}: ${d.wip} in progress`,
-      }))}
-    />
+    <>
+      <Bars
+        label="In progress at the end of each day"
+        values={props.daily.map((d) => ({
+          key: d.at,
+          value: d.wip,
+          title: `${dayLabel(d.at)}: ${d.wip} in progress`,
+        }))}
+      />
+      <span className="flow-stat-note">
+        Now {now} · peak {peak} · {props.days === 7 ? "this week" : "last 4 weeks"}
+      </span>
+    </>
   );
 }
 
@@ -134,12 +183,12 @@ function Tables(props: { readonly m: FlowMetrics }): ReactElement {
   return (
     <div className="flow-tables">
       <table>
-        <caption>Cycle time by column</caption>
+        <caption>Time in each column</caption>
         <thead>
           <tr>
             <th scope="col">Column</th>
-            <th scope="col">p50</th>
-            <th scope="col">p85</th>
+            <th scope="col">Typical (p50)</th>
+            <th scope="col">85% within (p85)</th>
             <th scope="col">Items</th>
           </tr>
         </thead>
@@ -178,12 +227,12 @@ function Charts(props: {
   return (
     <div className="flow-charts">
       <div>
-        <h3>Cycle time by column</h3>
+        <h3>Time in each column</h3>
         <ByColumn columns={m.by_column} />
       </div>
       <div>
-        <h3>In progress over time</h3>
-        <Wip daily={m.daily} />
+        <h3>In progress each day</h3>
+        <Wip daily={m.daily} days={m.days} />
       </div>
       <div>
         <h3>Aging</h3>
@@ -239,39 +288,55 @@ function Body(props: {
   );
 }
 
+/** The range and Table view toggles: only when there are numbers to show. */
+function Toggles(props: {
+  readonly range: MetricsRange;
+  readonly setRange: (range: MetricsRange) => void;
+  readonly table: boolean;
+  readonly setTable: (table: boolean) => void;
+}): ReactElement {
+  return (
+    <span className="flow-controls">
+      <span className="flow-range" role="group" aria-label="Range">
+        {RANGES.map((r) => (
+          <button
+            key={r.key}
+            type="button"
+            aria-pressed={props.range === r.key}
+            onClick={() => props.setRange(r.key)}
+          >
+            {r.label}
+          </button>
+        ))}
+      </span>
+      <button
+        type="button"
+        className="dash-more"
+        aria-pressed={props.table}
+        onClick={() => props.setTable(!props.table)}
+      >
+        {props.table ? "Chart view" : "Table view"}
+      </button>
+    </span>
+  );
+}
+
 export default function FlowWidget(props: {
   readonly state: MetricsState;
   readonly columnName: (key: string) => string;
   readonly onBoard: () => void;
 }): ReactElement {
   const [table, setTable] = useState(false);
-  const { range, setRange } = props.state;
+  const { range, setRange, metrics } = props.state;
+  // They do nothing without numbers (UX-019).
+  const toggles = metrics !== null && !isEmpty(metrics);
   return (
     <section className="dash-widget dash-wide" aria-labelledby="dash-flow">
       <h2 id="dash-flow">
         Flow
-        <span className="flow-controls">
-          <span className="flow-range" role="group" aria-label="Range">
-            {RANGES.map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                aria-pressed={range === r.key}
-                onClick={() => setRange(r.key)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </span>
-          <button
-            type="button"
-            className="dash-more"
-            aria-pressed={table}
-            onClick={() => setTable((t) => !t)}
-          >
-            {table ? "Chart view" : "Table view"}
-          </button>
-        </span>
+        {toggles ? (
+          <Toggles range={range} setRange={setRange} table={table} setTable={setTable} />
+        ) : null}
       </h2>
       <Body
         state={props.state}

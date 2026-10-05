@@ -90,7 +90,7 @@ async fn a_linked_computer_shows_the_homes_flow_or_where_to_look() {
     assert!(
         reply["note"]
             .as_str()
-            .is_some_and(|n| n.contains("can't be reached")),
+            .is_some_and(|n| n.starts_with("Can't reach")),
         "{reply}"
     );
 }

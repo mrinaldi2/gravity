@@ -42,5 +42,5 @@ export const FourWeeks: Story = () => <Widget metrics={flowMetrics4w()} range="4
 export const Empty: Story = () => <Widget metrics={emptyFlow()} />;
 /** Off the board's home, with the home away. */
 export const HomeAway: Story = () => (
-  <Widget metrics={null} note="Flow is kept on mac, which can't be reached right now." />
+  <Widget metrics={null} note="Can't reach mac right now, so these numbers can't be shown." />
 );

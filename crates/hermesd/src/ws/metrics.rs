@@ -85,7 +85,7 @@ async fn from_home(
             let name = crate::peer::board::home_name(&app, &home);
             json!({
                 "type": "metrics", "metrics": null,
-                "note": format!("Flow is kept on {name}, which can't be reached right now."),
+                "note": format!("Can't reach {name} right now, so these numbers can't be shown."),
             })
         }
     })
