@@ -1,11 +1,17 @@
 // The release review (H-018 §4A.2–4A.3): one component for the Releases tab
 // and the Decisions view, so there is only one way to rule on a package.
 
-import { useState } from "react";
-import type { KeyboardEvent, ReactElement } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ReactElement } from "react";
 import type { ItemVerdict, Release } from "../../protocol/releases";
 import { releaseTitle, statusLabel } from "./labels";
-import { ApproveDialog, HoldDialog, LeaveOutDialog, PauseDialog, RejectDialog } from "./ReleaseDialogs";
+import {
+  ApproveDialog,
+  HoldDialog,
+  LeaveOutDialog,
+  PauseDialog,
+  RejectDialog,
+} from "./ReleaseDialogs";
 import type { ReturnTo } from "./ReleaseDialogs";
 import { Changelog, Glyph, HowToTest, ItemsList, Rollout, TestSummary } from "./ReleaseSections";
 import type { LeftOut } from "./ReleaseSections";
@@ -14,7 +20,14 @@ import type { ReleaseActions } from "./useReleases";
 type Tab = "items" | "changelog" | "howto" | "rollout";
 type Open = "approve" | "hold" | "reject" | "pause" | { readonly leaveOut: string } | null;
 
-const ROLLING = ["approved", "deploying", "paused", "partially_deployed", "deployed", "rolled_back"];
+const ROLLING: ReadonlySet<string> = new Set([
+  "approved",
+  "deploying",
+  "paused",
+  "partially_deployed",
+  "deployed",
+  "rolled_back",
+]);
 
 export interface ReleaseReviewProps {
   readonly release: Release;
@@ -36,7 +49,7 @@ export default function ReleaseReview({
   now = Date.now,
 }: ReleaseReviewProps): ReactElement {
   const version = releaseTitle(release);
-  const rolling = ROLLING.includes(release.status);
+  const rolling = ROLLING.has(release.status);
   const [tab, setTab] = useState<Tab>(rolling ? "rollout" : "items");
   const [open, setOpen] = useState<Open>(null);
   const [leftOut, setLeftOut] = useState<ReadonlyMap<string, LeftOut>>(new Map());
@@ -56,7 +69,9 @@ export default function ReleaseReview({
         ? { item_id: i.item_id, verdict: out.verdict, ...(out.note ? { note: out.note } : {}) }
         : { item_id: i.item_id, verdict: "ship" };
     });
-    const label = leftOut.size ? `Approving ${shipping} of ${total} items of ${version}` : `Approving ${version}`;
+    const label = leftOut.size
+      ? `Approving ${shipping} of ${total} items of ${version}`
+      : `Approving ${version}`;
     actions.rule(release, verdicts, label);
     setLeftOut(new Map());
     close();
@@ -71,12 +86,20 @@ export default function ReleaseReview({
     close();
   };
 
-  const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && ruling && canRule && shipping > 0) {
-      event.preventDefault();
-      setOpen("approve");
-    }
-  };
+  // ⌘↩ approves while the review has focus (§4A.3).
+  const root = useRef<HTMLDivElement>(null);
+  const approvable = ruling && canRule && shipping > 0 && open === null;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const inside = root.current?.contains(document.activeElement) ?? false;
+      if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && inside && approvable) {
+        event.preventDefault();
+        setOpen("approve");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [approvable]);
 
   const tabs: readonly { readonly id: Tab; readonly label: string }[] = [
     { id: "items", label: `Items ${total}` },
@@ -86,7 +109,7 @@ export default function ReleaseReview({
   ];
 
   return (
-    <div className="release-review" onKeyDown={onKeyDown}>
+    <div className="release-review" role="region" aria-label={`Release ${version}`} ref={root}>
       <header className="release-head">
         <h2>{version}</h2>
         <span className={`release-pill release-tone-${status.tone}`}>
@@ -151,7 +174,9 @@ export default function ReleaseReview({
               </button>
             </span>
           ) : (
-            <span className="release-bar-note">{barNote(release, failing, leftOut.size, canRule)}</span>
+            <span className="release-bar-note">
+              {barNote(release, failing, leftOut.size, canRule)}
+            </span>
           )}
           <button
             type="button"
@@ -252,7 +277,12 @@ export default function ReleaseReview({
 }
 
 /** What should give the owner pause, or that nothing does (§4A.2). */
-function barNote(release: Release, failing: readonly string[], left: number, canRule: boolean): string {
+function barNote(
+  release: Release,
+  failing: readonly string[],
+  left: number,
+  canRule: boolean,
+): string {
   if (!canRule) {
     return release.rule_on
       ? `Rule on it from a device connected to ${release.rule_on}.`
@@ -260,7 +290,9 @@ function barNote(release: Release, failing: readonly string[], left: number, can
   }
   const notes: string[] = [];
   if (failing.length) {
-    notes.push(`⚠ ${failing.length} computer${failing.length > 1 ? "s" : ""} didn't pass: ${failing.join(", ")}`);
+    notes.push(
+      `⚠ ${failing.length} computer${failing.length > 1 ? "s" : ""} didn't pass: ${failing.join(", ")}`,
+    );
   }
   if (left) {
     notes.push(`${left} item${left > 1 ? "s" : ""} left out`);
@@ -289,7 +321,9 @@ function Banner({
         <p className="release-banner" role="status">
           <Glyph label={statusLabel("held")} />
           {release.held_note ? ` · ${release.held_note}` : ""}
-          {release.remind_at ? ` · reminds you ${new Date(release.remind_at).toLocaleString()}` : ""}
+          {release.remind_at
+            ? ` · reminds you ${new Date(release.remind_at).toLocaleString()}`
+            : ""}
         </p>
       );
     case "paused":
@@ -308,16 +342,16 @@ function Banner({
       const left = release.items.filter((i) => i.verdict !== "ship").map((i) => i.item_id);
       return (
         <p className="release-banner" role="status">
-          You approved part of this package. DevOps is building a new one without{" "}
-          {left.join(", ")}; you'll rule on that build.
+          You approved part of this package. DevOps is building a new one without {left.join(", ")};
+          you'll rule on that build.
         </p>
       );
     }
     case "partially_deployed":
       return (
         <p className="release-banner release-banner-bad" role="status">
-          The rollout failed on {failedOn(release).join(", ") || "a computer"}. Its items are back in
-          Verify, and DevOps has a rollback task.
+          The rollout failed on {failedOn(release).join(", ") || "a computer"}. Its items are back
+          in Verify, and DevOps has a rollback task.
         </p>
       );
     case "superseded":

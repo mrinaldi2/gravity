@@ -32,15 +32,22 @@ export function useDecisionRelease(
       return;
     }
     let live = true;
-    client
-      .request({ type: "list_releases", project_id: projectId }, "releases")
-      .then((reply) => {
-        if (live) {
-          setRelease(reply.releases.find((r) => r.decision_id === decisionId));
-        }
-      })
-      // Not a release decision as far as anyone can tell: show the decision.
-      .catch(() => (live ? setRelease(undefined) : undefined));
+    const load = async (): Promise<void> => {
+      let found: Release | undefined;
+      try {
+        const reply = await client.request(
+          { type: "list_releases", project_id: projectId },
+          "releases",
+        );
+        found = reply.releases.find((r) => r.decision_id === decisionId);
+      } catch {
+        // Not a release decision as far as anyone can tell: show the decision.
+      }
+      if (live) {
+        setRelease(found);
+      }
+    };
+    void load();
     return () => {
       live = false;
     };

@@ -112,8 +112,8 @@ export function HoldDialog({
       }
     >
       <p className="confirm-body">
-        Nothing is deployed. The package waits as it is, and comes back to you when the reminder
-        is due.
+        Nothing is deployed. The package waits as it is, and comes back to you when the reminder is
+        due.
       </p>
       <label className="release-field">
         Reason (optional)
