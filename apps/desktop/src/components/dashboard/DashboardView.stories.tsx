@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
 import type { Dashboard } from "../../protocol/dashboard";
-import { DASH_BOTS, MIRRORED_BOARD, dashboard, quietDashboard } from "../../test/dashboardFixtures";
+import { MIRRORED_BOARD, dashboard, quietDashboard } from "../../test/dashboardFixtures";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { project } from "../../test/fixtures";
 import ProjectWindow from "../project/ProjectWindow";
@@ -20,18 +20,20 @@ function Window({ data }: { readonly data: Dashboard }): ReactElement {
     req_id: "1",
     dashboard: data,
   }));
+  // The header counts the same bots the Team widget lists (UX-010 QA).
+  const bots = data.team.map((row) => row.bot);
   return (
     <div className="main" style={{ height: 900 }}>
       <ProjectWindow
         project={hermes}
-        botCount={DASH_BOTS.length}
+        botCount={bots.length}
         tab="dashboard"
         onSelectTab={noTab}
       >
         <DashboardView
           client={client}
           project={hermes}
-          bots={DASH_BOTS}
+          bots={bots}
           connected
           canControl
           addToast={noToast}

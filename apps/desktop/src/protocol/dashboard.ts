@@ -15,6 +15,8 @@ export type NeedsYou =
       readonly deadline_at: string | null;
       /** A bot's relay of a ruling, waiting for the owner to confirm it. */
       readonly relayed: boolean;
+      /** The bot that raised it; absent from daemons before 0.16.1. */
+      readonly raised_by?: string;
     }
   | {
       readonly kind: "p0";

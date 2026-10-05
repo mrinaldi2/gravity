@@ -65,22 +65,77 @@ describe("DashboardView", () => {
     ]);
     expect(rows[2]).toHaveTextContent("Doing · iOS Dev");
     expect(rows[3]).toHaveTextContent("WIP override: hotfix for 0.15.2 — Desktop Dev");
+    expect(rows[1]).toHaveTextContent(/Raised by Architect · Answer by /);
 
-    await user.click(within(nth(rows, 1)).getByRole("button", { name: "Answer" }));
+    await user.click(within(nth(rows, 1)).getByRole("button", { name: /^Answer/ }));
     expect(nav.onOpenDecision).toHaveBeenCalledWith("dec-1");
-    await user.click(within(nth(rows, 2)).getByRole("button", { name: "Open board" }));
+    await user.click(within(nth(rows, 2)).getByRole("button", { name: /^Open board/ }));
     expect(nav.onOpenTab).toHaveBeenCalledWith("board");
+  });
+
+  it("names each row's action after what it acts on, starting with its visible words", async () => {
+    setup(dashboard());
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    const buttons = within(needs).getAllByRole("button");
+    expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Review 0.16.0",
+      "Answer: Push notifications: pay for an APNs relay?",
+      "Open board at H-021",
+      "Open board at H-030",
+    ]);
+    for (const button of buttons) {
+      expect(button.getAttribute("aria-label")).toMatch(new RegExp(`^${button.textContent}`));
+    }
   });
 
   it("opens a release's review in a drawer, over the dashboard", async () => {
     const user = userEvent.setup();
     setup(dashboard());
     const needs = await screen.findByRole("region", { name: "Needs you · 4" });
-    await user.click(nth(within(needs).getAllByRole("button", { name: "Review" }), 0));
+    await user.click(within(needs).getByRole("button", { name: "Review 0.16.0" }));
     const drawer = screen.getByRole("complementary", { name: "Release R-2026-W41" });
     expect(within(drawer).getByRole("button", { name: "Approve 0.16.0" })).toBeInTheDocument();
     await user.click(within(drawer).getByRole("button", { name: "Close the release" }));
     expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("moves focus into the drawer, and back to its Review button when Escape closes it", async () => {
+    const user = userEvent.setup();
+    setup(dashboard());
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    const review = within(needs).getByRole("button", { name: "Review 0.16.0" });
+    review.focus();
+    await user.keyboard("{Enter}");
+    const drawer = screen.getByRole("complementary", { name: "Release R-2026-W41" });
+    expect(within(drawer).getByRole("button", { name: "Close the release" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(review).toHaveFocus();
+  });
+
+  it("returns focus to the Review button when the close button shuts the drawer", async () => {
+    const user = userEvent.setup();
+    setup(dashboard());
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    const review = within(needs).getByRole("button", { name: "Review 0.16.0" });
+    await user.click(review);
+    await user.click(screen.getByRole("button", { name: "Close the release" }));
+    expect(review).toHaveFocus();
+  });
+
+  it("leaves Escape to a dialog open inside the drawer", async () => {
+    const user = userEvent.setup();
+    setup(dashboard());
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    await user.click(within(needs).getByRole("button", { name: "Review 0.16.0" }));
+    const drawer = screen.getByRole("complementary", { name: "Release R-2026-W41" });
+    await user.click(within(drawer).getByRole("button", { name: "Approve 0.16.0" }));
+    expect(within(drawer).getByRole("dialog")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(within(drawer).queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("complementary", { name: "Release R-2026-W41" })).toBeInTheDocument();
   });
 
   it("shows the board strip with its limits, then blocked, stale and rework", async () => {
@@ -124,9 +179,11 @@ describe("DashboardView", () => {
   it("gives every widget an empty state", async () => {
     setup(quietDashboard());
     expect(await screen.findByText("Nothing needs you in The Hermes.")).toBeInTheDocument();
+    // No "· 0": the sentence already says nothing needs you.
+    expect(screen.getByRole("heading", { name: "Needs you" })).toBeInTheDocument();
     expect(screen.getByText("No board yet. Start it from the Board tab.")).toBeInTheDocument();
     expect(
-      screen.getByText("No release yet. DevOps packages the items in Verify."),
+      screen.getByText("No release yet. DevOps packages items once they pass Verify."),
     ).toBeInTheDocument();
     expect(screen.getByText("No bots in this project yet.")).toBeInTheDocument();
     expect(screen.getByText("No meetings yet.")).toBeInTheDocument();

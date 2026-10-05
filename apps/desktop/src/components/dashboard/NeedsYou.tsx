@@ -54,6 +54,8 @@ function RowView(props: {
   readonly title: ReactElement | string;
   readonly meta: string;
   readonly action: string;
+  /** Starts with `action`, then says what it acts on (UX-010). */
+  readonly label: string;
   readonly onAction: () => void;
 }): ReactElement {
   return (
@@ -65,7 +67,12 @@ function RowView(props: {
         <div className="dash-row-title">{props.title}</div>
         <div className="dash-row-meta">{props.meta}</div>
       </div>
-      <button type="button" className="btn btn-small" onClick={props.onAction}>
+      <button
+        type="button"
+        className="btn btn-small"
+        aria-label={props.label}
+        onClick={props.onAction}
+      >
         {props.action}
       </button>
     </li>
@@ -86,11 +93,14 @@ function row(r: Row, props: NeedsYouProps): ReactElement {
           title={`${releaseTitle(r.release)} is ready for you to test · ${plural(r.release.items.length, "item")}`}
           meta={tests || "No test results yet"}
           action="Review"
+          label={`Review ${releaseTitle(r.release)}`}
           onAction={() => props.onReview(r.release)}
         />
       );
     }
-    case "decision":
+    case "decision": {
+      const action = r.relayed ? "Confirm" : "Answer";
+      const due = r.deadline_at ? `Answer by ${when(r.deadline_at)}` : "Waiting for your answer";
       return (
         <RowView
           key={`decision-${r.id}`}
@@ -99,14 +109,16 @@ function row(r: Row, props: NeedsYouProps): ReactElement {
           meta={
             r.relayed
               ? "A bot relayed your ruling: confirm it's yours"
-              : r.deadline_at
-                ? `Answer by ${when(r.deadline_at)}`
-                : "Waiting for your answer"
+              : r.raised_by
+                ? `Raised by ${props.botName(r.raised_by)} · ${due}`
+                : due
           }
-          action={r.relayed ? "Confirm" : "Answer"}
+          action={action}
+          label={`${action}: ${r.title}`}
           onAction={() => props.onDecision(r.id)}
         />
       );
+    }
     case "p0":
       return (
         <RowView
@@ -123,6 +135,7 @@ function row(r: Row, props: NeedsYouProps): ReactElement {
             r.assignee ? props.botName(r.assignee) : "Unassigned",
           ].join(" · ")}
           action="Open board"
+          label={`Open board at ${r.id}`}
           onAction={props.onBoard}
         />
       );
@@ -139,6 +152,7 @@ function row(r: Row, props: NeedsYouProps): ReactElement {
           }
           meta={`${r.note} — ${actorName(r.actor, props.botName)} · ${when(r.at)}`}
           action="Open board"
+          label={`Open board at ${r.id}`}
           onAction={props.onBoard}
         />
       );
@@ -151,7 +165,8 @@ export default function NeedsYou(props: NeedsYouProps): ReactElement {
   rows.sort((a, b) => ORDER[a.kind] - ORDER[b.kind]);
   return (
     <section className="dash-widget dash-wide" aria-labelledby="dash-needs-you">
-      <h2 id="dash-needs-you">Needs you · {rows.length}</h2>
+      {/* At zero the empty sentence says it; no "· 0" badge (UX-010). */}
+      <h2 id="dash-needs-you">Needs you{rows.length > 0 ? ` · ${rows.length}` : ""}</h2>
       {rows.length === 0 ? (
         <p className="dash-empty">Nothing needs you in {props.projectName}.</p>
       ) : (

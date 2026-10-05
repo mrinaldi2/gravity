@@ -82,6 +82,7 @@ impl Conn {
                 needs_you.push(json!({
                     "kind": "decision", "id": d.id, "title": d.title,
                     "priority": d.priority, "deadline_at": d.deadline_at, "relayed": relayed,
+                    "raised_by": d.raised_by_bot_id,
                 }));
             }
         }

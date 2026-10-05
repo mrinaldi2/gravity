@@ -4,7 +4,7 @@
 // show, so there is one way to rule on a package.
 
 import { RefreshCw, X } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
@@ -51,9 +51,25 @@ function ReviewDrawer(props: {
     props.onChanged();
   });
   const titles = useItemTitles(props.client, props.project.id, true);
+  const drawer = useRef<HTMLElement>(null);
+  const close = useRef<HTMLButtonElement>(null);
+  const { onClose } = props;
+  // Keyboard users land in the drawer, and Escape leaves it unless one of
+  // the review's own dialogs is open: that Escape is the dialog's (UX-010).
+  useEffect(() => {
+    close.current?.focus();
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape" && !drawer.current?.querySelector('[role="dialog"]')) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
   return (
-    <aside className="dash-drawer" aria-label={`Release ${release.name}`}>
+    <aside ref={drawer} className="dash-drawer" aria-label={`Release ${release.name}`}>
       <button
+        ref={close}
         type="button"
         className="dash-drawer-close"
         aria-label="Close the release"
@@ -76,6 +92,19 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const { client, project, bots, connected } = props;
   const { dashboard, error, refresh } = useDashboard(client, project.id, connected);
   const [reviewing, setReviewing] = useState<Release | null>(null);
+  // The Review button that opened the drawer gets focus back when it closes.
+  const opener = useRef<HTMLElement | null>(null);
+  const openReview = useCallback((release: Release): void => {
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setReviewing(release);
+  }, []);
+  const closeReview = useCallback((): void => {
+    setReviewing(null);
+    if (opener.current?.isConnected) {
+      opener.current.focus();
+    }
+    opener.current = null;
+  }, []);
 
   if (dashboard === null) {
     return (
@@ -120,7 +149,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             rows={dashboard.needs_you}
             botName={botName}
             columnName={(key) => columns.get(key) ?? key}
-            onReview={setReviewing}
+            onReview={openReview}
             onDecision={props.onOpenDecision}
             onBoard={openBoard}
           />
@@ -143,7 +172,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
           canControl={props.canControl}
           addToast={props.addToast}
           onChanged={() => void refresh()}
-          onClose={() => setReviewing(null)}
+          onClose={closeReview}
         />
       ) : null}
     </div>

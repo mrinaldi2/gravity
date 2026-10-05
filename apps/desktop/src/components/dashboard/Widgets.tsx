@@ -137,7 +137,7 @@ export function ReleasesWidget(props: {
   return (
     <Widget id="dash-releases" title="Releases" more={{ label: "Releases", onClick: props.onOpen }}>
       {props.releases.length === 0 ? (
-        <p className="dash-empty">No release yet. DevOps packages the items in Verify.</p>
+        <p className="dash-empty">No release yet. DevOps packages items once they pass Verify.</p>
       ) : (
         <ul className="dash-rows">
           {props.releases.map((r) => {

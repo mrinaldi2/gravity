@@ -126,6 +126,7 @@ async fn the_dashboard_counts_this_weeks_flow_without_the_import() {
     assert_eq!(overrides.len(), 1, "{overrides:?}");
     assert_eq!(overrides[0]["note"], "WIP override: hotfix");
     assert_eq!(kinds(&d, "decision")[0]["title"], "Budget for push");
+    assert_eq!(kinds(&d, "decision")[0]["raised_by"], json!(pair.ids[0]));
 
     let dev = d["team"]
         .as_array()

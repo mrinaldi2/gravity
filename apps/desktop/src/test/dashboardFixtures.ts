@@ -63,6 +63,7 @@ export function dashboard(over: Partial<Dashboard> = {}): Dashboard {
         priority: "normal",
         deadline_at: "2026-10-07T16:00:00Z",
         relayed: false,
+        raised_by: "arch",
       },
       {
         kind: "p0",
