@@ -262,12 +262,20 @@ impl<S: Schtasks> Host for TaskScheduler<'_, S> {
 
     fn start(&self, id: Identity) -> anyhow::Result<()> {
         match id {
-            // Still registered, only disabled: enable it again.
+            // Still registered, only disabled: enable it again. Every task
+            // is tried, so one failing never leaves the others down.
             Identity::Legacy => {
+                let mut failed = Vec::new();
                 for (name, _) in &self.legacy {
-                    self.schtasks.run(&["/change", "/tn", name, "/enable"])?;
-                    self.schtasks.run(&["/run", "/tn", name])?;
+                    let started = self
+                        .schtasks
+                        .run(&["/change", "/tn", name, "/enable"])
+                        .and_then(|()| self.schtasks.run(&["/run", "/tn", name]));
+                    if let Err(error) = started {
+                        failed.push(format!("{error:#}"));
+                    }
                 }
+                anyhow::ensure!(failed.is_empty(), "{}", failed.join("; "));
                 Ok(())
             }
             // (Re)created, enabled, from the definition on disk.

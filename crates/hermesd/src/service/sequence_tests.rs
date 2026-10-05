@@ -96,6 +96,9 @@ pub(crate) struct FakeHost {
     pub(crate) definition: PathBuf,
     pub(crate) version: Option<&'static str>,
     pub(crate) fail: Option<&'static str>,
+    /// Runs as the service stops (something taking the home meanwhile).
+    pub(crate) on_stop: Option<Box<dyn Fn()>>,
+    pub(crate) owned: crate::holders::Owned,
 }
 
 impl FakeHost {
@@ -107,6 +110,8 @@ impl FakeHost {
             definition: dir.join("definition"),
             version: Some("9.9.9"),
             fail: None,
+            on_stop: None,
+            owned: Default::default(),
         }
     }
     fn op(&self, op: String) -> anyhow::Result<()> {
@@ -130,7 +135,13 @@ impl Host for FakeHost {
     fn stop(&self, id: Identity) -> anyhow::Result<()> {
         self.op(format!("stop {id:?}"))?;
         self.running.borrow_mut().retain(|r| *r != id);
+        if let Some(hook) = &self.on_stop {
+            hook();
+        }
         Ok(())
+    }
+    fn owned(&self, _ids: &[Identity]) -> crate::holders::Owned {
+        self.owned.clone()
     }
     fn definition_files(&self) -> Vec<PathBuf> {
         vec![self.definition.clone()]
@@ -166,7 +177,7 @@ impl Host for FakeHost {
     }
 }
 
-fn layout(moving: &Moving) -> Layout {
+pub(super) fn layout(moving: &Moving) -> Layout {
     let plan = moving.plan();
     Layout {
         from_bin: plan.from.join("bin").join(moving.bin_name),
@@ -179,7 +190,7 @@ fn layout(moving: &Moving) -> Layout {
     }
 }
 
-fn install(moving: &Moving, host: &FakeHost) -> anyhow::Result<()> {
+pub(super) fn install(moving: &Moving, host: &FakeHost) -> anyhow::Result<()> {
     let migration = HomeMigration(moving.plan());
     upgrade(&moving.source, &layout(moving), host, Some(&migration))
 }

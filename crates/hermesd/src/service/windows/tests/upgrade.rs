@@ -19,6 +19,8 @@ struct FakeSchtasks {
     tasks: RefCell<BTreeMap<String, (bool, bool)>>,
     calls: RefCell<Vec<String>>,
     fail: Option<String>,
+    /// Runs once a task has ended.
+    on_ended: Option<Box<dyn Fn()>>,
 }
 
 /// `Gravity` or `The Hermes`: the label a task name starts with.
@@ -81,7 +83,11 @@ impl Schtasks for FakeSchtasks {
         self.tasks.borrow().contains_key(name)
     }
     fn wait_ended(&self, name: &str) -> anyhow::Result<()> {
-        self.call(format!("wait {}", label(name)))
+        self.call(format!("wait {}", label(name)))?;
+        if let Some(hook) = &self.on_ended {
+            hook();
+        }
+        Ok(())
     }
     fn version_of(&self, binary: &Path) -> anyhow::Result<String> {
         self.call("version".into())?;
@@ -196,6 +202,40 @@ fn a_failure_at_each_step_restarts_the_pre_rename_task() {
         assert!(task_file.is_file(), "{step}");
         assert!(!paths.home.exists(), "{step}");
     }
+}
+
+/// The migration refused by its own preflight after the pre-rename task
+/// was disabled and ended: nothing to roll back, and the task is enabled
+/// and running again.
+#[test]
+fn a_migration_refused_after_the_stop_restarts_the_pre_rename_task() {
+    let moving = Moving::new();
+    let (paths, mut schtasks) = legacy_task(&moving);
+    let taken = moving.plan().to.join("taken");
+    schtasks.on_ended = Some(Box::new(move || std::fs::create_dir_all(&taken).unwrap()));
+    let (result, tasks, calls) = install_moving(&moving, &paths, schtasks);
+    let error = format!("{:#}", result.unwrap_err());
+    assert_eq!(
+        error.matches("exists and is not empty").count(),
+        1,
+        "{error}"
+    );
+    assert!(error.contains("previous daemon was restored"), "{error}");
+    assert!(!error.contains("undoing"), "{error}");
+    assert_eq!(
+        calls,
+        [
+            "version",
+            "/change/disable Gravity",
+            "/end Gravity",
+            "wait Gravity",
+            "/change/enable Gravity",
+            "/run Gravity",
+        ]
+    );
+    assert_eq!(tasks, [("Gravity".to_string(), true, true)]);
+    std::fs::remove_dir_all(&moving.plan().to).unwrap();
+    moving.assert_rolled_back();
 }
 
 /// 0.15.0 → 0.15.1: the same task before and after, no migration.

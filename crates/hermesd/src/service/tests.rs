@@ -66,6 +66,8 @@ struct FakeLaunchctl {
     disabled: RefCell<BTreeSet<String>>,
     calls: RefCell<Vec<String>>,
     fail: Option<String>,
+    /// Runs as an agent is booted out.
+    on_bootout: Option<Box<dyn Fn()>>,
 }
 
 impl FakeLaunchctl {
@@ -109,6 +111,9 @@ impl Launchctl for FakeLaunchctl {
     fn bootout(&self, plist: &Path) -> anyhow::Result<()> {
         self.call(format!("bootout {}", file_name(plist)))?;
         self.loaded.borrow_mut().remove(&file_name(plist));
+        if let Some(hook) = &self.on_bootout {
+            hook();
+        }
         Ok(())
     }
     fn bootstrap(&self, plist: &Path) -> anyhow::Result<()> {
@@ -360,3 +365,6 @@ fn an_overridden_home_never_takes_over_the_pre_rename_agent() {
     assert_eq!(host.launchctl.loaded(), [CURRENT, LEGACY]);
     assert!(paths.legacy_plist_path().is_file());
 }
+
+#[path = "launchd_premigrate_tests.rs"]
+mod premigrate;

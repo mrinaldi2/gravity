@@ -127,7 +127,7 @@ impl Plan {
     /// saving the state leaves a log in the new home that does not know about
     /// the move yet; that move is recorded here, so resume and rollback both
     /// see it. Callers that change anything save the state themselves.
-    fn state(&self) -> anyhow::Result<Option<State>> {
+    pub(crate) fn state(&self) -> anyhow::Result<Option<State>> {
         let Some(path) = State::locate(&self.from, &self.to) else {
             return Ok(None);
         };

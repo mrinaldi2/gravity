@@ -3,7 +3,8 @@
 //!
 //! 1. **Stage** the new binary as `.new` beside the live one, in the home
 //!    the daemon runs from now (so it moves with the home), and verify it.
-//! 2. **Preflight** the migration (destination, disk, ...).
+//! 2. **Preflight** the migration (destination, disk, processes holding the
+//!    home other than the running daemon's own).
 //! 3. **Disable and stop** the running service, keeping its definition.
 //! 4. **Migrate** the home.
 //! 5. **Swap** the binary by rename, keeping the old one as `.old`.
@@ -14,8 +15,10 @@
 //!
 //! A failure in 1–2 stops nothing. A failure in 3–6 goes through one
 //! [`rollback`]: the new identity is stopped (and removed unless it was the
-//! one running before), the kept files restored, the migration rolled back,
-//! and the services that ran before started again.
+//! one running before), the kept files restored, the migration rolled back
+//! (if it started), and the services that ran before started again. Each of
+//! those is attempted whatever an earlier one did, so the old service is
+//! always started again; their errors are reported together.
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -57,6 +60,12 @@ pub(crate) trait Host {
     fn start(&self, id: Identity) -> anyhow::Result<()>;
     /// Unregisters `id` and deletes its definition.
     fn remove(&self, id: Identity) -> anyhow::Result<()>;
+    /// The processes of the running `ids` (daemon, descendants, session
+    /// groups) that [`Host::stop`] ends, so the migration preflight made
+    /// before the stop does not count them as holding the home.
+    fn owned(&self, _ids: &[Identity]) -> crate::holders::Owned {
+        crate::holders::Owned::default()
+    }
     /// What `binary --version` reports.
     fn version_of(&self, binary: &Path) -> anyhow::Result<String>;
     /// Waits for `/health` to report `version`.
@@ -65,9 +74,12 @@ pub(crate) trait Host {
 
 /// The home migration, as the install drives it.
 pub(crate) trait Migration {
-    /// What would stop the move, checked before anything is stopped.
-    fn preflight(&self) -> anyhow::Result<()>;
+    /// What would stop the move, checked before anything is stopped;
+    /// processes in `owned` are the running daemon's and are stopped with it.
+    fn preflight(&self, owned: &crate::holders::Owned) -> anyhow::Result<()>;
     fn run(&self) -> anyhow::Result<()>;
+    /// Undoes what a run did. A run that never started (refused by its own
+    /// preflight) left nothing to undo, which is not an error.
     fn rollback(&self) -> anyhow::Result<()>;
 }
 
@@ -75,8 +87,8 @@ pub(crate) trait Migration {
 pub(crate) struct HomeMigration<'a>(pub(crate) &'a crate::migrate_home::Plan);
 
 impl Migration for HomeMigration<'_> {
-    fn preflight(&self) -> anyhow::Result<()> {
-        let blockers = crate::migrate_home::blockers_before_stop(self.0)?;
+    fn preflight(&self, owned: &crate::holders::Owned) -> anyhow::Result<()> {
+        let blockers = crate::migrate_home::blockers_before_stop(self.0, owned)?;
         anyhow::ensure!(
             blockers.is_empty(),
             "cannot migrate {}: {}",
@@ -89,6 +101,10 @@ impl Migration for HomeMigration<'_> {
         crate::migrate_home::run(self.0, &mut std::io::stdout()).map(drop)
     }
     fn rollback(&self) -> anyhow::Result<()> {
+        // No state file: the run stopped before its first change.
+        if self.0.state()?.is_none() {
+            return Ok(());
+        }
         crate::migrate_home::rollback(self.0, &mut std::io::stdout())
     }
 }
@@ -143,14 +159,14 @@ pub(crate) fn upgrade(
         }
     };
     // 2. Preflight.
+    let old = host.installed();
     if let Some(migration) = migration {
-        if let Err(error) = migration.preflight() {
+        if let Err(error) = migration.preflight(&host.owned(&old)) {
             discard_staged();
             return Err(error.context("nothing was stopped"));
         }
     }
     // 3. Disable and stop what runs now.
-    let old = host.installed();
     for id in &old {
         if let Err(error) = host.disable(*id).and_then(|()| host.stop(*id)) {
             discard_staged();
@@ -225,35 +241,66 @@ fn install(
 }
 
 /// The one way back from a failed install: stop the new identity, restore
-/// the kept files, roll the migration back, start what ran before.
+/// the kept files, roll the migration back, start what ran before. Every
+/// step is attempted even when an earlier one failed, so what ran before is
+/// always started again; the errors are reported together.
 fn rollback(
     host: &impl Host,
     old: &[Identity],
     progress: &Progress,
     migration: Option<&dyn Migration>,
 ) -> anyhow::Result<()> {
+    let mut errors = Errors::default();
     if progress.registered {
         // The new daemon must be gone before its binary or home can move.
         let _ = host.disable(Identity::Current);
-        host.stop(Identity::Current)?;
+        errors.note(host.stop(Identity::Current));
         if !old.contains(&Identity::Current) {
-            host.remove(Identity::Current)?;
+            errors.note(host.remove(Identity::Current));
         }
     }
-    progress.backup.restore()?;
+    errors.note(progress.backup.restore());
     if let (true, Some(migration)) = (progress.migrating, migration) {
-        migration
-            .rollback()
-            .context("rolling the home migration back")?;
+        errors.note(
+            migration
+                .rollback()
+                .context("rolling the home migration back"),
+        );
     }
-    start_all(host, old)
+    errors.note(start_all(host, old));
+    errors.into_result()
 }
 
+/// Starts each of `ids`, all of them even when one fails.
 fn start_all(host: &impl Host, ids: &[Identity]) -> anyhow::Result<()> {
+    let mut errors = Errors::default();
     for id in ids {
-        host.start(*id)?;
+        errors.note(host.start(*id).with_context(|| format!("starting {id:?}")));
     }
-    Ok(())
+    errors.into_result()
+}
+
+/// Errors from steps that each run whatever the others did.
+#[derive(Default)]
+struct Errors(Vec<anyhow::Error>);
+
+impl Errors {
+    fn note(&mut self, result: anyhow::Result<()>) {
+        if let Err(error) = result {
+            self.0.push(error);
+        }
+    }
+
+    fn into_result(mut self) -> anyhow::Result<()> {
+        match self.0.len() {
+            0 => Ok(()),
+            1 => Err(self.0.remove(0)),
+            _ => {
+                let all: Vec<String> = self.0.iter().map(|e| format!("{e:#}")).collect();
+                anyhow::bail!("{}", all.join("; "))
+            }
+        }
+    }
 }
 
 /// `service restart`: restarts the current identity, first reinstalling its
@@ -303,3 +350,7 @@ pub(crate) fn wait_healthy(home: &Path, configured_port: u16, version: &str) -> 
 #[cfg(test)]
 #[path = "sequence_tests.rs"]
 pub(super) mod tests;
+
+#[cfg(test)]
+#[path = "sequence_premigrate_tests.rs"]
+mod premigrate_tests;

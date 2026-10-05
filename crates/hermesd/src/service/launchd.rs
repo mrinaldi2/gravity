@@ -210,6 +210,27 @@ impl<L: Launchctl> Host for Launchd<'_, L> {
         }
     }
 
+    fn owned(&self, ids: &[Identity]) -> crate::holders::Owned {
+        let mut owned = crate::holders::Owned::default();
+        for id in ids {
+            let homes = self.homes(*id);
+            // The agent's daemon, and any copy launchd no longer tracks,
+            // which `stop` reaps.
+            let daemons = self
+                .launchctl
+                .pid(label(*id))
+                .into_iter()
+                .chain(super::reap::running(&managed_binaries(&homes)));
+            for pid in daemons {
+                owned.add_daemon(pid);
+            }
+            for home in &homes {
+                owned.groups.extend(crate::holders::recorded_sessions(home));
+            }
+        }
+        owned
+    }
+
     fn stop(&self, id: Identity) -> anyhow::Result<()> {
         let label = label(id);
         let homes = self.homes(id);
@@ -222,14 +243,7 @@ impl<L: Launchctl> Host for Launchd<'_, L> {
         self.stop_sessions(&homes, groups);
         // A daemon launchd no longer tracks (an earlier bootout that timed
         // out, a hand-started copy) still runs the managed binary.
-        let binaries: Vec<PathBuf> = homes
-            .iter()
-            .flat_map(|home| {
-                let bin = home.join("bin");
-                [bin.join("hermesd"), bin.join("gravityd")]
-            })
-            .collect();
-        super::reap::reap(&binaries)?;
+        super::reap::reap(&managed_binaries(&homes))?;
         for home in &homes {
             wait_released(home)?;
         }
@@ -291,6 +305,17 @@ fn label(id: Identity) -> &'static str {
         Identity::Legacy => crate::brand::LEGACY_LAUNCHD_LABEL,
         Identity::Current => LAUNCHD_LABEL,
     }
+}
+
+/// The daemon binaries a service installed in `homes` runs.
+fn managed_binaries(homes: &[PathBuf]) -> Vec<PathBuf> {
+    homes
+        .iter()
+        .flat_map(|home| {
+            let bin = home.join("bin");
+            [bin.join("hermesd"), bin.join("gravityd")]
+        })
+        .collect()
 }
 
 /// Waits for the stopped daemon to let go of `home`'s lock.
