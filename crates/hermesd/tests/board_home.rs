@@ -222,8 +222,16 @@ async fn the_side_with_the_board_is_the_home() {
         .await;
     assert_eq!(linked["type"], "project", "{linked}");
     snapshot(call(&mut p.mac_client, board_get(&mac_app)).await);
-    let body = call(&mut p.win_client, board_get(&win_app)).await;
-    assert_eq!(error_code(body), "no_board");
+    // The PC starts none: it mirrors the Mac's, read-only (B9).
+    let win = &p.win;
+    common::peers::wait_until("the PC mirrors the Mac's board", || {
+        win.app.board_mirror.home_peer(&win_app).is_some()
+    })
+    .await;
+    let mirrored = snapshot(call(&mut p.win_client, board_get(&win_app)).await);
+    let home = mirrored.settings.expect("settings").home_daemon_id;
+    assert_eq!(home, p.mac.app.db.daemon_id().unwrap());
+    assert!(p.win.app.db.board_settings(&win_app).unwrap().is_none());
 
     // The dialing side's board links too (the Mac dials the PC here).
     let mac_two = common::peers::project(&mut p.mac_client, "two").await;

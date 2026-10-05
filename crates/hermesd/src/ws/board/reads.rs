@@ -21,6 +21,10 @@ impl Conn {
     pub(super) fn snapshot(&self, project_id: &str) -> Result<c::BoardSnapshot, Refusal> {
         let mut board = match snapshot(&self.app, project_id)? {
             Some(board) => board,
+            // Its home is a peer: the board as last mirrored, read-only (B9).
+            None if self.app.board_mirror.home_peer(project_id).is_some() => {
+                return self.mirrored_snapshot(project_id)
+            }
             None => {
                 self.enable_board(project_id, Enable::Auto)?;
                 snapshot(&self.app, project_id)?
@@ -105,10 +109,6 @@ impl Conn {
     }
 
     pub(super) fn item_query(&self, r: &c::ItemQuery) -> Result<c::ItemQueryResult, Refusal> {
-        let bad = |e: MapError| refuse("invalid_request", e.to_string());
-        let types = wire_list(&r.types, m::ItemType::from_wire).map_err(bad)?;
-        let priorities = wire_list(&r.priorities, m::Priority::from_wire).map_err(bad)?;
-        let platforms = wire_list(&r.platforms, m::Platform::from_wire).map_err(bad)?;
         let text = r.text.as_deref().map(str::trim).filter(|t| !t.is_empty());
         let cards = self.app.db.board_read(|t| match text {
             Some(text) => t.search_cards(&r.project_id, text),
@@ -119,21 +119,35 @@ impl Conn {
             (Err(e), Some(_)) => return Err(refuse("invalid_request", format!("search: {e}"))),
             (Err(e), None) => return Err(e.into()),
         };
-        let wanted = |card: &m::ItemCard| {
-            (r.column_keys.is_empty() || r.column_keys.contains(&card.column_key))
-                && r.assignee
-                    .as_ref()
-                    .is_none_or(|a| card.assignee.as_ref() == Some(a))
-                && (types.is_empty() || types.contains(&card.item_type))
-                && (priorities.is_empty() || priorities.contains(&card.priority))
-                && (platforms.is_empty() || platforms.iter().any(|p| card.platforms.contains(p)))
-                && r.blocked.is_none_or(|b| card.blocked == b)
-        };
-        Ok(c::ItemQueryResult {
-            cards: cards.into_iter().filter(wanted).map(Into::into).collect(),
-        })
+        query_cards(r, cards)
     }
+}
 
+/// The cards among `cards` an `ItemQuery` asks for, its text aside.
+pub(super) fn query_cards(
+    r: &c::ItemQuery,
+    cards: Vec<m::ItemCard>,
+) -> Result<c::ItemQueryResult, Refusal> {
+    let bad = |e: MapError| refuse("invalid_request", e.to_string());
+    let types = wire_list(&r.types, m::ItemType::from_wire).map_err(bad)?;
+    let priorities = wire_list(&r.priorities, m::Priority::from_wire).map_err(bad)?;
+    let platforms = wire_list(&r.platforms, m::Platform::from_wire).map_err(bad)?;
+    let wanted = |card: &m::ItemCard| {
+        (r.column_keys.is_empty() || r.column_keys.contains(&card.column_key))
+            && r.assignee
+                .as_ref()
+                .is_none_or(|a| card.assignee.as_ref() == Some(a))
+            && (types.is_empty() || types.contains(&card.item_type))
+            && (priorities.is_empty() || priorities.contains(&card.priority))
+            && (platforms.is_empty() || platforms.iter().any(|p| card.platforms.contains(p)))
+            && r.blocked.is_none_or(|b| card.blocked == b)
+    };
+    Ok(c::ItemQueryResult {
+        cards: cards.into_iter().filter(wanted).map(Into::into).collect(),
+    })
+}
+
+impl Conn {
     pub(super) fn item_move_check(&self, id: &str) -> Result<c::MoveCheck, Refusal> {
         if self.app.db.board_read(|t| t.item_project(id))?.is_none() {
             return Err(not_found(id));

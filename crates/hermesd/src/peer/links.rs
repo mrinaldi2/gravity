@@ -178,6 +178,7 @@ fn adopt(
     roster::expose(app, &peer.id, &roster::roster(app, &project.id)?)?;
     roster::reconcile(app, peer, &project.id, &theirs.bots)?;
     links_changed(app, &project.id);
+    super::board::linked(app, &project.id, &peer.id);
     Ok(())
 }
 
@@ -194,6 +195,7 @@ pub(crate) fn drop_link(
         return Ok(false);
     }
     app.db.unexpose_project(project_id, peer_id)?;
+    app.board_mirror.forget(project_id, peer_id);
     for bot in app.db.stand_ins(project_id, peer_id)? {
         roster::archive_stand_in(app, &bot.id, "project unlinked")?;
     }

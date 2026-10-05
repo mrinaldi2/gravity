@@ -18,6 +18,14 @@ use super::Conn;
 impl Conn {
     pub(super) fn list_releases(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let project_id = Self::str_field(req, "project_id")?;
+        // Releases are reviewed and ruled on the board's home only (B9).
+        if let Some(home) = self.app.board_mirror.home_peer(project_id) {
+            return Err(crate::decisions::forbidden(format!(
+                "This project's releases are reviewed on {}, which holds its board; \
+                 rule on them there.",
+                crate::peer::board::home_name(&self.app, &home)
+            )));
+        }
         let releases = self.app.db.board_read(|t| t.releases(project_id))?;
         self.send(json!({
             "type": "releases", "req_id": req_id,

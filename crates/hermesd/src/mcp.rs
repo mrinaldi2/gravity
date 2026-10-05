@@ -15,6 +15,7 @@ use crate::app::AppState;
 
 mod board;
 mod board_edit;
+mod board_remote;
 mod board_schema;
 mod decisions;
 mod releases;
@@ -160,12 +161,27 @@ async fn remote_call(app: &Arc<AppState>, bot_id: &str, params: &Value) -> Optio
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
     let result = match workers::intercept(app, bot_id, name, &args).await {
         Some(result) => result,
-        None => remote::intercept(app, bot_id, name, &args).await?,
+        None => match remote::intercept(app, bot_id, name, &args).await {
+            Some(result) => result,
+            None => board_remote::intercept(app, bot_id, name, &args).await?,
+        },
     };
     Some(match result {
         Ok(v) => text_result(&v),
         Err(e) => tool_error(&e.to_string()),
     })
+}
+
+/// A board tool run as `bot_id`, for a call a peer forwarded to this
+/// board's home (B9): the bot is the caller's stand-in here.
+pub(crate) fn board_call_as(
+    app: &Arc<AppState>,
+    bot_id: &str,
+    name: &str,
+    args: &Value,
+) -> anyhow::Result<Value> {
+    anyhow::ensure!(board::is_board_tool(name), "unknown board tool: {name}");
+    board::call(app, bot_id, name, args)
 }
 
 fn tool_call(app: &Arc<AppState>, bot_id: &str, params: &Value) -> Result<Value, String> {

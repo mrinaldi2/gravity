@@ -8,6 +8,7 @@ pub mod contract;
 pub mod defaults;
 pub mod feed;
 pub mod guards;
+pub mod mirror;
 pub mod model;
 pub mod moves;
 pub mod rank;

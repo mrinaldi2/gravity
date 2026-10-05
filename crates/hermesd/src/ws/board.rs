@@ -20,6 +20,7 @@ use crate::board::feed::{card_after_commit, BoardChange, BoardFeed, Change, Chan
 use crate::board::moves::{self, MoveRequest, Moved};
 
 mod enable;
+mod mirrored;
 mod reads;
 
 /// A request refused before the board service answered it: no grant, an
@@ -60,6 +61,15 @@ impl Drop for Watch {
 
 fn lock(projects: &Mutex<HashSet<String>>) -> MutexGuard<'_, HashSet<String>> {
     projects.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The board as its home serves it, for a peer that mirrors it (B9).
+/// `None` when the project has no board; refused when it lives elsewhere.
+pub(crate) fn home_snapshot(
+    app: &crate::app::AppState,
+    project_id: &str,
+) -> anyhow::Result<Option<c::BoardSnapshot>> {
+    reads::snapshot(app, project_id).map_err(|r| crate::peer::refuse(r.code, r.message))
 }
 
 /// What answering a request needs: the response, or none when the handler
@@ -110,6 +120,7 @@ impl Conn {
                 ),
             ));
         }
+        self.on_home(&request)?;
         Ok(Some(match request {
             Request::BoardGet(r) => Response::Board(self.snapshot(&r.project_id)?),
             Request::BoardEnable(r) => return self.board_enable(req_id, r.project_id),
@@ -125,7 +136,10 @@ impl Conn {
             }
             Request::ItemGet(r) => Response::Item(self.item_get(&r.id)?),
             Request::ItemHistory(r) => Response::History(self.item_history(&r)?),
-            Request::ItemQuery(r) => Response::Items(self.item_query(&r)?),
+            Request::ItemQuery(r) => match self.mirrored_query(&r) {
+                Some(items) => Response::Items(items?),
+                None => Response::Items(self.item_query(&r)?),
+            },
             Request::ItemMoveCheck(r) => Response::MoveCheck(self.item_move_check(&r.id)?),
             Request::ItemMove(r) => Response::Moved(self.item_move(&r)?),
             // Bots make these edits over MCP (B5); the owner's item drawer
