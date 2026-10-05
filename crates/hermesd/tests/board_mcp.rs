@@ -37,15 +37,16 @@ async fn bots_work_an_item_through_the_board_over_mcp() {
         .unwrap()
         .project_id;
 
-    // No board yet: no board tools, and calling one says why.
-    assert!(!tool_names(&dev.tools().await).contains(&"item_move".to_string()));
+    // No board yet: the tools its seeded role will have are listed already
+    // (a session reads the list once), and calling one says why.
+    assert!(tool_names(&dev.tools().await).contains(&"item_move".to_string()));
     let raw = dev.call_raw("board_get", json!({})).await;
     assert!(error_text(&raw).contains("no board"));
 
     pair.d
         .app
         .db
-        .ensure_board(&project, "d-test", Some("H"))
+        .ensure_board(&project, &pair.d.app.db.daemon_id().unwrap(), Some("H"))
         .unwrap();
     let dev_tools = tool_names(&dev.tools().await);
     assert!(dev_tools.contains(&"item_move".to_string()));
@@ -244,7 +245,7 @@ async fn bot_writes_over_mcp_reach_watching_boards() {
     pair.d
         .app
         .db
-        .ensure_board(&project, "d-test", Some("H"))
+        .ensure_board(&project, &pair.d.app.db.daemon_id().unwrap(), Some("H"))
         .unwrap();
     let mut watcher = WsClient::connect(&pair.d).await;
     call(

@@ -5,7 +5,7 @@
 // (no grant, unknown item, bad arguments) is the envelope's `Error` instead.
 //
 // Grants: reads and watching need `read`; `item_move` and the edits need
-// `control`.
+// `control`; `board_enable` needs `approve`.
 //
 // Bots send the same requests as MCP tool arguments in proto3 JSON, and the
 // MCP tool schemas are generated from these messages: a field marked
@@ -28,7 +28,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file hermes/board/v1/requests.proto.
  */
 export const file_hermes_board_v1_requests: GenFile = /*@__PURE__*/
-  fileDesc("Ch5oZXJtZXMvYm9hcmQvdjEvcmVxdWVzdHMucHJvdG8SD2hlcm1lcy5ib2FyZC52MSLFBwoMQm9hcmRSZXF1ZXN0Ei4KCWJvYXJkX2dldBgBIAEoCzIZLmhlcm1lcy5ib2FyZC52MS5Cb2FyZEdldEgAEiwKCGl0ZW1fZ2V0GAIgASgLMhguaGVybWVzLmJvYXJkLnYxLkl0ZW1HZXRIABI0CgxpdGVtX2hpc3RvcnkYAyABKAsyHC5oZXJtZXMuYm9hcmQudjEuSXRlbUhpc3RvcnlIABIwCgppdGVtX3F1ZXJ5GAQgASgLMhouaGVybWVzLmJvYXJkLnYxLkl0ZW1RdWVyeUgAEjkKD2l0ZW1fbW92ZV9jaGVjaxgFIAEoCzIeLmhlcm1lcy5ib2FyZC52MS5JdGVtTW92ZUNoZWNrSAASLgoJaXRlbV9tb3ZlGAYgASgLMhkuaGVybWVzLmJvYXJkLnYxLkl0ZW1Nb3ZlSAASMgoLYm9hcmRfd2F0Y2gYByABKAsyGy5oZXJtZXMuYm9hcmQudjEuQm9hcmRXYXRjaEgAEjYKDWJvYXJkX3Vud2F0Y2gYCCABKAsyHS5oZXJtZXMuYm9hcmQudjEuQm9hcmRVbndhdGNoSAASMgoLaXRlbV9jcmVhdGUYCSABKAsyGy5oZXJtZXMuYm9hcmQudjEuSXRlbUNyZWF0ZUgAEjIKC2l0ZW1fdXBkYXRlGAogASgLMhsuaGVybWVzLmJvYXJkLnYxLkl0ZW1VcGRhdGVIABI3CgxpdGVtX2NvbW1lbnQYCyABKAsyHy5oZXJtZXMuYm9hcmQudjEuSXRlbUFkZENvbW1lbnRIABIxCglpdGVtX2xpbmsYDCABKAsyHC5oZXJtZXMuYm9hcmQudjEuSXRlbUFkZExpbmtIABI2CgtpdGVtX3VubGluaxgNIAEoCzIfLmhlcm1lcy5ib2FyZC52MS5JdGVtUmVtb3ZlTGlua0gAEjAKCml0ZW1fYmxvY2sYDiABKAsyGi5oZXJtZXMuYm9hcmQudjEuSXRlbUJsb2NrSAASNAoMaXRlbV91bmJsb2NrGA8gASgLMhwuaGVybWVzLmJvYXJkLnYxLkl0ZW1VbmJsb2NrSAASMgoLaXRlbV9hc3NpZ24YECABKAsyGy5oZXJtZXMuYm9hcmQudjEuSXRlbUFzc2lnbkgAEi4KCWl0ZW1fcmFuaxgRIAEoCzIZLmhlcm1lcy5ib2FyZC52MS5JdGVtUmFua0gAEjUKDWl0ZW1fY2hlY2tfYWMYEiABKAsyHC5oZXJtZXMuYm9hcmQudjEuSXRlbUNoZWNrQWNIAEIJCgdyZXF1ZXN0IqYDCg1Cb2FyZFJlc3BvbnNlEi8KBWJvYXJkGAEgASgLMh4uaGVybWVzLmJvYXJkLnYxLkJvYXJkU25hcHNob3RIABIrCgRpdGVtGAIgASgLMhsuaGVybWVzLmJvYXJkLnYxLkl0ZW1EZXRhaWxIABIzCgdoaXN0b3J5GAMgASgLMiAuaGVybWVzLmJvYXJkLnYxLkl0ZW1IaXN0b3J5UGFnZUgAEjEKBWl0ZW1zGAQgASgLMiAuaGVybWVzLmJvYXJkLnYxLkl0ZW1RdWVyeVJlc3VsdEgAEjAKCm1vdmVfY2hlY2sYBSABKAsyGi5oZXJtZXMuYm9hcmQudjEuTW92ZUNoZWNrSAASLAoFbW92ZWQYBiABKAsyGy5oZXJtZXMuYm9hcmQudjEuTW92ZVJlc3VsdEgAEjQKCXVud2F0Y2hlZBgHIAEoCzIfLmhlcm1lcy5ib2FyZC52MS5Cb2FyZFVud2F0Y2hlZEgAEi0KBmVkaXRlZBgIIAEoCzIbLmhlcm1lcy5ib2FyZC52MS5FZGl0UmVzdWx0SABCCgoIcmVzcG9uc2UiRwoJQm9hcmRQdXNoEjIKC2JvYXJkX2V2ZW50GAEgASgLMhsuaGVybWVzLmJvYXJkLnYxLkJvYXJkRXZlbnRIAEIGCgRwdXNoIh4KCEJvYXJkR2V0EhIKCnByb2plY3RfaWQYASABKAkiFQoHSXRlbUdldBIKCgJpZBgBIAEoCSJGCgtJdGVtSGlzdG9yeRIKCgJpZBgBIAEoCRISCgVhZnRlchgCIAEoA0gAiAEBEg0KBWxpbWl0GAMgASgNQggKBl9hZnRlciKdAgoJSXRlbVF1ZXJ5EhIKCnByb2plY3RfaWQYASABKAkSEQoEdGV4dBgCIAEoCUgAiAEBEhMKC2NvbHVtbl9rZXlzGAMgAygJEhUKCGFzc2lnbmVlGAQgASgJSAGIAQESKAoFdHlwZXMYBSADKA4yGS5oZXJtZXMuYm9hcmQudjEuSXRlbVR5cGUSLQoKcHJpb3JpdGllcxgGIAMoDjIZLmhlcm1lcy5ib2FyZC52MS5Qcmlvcml0eRIsCglwbGF0Zm9ybXMYByADKA4yGS5oZXJtZXMuYm9hcmQudjEuUGxhdGZvcm0SFAoHYmxvY2tlZBgIIAEoCEgCiAEBQgcKBV90ZXh0QgsKCV9hc3NpZ25lZUIKCghfYmxvY2tlZCIbCg1JdGVtTW92ZUNoZWNrEgoKAmlkGAEgASgJIo4BCghJdGVtTW92ZRIKCgJpZBgBIAEoCRIKCgJ0bxgCIAEoCRIYChBleHBlY3RlZF92ZXJzaW9uGAMgASgEEhMKBnJlYXNvbhgEIAEoCUgAiAEBEhwKD292ZXJyaWRlX3JlYXNvbhgFIAEoCUgBiAEBQgkKB19yZWFzb25CEgoQX292ZXJyaWRlX3JlYXNvbiIgCgpCb2FyZFdhdGNoEhIKCnByb2plY3RfaWQYASABKAkiIgoMQm9hcmRVbndhdGNoEhIKCnByb2plY3RfaWQYASABKAkiOQoMUGxhdGZvcm1MaXN0EikKBnZhbHVlcxgBIAMoDjIZLmhlcm1lcy5ib2FyZC52MS5QbGF0Zm9ybSL1AgoKSXRlbUNyZWF0ZRISCgpwcm9qZWN0X2lkGAEgASgJEicKBHR5cGUYAiABKA4yGS5oZXJtZXMuYm9hcmQudjEuSXRlbVR5cGUSDQoFdGl0bGUYAyABKAkSGAoLZGVzY3JpcHRpb24YBCABKAlIAIgBARIsCglwbGF0Zm9ybXMYBSADKA4yGS5oZXJtZXMuYm9hcmQudjEuUGxhdGZvcm0SKAoEc2l6ZRgGIAEoDjIVLmhlcm1lcy5ib2FyZC52MS5TaXplSAGIAQESMAoIcHJpb3JpdHkYByABKA4yGS5oZXJtZXMuYm9hcmQudjEuUHJpb3JpdHlIAogBARIOCgZsYWJlbHMYCCADKAkSFgoJcGFyZW50X2lkGAkgASgJSAOIAQESGwoTYWNjZXB0YW5jZV9jcml0ZXJpYRgKIAMoCUIOCgxfZGVzY3JpcHRpb25CBwoFX3NpemVCCwoJX3ByaW9yaXR5QgwKCl9wYXJlbnRfaWQiqwMKCkl0ZW1VcGRhdGUSCgoCaWQYASABKAkSGAoQZXhwZWN0ZWRfdmVyc2lvbhgCIAEoBBISCgV0aXRsZRgDIAEoCUgAiAEBEhgKC2Rlc2NyaXB0aW9uGAQgASgJSAGIAQESMAoJcGxhdGZvcm1zGAUgASgLMh0uaGVybWVzLmJvYXJkLnYxLlBsYXRmb3JtTGlzdBIoCgRzaXplGAYgASgOMhUuaGVybWVzLmJvYXJkLnYxLlNpemVIAogBARIwCghwcmlvcml0eRgHIAEoDjIZLmhlcm1lcy5ib2FyZC52MS5Qcmlvcml0eUgDiAEBEisKBmxhYmVscxgIIAEoCzIbLmhlcm1lcy5ib2FyZC52MS5TdHJpbmdMaXN0EhYKCXBhcmVudF9pZBgJIAEoCUgEiAEBEjgKE2FjY2VwdGFuY2VfY3JpdGVyaWEYCiABKAsyGy5oZXJtZXMuYm9hcmQudjEuU3RyaW5nTGlzdEIICgZfdGl0bGVCDgoMX2Rlc2NyaXB0aW9uQgcKBV9zaXplQgsKCV9wcmlvcml0eUIMCgpfcGFyZW50X2lkIk4KDkl0ZW1BZGRDb21tZW50EgoKAmlkGAEgASgJEgwKBGJvZHkYAiABKAkSFQoIcmVwbHlfdG8YAyABKAlIAIgBAUILCglfcmVwbHlfdG8ibQoLSXRlbUFkZExpbmsSCgoCaWQYASABKAkSJwoEa2luZBgCIAEoDjIZLmhlcm1lcy5ib2FyZC52MS5MaW5rS2luZBILCgNyZWYYAyABKAkSEgoFbGFiZWwYBCABKAlIAIgBAUIICgZfbGFiZWwiUgoOSXRlbVJlbW92ZUxpbmsSCgoCaWQYASABKAkSJwoEa2luZBgCIAEoDjIZLmhlcm1lcy5ib2FyZC52MS5MaW5rS2luZBILCgNyZWYYAyABKAkiWQoJSXRlbUJsb2NrEgoKAmlkGAEgASgJEhgKEGV4cGVjdGVkX3ZlcnNpb24YAiABKAQSDgoGcmVhc29uGAMgASgJEg8KAmJ5GAQgASgJSACIAQFCBQoDX2J5IjMKC0l0ZW1VbmJsb2NrEgoKAmlkGAEgASgJEhgKEGV4cGVjdGVkX3ZlcnNpb24YAiABKAQiTAoKSXRlbUFzc2lnbhIKCgJpZBgBIAEoCRIYChBleHBlY3RlZF92ZXJzaW9uGAIgASgEEhAKA2JvdBgDIAEoCUgAiAEBQgYKBF9ib3QibgoISXRlbVJhbmsSCgoCaWQYASABKAkSGAoQZXhwZWN0ZWRfdmVyc2lvbhgCIAEoBBISCgVhZnRlchgDIAEoCUgAiAEBEhMKBmJlZm9yZRgEIAEoCUgBiAEBQggKBl9hZnRlckIJCgdfYmVmb3JlIpkBCgtJdGVtQ2hlY2tBYxIKCgJpZBgBIAEoCRIYChBleHBlY3RlZF92ZXJzaW9uGAIgASgEEg0KBWluZGV4GAMgASgNEjMKBnJlc3VsdBgEIAEoDjIjLmhlcm1lcy5ib2FyZC52MS5WZXJpZmljYXRpb25SZXN1bHQSFAoHbWFjaGluZRgFIAEoCUgAiAEBQgoKCF9tYWNoaW5lItQBCg1Cb2FyZFNuYXBzaG90EjAKCHNldHRpbmdzGAEgASgLMh4uaGVybWVzLmJvYXJkLnYxLkJvYXJkU2V0dGluZ3MSLQoHY29sdW1ucxgCIAMoCzIcLmhlcm1lcy5ib2FyZC52MS5Cb2FyZENvbHVtbhIoCgVjYXJkcxgDIAMoCzIZLmhlcm1lcy5ib2FyZC52MS5JdGVtQ2FyZBIrCgVyb2xlcxgEIAMoCzIcLmhlcm1lcy5ib2FyZC52MS5Qcm9qZWN0Um9sZRILCgNzZXEYBSABKAQi5AEKCkl0ZW1EZXRhaWwSIwoEaXRlbRgBIAEoCzIVLmhlcm1lcy5ib2FyZC52MS5JdGVtEigKBWxpbmtzGAIgAygLMhkuaGVybWVzLmJvYXJkLnYxLkl0ZW1MaW5rEi4KCGNvbW1lbnRzGAMgAygLMhwuaGVybWVzLmJvYXJkLnYxLkl0ZW1Db21tZW50EisKB2hpc3RvcnkYBCADKAsyGi5oZXJtZXMuYm9hcmQudjEuSXRlbUV2ZW50EhkKDGhpc3RvcnlfbmV4dBgFIAEoA0gAiAEBQg8KDV9oaXN0b3J5X25leHQiagoPSXRlbUhpc3RvcnlQYWdlEg8KB2l0ZW1faWQYASABKAkSKgoGZXZlbnRzGAIgAygLMhouaGVybWVzLmJvYXJkLnYxLkl0ZW1FdmVudBIRCgRuZXh0GAMgASgDSACIAQFCBwoFX25leHQiOwoPSXRlbVF1ZXJ5UmVzdWx0EigKBWNhcmRzGAEgAygLMhkuaGVybWVzLmJvYXJkLnYxLkl0ZW1DYXJkIksKCU1vdmVDaGVjaxIPCgdpdGVtX2lkGAEgASgJEi0KB2NvbHVtbnMYAiADKAsyHC5oZXJtZXMuYm9hcmQudjEuQ29sdW1uQ2hlY2siSAoLQ29sdW1uQ2hlY2sSEgoKY29sdW1uX2tleRgBIAEoCRIlCgV1bm1ldBgCIAMoCzIWLmhlcm1lcy5ib2FyZC52MS5Vbm1ldCKaAQoKTW92ZVJlc3VsdBIlCgRkb25lGAEgASgLMhUuaGVybWVzLmJvYXJkLnYxLkl0ZW1IABIvCgdyZWZ1c2VkGAIgASgLMhwuaGVybWVzLmJvYXJkLnYxLk1vdmVSZWZ1c2VkSAASKQoIY29uZmxpY3QYAyABKAsyFS5oZXJtZXMuYm9hcmQudjEuSXRlbUgAQgkKB291dGNvbWUimgEKCkVkaXRSZXN1bHQSJQoEZG9uZRgBIAEoCzIVLmhlcm1lcy5ib2FyZC52MS5JdGVtSAASLwoHcmVmdXNlZBgCIAEoCzIcLmhlcm1lcy5ib2FyZC52MS5Nb3ZlUmVmdXNlZEgAEikKCGNvbmZsaWN0GAMgASgLMhUuaGVybWVzLmJvYXJkLnYxLkl0ZW1IAEIJCgdvdXRjb21lIjQKC01vdmVSZWZ1c2VkEiUKBXVubWV0GAEgAygLMhYuaGVybWVzLmJvYXJkLnYxLlVubWV0IiQKDkJvYXJkVW53YXRjaGVkEhIKCnByb2plY3RfaWQYASABKAkizgEKCkJvYXJkRXZlbnQSEgoKcHJvamVjdF9pZBgBIAEoCRILCgNzZXEYAiABKAQSLQoEa2luZBgDIAEoDjIfLmhlcm1lcy5ib2FyZC52MS5Cb2FyZEV2ZW50S2luZBIPCgdpdGVtX2lkGAQgASgJEiwKBGNhcmQYBSABKAsyGS5oZXJtZXMuYm9hcmQudjEuSXRlbUNhcmRIAIgBARIYCgtmcm9tX2NvbHVtbhgGIAEoCUgBiAEBQgcKBV9jYXJkQg4KDF9mcm9tX2NvbHVtbiqEAgoOQm9hcmRFdmVudEtpbmQSIAocQk9BUkRfRVZFTlRfS0lORF9VTlNQRUNJRklFRBAAEiIKHkJPQVJEX0VWRU5UX0tJTkRfSVRFTV9VUFNFUlRFRBABEh8KG0JPQVJEX0VWRU5UX0tJTkRfSVRFTV9NT1ZFRBACEiEKHUJPQVJEX0VWRU5UX0tJTkRfSVRFTV9SRU1PVkVEEAMSJAogQk9BUkRfRVZFTlRfS0lORF9DT0xVTU5TX0NIQU5HRUQQBBIlCiFCT0FSRF9FVkVOVF9LSU5EX1NFVFRJTkdTX0NIQU5HRUQQBRIbChdCT0FSRF9FVkVOVF9LSU5EX1JFU1lOQxAGYgZwcm90bzM", [file_hermes_board_v1_board]);
+  fileDesc("Ch5oZXJtZXMvYm9hcmQvdjEvcmVxdWVzdHMucHJvdG8SD2hlcm1lcy5ib2FyZC52MSL7BwoMQm9hcmRSZXF1ZXN0Ei4KCWJvYXJkX2dldBgBIAEoCzIZLmhlcm1lcy5ib2FyZC52MS5Cb2FyZEdldEgAEiwKCGl0ZW1fZ2V0GAIgASgLMhguaGVybWVzLmJvYXJkLnYxLkl0ZW1HZXRIABI0CgxpdGVtX2hpc3RvcnkYAyABKAsyHC5oZXJtZXMuYm9hcmQudjEuSXRlbUhpc3RvcnlIABIwCgppdGVtX3F1ZXJ5GAQgASgLMhouaGVybWVzLmJvYXJkLnYxLkl0ZW1RdWVyeUgAEjkKD2l0ZW1fbW92ZV9jaGVjaxgFIAEoCzIeLmhlcm1lcy5ib2FyZC52MS5JdGVtTW92ZUNoZWNrSAASLgoJaXRlbV9tb3ZlGAYgASgLMhkuaGVybWVzLmJvYXJkLnYxLkl0ZW1Nb3ZlSAASMgoLYm9hcmRfd2F0Y2gYByABKAsyGy5oZXJtZXMuYm9hcmQudjEuQm9hcmRXYXRjaEgAEjYKDWJvYXJkX3Vud2F0Y2gYCCABKAsyHS5oZXJtZXMuYm9hcmQudjEuQm9hcmRVbndhdGNoSAASMgoLaXRlbV9jcmVhdGUYCSABKAsyGy5oZXJtZXMuYm9hcmQudjEuSXRlbUNyZWF0ZUgAEjIKC2l0ZW1fdXBkYXRlGAogASgLMhsuaGVybWVzLmJvYXJkLnYxLkl0ZW1VcGRhdGVIABI3CgxpdGVtX2NvbW1lbnQYCyABKAsyHy5oZXJtZXMuYm9hcmQudjEuSXRlbUFkZENvbW1lbnRIABIxCglpdGVtX2xpbmsYDCABKAsyHC5oZXJtZXMuYm9hcmQudjEuSXRlbUFkZExpbmtIABI2CgtpdGVtX3VubGluaxgNIAEoCzIfLmhlcm1lcy5ib2FyZC52MS5JdGVtUmVtb3ZlTGlua0gAEjAKCml0ZW1fYmxvY2sYDiABKAsyGi5oZXJtZXMuYm9hcmQudjEuSXRlbUJsb2NrSAASNAoMaXRlbV91bmJsb2NrGA8gASgLMhwuaGVybWVzLmJvYXJkLnYxLkl0ZW1VbmJsb2NrSAASMgoLaXRlbV9hc3NpZ24YECABKAsyGy5oZXJtZXMuYm9hcmQudjEuSXRlbUFzc2lnbkgAEi4KCWl0ZW1fcmFuaxgRIAEoCzIZLmhlcm1lcy5ib2FyZC52MS5JdGVtUmFua0gAEjUKDWl0ZW1fY2hlY2tfYWMYEiABKAsyHC5oZXJtZXMuYm9hcmQudjEuSXRlbUNoZWNrQWNIABI0Cgxib2FyZF9lbmFibGUYEyABKAsyHC5oZXJtZXMuYm9hcmQudjEuQm9hcmRFbmFibGVIAEIJCgdyZXF1ZXN0IqYDCg1Cb2FyZFJlc3BvbnNlEi8KBWJvYXJkGAEgASgLMh4uaGVybWVzLmJvYXJkLnYxLkJvYXJkU25hcHNob3RIABIrCgRpdGVtGAIgASgLMhsuaGVybWVzLmJvYXJkLnYxLkl0ZW1EZXRhaWxIABIzCgdoaXN0b3J5GAMgASgLMiAuaGVybWVzLmJvYXJkLnYxLkl0ZW1IaXN0b3J5UGFnZUgAEjEKBWl0ZW1zGAQgASgLMiAuaGVybWVzLmJvYXJkLnYxLkl0ZW1RdWVyeVJlc3VsdEgAEjAKCm1vdmVfY2hlY2sYBSABKAsyGi5oZXJtZXMuYm9hcmQudjEuTW92ZUNoZWNrSAASLAoFbW92ZWQYBiABKAsyGy5oZXJtZXMuYm9hcmQudjEuTW92ZVJlc3VsdEgAEjQKCXVud2F0Y2hlZBgHIAEoCzIfLmhlcm1lcy5ib2FyZC52MS5Cb2FyZFVud2F0Y2hlZEgAEi0KBmVkaXRlZBgIIAEoCzIbLmhlcm1lcy5ib2FyZC52MS5FZGl0UmVzdWx0SABCCgoIcmVzcG9uc2UiRwoJQm9hcmRQdXNoEjIKC2JvYXJkX2V2ZW50GAEgASgLMhsuaGVybWVzLmJvYXJkLnYxLkJvYXJkRXZlbnRIAEIGCgRwdXNoIh4KCEJvYXJkR2V0EhIKCnByb2plY3RfaWQYASABKAkiIQoLQm9hcmRFbmFibGUSEgoKcHJvamVjdF9pZBgBIAEoCSIVCgdJdGVtR2V0EgoKAmlkGAEgASgJIkYKC0l0ZW1IaXN0b3J5EgoKAmlkGAEgASgJEhIKBWFmdGVyGAIgASgDSACIAQESDQoFbGltaXQYAyABKA1CCAoGX2FmdGVyIp0CCglJdGVtUXVlcnkSEgoKcHJvamVjdF9pZBgBIAEoCRIRCgR0ZXh0GAIgASgJSACIAQESEwoLY29sdW1uX2tleXMYAyADKAkSFQoIYXNzaWduZWUYBCABKAlIAYgBARIoCgV0eXBlcxgFIAMoDjIZLmhlcm1lcy5ib2FyZC52MS5JdGVtVHlwZRItCgpwcmlvcml0aWVzGAYgAygOMhkuaGVybWVzLmJvYXJkLnYxLlByaW9yaXR5EiwKCXBsYXRmb3JtcxgHIAMoDjIZLmhlcm1lcy5ib2FyZC52MS5QbGF0Zm9ybRIUCgdibG9ja2VkGAggASgISAKIAQFCBwoFX3RleHRCCwoJX2Fzc2lnbmVlQgoKCF9ibG9ja2VkIhsKDUl0ZW1Nb3ZlQ2hlY2sSCgoCaWQYASABKAkijgEKCEl0ZW1Nb3ZlEgoKAmlkGAEgASgJEgoKAnRvGAIgASgJEhgKEGV4cGVjdGVkX3ZlcnNpb24YAyABKAQSEwoGcmVhc29uGAQgASgJSACIAQESHAoPb3ZlcnJpZGVfcmVhc29uGAUgASgJSAGIAQFCCQoHX3JlYXNvbkISChBfb3ZlcnJpZGVfcmVhc29uIiAKCkJvYXJkV2F0Y2gSEgoKcHJvamVjdF9pZBgBIAEoCSIiCgxCb2FyZFVud2F0Y2gSEgoKcHJvamVjdF9pZBgBIAEoCSI5CgxQbGF0Zm9ybUxpc3QSKQoGdmFsdWVzGAEgAygOMhkuaGVybWVzLmJvYXJkLnYxLlBsYXRmb3JtIvUCCgpJdGVtQ3JlYXRlEhIKCnByb2plY3RfaWQYASABKAkSJwoEdHlwZRgCIAEoDjIZLmhlcm1lcy5ib2FyZC52MS5JdGVtVHlwZRINCgV0aXRsZRgDIAEoCRIYCgtkZXNjcmlwdGlvbhgEIAEoCUgAiAEBEiwKCXBsYXRmb3JtcxgFIAMoDjIZLmhlcm1lcy5ib2FyZC52MS5QbGF0Zm9ybRIoCgRzaXplGAYgASgOMhUuaGVybWVzLmJvYXJkLnYxLlNpemVIAYgBARIwCghwcmlvcml0eRgHIAEoDjIZLmhlcm1lcy5ib2FyZC52MS5Qcmlvcml0eUgCiAEBEg4KBmxhYmVscxgIIAMoCRIWCglwYXJlbnRfaWQYCSABKAlIA4gBARIbChNhY2NlcHRhbmNlX2NyaXRlcmlhGAogAygJQg4KDF9kZXNjcmlwdGlvbkIHCgVfc2l6ZUILCglfcHJpb3JpdHlCDAoKX3BhcmVudF9pZCKrAwoKSXRlbVVwZGF0ZRIKCgJpZBgBIAEoCRIYChBleHBlY3RlZF92ZXJzaW9uGAIgASgEEhIKBXRpdGxlGAMgASgJSACIAQESGAoLZGVzY3JpcHRpb24YBCABKAlIAYgBARIwCglwbGF0Zm9ybXMYBSABKAsyHS5oZXJtZXMuYm9hcmQudjEuUGxhdGZvcm1MaXN0EigKBHNpemUYBiABKA4yFS5oZXJtZXMuYm9hcmQudjEuU2l6ZUgCiAEBEjAKCHByaW9yaXR5GAcgASgOMhkuaGVybWVzLmJvYXJkLnYxLlByaW9yaXR5SAOIAQESKwoGbGFiZWxzGAggASgLMhsuaGVybWVzLmJvYXJkLnYxLlN0cmluZ0xpc3QSFgoJcGFyZW50X2lkGAkgASgJSASIAQESOAoTYWNjZXB0YW5jZV9jcml0ZXJpYRgKIAEoCzIbLmhlcm1lcy5ib2FyZC52MS5TdHJpbmdMaXN0QggKBl90aXRsZUIOCgxfZGVzY3JpcHRpb25CBwoFX3NpemVCCwoJX3ByaW9yaXR5QgwKCl9wYXJlbnRfaWQiTgoOSXRlbUFkZENvbW1lbnQSCgoCaWQYASABKAkSDAoEYm9keRgCIAEoCRIVCghyZXBseV90bxgDIAEoCUgAiAEBQgsKCV9yZXBseV90byJtCgtJdGVtQWRkTGluaxIKCgJpZBgBIAEoCRInCgRraW5kGAIgASgOMhkuaGVybWVzLmJvYXJkLnYxLkxpbmtLaW5kEgsKA3JlZhgDIAEoCRISCgVsYWJlbBgEIAEoCUgAiAEBQggKBl9sYWJlbCJSCg5JdGVtUmVtb3ZlTGluaxIKCgJpZBgBIAEoCRInCgRraW5kGAIgASgOMhkuaGVybWVzLmJvYXJkLnYxLkxpbmtLaW5kEgsKA3JlZhgDIAEoCSJZCglJdGVtQmxvY2sSCgoCaWQYASABKAkSGAoQZXhwZWN0ZWRfdmVyc2lvbhgCIAEoBBIOCgZyZWFzb24YAyABKAkSDwoCYnkYBCABKAlIAIgBAUIFCgNfYnkiMwoLSXRlbVVuYmxvY2sSCgoCaWQYASABKAkSGAoQZXhwZWN0ZWRfdmVyc2lvbhgCIAEoBCJMCgpJdGVtQXNzaWduEgoKAmlkGAEgASgJEhgKEGV4cGVjdGVkX3ZlcnNpb24YAiABKAQSEAoDYm90GAMgASgJSACIAQFCBgoEX2JvdCJuCghJdGVtUmFuaxIKCgJpZBgBIAEoCRIYChBleHBlY3RlZF92ZXJzaW9uGAIgASgEEhIKBWFmdGVyGAMgASgJSACIAQESEwoGYmVmb3JlGAQgASgJSAGIAQFCCAoGX2FmdGVyQgkKB19iZWZvcmUimQEKC0l0ZW1DaGVja0FjEgoKAmlkGAEgASgJEhgKEGV4cGVjdGVkX3ZlcnNpb24YAiABKAQSDQoFaW5kZXgYAyABKA0SMwoGcmVzdWx0GAQgASgOMiMuaGVybWVzLmJvYXJkLnYxLlZlcmlmaWNhdGlvblJlc3VsdBIUCgdtYWNoaW5lGAUgASgJSACIAQFCCgoIX21hY2hpbmUi1AEKDUJvYXJkU25hcHNob3QSMAoIc2V0dGluZ3MYASABKAsyHi5oZXJtZXMuYm9hcmQudjEuQm9hcmRTZXR0aW5ncxItCgdjb2x1bW5zGAIgAygLMhwuaGVybWVzLmJvYXJkLnYxLkJvYXJkQ29sdW1uEigKBWNhcmRzGAMgAygLMhkuaGVybWVzLmJvYXJkLnYxLkl0ZW1DYXJkEisKBXJvbGVzGAQgAygLMhwuaGVybWVzLmJvYXJkLnYxLlByb2plY3RSb2xlEgsKA3NlcRgFIAEoBCLkAQoKSXRlbURldGFpbBIjCgRpdGVtGAEgASgLMhUuaGVybWVzLmJvYXJkLnYxLkl0ZW0SKAoFbGlua3MYAiADKAsyGS5oZXJtZXMuYm9hcmQudjEuSXRlbUxpbmsSLgoIY29tbWVudHMYAyADKAsyHC5oZXJtZXMuYm9hcmQudjEuSXRlbUNvbW1lbnQSKwoHaGlzdG9yeRgEIAMoCzIaLmhlcm1lcy5ib2FyZC52MS5JdGVtRXZlbnQSGQoMaGlzdG9yeV9uZXh0GAUgASgDSACIAQFCDwoNX2hpc3RvcnlfbmV4dCJqCg9JdGVtSGlzdG9yeVBhZ2USDwoHaXRlbV9pZBgBIAEoCRIqCgZldmVudHMYAiADKAsyGi5oZXJtZXMuYm9hcmQudjEuSXRlbUV2ZW50EhEKBG5leHQYAyABKANIAIgBAUIHCgVfbmV4dCI7Cg9JdGVtUXVlcnlSZXN1bHQSKAoFY2FyZHMYASADKAsyGS5oZXJtZXMuYm9hcmQudjEuSXRlbUNhcmQiSwoJTW92ZUNoZWNrEg8KB2l0ZW1faWQYASABKAkSLQoHY29sdW1ucxgCIAMoCzIcLmhlcm1lcy5ib2FyZC52MS5Db2x1bW5DaGVjayJICgtDb2x1bW5DaGVjaxISCgpjb2x1bW5fa2V5GAEgASgJEiUKBXVubWV0GAIgAygLMhYuaGVybWVzLmJvYXJkLnYxLlVubWV0IpoBCgpNb3ZlUmVzdWx0EiUKBGRvbmUYASABKAsyFS5oZXJtZXMuYm9hcmQudjEuSXRlbUgAEi8KB3JlZnVzZWQYAiABKAsyHC5oZXJtZXMuYm9hcmQudjEuTW92ZVJlZnVzZWRIABIpCghjb25mbGljdBgDIAEoCzIVLmhlcm1lcy5ib2FyZC52MS5JdGVtSABCCQoHb3V0Y29tZSKaAQoKRWRpdFJlc3VsdBIlCgRkb25lGAEgASgLMhUuaGVybWVzLmJvYXJkLnYxLkl0ZW1IABIvCgdyZWZ1c2VkGAIgASgLMhwuaGVybWVzLmJvYXJkLnYxLk1vdmVSZWZ1c2VkSAASKQoIY29uZmxpY3QYAyABKAsyFS5oZXJtZXMuYm9hcmQudjEuSXRlbUgAQgkKB291dGNvbWUiNAoLTW92ZVJlZnVzZWQSJQoFdW5tZXQYASADKAsyFi5oZXJtZXMuYm9hcmQudjEuVW5tZXQiJAoOQm9hcmRVbndhdGNoZWQSEgoKcHJvamVjdF9pZBgBIAEoCSLOAQoKQm9hcmRFdmVudBISCgpwcm9qZWN0X2lkGAEgASgJEgsKA3NlcRgCIAEoBBItCgRraW5kGAMgASgOMh8uaGVybWVzLmJvYXJkLnYxLkJvYXJkRXZlbnRLaW5kEg8KB2l0ZW1faWQYBCABKAkSLAoEY2FyZBgFIAEoCzIZLmhlcm1lcy5ib2FyZC52MS5JdGVtQ2FyZEgAiAEBEhgKC2Zyb21fY29sdW1uGAYgASgJSAGIAQFCBwoFX2NhcmRCDgoMX2Zyb21fY29sdW1uKoQCCg5Cb2FyZEV2ZW50S2luZBIgChxCT0FSRF9FVkVOVF9LSU5EX1VOU1BFQ0lGSUVEEAASIgoeQk9BUkRfRVZFTlRfS0lORF9JVEVNX1VQU0VSVEVEEAESHwobQk9BUkRfRVZFTlRfS0lORF9JVEVNX01PVkVEEAISIQodQk9BUkRfRVZFTlRfS0lORF9JVEVNX1JFTU9WRUQQAxIkCiBCT0FSRF9FVkVOVF9LSU5EX0NPTFVNTlNfQ0hBTkdFRBAEEiUKIUJPQVJEX0VWRU5UX0tJTkRfU0VUVElOR1NfQ0hBTkdFRBAFEhsKF0JPQVJEX0VWRU5UX0tJTkRfUkVTWU5DEAZiBnByb3RvMw", [file_hermes_board_v1_board]);
 
 /**
  * @generated from message hermes.board.v1.BoardRequest
@@ -147,6 +147,14 @@ export type BoardRequest = Message<"hermes.board.v1.BoardRequest"> & {
      */
     value: ItemCheckAc;
     case: "itemCheckAc";
+  } | {
+    /**
+     * The owner choosing this computer as the board's home.
+     *
+     * @generated from field: hermes.board.v1.BoardEnable board_enable = 19;
+     */
+    value: BoardEnable;
+    case: "boardEnable";
   } | { case: undefined; value?: undefined };
 };
 
@@ -166,7 +174,7 @@ export type BoardResponse = Message<"hermes.board.v1.BoardResponse"> & {
    */
   response: {
     /**
-     * To `board_get` and `board_watch`.
+     * To `board_get`, `board_watch` and `board_enable`.
      *
      * @generated from field: hermes.board.v1.BoardSnapshot board = 1;
      */
@@ -265,8 +273,10 @@ export const BoardPushSchema: GenMessage<BoardPush> = /*@__PURE__*/
 
 /**
  * The whole board. On a project without one, a connection with `control`
- * enables it with the default columns, templates and roles; with `read`
- * only it is refused with `no_board`.
+ * enables it with the default columns, templates and roles if the project
+ * has no link; with `read` only, or on a linked project, it is refused with
+ * `no_board` (a linked team's home is the owner's choice: `board_enable`).
+ * A board whose home is another daemon is refused with `no_board` naming it.
  *
  * @generated from message hermes.board.v1.BoardGet
  */
@@ -285,6 +295,27 @@ export const BoardGetSchema: GenMessage<BoardGet> = /*@__PURE__*/
   messageDesc(file_hermes_board_v1_requests, 3);
 
 /**
+ * "Start the board on this computer": enables the project's board here as
+ * its home, linked or not, and answers with the snapshot. Needs `approve`
+ * (the owner). A board that already exists is returned unchanged.
+ *
+ * @generated from message hermes.board.v1.BoardEnable
+ */
+export type BoardEnable = Message<"hermes.board.v1.BoardEnable"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+};
+
+/**
+ * Describes the message hermes.board.v1.BoardEnable.
+ * Use `create(BoardEnableSchema)` to create a new message.
+ */
+export const BoardEnableSchema: GenMessage<BoardEnable> = /*@__PURE__*/
+  messageDesc(file_hermes_board_v1_requests, 4);
+
+/**
  * One item in full, for the drawer.
  *
  * @generated from message hermes.board.v1.ItemGet
@@ -301,7 +332,7 @@ export type ItemGet = Message<"hermes.board.v1.ItemGet"> & {
  * Use `create(ItemGetSchema)` to create a new message.
  */
 export const ItemGetSchema: GenMessage<ItemGet> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 4);
+  messageDesc(file_hermes_board_v1_requests, 5);
 
 /**
  * An item's history, oldest first, a page at a time.
@@ -334,7 +365,7 @@ export type ItemHistory = Message<"hermes.board.v1.ItemHistory"> & {
  * Use `create(ItemHistorySchema)` to create a new message.
  */
 export const ItemHistorySchema: GenMessage<ItemHistory> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 5);
+  messageDesc(file_hermes_board_v1_requests, 6);
 
 /**
  * Cards matching every filter that is set; an unset filter matches all.
@@ -390,7 +421,7 @@ export type ItemQuery = Message<"hermes.board.v1.ItemQuery"> & {
  * Use `create(ItemQuerySchema)` to create a new message.
  */
 export const ItemQuerySchema: GenMessage<ItemQuery> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 6);
+  messageDesc(file_hermes_board_v1_requests, 7);
 
 /**
  * What stands between the item and every other column, for this connection.
@@ -409,7 +440,7 @@ export type ItemMoveCheck = Message<"hermes.board.v1.ItemMoveCheck"> & {
  * Use `create(ItemMoveCheckSchema)` to create a new message.
  */
 export const ItemMoveCheckSchema: GenMessage<ItemMoveCheck> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 7);
+  messageDesc(file_hermes_board_v1_requests, 8);
 
 /**
  * Move the item if every guard holds. Needs `control`.
@@ -456,7 +487,7 @@ export type ItemMove = Message<"hermes.board.v1.ItemMove"> & {
  * Use `create(ItemMoveSchema)` to create a new message.
  */
 export const ItemMoveSchema: GenMessage<ItemMove> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 8);
+  messageDesc(file_hermes_board_v1_requests, 9);
 
 /**
  * Receive `board_event` pushes for the project. Answered with the snapshot
@@ -476,7 +507,7 @@ export type BoardWatch = Message<"hermes.board.v1.BoardWatch"> & {
  * Use `create(BoardWatchSchema)` to create a new message.
  */
 export const BoardWatchSchema: GenMessage<BoardWatch> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 9);
+  messageDesc(file_hermes_board_v1_requests, 10);
 
 /**
  * @generated from message hermes.board.v1.BoardUnwatch
@@ -493,7 +524,7 @@ export type BoardUnwatch = Message<"hermes.board.v1.BoardUnwatch"> & {
  * Use `create(BoardUnwatchSchema)` to create a new message.
  */
 export const BoardUnwatchSchema: GenMessage<BoardUnwatch> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 10);
+  messageDesc(file_hermes_board_v1_requests, 11);
 
 /**
  * Platforms, where "unset" and "none" must differ.
@@ -512,7 +543,7 @@ export type PlatformList = Message<"hermes.board.v1.PlatformList"> & {
  * Use `create(PlatformListSchema)` to create a new message.
  */
 export const PlatformListSchema: GenMessage<PlatformList> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 11);
+  messageDesc(file_hermes_board_v1_requests, 12);
 
 /**
  * A new item in the inbox. Its type's template fills the description.
@@ -582,7 +613,7 @@ export type ItemCreate = Message<"hermes.board.v1.ItemCreate"> & {
  * Use `create(ItemCreateSchema)` to create a new message.
  */
 export const ItemCreateSchema: GenMessage<ItemCreate> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 12);
+  messageDesc(file_hermes_board_v1_requests, 13);
 
 /**
  * Change an item's fields; never its column or rank.
@@ -651,7 +682,7 @@ export type ItemUpdate = Message<"hermes.board.v1.ItemUpdate"> & {
  * Use `create(ItemUpdateSchema)` to create a new message.
  */
 export const ItemUpdateSchema: GenMessage<ItemUpdate> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 13);
+  messageDesc(file_hermes_board_v1_requests, 14);
 
 /**
  * @generated from message hermes.board.v1.ItemAddComment
@@ -680,7 +711,7 @@ export type ItemAddComment = Message<"hermes.board.v1.ItemAddComment"> & {
  * Use `create(ItemAddCommentSchema)` to create a new message.
  */
 export const ItemAddCommentSchema: GenMessage<ItemAddComment> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 14);
+  messageDesc(file_hermes_board_v1_requests, 15);
 
 /**
  * Link an item to a task, decision, artifact, branch, PR or other item.
@@ -716,7 +747,7 @@ export type ItemAddLink = Message<"hermes.board.v1.ItemAddLink"> & {
  * Use `create(ItemAddLinkSchema)` to create a new message.
  */
 export const ItemAddLinkSchema: GenMessage<ItemAddLink> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 15);
+  messageDesc(file_hermes_board_v1_requests, 16);
 
 /**
  * @generated from message hermes.board.v1.ItemRemoveLink
@@ -743,7 +774,7 @@ export type ItemRemoveLink = Message<"hermes.board.v1.ItemRemoveLink"> & {
  * Use `create(ItemRemoveLinkSchema)` to create a new message.
  */
 export const ItemRemoveLinkSchema: GenMessage<ItemRemoveLink> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 16);
+  messageDesc(file_hermes_board_v1_requests, 17);
 
 /**
  * Flag an item blocked; it keeps its column.
@@ -779,7 +810,7 @@ export type ItemBlock = Message<"hermes.board.v1.ItemBlock"> & {
  * Use `create(ItemBlockSchema)` to create a new message.
  */
 export const ItemBlockSchema: GenMessage<ItemBlock> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 17);
+  messageDesc(file_hermes_board_v1_requests, 18);
 
 /**
  * @generated from message hermes.board.v1.ItemUnblock
@@ -801,7 +832,7 @@ export type ItemUnblock = Message<"hermes.board.v1.ItemUnblock"> & {
  * Use `create(ItemUnblockSchema)` to create a new message.
  */
 export const ItemUnblockSchema: GenMessage<ItemUnblock> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 18);
+  messageDesc(file_hermes_board_v1_requests, 19);
 
 /**
  * Lead: set or clear an item's assignee.
@@ -832,7 +863,7 @@ export type ItemAssign = Message<"hermes.board.v1.ItemAssign"> & {
  * Use `create(ItemAssignSchema)` to create a new message.
  */
 export const ItemAssignSchema: GenMessage<ItemAssign> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 19);
+  messageDesc(file_hermes_board_v1_requests, 20);
 
 /**
  * Lead: place an item between two others in its column.
@@ -870,7 +901,7 @@ export type ItemRank = Message<"hermes.board.v1.ItemRank"> & {
  * Use `create(ItemRankSchema)` to create a new message.
  */
 export const ItemRankSchema: GenMessage<ItemRank> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 20);
+  messageDesc(file_hermes_board_v1_requests, 21);
 
 /**
  * Tester: record an acceptance criterion's result.
@@ -913,7 +944,7 @@ export type ItemCheckAc = Message<"hermes.board.v1.ItemCheckAc"> & {
  * Use `create(ItemCheckAcSchema)` to create a new message.
  */
 export const ItemCheckAcSchema: GenMessage<ItemCheckAc> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 21);
+  messageDesc(file_hermes_board_v1_requests, 22);
 
 /**
  * @generated from message hermes.board.v1.BoardSnapshot
@@ -958,7 +989,7 @@ export type BoardSnapshot = Message<"hermes.board.v1.BoardSnapshot"> & {
  * Use `create(BoardSnapshotSchema)` to create a new message.
  */
 export const BoardSnapshotSchema: GenMessage<BoardSnapshot> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 22);
+  messageDesc(file_hermes_board_v1_requests, 23);
 
 /**
  * @generated from message hermes.board.v1.ItemDetail
@@ -1001,7 +1032,7 @@ export type ItemDetail = Message<"hermes.board.v1.ItemDetail"> & {
  * Use `create(ItemDetailSchema)` to create a new message.
  */
 export const ItemDetailSchema: GenMessage<ItemDetail> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 23);
+  messageDesc(file_hermes_board_v1_requests, 24);
 
 /**
  * @generated from message hermes.board.v1.ItemHistoryPage
@@ -1030,7 +1061,7 @@ export type ItemHistoryPage = Message<"hermes.board.v1.ItemHistoryPage"> & {
  * Use `create(ItemHistoryPageSchema)` to create a new message.
  */
 export const ItemHistoryPageSchema: GenMessage<ItemHistoryPage> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 24);
+  messageDesc(file_hermes_board_v1_requests, 25);
 
 /**
  * @generated from message hermes.board.v1.ItemQueryResult
@@ -1047,7 +1078,7 @@ export type ItemQueryResult = Message<"hermes.board.v1.ItemQueryResult"> & {
  * Use `create(ItemQueryResultSchema)` to create a new message.
  */
 export const ItemQueryResultSchema: GenMessage<ItemQueryResult> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 25);
+  messageDesc(file_hermes_board_v1_requests, 26);
 
 /**
  * @generated from message hermes.board.v1.MoveCheck
@@ -1071,7 +1102,7 @@ export type MoveCheck = Message<"hermes.board.v1.MoveCheck"> & {
  * Use `create(MoveCheckSchema)` to create a new message.
  */
 export const MoveCheckSchema: GenMessage<MoveCheck> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 26);
+  messageDesc(file_hermes_board_v1_requests, 27);
 
 /**
  * @generated from message hermes.board.v1.ColumnCheck
@@ -1095,7 +1126,7 @@ export type ColumnCheck = Message<"hermes.board.v1.ColumnCheck"> & {
  * Use `create(ColumnCheckSchema)` to create a new message.
  */
 export const ColumnCheckSchema: GenMessage<ColumnCheck> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 27);
+  messageDesc(file_hermes_board_v1_requests, 28);
 
 /**
  * @generated from message hermes.board.v1.MoveResult
@@ -1136,7 +1167,7 @@ export type MoveResult = Message<"hermes.board.v1.MoveResult"> & {
  * Use `create(MoveResultSchema)` to create a new message.
  */
 export const MoveResultSchema: GenMessage<MoveResult> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 28);
+  messageDesc(file_hermes_board_v1_requests, 29);
 
 /**
  * An edit's outcome, shaped like a move's.
@@ -1179,7 +1210,7 @@ export type EditResult = Message<"hermes.board.v1.EditResult"> & {
  * Use `create(EditResultSchema)` to create a new message.
  */
 export const EditResultSchema: GenMessage<EditResult> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 29);
+  messageDesc(file_hermes_board_v1_requests, 30);
 
 /**
  * @generated from message hermes.board.v1.MoveRefused
@@ -1196,7 +1227,7 @@ export type MoveRefused = Message<"hermes.board.v1.MoveRefused"> & {
  * Use `create(MoveRefusedSchema)` to create a new message.
  */
 export const MoveRefusedSchema: GenMessage<MoveRefused> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 30);
+  messageDesc(file_hermes_board_v1_requests, 31);
 
 /**
  * @generated from message hermes.board.v1.BoardUnwatched
@@ -1213,7 +1244,7 @@ export type BoardUnwatched = Message<"hermes.board.v1.BoardUnwatched"> & {
  * Use `create(BoardUnwatchedSchema)` to create a new message.
  */
 export const BoardUnwatchedSchema: GenMessage<BoardUnwatched> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 31);
+  messageDesc(file_hermes_board_v1_requests, 32);
 
 /**
  * @generated from message hermes.board.v1.BoardEvent
@@ -1262,7 +1293,7 @@ export type BoardEvent = Message<"hermes.board.v1.BoardEvent"> & {
  * Use `create(BoardEventSchema)` to create a new message.
  */
 export const BoardEventSchema: GenMessage<BoardEvent> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_requests, 32);
+  messageDesc(file_hermes_board_v1_requests, 33);
 
 /**
  * @generated from enum hermes.board.v1.BoardEventKind

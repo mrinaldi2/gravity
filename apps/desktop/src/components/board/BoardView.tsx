@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import type { ReactElement } from "react";
 import type { AddToast } from "../../app/useToasts";
 import type { DaemonApi } from "../../protocol/api";
-import { PROTO_ENCODING } from "../../protocol/board";
+import { boardCall, PROTO_ENCODING } from "../../protocol/board";
 import type { Bot, Project } from "../../protocol/entities";
 import type { BoardColumn, ItemCard } from "../../protocol/gen/hermes/board/v1/board_pb";
 import { ColumnCategory } from "../../protocol/gen/hermes/board/v1/board_pb";
@@ -55,6 +55,52 @@ function Notice({
   );
 }
 
+/**
+ * A project with no board here. The owner can make this computer its home
+ * (H-037); a linked team's home is their choice, so the daemon never picks one.
+ */
+function NoBoard(
+  props: BoardViewProps & { readonly message: string; readonly refresh: () => void },
+): ReactElement {
+  const { client, project, message, refresh, addToast } = props;
+  const [starting, setStarting] = useState(false);
+  const owner = client.hasGrant("approve");
+  const start = (): void => {
+    setStarting(true);
+    void (async () => {
+      try {
+        await boardCall(client, { case: "boardEnable", value: { projectId: project.id } }, "board");
+        refresh();
+      } catch (error) {
+        addToast(
+          "error",
+          "Couldn't start the board",
+          error instanceof Error ? error.message : String(error),
+        );
+      } finally {
+        setStarting(false);
+      }
+    })();
+  };
+  return (
+    <Notice
+      title="This board isn't set up yet"
+      text={
+        owner
+          ? `${message} Start it on one computer only: that computer becomes the board's home.`
+          : message
+      }
+      action={
+        owner ? (
+          <button type="button" className="btn btn-small" disabled={starting} onClick={start}>
+            Start the board on this computer
+          </button>
+        ) : undefined
+      }
+    />
+  );
+}
+
 /** The Board tab: the project's columns and cards, live (H-018 §3). */
 export default function BoardView(props: BoardViewProps): ReactElement {
   const { client, project, connected } = props;
@@ -69,12 +115,7 @@ export default function BoardView(props: BoardViewProps): ReactElement {
   }
   if (status.kind === "failed") {
     if (status.code === "no_board") {
-      return (
-        <Notice
-          title="This board isn't set up yet"
-          text="It's set up the first time the board is opened from a Mac with full access to this project."
-        />
-      );
+      return <NoBoard {...props} message={status.message} refresh={refresh} />;
     }
     return (
       <Notice

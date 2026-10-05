@@ -96,6 +96,8 @@ impl Conn {
             | Request::ItemMoveCheck(_)
             | Request::BoardWatch(_)
             | Request::BoardUnwatch(_) => Capability::Read,
+            // Choosing the board's home is the owner's call (H-037).
+            Request::BoardEnable(_) => Capability::Approve,
             _ => Capability::Control,
         };
         if !self.caps.contains(&cap) {
@@ -109,6 +111,7 @@ impl Conn {
         }
         Ok(Some(match request {
             Request::BoardGet(r) => Response::Board(self.snapshot(&r.project_id)?),
+            Request::BoardEnable(r) => Response::Board(self.board_enable(&r.project_id)?),
             Request::BoardWatch(r) => {
                 self.board_watch(req_id, &r.project_id)?;
                 return Ok(None);

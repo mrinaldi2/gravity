@@ -213,14 +213,13 @@ fn tool_call(app: &Arc<AppState>, bot_id: &str, params: &Value) -> Result<Value,
     })
 }
 
-/// The board tools this bot sees: none until its project has a board, then
-/// those its board roles allow (H-020 §1.6).
+/// The board tools this bot sees: the reads for everyone, and those its
+/// board roles allow (H-020 §1.6, H-037), also before the board exists.
+/// The transport has no server push, so a session can't be told of a change
+/// (`notifications/tools/list_changed`); the list is fixed per session.
 fn board_tools(app: &Arc<AppState>, bot_id: &str) -> Vec<Value> {
-    let roles = caller(app, bot_id).and_then(|bot| board::board_roles(app, &bot));
-    match roles {
-        Ok(Some(roles)) => board_schema::board_tool_list(&roles),
-        _ => Vec::new(),
-    }
+    let roles = caller(app, bot_id).and_then(|bot| board::listed_roles(app, &bot));
+    board_schema::board_tool_list(&roles.unwrap_or_default())
 }
 
 fn caller(app: &Arc<AppState>, bot_id: &str) -> anyhow::Result<bus::Bot> {

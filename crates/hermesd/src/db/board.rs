@@ -180,20 +180,25 @@ impl Db {
                 params![project_id, to_text(&item_type), body.to_string(), at],
             )?;
         }
-        let bots: Vec<(String, String)> = tx
-            .prepare("SELECT id, name FROM bot WHERE project_id = ?1 AND deleted_at IS NULL")?
-            .query_map(params![project_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        // A tester verifies on the machine it runs on: a linked bot's peer.
+        let bots: Vec<(String, String, Option<String>)> = tx
+            .prepare(
+                "SELECT bot.id, bot.name, peer.name FROM bot
+                 LEFT JOIN peer ON peer.id = bot.peer_id
+                 WHERE bot.project_id = ?1 AND bot.deleted_at IS NULL",
+            )?
+            .query_map(params![project_id], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })?
             .collect::<Result<_, _>>()?;
-        for (bot_id, name) in bots {
-            let role = if lead_bot_id.as_deref() == Some(bot_id.as_str()) {
-                Some(Role::Lead)
-            } else {
-                defaults::guess_role(&name)
-            };
-            if let Some(role) = role {
+        for (bot_id, name, peer) in bots {
+            let is_lead = lead_bot_id.as_deref() == Some(bot_id.as_str());
+            if let Some(role) = defaults::seed_role(&name, is_lead) {
+                let machine = peer.filter(|_| role == Role::Tester);
                 tx.execute(
-                    "INSERT OR IGNORE INTO project_role(project_id, role, bot_id) VALUES (?1, ?2, ?3)",
-                    params![project_id, to_text(&role), bot_id],
+                    "INSERT OR IGNORE INTO project_role(project_id, role, bot_id, machine)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![project_id, to_text(&role), bot_id, machine],
                 )?;
             }
         }

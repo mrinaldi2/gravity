@@ -5,7 +5,7 @@
 // (no grant, unknown item, bad arguments) is the envelope's `Error` instead.
 //
 // Grants: reads and watching need `read`; `item_move` and the edits need
-// `control`.
+// `control`; `board_enable` needs `approve`.
 //
 // Bots send the same requests as MCP tool arguments in proto3 JSON, and the
 // MCP tool schemas are generated from these messages: a field marked
@@ -40,12 +40,14 @@ message BoardRequest {
     ItemAssign item_assign = 16;
     ItemRank item_rank = 17;
     ItemCheckAc item_check_ac = 18;
+    // The owner choosing this computer as the board's home.
+    BoardEnable board_enable = 19;
   }
 }
 
 message BoardResponse {
   oneof response {
-    // To `board_get` and `board_watch`.
+    // To `board_get`, `board_watch` and `board_enable`.
     BoardSnapshot board = 1;
     // To `item_get`.
     ItemDetail item = 2;
@@ -74,9 +76,18 @@ message BoardPush {
 // --- Requests ---------------------------------------------------------------
 
 // The whole board. On a project without one, a connection with `control`
-// enables it with the default columns, templates and roles; with `read`
-// only it is refused with `no_board`.
+// enables it with the default columns, templates and roles if the project
+// has no link; with `read` only, or on a linked project, it is refused with
+// `no_board` (a linked team's home is the owner's choice: `board_enable`).
+// A board whose home is another daemon is refused with `no_board` naming it.
 message BoardGet {
+  string project_id = 1;
+}
+
+// "Start the board on this computer": enables the project's board here as
+// its home, linked or not, and answers with the snapshot. Needs `approve`
+// (the owner). A board that already exists is returned unchanged.
+message BoardEnable {
   string project_id = 1;
 }
 

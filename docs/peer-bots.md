@@ -131,10 +131,14 @@ and stays that way as the team changes.
   two rosters share a name is refused with `conflict`, naming the clashing
   bots. A bot created or renamed later into a name the other side holds is
   stood in as `<name>-<peer>` instead, with a warning in the log.
-- **One board home.** A linked project's board lives on the daemon the other
-  one dials. The dialing side never creates one (`board_get` answers
-  `no_board`), and a project whose board is already there can't be linked
-  through a peer it dials: link it from the other computer instead.
+- **One board home.** A board lives on the daemon named in its
+  `home_daemon_id`, and only that daemon serves it; any other answers
+  `no_board` naming the home. An unlinked project's board starts on its
+  first `board_get`; a linked project's only when the owner picks its home
+  with "Start the board on this computer" (`board_enable`, owner only).
+  Which side dials says nothing about the home, since both sides may dial.
+  Two projects that each have a board can't be linked (`conflict`); when
+  only one has a board, that side is the home.
 - **Stand-ins do not count** towards `max_bots_per_project`; only bots that
   run on a daemon count there.
 - **Unlinking**, from either side, archives the stand-ins on both sides

@@ -1,16 +1,26 @@
-//! One home per board (H-020 §1.3, ARCH-R8 M1): until boards forward (B9), a
-//! linked project's board is enabled only on the side that accepted the
-//! link, so imac and win-pc never grow a second board for the Mac's project.
+//! One home per board (H-020 §1.3, H-037): an unlinked project's board is
+//! enabled on its first read; a linked project's only when the owner starts
+//! it on the computer that should be its home. Once it exists, only the
+//! daemon named in `home_daemon_id` serves it, and two projects that each
+//! have a board can't be linked.
 
 mod common;
 
 use bus::contract::board::{self as c, board_request::Request};
+use bus::contract::wire::envelope::Body;
 use common::board::*;
 use common::*;
+use hermesd::board::defaults::COLUMNS;
 use serde_json::{json, Value};
 
 fn board_get(project_id: &str) -> Request {
     Request::BoardGet(c::BoardGet {
+        project_id: project_id.to_string(),
+    })
+}
+
+fn board_enable(project_id: &str) -> Request {
+    Request::BoardEnable(c::BoardEnable {
         project_id: project_id.to_string(),
     })
 }
@@ -39,31 +49,69 @@ async fn an_unlinked_project_enables_its_board_here() {
     assert_eq!(home, d.app.db.daemon_id().unwrap());
 }
 
+/// Both sides dial each other on the owner's Mac (both peer rows have a
+/// url), and listening is no sign of home either: a linked project gets a
+/// board only when the owner starts it.
 #[tokio::test]
-async fn the_side_that_accepted_the_link_is_the_home() {
-    let (d, mut owner, project_id) = project(Some(None)).await;
-    let board = snapshot(call(&mut owner, board_get(&project_id)).await);
-    let home = board.settings.expect("settings").home_daemon_id;
-    assert_eq!(home, d.app.db.daemon_id().unwrap());
+async fn a_linked_project_gets_a_board_only_when_the_owner_starts_it() {
+    for url in [Some("wss://pc.example:7316"), None] {
+        let (d, mut owner, project_id) = project(Some(url)).await;
+        let body = call(&mut owner, board_get(&project_id)).await;
+        assert_eq!(error_code(body), "no_board");
+        assert!(d.app.db.board_settings(&project_id).unwrap().is_none());
+
+        let board = snapshot(call(&mut owner, board_enable(&project_id)).await);
+        let home = board.settings.expect("settings").home_daemon_id;
+        assert_eq!(home, d.app.db.daemon_id().unwrap());
+        assert_eq!(board.columns.len(), COLUMNS.len());
+        // Served from here from now on, and starting it again changes nothing.
+        snapshot(call(&mut owner, board_get(&project_id)).await);
+        let again = snapshot(call(&mut owner, board_enable(&project_id)).await);
+        assert_eq!(again.settings.expect("settings").key, "L");
+    }
 }
 
 #[tokio::test]
-async fn the_dialing_side_gets_no_second_board() {
-    let (d, mut owner, project_id) = project(Some(Some("wss://mac.example:7316"))).await;
-    let body = call(&mut owner, board_get(&project_id)).await;
-    assert_eq!(error_code(body), "no_board");
+async fn only_the_owner_starts_a_board() {
+    let (d, mut owner, project_id) = project(Some(Some("wss://pc.example:7316"))).await;
+    let created = owner
+        .request(json!({"type": "create_device", "name": "tablet",
+                        "capabilities": ["read", "control"]}))
+        .await;
+    let mut device = connect_with(&d, token_str(&created)).await;
+    let body = call(&mut device, board_enable(&project_id)).await;
+    assert_eq!(error_code(body), "forbidden");
     assert!(d.app.db.board_settings(&project_id).unwrap().is_none());
 }
 
-/// A board enabled before a link stays home on the side the other one
-/// dials. Linking it as the dialing side is refused (the two tests below).
+/// A board recorded with another daemon as its home is not served here.
+#[tokio::test]
+async fn a_board_homed_elsewhere_is_refused_naming_its_home() {
+    let (d, mut owner, project_id) = project(None).await;
+    let imac = d.app.db.create_peer("imac", None).unwrap();
+    d.app.db.bind_peer_daemon(&imac.id, "d-imac").unwrap();
+    d.app.db.ensure_board(&project_id, "d-imac", None).unwrap();
+    for request in [board_get(&project_id), board_enable(&project_id)] {
+        let Body::Error(e) = call(&mut owner, request).await else {
+            panic!("expected a refusal");
+        };
+        assert_eq!(e.code, "no_board");
+        assert!(e.message.contains("imac"), "{}", e.message);
+    }
+}
+
+/// A board enabled before a link stays home on its side.
 #[tokio::test]
 async fn an_existing_board_keeps_its_home_after_a_link() {
     let d = spawn_daemon().await;
     let mut owner = WsClient::connect(&d).await;
     let project_id = common::peers::project(&mut owner, "Linked").await;
     snapshot(call(&mut owner, board_get(&project_id)).await);
-    let peer = d.app.db.create_peer("imac", None).unwrap();
+    let peer = d
+        .app
+        .db
+        .create_peer("imac", Some("wss://imac.example:7316"))
+        .unwrap();
     d.app
         .db
         .create_project_link(&project_id, &peer.id, "remote-project", "Linked")
@@ -73,50 +121,62 @@ async fn an_existing_board_keeps_its_home_after_a_link() {
     assert_eq!(home, d.app.db.daemon_id().unwrap());
 }
 
-fn refused_for_its_board(reply: &Value) {
+fn refused_for_two_homes(reply: &Value) {
     assert_eq!(reply["type"], "error", "{reply}");
     assert_eq!(reply["code"], "conflict");
     let message = reply["message"].as_str().expect("message");
-    assert!(message.contains("board lives here"), "{message}");
+    assert!(message.contains("one board home"), "{message}");
 }
 
-/// In `paired()` the Mac dials the PC. A Mac project with a board can't be
-/// linked from the Mac: the PC it dials would become a second home.
+/// Two projects that each have a board can't be linked, from either side.
 #[tokio::test]
-async fn the_dialing_side_cannot_link_a_project_whose_board_is_here() {
-    let mut p = common::peers::paired().await;
-    let mac_app = common::peers::project(&mut p.mac_client, "app").await;
-    snapshot(call(&mut p.mac_client, board_get(&mac_app)).await);
-    let reply = p
-        .mac_client
-        .request(json!({"type": "link_project", "project_id": mac_app, "peer_id": p.mac_peer_id}))
-        .await;
-    refused_for_its_board(&reply);
-    assert!(p.mac.app.db.project_links(&mac_app).unwrap().is_empty());
-}
-
-/// Nor from the other side: the PC asking to link its project with the
-/// Mac's is refused by the Mac, which dials it (the re-pairing case).
-#[tokio::test]
-async fn a_link_into_a_board_on_the_dialing_side_is_refused_there() {
+async fn linking_two_boards_is_refused() {
     let mut p = common::peers::paired().await;
     let mac_app = common::peers::project(&mut p.mac_client, "app").await;
     snapshot(call(&mut p.mac_client, board_get(&mac_app)).await);
     let win_app = common::peers::project(&mut p.win_client, "pc-app").await;
-    let reply = p
+    snapshot(call(&mut p.win_client, board_get(&win_app)).await);
+
+    let from_mac = p
+        .mac_client
+        .request(json!({"type": "link_project", "project_id": mac_app,
+                        "peer_id": p.mac_peer_id, "remote_project_id": win_app}))
+        .await;
+    refused_for_two_homes(&from_mac);
+    let from_pc = p
         .win_client
         .request(json!({"type": "link_project", "project_id": win_app,
                         "peer_id": p.win_peer_id, "remote_project_id": mac_app}))
         .await;
-    refused_for_its_board(&reply);
-    assert!(p.win.app.db.project_links(&win_app).unwrap().is_empty());
+    refused_for_two_homes(&from_pc);
     assert!(p.mac.app.db.project_links(&mac_app).unwrap().is_empty());
+    assert!(p.win.app.db.project_links(&win_app).unwrap().is_empty());
+}
 
-    // The listener's own board links fine: it stays home here.
-    snapshot(call(&mut p.win_client, board_get(&win_app)).await);
+/// When only one side has a board the link goes through, from either side,
+/// and that side is the home: the other one starts none on its own.
+#[tokio::test]
+async fn the_side_with_the_board_is_the_home() {
+    let mut p = common::peers::paired().await;
+    let mac_app = common::peers::project(&mut p.mac_client, "app").await;
+    snapshot(call(&mut p.mac_client, board_get(&mac_app)).await);
+    let win_app = common::peers::project(&mut p.win_client, "pc-app").await;
     let linked = p
         .win_client
-        .request(json!({"type": "link_project", "project_id": win_app, "peer_id": p.win_peer_id}))
+        .request(json!({"type": "link_project", "project_id": win_app,
+                        "peer_id": p.win_peer_id, "remote_project_id": mac_app}))
+        .await;
+    assert_eq!(linked["type"], "project", "{linked}");
+    snapshot(call(&mut p.mac_client, board_get(&mac_app)).await);
+    let body = call(&mut p.win_client, board_get(&win_app)).await;
+    assert_eq!(error_code(body), "no_board");
+
+    // The dialing side's board links too (the Mac dials the PC here).
+    let mac_two = common::peers::project(&mut p.mac_client, "two").await;
+    snapshot(call(&mut p.mac_client, board_get(&mac_two)).await);
+    let linked = p
+        .mac_client
+        .request(json!({"type": "link_project", "project_id": mac_two, "peer_id": p.mac_peer_id}))
         .await;
     assert_eq!(linked["type"], "project", "{linked}");
 }

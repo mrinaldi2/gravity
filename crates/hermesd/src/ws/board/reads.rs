@@ -24,11 +24,12 @@ impl Conn {
         let snapshot = match db.board_read(|t| t.snapshot(project_id))? {
             Some(snapshot) => snapshot,
             None => {
-                self.enable_board(project_id)?;
+                self.enable_board(project_id, Enable::Auto)?;
                 db.board_read(|t| t.snapshot(project_id))?
                     .ok_or_else(|| refuse("internal", "the board was enabled but is missing"))?
             }
         };
+        self.served_here(&snapshot.settings.home_daemon_id)?;
         Ok(c::BoardSnapshot {
             settings: Some(snapshot.settings.into()),
             columns: snapshot.columns.into_iter().map(Into::into).collect(),
@@ -38,11 +39,39 @@ impl Conn {
         })
     }
 
-    /// A project's first `board_get` enables its board (B2 defaults), on
-    /// this daemon as its home. Enabling is a change, so it needs `control`.
-    /// A project that already has a board keeps its home: this runs only
-    /// when it has none.
-    fn enable_board(&self, project_id: &str) -> Result<(), Refusal> {
+    /// The owner's "Start the board on this computer": makes this daemon the
+    /// project's board home even when the project is linked. A board that
+    /// already exists is returned as it is.
+    pub(super) fn board_enable(&self, project_id: &str) -> Result<c::BoardSnapshot, Refusal> {
+        if self.app.db.board_settings(project_id)?.is_none() {
+            self.enable_board(project_id, Enable::Owner)?;
+        }
+        self.snapshot(project_id)
+    }
+
+    /// One home per board (H-020 §1.3, H-037): only the daemon named in
+    /// `home_daemon_id` serves it.
+    fn served_here(&self, home_daemon_id: &str) -> Result<(), Refusal> {
+        let db = &self.app.db;
+        if home_daemon_id == db.daemon_id()? {
+            return Ok(());
+        }
+        let home = db
+            .list_peers()?
+            .into_iter()
+            .find(|p| p.daemon_id.as_deref() == Some(home_daemon_id))
+            .map_or_else(|| "another computer".to_string(), |p| p.name);
+        Err(refuse(
+            "no_board",
+            format!("This project's board lives on {home}; open it there."),
+        ))
+    }
+
+    /// Enables a project's board here with the B2 defaults, recording this
+    /// daemon as its home (H-037). `board_get` does it on its own only for
+    /// a project with no link: which computer of a linked team is the home
+    /// is the owner's call, made with `board_enable`.
+    fn enable_board(&self, project_id: &str, how: Enable) -> Result<(), Refusal> {
         let db = &self.app.db;
         if !db
             .get_project(project_id)?
@@ -50,21 +79,18 @@ impl Conn {
         {
             return Err(refuse("not_found", format!("no project {project_id}")));
         }
-        if !self.caps.contains(&Capability::Control) {
-            return Err(refuse(
-                "no_board",
-                "This project has no board yet; enabling it needs the control grant.",
-            ));
-        }
-        // One home per project (H-020 §1.3). Until boards forward (B9), a
-        // linked project's board lives on the side that accepted the link:
-        // the dialing side would otherwise grow a second board.
-        for link in db.project_links(project_id)? {
-            if db.get_peer(&link.peer_id)?.is_some_and(|p| p.url.is_some()) {
+        if how == Enable::Auto {
+            if !self.caps.contains(&Capability::Control) {
                 return Err(refuse(
                     "no_board",
-                    "This project is linked; its board lives on its home computer \
-                     (board forwarding comes later).",
+                    "This project has no board yet; enabling it needs the control grant.",
+                ));
+            }
+            if !db.project_links(project_id)?.is_empty() {
+                return Err(refuse(
+                    "no_board",
+                    "This project is linked with another computer, so its board isn't \
+                     started on its own. Start it on the computer that should be its home.",
                 ));
             }
         }
@@ -159,6 +185,13 @@ impl Conn {
                 .collect(),
         })
     }
+}
+
+/// Who enables a board: `board_get` on its own, or the owner on purpose.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Enable {
+    Auto,
+    Owner,
 }
 
 fn wire_list<T>(

@@ -15,10 +15,13 @@ use serde_json::{json, Map, Value};
 use crate::board::contract::{all_spellings, spellings};
 use crate::board::model::Role;
 
-/// Who sees a board tool in `tools/list` (H-020 §1.6).
+/// Who sees a board tool in `tools/list` (H-020 §1.6, H-037).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Audience {
+    /// Every bot in the project, with a board role or not: the reads.
     Everyone,
+    /// A bot with any board role.
+    Member,
     Lead,
     Tester,
 }
@@ -70,26 +73,26 @@ pub(super) const BOARD_TOOLS: &[BoardTool] = &[
         Audience::Everyone,
         "Cards matching every filter given, in board order.",
     ),
-    tool("item_create", "ItemCreate", Audience::Everyone),
-    tool("item_update", "ItemUpdate", Audience::Everyone),
+    tool("item_create", "ItemCreate", Audience::Member),
+    tool("item_update", "ItemUpdate", Audience::Member),
     shared(
         "item_move",
         "ItemMove",
-        Audience::Everyone,
+        Audience::Member,
         "Move an item to another column. Refused with every unmet guard and its fix; \
             item_move_check shows them in advance.",
     ),
     shared(
         "item_move_check",
         "ItemMoveCheck",
-        Audience::Everyone,
+        Audience::Member,
         "What stands between an item and each other column, for you.",
     ),
-    tool("item_comment", "ItemAddComment", Audience::Everyone),
-    tool("item_link", "ItemAddLink", Audience::Everyone),
-    tool("item_unlink", "ItemRemoveLink", Audience::Everyone),
-    tool("item_block", "ItemBlock", Audience::Everyone),
-    tool("item_unblock", "ItemUnblock", Audience::Everyone),
+    tool("item_comment", "ItemAddComment", Audience::Member),
+    tool("item_link", "ItemAddLink", Audience::Member),
+    tool("item_unlink", "ItemRemoveLink", Audience::Member),
+    tool("item_block", "ItemBlock", Audience::Member),
+    tool("item_unblock", "ItemUnblock", Audience::Member),
     tool("item_assign", "ItemAssign", Audience::Lead),
     tool("item_rank", "ItemRank", Audience::Lead),
     tool("item_check_ac", "ItemCheckAc", Audience::Tester),
@@ -99,6 +102,7 @@ impl Audience {
     pub(super) fn admits(self, roles: &[Role]) -> bool {
         match self {
             Audience::Everyone => true,
+            Audience::Member => !roles.is_empty(),
             Audience::Lead => roles.contains(&Role::Lead),
             Audience::Tester => roles.contains(&Role::Tester),
         }
