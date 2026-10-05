@@ -116,3 +116,30 @@ async fn a_client_without_terminal_card_neither_counts_as_an_app_nor_sees_the_ca
     let (_, pushed) = request_seeing_all(&mut phone, json!({ "type": "list_permissions" })).await;
     assert!(!mentions_terminal(&pushed), "{pushed:?}");
 }
+
+/// ARCH-R36: a device that renders terminal cards but holds only control can't
+/// allow one, so it doesn't count as an app: the command fails at once.
+#[tokio::test]
+async fn a_control_only_device_does_not_make_owner_request_wait() {
+    let d = spawn_daemon_with(|cfg| cfg.permission_timeout_seconds = 30).await;
+    // The owner, without cards, only to create the device.
+    let mut owner = WsClient::connect_with_features(&d, &[]).await;
+    let created = owner
+        .request(json!({"type": "create_device", "name": "tablet",
+                        "capabilities": ["read", "control"]}))
+        .await;
+    let _tablet = WsClient::connect_as(&d, token_str(&created)).await;
+
+    let mut cli = Proxy::spawn(&d);
+    cli.start().await;
+    let refused = cli
+        .request_within(
+            "hermes/owner_request",
+            json!({ "command": "hermesd board import" }),
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("an answer at once, not after the card's window");
+    assert_eq!(refused["error"]["message"], owner::NO_APP, "{refused}");
+    assert!(d.app.approvals.list(None).is_empty());
+}

@@ -86,7 +86,9 @@ pub struct Approvals {
     pending: Mutex<HashMap<String, Pending>>,
     /// Connected clients that show permission cards and may answer them.
     answerers: AtomicUsize,
-    /// Those of them that also render terminal cards (`terminal_card`).
+    /// Those of them that also render terminal cards (`terminal_card`) and
+    /// hold approve, so could allow one: only they make a terminal command
+    /// wait for the app (ARCH-R36).
     terminal_answerers: AtomicUsize,
 }
 
@@ -107,7 +109,7 @@ impl Drop for Answerer {
 }
 
 /// Counts a connection in as able to answer permission cards, and terminal
-/// cards too when it said it renders them.
+/// cards too when it renders them and holds approve.
 pub fn answerer(app: &Arc<AppState>, terminal_cards: bool) -> Answerer {
     app.approvals.answerers.fetch_add(1, Ordering::SeqCst);
     if terminal_cards {
@@ -141,17 +143,28 @@ impl Approvals {
             .is_some_and(|p| p.request.bot_id == TERMINAL)
     }
 
-    /// Answers a pending prompt. Errors when it is no longer pending.
+    /// Answers a pending prompt. Errors when it is no longer pending, and with
+    /// [`NeedsApprove`] when a terminal command's card is answered without the
+    /// approve grant: allowing it lets that command act as the owner.
     pub fn answer(
         &self,
         request_id: &str,
         answer: Answer,
         reason: Option<String>,
+        can_approve: bool,
     ) -> anyhow::Result<PermissionRequest> {
-        let pending = self
-            .lock()
-            .remove(request_id)
-            .ok_or_else(|| anyhow::anyhow!("that permission prompt is no longer waiting"))?;
+        let pending = {
+            let mut pending = self.lock();
+            let waiting = pending
+                .get(request_id)
+                .ok_or_else(|| anyhow::anyhow!("that permission prompt is no longer waiting"))?;
+            if waiting.request.bot_id == TERMINAL && !can_approve {
+                return Err(NeedsApprove.into());
+            }
+            pending
+                .remove(request_id)
+                .expect("present: checked under the same lock")
+        };
         let request = pending.request.clone();
         // A closed receiver means the asker just gave up; the prompt is gone
         // either way, so the answer has nothing left to decide.
@@ -282,6 +295,18 @@ pub enum OwnerAnswer {
     /// No app is open to ask.
     NoApp,
 }
+
+/// A terminal command's card answered by a connection without approve.
+#[derive(Debug)]
+pub struct NeedsApprove;
+
+impl std::fmt::Display for NeedsApprove {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("allowing a terminal command to act as you requires the approve capability")
+    }
+}
+
+impl std::error::Error for NeedsApprove {}
 
 /// Asks the owner, on a card, whether a command run in a terminal may act as
 /// them (H-044 T4). The card shows where it came from (UX-014).

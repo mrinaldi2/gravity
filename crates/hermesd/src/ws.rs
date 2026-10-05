@@ -157,8 +157,12 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
     // client that says it renders them: an older one would show them as a
     // bot's prompt and could grant owner power without saying so (H-044 T4).
     let terminal_cards = cards && features.iter().any(|f| f == TERMINAL_CARD);
+    // Only a client that could allow a terminal card (it holds approve) makes
+    // a terminal command wait for the app; a control-only one would leave it
+    // waiting on a card nobody there may answer (ARCH-R36).
+    let terminal_answerer = terminal_cards && caps.contains(&Capability::Approve);
     let _answerer = (cards && caps.contains(&Capability::Control))
-        .then(|| crate::approval::answerer(&app, terminal_cards));
+        .then(|| crate::approval::answerer(&app, terminal_answerer));
 
     // Forward server pushes to this client.
     let push_tx = out_tx.clone();
