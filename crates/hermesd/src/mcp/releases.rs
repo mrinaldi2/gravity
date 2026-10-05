@@ -11,6 +11,7 @@ use crate::app::AppState;
 use crate::board::model::Role;
 use crate::board::release::assemble::{self, NewPackage};
 use crate::board::release::model::{DeployResult, ReleaseBuild, Smoke};
+use crate::board::release::publish::{self, Publish};
 use crate::board::release::{deploy, lifecycle, load, model::parse_arg, package, Caller};
 use crate::db::NewReleaseTest;
 
@@ -25,6 +26,7 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
         "ReleaseAttachBuild",
         Audience::Devops,
     ),
+    tool("release_publish", "ReleasePublish", Audience::Devops),
     tool("release_update", "ReleaseUpdate", Audience::Devops),
     tool("release_test", "ReleaseTest", Audience::Tester),
     shared(
@@ -93,6 +95,21 @@ pub(super) fn call(
                 built_at: bus::now(),
             };
             released(assemble::attach_build(app, &me, &req.release_id, &build)?)
+        }
+        "release_publish" => {
+            let req: c::ReleasePublish = decode("ReleasePublish", args, project)?;
+            let (release, published) = publish::publish(
+                app,
+                &me,
+                &Publish {
+                    release_id: &req.release_id,
+                    file: &req.file,
+                    platform: req.platform.as_deref(),
+                    version: req.version.as_deref(),
+                    bundle_id: req.bundle_id.as_deref(),
+                },
+            )?;
+            Ok(json!({ "release": release.to_json(), "published": published }))
         }
         "release_update" => {
             let req: c::ReleaseUpdate = decode("ReleaseUpdate", args, project)?;

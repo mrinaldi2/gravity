@@ -25,7 +25,9 @@ pub mod deploy;
 pub mod lifecycle;
 pub mod model;
 pub mod package;
+pub mod publish;
 pub mod rule;
+pub mod serve;
 #[cfg(test)]
 mod tests;
 

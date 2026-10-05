@@ -107,6 +107,8 @@ pub struct Config {
     pub retention: RetentionConfig,
     /// Each bot's own browser. See [`crate::browser`].
     pub browser: crate::browser::BrowserConfig,
+    /// Serving release builds on the tailnet (H-020 §6.6).
+    pub releases: crate::board::release::serve::ServeConfig,
     /// The *user's* home, where Claude Code keeps its `~/.claude/projects`
     /// transcripts. Distinct from `home`, which is the daemon's own state
     /// directory; separate so tests can point it at a fixture tree.
@@ -221,6 +223,7 @@ impl Default for Config {
             resume_after_restart: true,
             delivery: DeliveryConfig::default(),
             browser: crate::browser::BrowserConfig::default(),
+            releases: Default::default(),
             scheduler: SchedulerConfig::default(),
             supervision_interval_ms: 5_000,
             startup: Default::default(),

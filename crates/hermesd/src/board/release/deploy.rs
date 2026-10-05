@@ -202,15 +202,17 @@ pub fn install(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow
     if deployment.action == DeployAction::Deploy {
         gate_open(app, &release)?;
     }
+    let verified = super::publish::verify_served(app, &release)?;
     Ok(json!({
         "release_id": release.id,
         "name": release.name,
         "machine": deployment.machine,
         "action": deployment.action.as_str(),
         "install_mode": release.install_mode,
-        "builds": release.builds.iter().map(|b| json!({
+        "builds": release.builds.iter().zip(verified).map(|(b, verified)| json!({
             "platform": b.platform, "version": b.version, "artifact": b.artifact,
             "url": b.url, "install_url": b.install_url, "sha256": b.sha256,
+            "verified": verified,
         })).collect::<Vec<_>>(),
     }))
 }

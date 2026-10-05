@@ -637,3 +637,8 @@ runs through the tester the same way.
 - **Hold:** `release_hold` keeps the decision open and holds it (`remind_at` becomes its `held_until`). When the reminder comes due, the decision sweep resumes it and the package goes back to `awaiting_owner`. `release_unhold` does the same on request.
 - **Pause:** `release_pause` (owner, or DevOps over MCP) pauses a rollout in progress. Deploys and installs are refused with the reason, and every tester holding an open deploy task gets a note. `release_resume` returns it to `deploying`.
 - **Who may rule:** `can_rule` says whether this connection may rule (the approve grant, on the board's home). When it can't, `rule_on` names the home computer. `BoardSnapshot.can_rule` carries the same flag.
+- **Serving builds (H-020 §6.6):** `release_publish {release_id, file, platform?, version?, bundle_id?}` (DevOps with the Publish extra; `hermesd release publish <release> <file>` calls it with the bot's token) copies a build into the served directory, `[releases] dir` (default `<home>/releases`), at `<release_id>/<platform>/<file>`.
+  - The file must resolve, symlinks and all, inside `[releases] source_roots` (default `~/Developer`) or the project's artifacts. Inside the served directory, symlinks are refused.
+  - A published file is never replaced by a different one.
+  - It attaches the build with its sha256, its `url` under `[releases] base_url`, and its `install_url`. For an `.ipa`, that is the `itms-services://` link to a generated `manifest.plist`; for other builds, it is the `url`.
+  - `install_release` re-hashes every served build against the frozen sha256 and returns `verified` per build. On a mismatch, it refuses the install, pauses a rollout in progress and tells DevOps.
