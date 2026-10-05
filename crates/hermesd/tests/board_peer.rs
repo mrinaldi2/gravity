@@ -7,104 +7,15 @@
 mod common;
 
 use bus::contract::board::{self as c, board_request::Request, board_response::Response};
+use bus::contract::wire::envelope::Body;
 use common::board::*;
-use common::peers::{bot_named, paired, project, wait_until, Paired};
+use common::peer_board::board;
+use common::peers::wait_until;
 use common::*;
 use hermesd::actor::Actor;
-use hermesd::board::feed::{Change, ChangeKind};
-use hermesd::board::model::{ItemType, Platform, Priority, ProjectRole, Role};
-use hermesd::db::{MoveTo, NewItem};
+use hermesd::board::model::{ProjectRole, Role};
+use hermesd::db::MoveTo;
 use serde_json::json;
-
-struct Board {
-    p: Paired,
-    mac_app: String,
-    win_app: String,
-    item: String,
-    /// The tester on the PC, and its stand-in on the Mac.
-    tester: McpClient,
-    tester_id: String,
-    stand_in: String,
-}
-
-/// The Mac's "app" holds the board with item H-1 assigned to the PC's
-/// tester; the PC's "app" is linked to it and has mirrored the board.
-async fn board() -> Board {
-    let mut p = paired().await;
-    let mac_app = project(&mut p.mac_client, "app").await;
-    create_bot(&mut p.mac_client, &mac_app, "lead").await;
-    let win_app = project(&mut p.win_client, "app").await;
-    let tester = create_bot(&mut p.win_client, &win_app, "tester").await;
-    let tester_id = tester["id"].as_str().expect("id").to_string();
-    let linked = p
-        .mac_client
-        .request(json!({"type": "link_project", "project_id": mac_app,
-                        "peer_id": p.mac_peer_id, "remote_project_id": win_app}))
-        .await;
-    assert_eq!(linked["type"], "project", "{linked}");
-    let mac = &p.mac;
-    wait_until("the tester stands in on the Mac", || {
-        bot_named(mac, &mac_app, "tester").is_some()
-    })
-    .await;
-    let stand_in = bot_named(mac, &mac_app, "tester").expect("stand-in").id;
-
-    let db = &mac.app.db;
-    db.ensure_board(&mac_app, &db.daemon_id().unwrap(), Some("H"))
-        .unwrap();
-    db.set_project_role(&ProjectRole {
-        project_id: mac_app.clone(),
-        role: Role::Tester,
-        bot_id: stand_in.clone(),
-        machine: Some("win".into()),
-    })
-    .unwrap();
-    let item = db
-        .create_item(
-            &NewItem {
-                project_id: &mac_app,
-                item_type: ItemType::Feature,
-                title: "Peer board",
-                description: "",
-                platforms: &[Platform::Daemon],
-                size: None,
-                priority: Priority::P1,
-                labels: &[],
-                parent_id: None,
-                acceptance_criteria: &[],
-            },
-            &Actor::User,
-        )
-        .unwrap();
-    db.assign_item(&item.id, item.version, Some(&stand_in), &Actor::User)
-        .unwrap();
-    // As starting the board does: the PC hears of it and mirrors it.
-    mac.app.board.writer().publish(Change {
-        project_id: &mac_app,
-        kind: ChangeKind::SettingsChanged,
-        item_id: "",
-        card: None,
-        from_column: None,
-    });
-    let win = &p.win;
-    wait_until("the PC mirrors the board", || {
-        win.app
-            .board_mirror
-            .get(&win_app)
-            .is_some_and(|m| !m.snapshot.cards.is_empty())
-    })
-    .await;
-    let token = win.app.secrets.bot_token(&tester_id).expect("token");
-    Board {
-        tester: McpClient::new(win, &token),
-        p,
-        mac_app,
-        win_app,
-        item: item.id,
-        tester_id,
-        stand_in,
-    }
-}
 
 fn watch(project_id: &str) -> Request {
     Request::BoardWatch(c::BoardWatch {
@@ -204,13 +115,40 @@ async fn the_home_relays_its_changes_to_a_linked_computers_clients() {
     assert!(check
         .columns
         .iter()
-        .all(|col| col.unmet.iter().any(|u| u.code == "board.elsewhere")));
+        .all(|col| col.unmet.iter().any(|u| u.code == "board.elsewhere"
+            && u.text == format!("The board lives on mac. Move {} from there.", b.item))));
     let body = call(
         &mut b.p.win_client,
         move_to(&b.item, "doing", item.version, None),
     )
     .await;
-    assert_eq!(error_code(body), "no_board");
+    let Body::Error(e) = body else {
+        panic!("expected a refusal");
+    };
+    assert_eq!(e.code, "no_board");
+    assert_eq!(
+        e.message,
+        format!("The board lives on mac. Move {} from there.", b.item)
+    );
+    let body = call(
+        &mut b.p.win_client,
+        Request::ItemComment(c::ItemAddComment {
+            id: b.item.clone(),
+            body: "hi".into(),
+            reply_to: None,
+        }),
+    )
+    .await;
+    let Body::Error(e) = body else {
+        panic!("expected a refusal");
+    };
+    assert_eq!(
+        e.message,
+        format!(
+            "The board for {} lives on mac. Comment on it from there.",
+            b.item
+        )
+    );
     let releases =
         b.p.win_client
             .request(json!({"type": "list_releases", "project_id": b.win_app}))

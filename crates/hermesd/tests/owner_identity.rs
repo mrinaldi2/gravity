@@ -148,10 +148,12 @@ async fn a_terminal_card_says_where_the_command_came_from() {
         (d._home.path().to_path_buf(), None),
     ] {
         let mut cli = Proxy::spawn_in(&d, &dir);
-        let pid = cli.pid();
+        let launcher = cli.pid();
         cli.start().await;
+        // The client reports its directory, as the real CLI does; Windows
+        // can't read another process's, so there the card relies on it.
+        let request = json!({ "command": "hermesd board import --dry-run", "cwd": dir });
         let asking = tokio::spawn(async move {
-            let request = json!({ "command": "hermesd board import --dry-run" });
             let reply = ask(&mut cli, "hermes/owner_request", request, 20).await;
             (cli, reply)
         });
@@ -163,7 +165,9 @@ async fn a_terminal_card_says_where_the_command_came_from() {
             origin["command"], "hermesd board import --dry-run",
             "{origin}"
         );
-        assert_eq!(origin["pid"], pid, "{origin}");
+        // Windows has no exec: the launcher runs the proxy as its child.
+        let asker = origin["pid"].as_u64().expect("pid") as u32;
+        assert!(is_launched_by(launcher, asker), "{origin}");
         assert_eq!(origin["process"], "hermesd", "{origin}");
         let cwd = std::path::PathBuf::from(origin["cwd"].as_str().expect("cwd"));
         assert_eq!(real(&cwd), real(&dir), "{origin}");

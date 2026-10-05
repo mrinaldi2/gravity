@@ -29,6 +29,8 @@ mod chat;
 mod commands;
 mod conversations;
 mod dashboard;
+mod needs_you;
+pub(crate) use needs_you::home_needs_you;
 mod decisions;
 mod decisions_publish;
 mod dispatch;

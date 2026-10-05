@@ -16,7 +16,7 @@ use crate::decisions::{conflict, invalid};
 
 use super::model::{Release, ReleaseBuild, ReleaseStatus};
 use super::package::{check_tested, decision_body};
-use super::{daemon_move, frozen_hash, load, publish_moves, Caller};
+use super::{daemon_move, frozen_hash, load, publish_moves, publish_touched, Caller};
 
 pub struct NewPackage<'a> {
     pub name: &'a str,
@@ -150,7 +150,7 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
         roles: me.roles.clone(),
     };
     let mut feed = app.board.writer();
-    let (release, before, moved) = app.db.board_tx(|t| {
+    let (release, before, moved, touched) = app.db.board_tx(|t| {
         let release = load(t, project, release_id)?;
         if release.status != ReleaseStatus::Built {
             return Err(conflict(format!(
@@ -167,8 +167,11 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
             .find(|c| c.category == ColumnCategory::Approval)
             .ok_or_else(|| anyhow::anyhow!("this board has no owner-testing column"))?;
         let mut refused: Vec<String> = Vec::new();
+        let mut touched = Vec::new();
         for ri in &release.items {
-            t.set_item_release(&ri.item_id, Some(&release.id), &actor)?;
+            if t.set_item_release(&ri.item_id, Some(&release.id), &actor)? {
+                touched.push(ri.item_id.clone());
+            }
             let item = t.item(&ri.item_id)?.expect("in the release");
             let ctx = t.move_context(project, &item)?;
             let mv = Move {
@@ -218,9 +221,15 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
         if let Some(old) = &before {
             t.set_release_status(&old.id, ReleaseStatus::Superseded)?;
         }
-        Ok((t.release(&release.id)?.expect("loaded"), before, moved))
+        Ok((
+            t.release(&release.id)?.expect("loaded"),
+            before,
+            moved,
+            touched,
+        ))
     })?;
     publish_moves(app, &mut feed, project, &moved);
+    publish_touched(app, &mut feed, project, &touched, &moved);
     drop(feed);
 
     let body = decision_body(&release, before.as_ref());
@@ -287,14 +296,16 @@ fn unsubmit(
     let project = me.bot.project_id.as_str();
     let actor = me.actor();
     let mut feed = app.board.writer();
-    let moved = app.db.board_tx(|t| {
-        let mut moved = Vec::new();
+    let (moved, touched) = app.db.board_tx(|t| {
+        let (mut moved, mut touched) = (Vec::new(), Vec::new());
         if let Some(old) = before {
             t.set_release_status(&old.id, old.status)?;
         }
         for ri in &release.items {
             if let Some(old) = before.filter(|old| old.holds_shipped(&ri.item_id)) {
-                t.set_item_release(&ri.item_id, Some(&old.id), &actor)?;
+                if t.set_item_release(&ri.item_id, Some(&old.id), &actor)? {
+                    touched.push(ri.item_id.clone());
+                }
                 continue;
             }
             let note = "the release decision could not be raised";
@@ -308,12 +319,15 @@ fn unsubmit(
                 &actor,
             )?;
             moved.extend(from.map(|f| (ri.item_id.clone(), f)));
-            t.set_item_release(&ri.item_id, None, &actor)?;
+            if t.set_item_release(&ri.item_id, None, &actor)? {
+                touched.push(ri.item_id.clone());
+            }
         }
         t.freeze_release(&release.id, None, None)?;
         t.set_release_status(&release.id, ReleaseStatus::Built)?;
-        Ok(moved)
+        Ok((moved, touched))
     })?;
     publish_moves(app, &mut feed, project, &moved);
+    publish_touched(app, &mut feed, project, &touched, &moved);
     Ok(())
 }

@@ -343,4 +343,27 @@ impl Db {
         let rows = stmt.query_map(params![cutoff], Self::bot_from_row)?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
+
+    /// Workers living on this machine that haven't retired.
+    pub fn live_temporary_bot_count(&self) -> anyhow::Result<i64> {
+        let conn = self.lock();
+        Ok(conn.query_row(
+            "SELECT COUNT(*) FROM bot
+             WHERE temporary = 1 AND peer_id IS NULL AND deleted_at IS NULL",
+            [],
+            |r| r.get(0),
+        )?)
+    }
+
+    /// Workspaces of this machine's retired workers, newest first (H-109).
+    pub fn retired_worker_workspaces(&self) -> anyhow::Result<Vec<(String, String)>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, workspace_path FROM bot
+             WHERE temporary = 1 AND peer_id IS NULL AND deleted_at IS NOT NULL
+             ORDER BY deleted_at DESC",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
 }

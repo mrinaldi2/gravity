@@ -14,7 +14,7 @@ use super::Conn;
 impl Conn {
     /// Answers `req_id` with whatever `work` produces, or its error with the
     /// error's own code.
-    fn answer_later(
+    pub(super) fn answer_later(
         &self,
         req_id: &Value,
         work: impl Future<Output = anyhow::Result<Value>> + Send + 'static,

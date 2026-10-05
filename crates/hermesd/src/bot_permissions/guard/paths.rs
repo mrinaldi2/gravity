@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
-use super::path_key::{is_null_device, last_separator};
+use super::path_key::{git_bash_drive, is_null_device, last_separator};
 pub use super::path_key::{key, within};
 use super::words::pieces;
 use super::GuardContext;
@@ -165,7 +165,8 @@ impl GuardContext {
     /// lexically (with the line's links followed) and on disk. A word with
     /// wildcards keeps them as literal components here.
     pub(super) fn candidates(&self, expanded: &str, scope: &Scope) -> Vec<PathBuf> {
-        let word = Path::new(expanded);
+        let drive = git_bash_drive(expanded);
+        let word = Path::new(drive.as_deref().unwrap_or(expanded));
         let dirs: Vec<&Path> = if word.is_absolute() {
             vec![Path::new("/")]
         } else {

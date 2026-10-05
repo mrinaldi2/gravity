@@ -20,6 +20,7 @@ use crate::board::feed::{card_after_commit, BoardChange, BoardFeed, Change, Chan
 use crate::board::moves::{self, MoveRequest, Moved};
 use crate::board::team;
 
+mod edits;
 mod enable;
 mod forward;
 mod mirrored;
@@ -160,11 +161,12 @@ impl Conn {
             },
             Request::ItemMoveCheck(r) => Response::MoveCheck(self.item_move_check(&r.id)?),
             Request::ItemMove(r) => Response::Moved(self.item_move(&r)?),
-            // Bots make these edits over MCP (B5); the owner's item drawer
-            // (U4) serves them here next.
+            // The owner's comment from the item drawer (U4).
+            Request::ItemComment(r) => Response::Edited(self.item_comment(&r)?),
+            // Bots make these edits over MCP (B5); the owner's inline edits
+            // in the drawer come later.
             Request::ItemCreate(_)
             | Request::ItemUpdate(_)
-            | Request::ItemComment(_)
             | Request::ItemLink(_)
             | Request::ItemUnlink(_)
             | Request::ItemBlock(_)
@@ -181,7 +183,7 @@ impl Conn {
     }
 
     /// The owner, on the owner token or through a device.
-    fn actor(&self) -> Actor<'_> {
+    pub(super) fn actor(&self) -> Actor<'_> {
         self.device_id.as_deref().map_or(Actor::User, Actor::Device)
     }
 

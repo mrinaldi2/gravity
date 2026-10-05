@@ -328,20 +328,21 @@ impl BoardTx<'_> {
     }
 
     /// Put an item in a package (or take it out, with `None`), recording it
-    /// in the item's history.
+    /// in the item's history. True when it changed: its version moved, so
+    /// its card must be pushed (H-113).
     pub fn set_item_release(
         &self,
         item_id: &str,
         release_id: Option<&str>,
         actor: &crate::actor::Actor<'_>,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<bool> {
         let before: Option<String> = self.conn.query_row(
             "SELECT release_id FROM item WHERE id = ?1",
             params![item_id],
             |r| r.get(0),
         )?;
         if before.as_deref() == release_id {
-            return Ok(());
+            return Ok(false);
         }
         self.conn.execute(
             "UPDATE item SET release_id = ?2, version = version + 1, updated_at = ?3 WHERE id = ?1",
@@ -355,7 +356,7 @@ impl BoardTx<'_> {
             note: None,
         };
         record(self.conn, item_id, actor, event)?;
-        Ok(())
+        Ok(true)
     }
 
     pub fn settings(

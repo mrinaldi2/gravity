@@ -65,6 +65,7 @@ impl Conn {
             Request::ItemHistory(r) => &r.id,
             Request::ItemMoveCheck(r) => &r.id,
             Request::ItemMove(r) => &r.id,
+            Request::ItemComment(r) => &r.id,
             _ => return Ok(None),
         };
         let mirror = &self.app.board_mirror;
@@ -77,14 +78,20 @@ impl Conn {
         if self.app.db.board_read(|t| t.item_project(id))?.is_some() {
             return Ok(None);
         }
-        if matches!(request, Request::ItemMove(_)) {
-            return Err(refuse(
-                "no_board",
-                format!(
-                    "{id} is on the board {} holds; move it there.",
-                    home_name(&self.app, &home)
-                ),
-            ));
+        // Changes are the owner's own, on the home: a peer never acts as the
+        // owner (H-020 §2.2).
+        let name = home_name(&self.app, &home);
+        let refusal = match request {
+            Request::ItemMove(_) => {
+                Some(format!("The board lives on {name}. Move {id} from there."))
+            }
+            Request::ItemComment(_) => Some(format!(
+                "The board for {id} lives on {name}. Comment on it from there."
+            )),
+            _ => None,
+        };
+        if let Some(text) = refusal {
+            return Err(refuse("no_board", text));
         }
         Ok(Some((project, home)))
     }

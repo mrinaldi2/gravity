@@ -130,6 +130,7 @@ impl Supervisor {
         } else {
             Vec::new()
         };
+        env.extend(crate::workers::scratch::bot_env(&self.inner.cfg.home, &bot));
         if let Some(window) = self.inner.auto_compact.effective(&self.inner.cfg) {
             env.push((AUTO_COMPACT_WINDOW_ENV.to_string(), window.to_string()));
         }

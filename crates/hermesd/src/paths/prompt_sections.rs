@@ -53,6 +53,14 @@ pub(super) fn temporary() -> String {
         .to_string()
 }
 
+/// Where a worker puts any other clone or worktree, and why (H-109).
+const SCRATCH_NOTE: &str = "## Your scratch folder\n\n\
+     Put any clone, worktree or build output that isn't `repo/` under \
+     `$THEHERMES_SCRATCH` (the `scratch/` folder in your workspace), never \
+     elsewhere on the disk. When you retire, the daemon deletes `repo/` and \
+     `scratch/` for you, so you don't need to, and nothing outside them is \
+     ever cleaned up.\n\n";
+
 /// The project's shared repository: how a worker gets and returns its
 /// work, or how a permanent bot reads what workers push.
 /// `name` and `bot_id` name the worker's own branch, the one its unpushed
@@ -63,8 +71,9 @@ pub(super) fn repo(
     name: &str,
     bot_id: &str,
 ) -> String {
+    let scratch = if temporary { SCRATCH_NOTE } else { "" };
     let Some(bus::ProjectRepo { url, branch }) = repo else {
-        return String::new();
+        return scratch.to_string();
     };
     if temporary {
         let own = crate::workers::repo::salvage_branch(name, bot_id);
@@ -78,7 +87,7 @@ pub(super) fn repo(
              conflicts yourself), then `git push origin HEAD:{branch}`. If it still \
              will not push, push `HEAD:{own}` instead and say so. Name the commit or \
              branch in your result. Anything you leave unpushed when you stop is \
-             saved to a branch of your own and whoever spawned you is told.\n\n"
+             saved to a branch of your own and whoever spawned you is told.\n\n{scratch}"
         )
     } else {
         format!(
@@ -170,9 +179,13 @@ mod tests {
 
     #[test]
     fn tells_workers_and_their_parents_about_the_repository() {
-        assert_eq!(repo(None, true, "ch-1", "b1"), "");
+        // A worker always hears where its clones go (H-109); a permanent bot
+        // without a shared repository hears nothing.
+        assert_eq!(repo(None, true, "ch-1", "b1"), SCRATCH_NOTE);
+        assert_eq!(repo(None, false, "lead", "b2"), "");
         let shared = bus::ProjectRepo::parse("git@host:me/book.git", None).expect("repo");
         let worker = repo(Some(&shared), true, "ch-1", "0123456789");
+        assert!(worker.contains("$THEHERMES_SCRATCH"));
         assert!(worker.contains("--branch main git@host:me/book.git repo"));
         assert!(worker.contains("`git push origin HEAD:main`"));
         assert!(worker.contains("`HEAD:gravity/ch-1-01234567`"));

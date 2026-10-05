@@ -15,6 +15,8 @@ interface BoardCardProps {
   readonly assignee: Bot | undefined;
   /** Null when this connection can't move items. */
   readonly onOpenMoveMenu: ((card: ItemCard, anchor: Anchor) => void) | null;
+  /** Opens the item drawer (U4): a click, or Enter on the focused card. */
+  readonly onOpen?: (id: string) => void;
   readonly onDragStart: (card: ItemCard) => void;
   readonly onDragEnd: () => void;
   readonly dragging: boolean;
@@ -55,6 +57,11 @@ export default function BoardCard(props: BoardCardProps): ReactElement {
   const overWip = card.labels.includes(WIP_OVERRIDE_LABEL);
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
+    if (props.onOpen && event.target === event.currentTarget && event.key === "Enter") {
+      event.preventDefault();
+      props.onOpen(card.id);
+      return;
+    }
     if (
       onOpenMoveMenu !== null &&
       event.target === event.currentTarget &&
@@ -95,6 +102,12 @@ export default function BoardCard(props: BoardCardProps): ReactElement {
       onDragStart={onDragStart}
       onDragEnd={props.onDragEnd}
       onKeyDown={onKeyDown}
+      onClick={(event) => {
+        // The card's own buttons (Move to…) act on their own.
+        if (!(event.target instanceof Element && event.target.closest("button"))) {
+          props.onOpen?.(card.id);
+        }
+      }}
     >
       <div className="board-card-top">
         <span className="board-card-type">

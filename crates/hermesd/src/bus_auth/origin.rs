@@ -168,7 +168,21 @@ fn cwd_of(pid: u32) -> Option<PathBuf> {
 
 #[cfg(windows)]
 pub fn name_of(pid: u32) -> Option<String> {
-    super::os::exe_name(pid)
+    super::os::exe_name(pid).map(without_exe)
+}
+
+/// ToolHelp names the image file; the card shows the process name, as on Unix.
+#[cfg(any(windows, test))]
+fn without_exe(mut exe: String) -> String {
+    let stem = exe.len().saturating_sub(4);
+    if exe.len() > 4
+        && exe
+            .get(stem..)
+            .is_some_and(|s| s.eq_ignore_ascii_case(".exe"))
+    {
+        exe.truncate(stem);
+    }
+    exe
 }
 
 /// Windows keeps a process's directory in its own memory: the client's word.
@@ -196,6 +210,20 @@ mod tests {
             "zsh", "bash", "login", "sudo", "codesign", "zedd", "hermesd",
         ] {
             assert_eq!(known_app(shell), None, "{shell}");
+        }
+    }
+
+    #[test]
+    fn windows_process_names_lose_the_exe_suffix() {
+        for (exe, name) in [
+            ("hermesd.exe", "hermesd"),
+            ("Code.EXE", "Code"),
+            ("hermesd", "hermesd"),
+            (".exe", ".exe"),
+            ("setup.exe.bak", "setup.exe.bak"),
+            ("née.exe", "née"),
+        ] {
+            assert_eq!(without_exe(exe.to_string()), name, "{exe}");
         }
     }
 

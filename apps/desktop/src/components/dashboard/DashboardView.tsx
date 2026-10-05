@@ -4,18 +4,22 @@
 // show, so there is one way to rule on a package.
 
 import { RefreshCw, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
+import { useDrawerEscape } from "../../hooks/useDrawerEscape";
 import type { DaemonApi } from "../../protocol/api";
 import type { Bot, Project } from "../../protocol/entities";
 import type { Release } from "../../protocol/releases";
 import ReleaseReview from "../releases/ReleaseReview";
 import { botNamer, useItemTitles } from "../releases/ReleasesView";
 import { useReleaseActions } from "../releases/useReleases";
+import DashboardItem from "./DashboardItem";
 import NeedsYou from "./NeedsYou";
+import { useConfirmRelayed } from "./useConfirmRelayed";
 import { useDashboard } from "./useDashboard";
+import { useDashboardDrawers } from "./useDashboardDrawers";
 import { BoardWidget, MeetingsWidgets, ReleasesWidget, TeamWidget } from "./Widgets";
 
 export interface DashboardViewProps {
@@ -51,23 +55,15 @@ function ReviewDrawer(props: {
     props.onChanged();
   });
   const titles = useItemTitles(props.client, props.project.id, true);
-  const drawer = useRef<HTMLElement>(null);
   const close = useRef<HTMLButtonElement>(null);
-  const { onClose } = props;
-  // Keyboard users land in the drawer, and Escape leaves it unless one of
-  // the review's own dialogs is open: that Escape is the dialog's (UX-010).
+  // Keyboard users land in the drawer, and Escape leaves it unless a dialog
+  // or menu is open: that Escape is theirs (UX-010, UX-012).
   useEffect(() => {
     close.current?.focus();
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape" && !drawer.current?.querySelector('[role="dialog"]')) {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, []);
+  useDrawerEscape(props.onClose);
   return (
-    <aside ref={drawer} className="dash-drawer" aria-label={`Release ${release.name}`}>
+    <aside className="dash-drawer" aria-label={`Release ${release.name}`}>
       <button
         ref={close}
         type="button"
@@ -91,20 +87,8 @@ function ReviewDrawer(props: {
 export default function DashboardView(props: DashboardViewProps): ReactElement {
   const { client, project, bots, connected } = props;
   const { dashboard, error, refresh } = useDashboard(client, project.id, connected);
-  const [reviewing, setReviewing] = useState<Release | null>(null);
-  // The Review button that opened the drawer gets focus back when it closes.
-  const opener = useRef<HTMLElement | null>(null);
-  const openReview = useCallback((release: Release): void => {
-    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setReviewing(release);
-  }, []);
-  const closeReview = useCallback((): void => {
-    setReviewing(null);
-    if (opener.current?.isConnected) {
-      opener.current.focus();
-    }
-    opener.current = null;
-  }, []);
+  const relayed = useConfirmRelayed(client, project.id, props.addToast, refresh);
+  const { reviewing, openItem, openReview, showItem, close: closeDrawer } = useDashboardDrawers();
 
   if (dashboard === null) {
     return (
@@ -148,11 +132,16 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
           <NeedsYou
             projectName={project.name}
             rows={dashboard.needs_you}
+            overrides={dashboard.wip_overrides ?? []}
+            note={dashboard.needs_you_note}
+            canApprove={connected && client.hasGrant("approve")}
+            confirming={relayed.confirming}
             botName={(id) => botName(id) ?? "a bot"}
             columnName={(key) => columns.get(key) ?? key}
             onReview={openReview}
             onDecision={props.onOpenDecision}
-            onBoard={openBoard}
+            onConfirmRelayed={relayed.confirm}
+            onItem={showItem}
           />
           <BoardWidget board={dashboard.board} home={dashboard.home} onOpen={openBoard} />
           <ReleasesWidget
@@ -173,7 +162,18 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
           canControl={props.canControl}
           addToast={props.addToast}
           onChanged={() => void refresh()}
-          onClose={closeReview}
+          onClose={closeDrawer}
+        />
+      ) : null}
+      {openItem ? (
+        <DashboardItem
+          key={openItem}
+          api={client}
+          projectId={project.id}
+          itemId={openItem}
+          bots={bots}
+          canComment={props.canControl}
+          onClose={closeDrawer}
         />
       ) : null}
     </div>

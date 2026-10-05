@@ -197,6 +197,30 @@ pub fn publish_moves(
     }
 }
 
+/// Push the cards a release changed without moving them (their package
+/// changed, so their version did), once the transaction has committed:
+/// otherwise a mirror keeps the old version and its next write conflicts.
+pub fn publish_touched(
+    app: &Arc<AppState>,
+    feed: &mut FeedWriter<'_>,
+    project_id: &str,
+    touched: &[String],
+    moved: &[(String, String)],
+) {
+    for item_id in touched {
+        if moved.iter().any(|(id, _)| id == item_id) {
+            continue;
+        }
+        feed.publish(Change {
+            project_id,
+            kind: ChangeKind::ItemUpserted,
+            item_id,
+            card: card_after_commit(&app.db, item_id),
+            from_column: None,
+        });
+    }
+}
+
 /// The bot ids of a project's testers on `machine`.
 pub fn testers_on(
     app: &Arc<AppState>,

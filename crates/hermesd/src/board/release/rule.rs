@@ -14,7 +14,7 @@ use crate::decisions::publish::publish_settled;
 use crate::decisions::{conflict, forbidden, invalid, not_found};
 
 use super::model::{Release, ReleaseStatus, Verdict};
-use super::{check_frozen, daemon_move, publish_moves};
+use super::{check_frozen, daemon_move, publish_moves, publish_touched};
 
 pub struct ItemVerdict {
     pub item_id: String,
@@ -87,7 +87,7 @@ pub fn rule(
     let summary = summary(&release, verdicts, outcome);
 
     let mut feed = app.board.writer();
-    let (ruled, moved) = app.db.board_tx(|t| {
+    let (ruled, moved, touched) = app.db.board_tx(|t| {
         let release = t.release(release_id)?.expect("read above");
         if release.version != expected_version {
             return Err(conflict(format!(
@@ -106,7 +106,7 @@ pub fn rule(
             )));
         }
         check_frozen(&release)?;
-        let mut moved = Vec::new();
+        let (mut moved, mut touched) = (Vec::new(), Vec::new());
         for v in verdicts {
             t.set_verdict(release_id, &v.item_id, v.verdict, v.note.as_deref())?;
             if outcome == Outcome::Held {
@@ -128,8 +128,8 @@ pub fn rule(
             }
             let from = daemon_move(t, &project, &v.item_id, to, &note, first, actor)?;
             moved.extend(from.map(|f| (v.item_id.clone(), f)));
-            if to != ColumnCategory::Deploying {
-                t.set_item_release(&v.item_id, None, actor)?;
+            if to != ColumnCategory::Deploying && t.set_item_release(&v.item_id, None, actor)? {
+                touched.push(v.item_id.clone());
             }
         }
         let status = match outcome {
@@ -139,9 +139,10 @@ pub fn rule(
             Outcome::Rejected => ReleaseStatus::Rejected,
         };
         t.set_release_status(release_id, status)?;
-        Ok((t.release(release_id)?.expect("read above"), moved))
+        Ok((t.release(release_id)?.expect("read above"), moved, touched))
     })?;
     publish_moves(app, &mut feed, &project, &moved);
+    publish_touched(app, &mut feed, &project, &touched, &moved);
     drop(feed);
     settle(app, actor, &decision_id, outcome, &summary)?;
     Ok(ruled)

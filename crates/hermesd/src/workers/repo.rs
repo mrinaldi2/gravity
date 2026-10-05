@@ -59,8 +59,8 @@ impl Salvaged {
                  repository; merge it if you want it."
             )),
             Self::Failed(error) => Some(format!(
-                "Work it had not pushed could not be saved ({error}); it remains in {} on \
-                 its machine.",
+                "Work it had not pushed could not be saved ({error}); its commits in {} are \
+                 bundled before the clone is removed, and you are told where.",
                 checkout.display()
             )),
         }

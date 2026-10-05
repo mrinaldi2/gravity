@@ -8,6 +8,7 @@ import type { Bot, Project } from "../../protocol/entities";
 import type { BoardColumn, ItemCard } from "../../protocol/gen/hermes/board/v1/board_pb";
 import { ColumnCategory } from "../../protocol/gen/hermes/board/v1/board_pb";
 import BoardCard from "./BoardCard";
+import BoardDrawer from "./BoardDrawer";
 import BoardColumnView, { InboxRail } from "./BoardColumnView";
 import type { DropState } from "./BoardColumnView";
 import BoardFilterBar from "./BoardFilterBar";
@@ -229,6 +230,7 @@ function Board(props: BoardProps): ReactElement {
   };
 
   const canMove = canControl ? moves.openMenu : null;
+  const [opened, setOpened] = useState<string | null>(null);
   // The owner's call, on the board's home (H-099).
   const setLimit =
     (column: BoardColumn) =>
@@ -321,6 +323,7 @@ function Board(props: BoardProps): ReactElement {
                   columnName={column.name}
                   assignee={card.assignee === undefined ? undefined : botsById.get(card.assignee)}
                   onOpenMoveMenu={canMove}
+                  onOpen={setOpened}
                   onDragStart={onDragStart}
                   onDragEnd={() => {
                     setDrag(null);
@@ -336,6 +339,16 @@ function Board(props: BoardProps): ReactElement {
       <div className="visually-hidden" aria-live="polite">
         {announce}
       </div>
+      <BoardDrawer
+        api={client}
+        openId={opened}
+        shown={cards.filter((card) => matchesFilters(card, prefs.filters))}
+        columns={model.columns}
+        bots={bots}
+        canControl={canControl}
+        onOpen={setOpened}
+        onMove={canMove}
+      />
       {ui.kind === "menu" ? (
         <MoveMenu
           card={ui.card}
