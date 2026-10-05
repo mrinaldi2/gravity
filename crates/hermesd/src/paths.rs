@@ -39,7 +39,7 @@ mod unix_hooks;
 mod windows_hooks;
 
 pub use prompt::system_md;
-pub use trust::trust_workspace;
+pub use trust::{claude_config_path, trust_workspace, ConfigLocked};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BotFile {

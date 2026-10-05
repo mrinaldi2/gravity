@@ -13,6 +13,7 @@ use futures::{SinkExt, StreamExt};
 use hermesd::app::AppState;
 use hermesd::config::{Config, RuntimeKind};
 use hermesd::db::Db;
+use hermesd::runtime::RuntimeAdapter;
 use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::Message as WsMsg;
 
@@ -35,6 +36,14 @@ pub async fn spawn_daemon() -> TestDaemon {
 /// Spawn a daemon with the config tweaked before anything reads it — the
 /// supervisor keeps its own clone, so limits must be set up front.
 pub async fn spawn_daemon_with(tweak: impl FnOnce(&mut Config)) -> TestDaemon {
+    spawn_daemon_on(None, tweak).await
+}
+
+/// [`spawn_daemon_with`] around a given runtime instead of the double.
+pub async fn spawn_daemon_on(
+    adapter: Option<Arc<dyn RuntimeAdapter>>,
+    tweak: impl FnOnce(&mut Config),
+) -> TestDaemon {
     let home = tempfile::tempdir().expect("tempdir");
     let mut cfg = Config {
         home: home.path().to_path_buf(),
@@ -51,7 +60,11 @@ pub async fn spawn_daemon_with(tweak: impl FnOnce(&mut Config)) -> TestDaemon {
         .expect("bind");
     let addr = listener.local_addr().expect("addr");
     cfg.port = addr.port();
-    let app = AppState::new(cfg, db).expect("app");
+    let app = match adapter {
+        Some(adapter) => AppState::with_adapter(cfg, db, adapter),
+        None => AppState::new(cfg, db),
+    }
+    .expect("app");
     hermesd::server::spawn_workers(&app);
     let router = hermesd::server::router(app.clone());
     tokio::spawn(async move {

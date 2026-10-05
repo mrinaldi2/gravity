@@ -14,9 +14,13 @@ export const BOT_STATE_LABEL: Readonly<Record<BotState, string>> = {
   stopped: "Stopped",
 };
 
-/** The failure states whose reason the owner sees (ux-glossary rule 8). */
+/**
+ * The failure states whose reason the owner sees (ux-glossary rule 8).
+ * "Waiting for you" names what is wanted: "Didn't connect — Restart bot".
+ */
 const REASON_SHOWN: ReadonlySet<BotState> = new Set<BotState>([
   "crashed",
+  "waiting_for_user",
   "auth_failed",
   "rate_limited",
 ]);

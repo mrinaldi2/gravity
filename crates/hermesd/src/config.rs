@@ -97,6 +97,8 @@ pub struct Config {
     /// How often the supervisor reconciles live bots into running sessions.
     /// Bots are always-on, so this is the only thing that starts them.
     pub supervision_interval_ms: u64,
+    /// Start staggering and the connect watchdog; see [`StartupConfig`].
+    pub startup: crate::supervisor::StartupConfig,
     /// Terminal scrollback ring size per bot, in bytes.
     pub scrollback_bytes: usize,
     /// Extra allowed WebSocket Origin values. Requests without an Origin
@@ -221,6 +223,7 @@ impl Default for Config {
             browser: crate::browser::BrowserConfig::default(),
             scheduler: SchedulerConfig::default(),
             supervision_interval_ms: 5_000,
+            startup: Default::default(),
             scrollback_bytes: 1_048_576,
             allowed_origins: Vec::new(),
             retention: RetentionConfig::default(),

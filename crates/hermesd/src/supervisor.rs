@@ -35,6 +35,9 @@ mod lifecycle;
 mod restart;
 mod session_events;
 mod termio;
+mod watchdog;
+
+pub use watchdog::{StartupConfig, DIDNT_CONNECT};
 
 pub use crate::brand::BOT_TOKEN_ENV;
 /// Caps how large a bot's conversation grows before Claude Code compacts it.
@@ -63,6 +66,12 @@ pub const DISABLE_MOUSE_ENV: &str = "CLAUDE_CODE_DISABLE_MOUSE";
 /// First crash-restart delay; doubles per consecutive crash up to `MAX_BACKOFF`.
 const BASE_BACKOFF: Duration = Duration::from_secs(2);
 const MAX_BACKOFF: Duration = Duration::from_secs(300);
+
+/// Restart delay for the nth consecutive crash: 2s doubling to a 5 minute cap.
+fn backoff(crashes: u32) -> Duration {
+    let shift = crashes.saturating_sub(1).min(8);
+    (BASE_BACKOFF * 2u32.pow(shift)).min(MAX_BACKOFF)
+}
 /// A resumed session that dies faster than this is treated as a transcript the
 /// runtime could not load, so the next start comes up fresh.
 const RESUME_FAST_EXIT: Duration = Duration::from_secs(10);
@@ -121,6 +130,9 @@ struct BotHandle {
     /// Set while one `start_bot` call is bringing the runtime up, so a second
     /// caller does not launch another runtime against the same conversation.
     starting: bool,
+    /// When the in-flight start was claimed; bounds how long a hung start
+    /// holds a stagger slot.
+    starting_since: Instant,
     consecutive_crashes: u32,
     last_start: Instant,
     /// Earliest time the reconciler may start this bot again; set while a
@@ -135,6 +147,12 @@ struct BotHandle {
     /// Whether the current session was started with an explicit `--model`.
     /// A crash streak under a pin is what condemns the pin itself.
     pinned_model: bool,
+    /// Restarts the connect watchdog has spent on this bot since its socket
+    /// last registered, and whether it has given up; see [`watchdog`].
+    connect_restarts: u32,
+    connect_gave_up: bool,
+    /// Starts deferred in a row because Claude Code's config lock was busy.
+    trust_retries: u32,
 }
 
 impl BotHandle {
@@ -152,12 +170,16 @@ impl BotHandle {
             stopping: false,
             restart_pending: false,
             starting: false,
+            starting_since: Instant::now(),
             consecutive_crashes: 0,
             last_start: Instant::now(),
             next_start_at: None,
             resumed: false,
             skip_resume: false,
             pinned_model: false,
+            connect_restarts: 0,
+            connect_gave_up: false,
+            trust_retries: 0,
         }
     }
 }
@@ -284,14 +306,18 @@ impl Supervisor {
         if path.is_empty() {
             return;
         }
-        let mut bots = self.lock_bots();
-        if let Some(h) = bots.get_mut(bot_id) {
+        {
+            let mut bots = self.lock_bots();
+            let Some(h) = bots.get_mut(bot_id) else {
+                return;
+            };
             h.msg_socket = Some(MsgSocket {
                 path: std::path::PathBuf::from(path),
                 token: token.filter(|t| !t.is_empty()).map(|t| t.to_string()),
             });
-            tracing::info!(bot_id, socket = path, "inbox socket registered");
         }
+        tracing::info!(bot_id, socket = path, "inbox socket registered");
+        self.on_connected(bot_id);
     }
 
     /// Deliver a rendered envelope through the session's inbox socket. The

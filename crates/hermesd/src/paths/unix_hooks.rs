@@ -57,12 +57,14 @@ pub fn settings(daemon_port: u16, bot_token_env: &str) -> serde_json::Value {
     }]);
     // SessionStart additionally reports the session's inbox socket (and its
     // messaging token) so the daemon can deliver bus messages through it
-    // instead of the terminal.
+    // instead of the terminal. It is sent once per session, and losing it
+    // leaves the bot unreachable, so it retries through a daemon that is
+    // still booting (refused or not yet answering) for up to ~20s.
     let session_start = serde_json::json!([{
         "hooks": [{
             "type": "command",
             "command": format!(
-                "curl -fsS -m 3 -X POST http://127.0.0.1:{daemon_port}/hook \
+                "curl -fsS -m 3 --retry 5 --retry-delay 1 --retry-connrefused -X POST http://127.0.0.1:{daemon_port}/hook \
                  -H \"Authorization: Bearer ${{{bot_token_env}}}\" \
                  -H 'Content-Type: application/json' \
                  -d \"{{\\\"event\\\":\\\"SessionStart\\\",\\\"socket\\\":\\\"$CLAUDE_CODE_MESSAGING_SOCKET\\\",\\\"msg_token\\\":\\\"$CLAUDE_CODE_MESSAGING_TOKEN\\\"}}\" \
