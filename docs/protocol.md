@@ -638,3 +638,20 @@ runs through the tester the same way.
 - **Hold:** `release_hold` keeps the decision open and holds it (`remind_at` becomes its `held_until`). When the reminder comes due, the decision sweep resumes it and the package goes back to `awaiting_owner`. `release_unhold` does the same on request.
 - **Pause:** `release_pause` (owner, or DevOps over MCP) pauses a rollout in progress. Deploys and installs are refused with the reason, and every tester holding an open deploy task gets a note. `release_resume` returns it to `deploying`.
 - **Who may rule:** `can_rule` says whether this connection may rule (the approve grant, on the board's home). When it can't, `rule_on` names the home computer. `BoardSnapshot.can_rule` carries the same flag.
+
+## The project dashboard
+
+`dashboard_get {project_id}` (read) answers with `{type: "dashboard", dashboard}`, which holds what the dashboard's first four widgets show (H-018 §2.1, H-076):
+
+- **`needs_you`:** one row per thing waiting on the owner, each with a `kind`:
+  - `release`: the package, with `can_rule`. Its decision gets no row of its own.
+  - `decision`: an open decision of the project, or a relayed ruling waiting for confirmation (`relayed: true`).
+  - `p0`: an open P0 item.
+  - `wip_override`: a move made over a WIP limit in the last seven days, with its note.
+- **`board`:** null without a board. Otherwise:
+  - `columns`: each visible column with its `count`, `wip_limit` and `wip_scope`.
+  - `blocked` and `stale`: counts of open items.
+  - `done_this_week` and `rework_this_week`: since `since`, seven days back. Items brought in by the backlog import never count. Off the board's home, where the history isn't, both are null and `home` names the computer holding the board.
+- **`releases`:** the current package and the last two, newest first.
+- **`team`:** each bot of the project (`bot`, as in `list_bots`), its items in Doing, and its open task count.
+- **`meetings` and `action_items`:** empty until meetings land.

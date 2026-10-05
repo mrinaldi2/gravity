@@ -108,7 +108,7 @@ impl Conn {
 
     /// A package as this connection sees it: with `can_rule`, and when it
     /// can't, `rule_on`, the computer where it can (H-020 §6.5).
-    fn release_json(&self, release: &Release) -> anyhow::Result<Value> {
+    pub(super) fn release_json(&self, release: &Release) -> anyhow::Result<Value> {
         let approve = self.caps.contains(&Capability::Approve);
         let (can, on) = can_rule(&self.app, &self.owner(), approve, &release.project_id)?;
         let mut v = release.to_json();

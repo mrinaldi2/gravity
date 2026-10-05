@@ -28,6 +28,7 @@ mod browser;
 mod chat;
 mod commands;
 mod conversations;
+mod dashboard;
 mod decisions;
 mod decisions_publish;
 mod dispatch;
