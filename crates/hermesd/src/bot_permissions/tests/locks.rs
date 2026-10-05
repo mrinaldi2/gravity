@@ -85,10 +85,10 @@ fn the_guard_is_told_worktrees_not_trusted_paths_are_writable() {
     assert!(!trusted.contains("--releases"), "{trusted}");
     // Every bot's guard knows the served builds (CE-010 M3).
     for dir in [
-        "/Users/me/.gravity/releases",
-        "/Users/me/.gravity/.releases-staging",
+        cfg.home.join("releases"),
+        cfg.home.join(".releases-staging"),
     ] {
-        let dir = super::super::quote(&PathBuf::from(dir).display().to_string());
+        let dir = super::super::quote(&dir.display().to_string());
         assert!(trusted.contains(&format!("--served {dir}")), "{trusted}");
     }
     let publishers: [&[PermissionExtra]; 2] =
