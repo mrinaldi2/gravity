@@ -1,6 +1,6 @@
 // Widget 1, Needs you (H-018 §2.1): what waits on the owner, most urgent
 // first, each row with one primary action. Releases open their review in a
-// drawer, decisions open in Decisions, items open the board.
+// drawer, decisions open in Decisions, items open their drawer (U4).
 
 import type { ReactElement } from "react";
 import type { NeedsYou as Row } from "../../protocol/dashboard";
@@ -10,7 +10,8 @@ import { releaseTitle, testLabel } from "../releases/labels";
 interface NeedsYouActions {
   readonly onReview: (release: Release) => void;
   readonly onDecision: (decisionId: string) => void;
-  readonly onBoard: () => void;
+  /** Opens the item's drawer (U4). */
+  readonly onItem: (itemId: string) => void;
 }
 
 interface NeedsYouProps extends NeedsYouActions {
@@ -122,8 +123,8 @@ function row(r: Row, props: NeedsYouProps): ReactElement {
             props.columnName(r.column_key),
             r.assignee ? props.botName(r.assignee) : "Unassigned",
           ].join(" · ")}
-          action="Open board"
-          onAction={props.onBoard}
+          action="Open item"
+          onAction={() => props.onItem(r.id)}
         />
       );
     case "wip_override":
@@ -138,8 +139,8 @@ function row(r: Row, props: NeedsYouProps): ReactElement {
             </>
           }
           meta={`${r.note} — ${actorName(r.actor, props.botName)} · ${when(r.at)}`}
-          action="Open board"
-          onAction={props.onBoard}
+          action="Open item"
+          onAction={() => props.onItem(r.id)}
         />
       );
   }

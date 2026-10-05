@@ -14,6 +14,7 @@ import type { Release } from "../../protocol/releases";
 import ReleaseReview from "../releases/ReleaseReview";
 import { botNamer, useItemTitles } from "../releases/ReleasesView";
 import { useReleaseActions } from "../releases/useReleases";
+import DashboardItem from "./DashboardItem";
 import NeedsYou from "./NeedsYou";
 import { useDashboard } from "./useDashboard";
 import { BoardWidget, MeetingsWidgets, ReleasesWidget, TeamWidget } from "./Widgets";
@@ -76,6 +77,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const { client, project, bots, connected } = props;
   const { dashboard, error, refresh } = useDashboard(client, project.id, connected);
   const [reviewing, setReviewing] = useState<Release | null>(null);
+  const [openItem, setOpenItem] = useState<string | null>(null);
 
   if (dashboard === null) {
     return (
@@ -120,9 +122,15 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             rows={dashboard.needs_you}
             botName={botName}
             columnName={(key) => columns.get(key) ?? key}
-            onReview={setReviewing}
+            onReview={(release) => {
+              setOpenItem(null);
+              setReviewing(release);
+            }}
             onDecision={props.onOpenDecision}
-            onBoard={openBoard}
+            onItem={(id) => {
+              setReviewing(null);
+              setOpenItem(id);
+            }}
           />
           <BoardWidget board={dashboard.board} home={dashboard.home} onOpen={openBoard} />
           <ReleasesWidget
@@ -144,6 +152,17 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
           addToast={props.addToast}
           onChanged={() => void refresh()}
           onClose={() => setReviewing(null)}
+        />
+      ) : null}
+      {openItem ? (
+        <DashboardItem
+          key={openItem}
+          api={client}
+          projectId={project.id}
+          itemId={openItem}
+          bots={bots}
+          canComment={props.canControl}
+          onClose={() => setOpenItem(null)}
         />
       ) : null}
     </div>

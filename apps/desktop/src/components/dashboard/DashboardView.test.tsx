@@ -5,6 +5,7 @@ import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
 import type { Dashboard } from "../../protocol/dashboard";
 import { DASH_BOTS, MIRRORED_BOARD, dashboard, quietDashboard } from "../../test/dashboardFixtures";
+import { itemDetail } from "../../test/drawerFixtures";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { project } from "../../test/fixtures";
 import DashboardView from "./DashboardView";
@@ -19,6 +20,14 @@ function setup(data: Dashboard | (() => Dashboard)) {
   }));
   fake.onBoard("boardGet", () => {
     throw new Error("no board here");
+  });
+  fake.onBoard("itemGet", () => {
+    const detail = itemDetail();
+    if (detail.item) {
+      detail.item.id = "H-021";
+      detail.item.title = "Pairing crash on iOS 18.1";
+    }
+    return { case: "item", value: detail };
   });
   const nav = {
     onOpenTab: vi.fn<(tab: ProjectTab) => void>(),
@@ -68,8 +77,12 @@ describe("DashboardView", () => {
 
     await user.click(within(nth(rows, 1)).getByRole("button", { name: "Answer" }));
     expect(nav.onOpenDecision).toHaveBeenCalledWith("dec-1");
-    await user.click(within(nth(rows, 2)).getByRole("button", { name: "Open board" }));
-    expect(nav.onOpenTab).toHaveBeenCalledWith("board");
+    // An item opens its drawer over the dashboard (U4).
+    await user.click(within(nth(rows, 2)).getByRole("button", { name: "Open item" }));
+    const drawer = screen.getByRole("complementary", { name: "Item H-021" });
+    expect(await within(drawer).findByText(/Pairing crash/)).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("complementary", { name: "Item H-021" })).toBeNull();
   });
 
   it("opens a release's review in a drawer, over the dashboard", async () => {
