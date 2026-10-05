@@ -13,7 +13,9 @@ export const CANCELLED: ReleaseEvent = {
   at: "2026-10-05T14:00:00Z",
 };
 
-const SHA = "a".repeat(64);
+/** The mac build and the Windows build: each computer tests its own. */
+export const MAC_SHA = "a".repeat(64);
+export const WIN_SHA = "b".repeat(64);
 
 /** A package of two items waiting for the owner, tested on mac and win-pc. */
 export function release(over: Partial<Release> = {}): Release {
@@ -53,13 +55,22 @@ export function release(over: Partial<Release> = {}): Release {
         artifact: "/builds/The Hermes 0.16.0.dmg",
         url: null,
         install_url: null,
-        sha256: SHA,
+        sha256: MAC_SHA,
         built_at: "2026-10-05T10:00:00Z",
+      },
+      {
+        platform: "desktop-win",
+        version: "0.16.0",
+        artifact: "/builds/The Hermes 0.16.0.msi",
+        url: null,
+        install_url: null,
+        sha256: WIN_SHA,
+        built_at: "2026-10-05T10:05:00Z",
       },
     ],
     tests: [
-      { machine: "mac", tester: "tester", build_sha256: SHA, result: "pass" },
-      { machine: "win-pc", tester: "tester-win", build_sha256: SHA, result: "pass" },
+      { machine: "mac", tester: "tester", build_sha256: MAC_SHA, result: "pass" },
+      { machine: "win-pc", tester: "tester-win", build_sha256: WIN_SHA, result: "pass" },
     ],
     deployments: [],
     events: [],

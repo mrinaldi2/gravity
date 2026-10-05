@@ -1,10 +1,12 @@
 // The release review's parts: the package tabs, the state banner and the
 // sticky action bar (H-018 §4A.2–4A.4).
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReactElement } from "react";
 import type { Release } from "../../protocol/releases";
-import { eventLine, statusLabel } from "./labels";
+import { fmtTimestamp } from "../../util";
+import { eventLine, plural, statusLabel } from "./labels";
+import type { BotName } from "./labels";
 import { Changelog, Glyph, HowToTest, ItemsList, Rollout } from "./ReleaseSections";
 import type { LeftOut } from "./ReleaseSections";
 import type { ReleaseActions } from "./useReleases";
@@ -99,22 +101,28 @@ export function ReviewBar(props: {
   const blocked = !canRule || actions.pending !== null;
   const total = release.items.length;
   const shipping = total - props.leftOut;
+  const noteId = useId();
+  // A disabled button points at the note, so its reason is read with it.
+  const why = (disabled: boolean) => (disabled ? noteId : undefined);
   return (
     <footer className="release-bar">
       {actions.pending ? (
-        <span className="release-pending" role="status">
+        <span className="release-pending" role="status" id={noteId}>
           {actions.pending}…{" "}
           <button type="button" className="cc-link" onClick={actions.undo}>
             Undo
           </button>
         </span>
       ) : (
-        <span className="release-bar-note">{barNote(release, props.leftOut)}</span>
+        <span className="release-bar-note" id={noteId}>
+          {barNote(release, props.leftOut)}
+        </span>
       )}
       <button
         type="button"
         className="btn btn-small btn-danger"
         disabled={blocked}
+        aria-describedby={why(blocked)}
         onClick={() => props.onOpen("reject")}
       >
         Reject…
@@ -124,6 +132,7 @@ export function ReviewBar(props: {
           type="button"
           className="btn btn-small"
           disabled={blocked}
+          aria-describedby={why(blocked)}
           onClick={() => actions.unhold(release)}
         >
           Take off hold
@@ -133,6 +142,7 @@ export function ReviewBar(props: {
           type="button"
           className="btn btn-small"
           disabled={blocked}
+          aria-describedby={why(blocked)}
           onClick={() => props.onOpen("hold")}
         >
           Hold
@@ -142,6 +152,7 @@ export function ReviewBar(props: {
         type="button"
         className="btn btn-small btn-primary"
         disabled={blocked || shipping === 0}
+        aria-describedby={why(blocked || shipping === 0)}
         onClick={() => props.onOpen("approve")}
       >
         {props.leftOut ? `Approve ${shipping} of ${total} items` : `Approve ${props.version}`}
@@ -155,16 +166,12 @@ export function failingMachines(release: Release): string[] {
   return release.tests.filter((t) => t.result !== "pass").map((t) => t.machine);
 }
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
-
 /** What should give the owner pause, or that nothing does (§4A.2). */
 function barNote(release: Release, left: number): string {
   if (release.can_rule !== true) {
     return release.rule_on
-      ? `Rule on it from a device connected to ${release.rule_on}.`
-      : "This device can't approve: it needs the approve permission.";
+      ? `You can approve, hold or reject this package only from a device connected directly to ${release.rule_on}.`
+      : "This device can't rule on releases: it doesn't have approve access.";
   }
   const failing = failingMachines(release);
   const notes: string[] = [];
@@ -193,18 +200,21 @@ export function Banner(props: {
     case "held":
       return (
         <p className="release-banner" role="status">
-          <Glyph label={statusLabel("held")} />
-          {release.held_note ? ` · ${release.held_note}` : ""}
-          {release.remind_at
-            ? ` · reminds you ${new Date(release.remind_at).toLocaleString()}`
-            : ""}
+          {/* One span, so the banner's flex gap can't split the sentence. */}
+          <span>
+            <Glyph label={statusLabel("held")} />
+            {release.held_note ? `: “${release.held_note}”.` : "."}
+            {release.remind_at ? ` Reminds you ${fmtTimestamp(release.remind_at)}.` : ""}
+          </span>
         </p>
       );
     case "paused":
       return (
         <p className="release-banner" role="status">
-          <Glyph label={statusLabel("paused")} />
-          {release.paused_reason ? `: ${release.paused_reason}` : ""}
+          <span>
+            <Glyph label={statusLabel("paused")} />
+            {release.paused_reason ? `: ${release.paused_reason}.` : "."}
+          </span>
           {props.canControl ? (
             <button
               type="button"
@@ -220,8 +230,8 @@ export function Banner(props: {
       const left = release.items.filter((i) => i.verdict !== "ship").map((i) => i.item_id);
       return (
         <p className="release-banner" role="status">
-          You approved part of this package. DevOps is building a new one without {left.join(", ")};
-          you'll rule on that build.
+          You approved part of this package. DevOps will build a new one without {left.join(", ")},
+          and you'll rule on that build.
         </p>
       );
     }
@@ -248,7 +258,7 @@ export function Banner(props: {
 /** What happened around the package, in the order it happened: a successor DevOps cancelled. */
 export function ReviewEvents(props: {
   readonly release: Release;
-  readonly botName: (id: string) => string;
+  readonly botName: BotName;
 }): ReactElement | null {
   if (props.release.events.length === 0) {
     return null;

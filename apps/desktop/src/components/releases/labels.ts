@@ -30,6 +30,11 @@ export function statusLabel(status: ReleaseStatus): StatusLabel {
   return STATUS[status] ?? { glyph: "•", word: status, tone: "wait" };
 }
 
+/** "1 item", "2 items". */
+export function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
 /** What the release review shows as the package's name: its version. */
 export function releaseTitle(release: Release): string {
   return release.display_version ?? release.name;
@@ -40,14 +45,21 @@ export function isCurrent(release: Release): boolean {
   return !["deployed", "rejected", "rolled_back", "superseded"].includes(release.status);
 }
 
+/** A bot's name by id; undefined when this device doesn't know the bot. */
+export type BotName = (id: string) => string | undefined;
+
 /** One line for an event on a package, e.g. a successor DevOps cancelled. */
-export function eventLine(event: ReleaseEvent, botName: (id: string) => string): string {
+export function eventLine(event: ReleaseEvent, botName: BotName): string {
   const who =
-    event.actor === "owner" || event.actor.startsWith("device:") ? "You" : botName(event.actor);
-  const what =
-    event.kind === "cancelled"
-      ? `${who} cancelled ${event.release_name}, a package that would have replaced this one`
-      : `${who}: ${event.kind} ${event.release_name}`;
+    event.actor === "owner" || event.actor.startsWith("device:")
+      ? "You"
+      : (botName(event.actor) ?? "A bot");
+  if (event.kind === "cancelled") {
+    // The note is the bot's own words, so it is quoted, not run into ours.
+    const what = `${who} cancelled ${event.release_name}, the package that was going to replace this one.`;
+    return event.note ? `${what} Their note: “${event.note}”.` : what;
+  }
+  const what = `${who}: ${event.kind} ${event.release_name}`;
   return event.note ? `${what}: ${event.note}` : what;
 }
 
@@ -60,6 +72,16 @@ export function testLabel(result: ReleaseTest["result"]): StatusLabel {
     default:
       return { glyph: "!", word: "Blocked", tone: "bad" };
   }
+}
+
+/**
+ * Every computer the package goes to. A package reaches the owner only once
+ * each required computer has a result, so its tests name them all, including
+ * those the rollout hasn't reached yet (§4A.4).
+ */
+export function targetMachines(release: Release): string[] {
+  const tested = release.tests.map((t) => t.machine);
+  return [...new Set([...tested, ...release.deployments.map((d) => d.machine)])];
 }
 
 /** One machine's rollout row, from its deploy and rollback records. */
@@ -82,5 +104,7 @@ export function rolloutLabel(release: Release, machine: string): StatusLabel {
   if (deploy) {
     return { glyph: "◑", word: "Installing", tone: "wait" };
   }
-  return { glyph: "○", word: "Queued", tone: "wait" };
+  return release.status === "paused"
+    ? { glyph: "○", word: "Not started", tone: "off" }
+    : { glyph: "○", word: "Queued", tone: "wait" };
 }

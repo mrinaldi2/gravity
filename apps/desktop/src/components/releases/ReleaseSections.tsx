@@ -4,8 +4,8 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
 import type { Release } from "../../protocol/releases";
-import type { StatusLabel } from "./labels";
-import { rolloutLabel, testLabel } from "./labels";
+import type { BotName, StatusLabel } from "./labels";
+import { rolloutLabel, targetMachines, testLabel } from "./labels";
 
 export function Glyph({ label }: { readonly label: StatusLabel }): ReactElement {
   return (
@@ -21,7 +21,7 @@ export function TestSummary({
   botName,
 }: {
   readonly release: Release;
-  readonly botName: (id: string) => string;
+  readonly botName: BotName;
 }): ReactElement {
   const builds = new Map(release.builds.map((b) => [b.sha256, b]));
   return (
@@ -37,7 +37,7 @@ export function TestSummary({
               <b className="release-machine">{t.machine}</b>
               <Glyph label={testLabel(t.result)} />
               <span className="release-meta">
-                {botName(t.tester)}
+                {botName(t.tester) ?? "Unknown tester"}
                 {build ? ` · ${build.platform} ${build.version}` : " · an older build"}
               </span>
             </div>
@@ -78,12 +78,7 @@ export function ItemsList({
           <li className="release-row" key={item.item_id}>
             <span className="mono">{item.item_id}</span>
             <span className="release-item-title">{titles.get(item.item_id) ?? ""}</span>
-            {decided ? (
-              <span className="release-meta">
-                {verdictWord(decided)}
-                {item.owner_note ? ` · ${item.owner_note}` : ""}
-              </span>
-            ) : null}
+            {decided ? <Outcome verdict={decided} note={item.owner_note} /> : null}
             {editable ? (
               out ? (
                 <span className="release-include">
@@ -120,15 +115,32 @@ export function ItemsList({
   );
 }
 
-function verdictWord(verdict: "ship" | "hold" | "rework"): string {
-  switch (verdict) {
-    case "ship":
-      return "Ship";
-    case "hold":
-      return "Held for the next release";
-    default:
-      return "Back to Doing";
+function verdictWord(verdict: "hold" | "rework"): string {
+  return verdict === "hold" ? "Held for the next release" : "Back to Doing";
+}
+
+/** An item's ruling, in the words of the choice: Include or Leave out. */
+function Outcome({
+  verdict,
+  note,
+}: {
+  readonly verdict: "ship" | "hold" | "rework";
+  readonly note: string | null;
+}): ReactElement {
+  if (verdict === "ship") {
+    return (
+      <span className="release-tone release-tone-ok">
+        <span aria-hidden="true">✓</span> Included
+      </span>
+    );
   }
+  const where =
+    verdict === "hold" ? "waits for the next package" : `back to Doing${note ? `: “${note}”` : ""}`;
+  return (
+    <span className="release-tone release-tone-off">
+      <span aria-hidden="true">⤼</span> Left out · {where}
+    </span>
+  );
 }
 
 export function Changelog({ release }: { readonly release: Release }): ReactElement {
@@ -192,9 +204,12 @@ export function HowToTest({
   );
 }
 
-/** Each computer's rollout, live from the deploy records (§4A.4). */
+/**
+ * Every target computer's rollout, live from the deploy records (§4A.4), so
+ * the owner sees which are still on the old version.
+ */
 export function Rollout({ release }: { readonly release: Release }): ReactElement {
-  const machines = [...new Set(release.deployments.map((d) => d.machine))];
+  const machines = targetMachines(release);
   if (machines.length === 0) {
     return <p className="release-hint">DevOps hasn't started the rollout yet.</p>;
   }

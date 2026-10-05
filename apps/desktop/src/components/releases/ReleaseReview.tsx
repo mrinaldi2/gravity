@@ -4,7 +4,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { ItemVerdict, Release } from "../../protocol/releases";
-import { releaseTitle, statusLabel } from "./labels";
+import { plural, releaseTitle, statusLabel } from "./labels";
+import type { BotName } from "./labels";
 import {
   ApproveDialog,
   HoldDialog,
@@ -25,7 +26,7 @@ export interface ReleaseReviewProps {
   readonly release: Release;
   /** Item titles by id, where the board knows them. */
   readonly titles: ReadonlyMap<string, string>;
-  readonly botName: (id: string) => string;
+  readonly botName: BotName;
   readonly actions: ReleaseActions;
   /** The connection may control the fleet (pause and resume a rollout). */
   readonly canControl: boolean;
@@ -100,7 +101,8 @@ export default function ReleaseReview({
         </span>
       </header>
       <p className="release-meta">
-        Packaged by {botName(release.created_by)} · <span className="mono">{release.name}</span>
+        Packaged by {botName(release.created_by) ?? "a bot"} ·{" "}
+        <span className="mono">{release.name}</span>
         {release.supersedes ? " · replaces an earlier package" : ""}
       </p>
       <Banner release={release} actions={actions} canControl={canControl} />
@@ -233,10 +235,10 @@ function ReviewDialogs(props: {
       }
       body={
         left
-          ? `DevOps repackages the ${total - left} approved items without the rest, and you rule on that new build. The items left out go back as you chose.`
+          ? `DevOps repackages the ${plural(total - left, "approved item")} without the rest, and you rule on that new build. The items left out go back as you chose.`
           : `DevOps rolls ${version} out to each computer, one at a time, starting now.`
       }
-      confirmLabel={left ? `Approve ${total - left} items` : "Approve"}
+      confirmLabel={left ? `Approve ${plural(total - left, "item")}` : `Approve ${version}`}
       onConfirm={then(props.onApprove)}
       onCancel={onClose}
     />

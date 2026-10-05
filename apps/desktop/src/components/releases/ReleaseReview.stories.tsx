@@ -3,14 +3,20 @@ import type { ReactElement } from "react";
 import type { Release } from "../../protocol/releases";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { bot, project } from "../../test/fixtures";
-import { CANCELLED, RELEASE_TITLES, deployment, release } from "../../test/releaseFixtures";
+import {
+  CANCELLED,
+  MAC_SHA,
+  RELEASE_TITLES,
+  WIN_SHA,
+  deployment,
+  release,
+} from "../../test/releaseFixtures";
 import ProjectWindow from "../project/ProjectWindow";
 import ReleaseReview from "./ReleaseReview";
 import ReleasesView from "./ReleasesView";
 import { useReleaseActions } from "./useReleases";
 
 const noop = (): void => undefined;
-const SHA = "a".repeat(64);
 
 function Review({ value }: { readonly value: Release }): ReactElement {
   const actions = useReleaseActions(new FakeDaemon(), noop, noop);
@@ -34,8 +40,8 @@ export const FailedTest: Story = () => (
   <Review
     value={release({
       tests: [
-        { machine: "mac", tester: "tester", build_sha256: SHA, result: "pass" },
-        { machine: "win-pc", tester: "tester-win", build_sha256: SHA, result: "fail" },
+        { machine: "mac", tester: "tester", build_sha256: MAC_SHA, result: "pass" },
+        { machine: "win-pc", tester: "tester-win", build_sha256: WIN_SHA, result: "fail" },
       ],
     })}
   />

@@ -9,6 +9,7 @@ import { boardCall } from "../../protocol/board";
 import type { Bot, Project } from "../../protocol/entities";
 import type { Release } from "../../protocol/releases";
 import { isCurrent, releaseTitle, statusLabel } from "./labels";
+import type { BotName } from "./labels";
 import ReleaseReview from "./ReleaseReview";
 import { useProjectReleases, useReleaseActions } from "./useReleases";
 
@@ -51,8 +52,8 @@ export function useItemTitles(
   return titles;
 }
 
-export function botNamer(bots: readonly Bot[]): (id: string) => string {
-  return (id) => bots.find((b) => b.id === id)?.name ?? "a bot";
+export function botNamer(bots: readonly Bot[]): BotName {
+  return (id) => bots.find((b) => b.id === id)?.name;
 }
 
 export default function ReleasesView({
