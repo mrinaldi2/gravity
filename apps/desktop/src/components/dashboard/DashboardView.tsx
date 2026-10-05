@@ -4,10 +4,11 @@
 // show, so there is one way to rule on a package.
 
 import { RefreshCw, X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
+import { useDrawerEscape } from "../../hooks/useDrawerEscape";
 import type { DaemonApi } from "../../protocol/api";
 import type { Bot, Project } from "../../protocol/entities";
 import type { Release } from "../../protocol/releases";
@@ -52,6 +53,7 @@ function ReviewDrawer(props: {
     props.onChanged();
   });
   const titles = useItemTitles(props.client, props.project.id, true);
+  useDrawerEscape(props.onClose);
   return (
     <aside className="dash-drawer" aria-label={`Release ${release.name}`}>
       <button
@@ -78,6 +80,8 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const { dashboard, error, refresh } = useDashboard(client, project.id, connected);
   const [reviewing, setReviewing] = useState<Release | null>(null);
   const [openItem, setOpenItem] = useState<string | null>(null);
+  // The "Open item" button, which takes focus back when the drawer closes.
+  const opener = useRef<HTMLElement | null>(null);
 
   if (dashboard === null) {
     return (
@@ -127,7 +131,8 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
               setReviewing(release);
             }}
             onDecision={props.onOpenDecision}
-            onItem={(id) => {
+            onItem={(id, button) => {
+              opener.current = button;
               setReviewing(null);
               setOpenItem(id);
             }}
@@ -162,7 +167,10 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
           itemId={openItem}
           bots={bots}
           canComment={props.canControl}
-          onClose={() => setOpenItem(null)}
+          onClose={() => {
+            setOpenItem(null);
+            opener.current?.focus();
+          }}
         />
       ) : null}
     </div>

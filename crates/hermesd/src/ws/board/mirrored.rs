@@ -80,19 +80,18 @@ impl Conn {
         }
         // Changes are the owner's own, on the home: a peer never acts as the
         // owner (H-020 §2.2).
-        let change = match request {
-            Request::ItemMove(_) => Some("move it"),
-            Request::ItemComment(_) => Some("comment on it"),
+        let name = home_name(&self.app, &home);
+        let refusal = match request {
+            Request::ItemMove(_) => {
+                Some(format!("The board lives on {name}. Move {id} from there."))
+            }
+            Request::ItemComment(_) => Some(format!(
+                "The board for {id} lives on {name}. Comment on it from there."
+            )),
             _ => None,
         };
-        if let Some(change) = change {
-            return Err(refuse(
-                "no_board",
-                format!(
-                    "{id} is on the board {} holds; {change} there.",
-                    home_name(&self.app, &home)
-                ),
-            ));
+        if let Some(text) = refusal {
+            return Err(refuse("no_board", text));
         }
         Ok(Some((project, home)))
     }

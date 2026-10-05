@@ -2,9 +2,12 @@
 // the dashboard. The state stepper, a meta line, the next step as the guard
 // check turns it into guidance, then Overview, Links and Activity. Esc
 // closes it; ↑/↓ move to the neighbouring card when the board offers them.
+// Focus lands on the title once the item loads, so a screen reader reads it
+// (UX-012); the caller returns it on close.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
+import { escapeIsTheDrawers } from "../../../hooks/useDrawerEscape";
 import type { BoardApi } from "../../../protocol/board";
 import type { Bot } from "../../../protocol/entities";
 import type { BoardColumn } from "../../../protocol/gen/hermes/board/v1/board_pb";
@@ -56,7 +59,7 @@ function useDrawerKeys(onClose: () => void, onStep?: (direction: -1 | 1) => void
         (event.target.tagName === "TEXTAREA" || event.target.tagName === "INPUT");
       if (event.key === "Escape") {
         // A menu or dialog over the drawer takes its own Esc first.
-        if (document.querySelector('[role="menu"], [role="dialog"]') === null) {
+        if (escapeIsTheDrawers(event)) {
           onClose();
         }
       } else if (!typing && onStep && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
@@ -78,6 +81,14 @@ export default function ItemDrawer(props: ItemDrawerProps): ReactElement {
   const item = detail?.item;
   const column = columns.find((c) => c.key === item?.columnKey);
   const now = props.now ?? Date.now;
+  const title = useRef<HTMLHeadingElement>(null);
+  const loaded = item !== undefined;
+  // Callers key the drawer by item, so ↑/↓ mounts it afresh and this runs again.
+  useEffect(() => {
+    if (loaded) {
+      title.current?.focus();
+    }
+  }, [loaded]);
 
   return (
     <aside className="item-drawer" aria-label={`Item ${itemId}`}>
@@ -88,7 +99,9 @@ export default function ItemDrawer(props: ItemDrawerProps): ReactElement {
         </p>
       ) : (
         <div className="drawer-body">
-          <h2 className="drawer-title">{item.title}</h2>
+          <h2 className="drawer-title" tabIndex={-1} ref={title}>
+            {item.title}
+          </h2>
           <Stepper column={column} />
           <MetaLine item={item} column={column} who={who} now={now()} />
           <NextStepView

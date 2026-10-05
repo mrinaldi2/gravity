@@ -247,16 +247,14 @@ export function Activity(props: {
       )}
       {props.onComment === undefined ? null : (
         <div className="drawer-composer">
-          <label>
-            <span className="visually-hidden">Write a comment</span>
-            <textarea
-              rows={2}
-              placeholder="Write a comment…"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={onKeyDown}
-            />
-          </label>
+          <textarea
+            rows={2}
+            aria-label={`Comment on ${props.detail.item?.id ?? ""}`}
+            placeholder="Write a comment…"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={onKeyDown}
+          />
           <button
             type="button"
             className="btn btn-small btn-primary"

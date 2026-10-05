@@ -78,11 +78,14 @@ describe("DashboardView", () => {
     await user.click(within(nth(rows, 1)).getByRole("button", { name: "Answer" }));
     expect(nav.onOpenDecision).toHaveBeenCalledWith("dec-1");
     // An item opens its drawer over the dashboard (U4).
-    await user.click(within(nth(rows, 2)).getByRole("button", { name: "Open item" }));
+    const openItem = within(nth(rows, 2)).getByRole("button", { name: "Open item" });
+    await user.click(openItem);
     const drawer = screen.getByRole("complementary", { name: "Item H-021" });
-    expect(await within(drawer).findByText(/Pairing crash/)).toBeInTheDocument();
+    expect(await within(drawer).findByRole("heading", { name: /Pairing crash/ })).toHaveFocus();
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("complementary", { name: "Item H-021" })).toBeNull();
+    // Focus goes back to the button that opened it (UX-012).
+    expect(openItem).toHaveFocus();
   });
 
   it("opens a release's review in a drawer, over the dashboard", async () => {
@@ -93,6 +96,21 @@ describe("DashboardView", () => {
     const drawer = screen.getByRole("complementary", { name: "Release R-2026-W41" });
     expect(within(drawer).getByRole("button", { name: "Approve 0.16.0" })).toBeInTheDocument();
     await user.click(within(drawer).getByRole("button", { name: "Close the release" }));
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("closes a release's review on Esc, after any dialog over it", async () => {
+    const user = userEvent.setup();
+    setup(dashboard());
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    await user.click(nth(within(needs).getAllByRole("button", { name: "Review" }), 0));
+    const drawer = screen.getByRole("complementary", { name: "Release R-2026-W41" });
+    await user.click(within(drawer).getByRole("button", { name: "Approve 0.16.0" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("complementary", { name: "Release R-2026-W41" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
     expect(screen.queryByRole("complementary")).toBeNull();
   });
 

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DaemonError } from "../../../protocol/connection";
 import { EditResultSchema } from "../../../protocol/gen/hermes/board/v1/requests_pb";
-import { defaultColumns } from "../../../test/boardFixtures";
+import { defaultColumns, unmet } from "../../../test/boardFixtures";
 import { DASH_BOTS } from "../../../test/dashboardFixtures";
 import { DRAWER_NOW, drawerCheck, itemDetail } from "../../../test/drawerFixtures";
 import { FakeDaemon } from "../../../test/fakeDaemon";
@@ -13,11 +13,18 @@ import ItemDrawer from "./ItemDrawer";
 
 const BOTS = [...DASH_BOTS, bot({ id: "lead", name: "Team Lead" })];
 
-function setup(options: { readonly canComment?: boolean; readonly fake?: FakeDaemon } = {}) {
+function setup(
+  options: {
+    readonly canComment?: boolean;
+    readonly fake?: FakeDaemon;
+    readonly check?: ReturnType<typeof drawerCheck>;
+  } = {},
+) {
   const fake = options.fake ?? new FakeDaemon();
+  const check = options.check ?? drawerCheck();
   fake
     .onBoard("itemGet", () => ({ case: "item", value: itemDetail() }))
-    .onBoard("itemMoveCheck", () => ({ case: "moveCheck", value: drawerCheck() }));
+    .onBoard("itemMoveCheck", () => ({ case: "moveCheck", value: check }));
   const onClose = vi.fn<() => void>();
   const onMove = vi.fn<(anchor: { readonly x: number; readonly y: number }) => void>();
   const onStep = vi.fn<(direction: -1 | 1) => void>();
@@ -95,7 +102,9 @@ describe("ItemDrawer", () => {
     const moves = screen.getByRole("list", { name: "Timeline" });
     expect(within(moves).getAllByRole("listitem")).toHaveLength(1);
 
-    await user.type(screen.getByLabelText("Write a comment"), "Ship it after the demo");
+    const box = screen.getByRole("textbox", { name: "Comment on H-017" });
+    expect(box).toHaveAttribute("placeholder", "Write a comment…");
+    await user.type(box, "Ship it after the demo");
     await user.keyboard("{Meta>}{Enter}{/Meta}");
     await waitFor(() => {
       expect(fake.boardCalls.find((c) => c.case === "itemComment")?.value).toMatchObject({
@@ -103,19 +112,46 @@ describe("ItemDrawer", () => {
         body: "Ship it after the demo",
       });
     });
-    expect(screen.getByLabelText("Write a comment")).toHaveValue("");
+    expect(box).toHaveValue("");
   });
 
   it("shows a refused comment, and no composer without the control grant", async () => {
     const user = userEvent.setup();
     const { fake } = setup();
+    const refusal = "The board for H-017 lives on mac. Comment on it from there.";
     fake.onBoard("itemComment", () => {
-      throw new DaemonError("no_board", "H-017 is on the board mac holds; comment on it there.");
+      throw new DaemonError("no_board", refusal);
     });
     await user.click(await screen.findByRole("tab", { name: "Activity 3" }));
-    await user.type(screen.getByLabelText("Write a comment"), "x");
+    await user.type(screen.getByRole("textbox", { name: "Comment on H-017" }), "x");
     await user.click(screen.getByRole("button", { name: /Send/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("comment on it there");
+    expect(await screen.findByRole("alert")).toHaveTextContent(refusal);
+  });
+
+  it("shows the move refusal off the board's home", async () => {
+    const check = drawerCheck();
+    for (const column of check.columns) {
+      column.unmet = [unmet("board.elsewhere", "The board lives on mac. Move H-017 from there.")];
+    }
+    setup({ check });
+    const next = await screen.findByRole("region", { name: "Next step" });
+    expect(next).toHaveTextContent("The board lives on mac. Move H-017 from there.");
+  });
+
+  it("puts focus on the title once the item loads", async () => {
+    setup();
+    const title = await screen.findByRole("heading", { name: /^Backlog and meetings/ });
+    expect(title).toHaveAttribute("tabindex", "-1");
+    expect(title).toHaveFocus();
+  });
+
+  it("leaves an Esc another handler took", async () => {
+    const { onClose } = setup();
+    await screen.findByRole("heading", { name: /^Backlog and meetings/ });
+    const taken = new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
+    taken.preventDefault();
+    window.dispatchEvent(taken);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("closes on Esc, steps with the arrows and opens Move to…", async () => {

@@ -71,7 +71,7 @@ impl Conn {
                 Ok(mut value) => match app.db.project_link(&project_id, &home) {
                     Ok(Some(link)) => {
                         ids_from_home(&app, &link, &mut value["response"]);
-                        decode(&value["response"], &name)
+                        decode(&value["response"], &name, &item_id)
                             .map(|response| binary::response(req_id, response))
                             .unwrap_or_else(|| {
                                 binary::error(
@@ -114,13 +114,13 @@ fn item_of(request: &Request) -> &str {
 }
 
 /// The home's answer, with every move marked as the home's to make.
-fn decode(value: &serde_json::Value, home: &str) -> Option<c::BoardResponse> {
+fn decode(value: &serde_json::Value, home: &str, id: &str) -> Option<c::BoardResponse> {
     let mut response: c::BoardResponse = serde_json::from_value(value.clone()).ok()?;
     if let Some(Response::MoveCheck(check)) = response.response.as_mut() {
         for column in &mut check.columns {
             column.unmet.push(c::Unmet {
                 code: "board.elsewhere".into(),
-                text: format!("The board lives on {home}; move it there."),
+                text: format!("The board lives on {home}. Move {id} from there."),
                 fix: None,
             });
         }

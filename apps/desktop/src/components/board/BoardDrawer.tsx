@@ -1,6 +1,7 @@
 // The board's item drawer (U4): the open card's drawer, with ↑/↓ stepping
 // through the cards its column shows and "Move to…" opening the board's own
 // move menu, so a move from the drawer runs the same guards as a drag.
+// Closing returns focus to the card of the item shown (UX-012).
 
 import type { ReactElement } from "react";
 import type { BoardApi } from "../../protocol/board";
@@ -19,6 +20,14 @@ interface BoardDrawerProps {
   readonly canControl: boolean;
   readonly onOpen: (id: string | null) => void;
   readonly onMove: ((card: ItemCard, anchor: Anchor) => void) | null;
+}
+
+/** Focuses the board card of `id`, when the board shows it. */
+function focusCard(id: string): void {
+  const cards = document.querySelectorAll<HTMLElement>(".board-card[data-item-id]");
+  Array.from(cards)
+    .find((el) => el.dataset.itemId === id)
+    ?.focus();
 }
 
 export default function BoardDrawer(props: BoardDrawerProps): ReactElement | null {
@@ -44,7 +53,10 @@ export default function BoardDrawer(props: BoardDrawerProps): ReactElement | nul
       columns={props.columns}
       bots={props.bots}
       canComment={props.canControl}
-      onClose={() => props.onOpen(null)}
+      onClose={() => {
+        props.onOpen(null);
+        focusCard(openId);
+      }}
       onMove={move && card ? (anchor) => move(card, anchor) : undefined}
       onStep={step}
     />

@@ -2,7 +2,7 @@
 // first, each row with one primary action. Releases open their review in a
 // drawer, decisions open in Decisions, items open their drawer (U4).
 
-import type { ReactElement } from "react";
+import type { MouseEvent, ReactElement } from "react";
 import type { NeedsYou as Row } from "../../protocol/dashboard";
 import type { Release } from "../../protocol/releases";
 import { releaseTitle, testLabel } from "../releases/labels";
@@ -10,8 +10,8 @@ import { releaseTitle, testLabel } from "../releases/labels";
 interface NeedsYouActions {
   readonly onReview: (release: Release) => void;
   readonly onDecision: (decisionId: string) => void;
-  /** Opens the item's drawer (U4). */
-  readonly onItem: (itemId: string) => void;
+  /** Opens the item's drawer (U4); `opener` takes focus back on close. */
+  readonly onItem: (itemId: string, opener: HTMLElement) => void;
 }
 
 interface NeedsYouProps extends NeedsYouActions {
@@ -55,7 +55,7 @@ function RowView(props: {
   readonly title: ReactElement | string;
   readonly meta: string;
   readonly action: string;
-  readonly onAction: () => void;
+  readonly onAction: (event: MouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
   return (
     <li className="dash-row">
@@ -124,7 +124,7 @@ function row(r: Row, props: NeedsYouProps): ReactElement {
             r.assignee ? props.botName(r.assignee) : "Unassigned",
           ].join(" · ")}
           action="Open item"
-          onAction={() => props.onItem(r.id)}
+          onAction={(event) => props.onItem(r.id, event.currentTarget)}
         />
       );
     case "wip_override":
@@ -140,7 +140,7 @@ function row(r: Row, props: NeedsYouProps): ReactElement {
           }
           meta={`${r.note} — ${actorName(r.actor, props.botName)} · ${when(r.at)}`}
           action="Open item"
-          onAction={() => props.onItem(r.id)}
+          onAction={(event) => props.onItem(r.id, event.currentTarget)}
         />
       );
   }
