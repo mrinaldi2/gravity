@@ -7,11 +7,11 @@
 //! arrives over a WebSocket or a bot's bearer token, and a rule duplicated in
 //! two handlers is a rule that will eventually disagree with itself.
 
-mod authority;
+pub(crate) mod authority;
 mod owner;
-mod publish;
+pub(crate) mod publish;
 mod record;
-mod service;
+pub(crate) mod service;
 mod validate;
 mod view;
 mod watch;
@@ -68,11 +68,11 @@ pub fn error_code(error: &anyhow::Error) -> Option<&'static str> {
     error.downcast_ref::<DecisionError>().map(|e| e.code())
 }
 
-fn invalid(message: impl Into<String>) -> anyhow::Error {
+pub(crate) fn invalid(message: impl Into<String>) -> anyhow::Error {
     DecisionError::Invalid(message.into()).into()
 }
 
-fn forbidden(message: impl Into<String>) -> anyhow::Error {
+pub(crate) fn forbidden(message: impl Into<String>) -> anyhow::Error {
     DecisionError::Forbidden(message.into()).into()
 }
 

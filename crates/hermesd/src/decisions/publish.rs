@@ -35,6 +35,17 @@ pub fn publish(
     decision_id: &str,
     notify: Option<&[String]>,
 ) -> anyhow::Result<PublishOutcome> {
+    super::authority::release_review_only(app, decision_id)?;
+    publish_settled(app, decision_id, notify)
+}
+
+/// `publish` without the release check, for `release_rule`, which settles
+/// a release decision itself.
+pub(crate) fn publish_settled(
+    app: &Arc<AppState>,
+    decision_id: &str,
+    notify: Option<&[String]>,
+) -> anyhow::Result<PublishOutcome> {
     let decision = app
         .db
         .get_decision(decision_id)?

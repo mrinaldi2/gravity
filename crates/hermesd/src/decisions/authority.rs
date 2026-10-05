@@ -92,3 +92,23 @@ pub fn is_relayed(decision: &Decision) -> bool {
         .is_some_and(|r| r.answered_by.starts_with("owner-via-bot:"))
         && decision.state == DecisionState::Settled
 }
+
+/// A release decision is answered only through the release review
+/// (`release_rule`, H-020 §2.2): the generic requests are refused, so a
+/// release can't be approved by a path that skips the package checks.
+pub fn release_review_only(
+    app: &std::sync::Arc<crate::app::AppState>,
+    decision_id: &str,
+) -> anyhow::Result<()> {
+    if app
+        .db
+        .board_read(|t| t.release_of_decision(decision_id))?
+        .is_some()
+    {
+        return Err(forbidden(
+            "this is a release decision: rule on it in the release review, in the dashboard \
+             or on the phone",
+        ));
+    }
+    Ok(())
+}

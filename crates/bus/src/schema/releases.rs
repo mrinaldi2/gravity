@@ -1,0 +1,94 @@
+//! Release packages and the deploy gate (H-020 §2, §6; H-017 §1.4). Named
+//! rather than numbered (ARCH-R1).
+//!
+//! Safe to run again (a downgrade and reinstall can rewind
+//! `schema_version`): every statement is `IF NOT EXISTS`.
+//!
+//! A release's decision is `release.decision_id`. The decision table keeps
+//! its kinds: a decision is a release decision when a release names it, so
+//! the gate needs no rebuild of a table other tables reference.
+
+pub(super) const MIGRATION_RELEASES: &str = r#"
+CREATE TABLE IF NOT EXISTS release (
+    id              TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL REFERENCES project(id),
+    name            TEXT NOT NULL,
+    display_version TEXT,
+    status          TEXT NOT NULL DEFAULT 'assembling' CHECK(status IN
+        ('assembling', 'built', 'awaiting_owner', 'held', 'repackaging', 'superseded',
+         'approved', 'deploying', 'paused', 'partially_deployed', 'deployed', 'rejected',
+         'rolled_back')),
+    decision_id     TEXT REFERENCES decision(id),
+    supersedes      TEXT REFERENCES release(id),
+    install_mode    TEXT NOT NULL DEFAULT 'side_by_side'
+                    CHECK(install_mode IN ('side_by_side', 'replace')),
+    rollback_to     TEXT REFERENCES release(id),
+    changelog       TEXT NOT NULL DEFAULT '',
+    how_to_test     TEXT NOT NULL DEFAULT '[]',
+    paused_reason   TEXT,
+    held_note       TEXT,
+    remind_at       TEXT,
+    frozen_at       TEXT,
+    frozen_hash     TEXT,
+    created_by      TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    version         INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (project_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_release_project ON release(project_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_release_decision ON release(decision_id)
+    WHERE decision_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS release_item (
+    release_id TEXT NOT NULL REFERENCES release(id),
+    item_id    TEXT NOT NULL REFERENCES item(id),
+    verdict    TEXT NOT NULL DEFAULT 'pending'
+               CHECK(verdict IN ('pending', 'ship', 'hold', 'rework')),
+    owner_note TEXT,
+    PRIMARY KEY (release_id, item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_release_item_item ON release_item(item_id);
+
+CREATE TABLE IF NOT EXISTS release_build (
+    release_id  TEXT NOT NULL REFERENCES release(id),
+    platform    TEXT NOT NULL,
+    version     TEXT NOT NULL,
+    artifact    TEXT NOT NULL,
+    url         TEXT,
+    install_url TEXT,
+    sha256      TEXT NOT NULL,
+    built_at    TEXT NOT NULL,
+    PRIMARY KEY (release_id, platform)
+);
+
+-- One result per required machine against the exact build (H-021 §6.4).
+-- Written by B7b's release_test; frozen into the hash at submit.
+CREATE TABLE IF NOT EXISTS release_test (
+    release_id    TEXT NOT NULL REFERENCES release(id),
+    machine       TEXT NOT NULL,
+    tester        TEXT NOT NULL,
+    build_sha256  TEXT NOT NULL,
+    result        TEXT NOT NULL CHECK(result IN ('pass', 'fail', 'blocked')),
+    checks_passed INTEGER NOT NULL DEFAULT 0,
+    checks_total  INTEGER NOT NULL DEFAULT 0,
+    log_artifact  TEXT,
+    at            TEXT NOT NULL,
+    PRIMARY KEY (release_id, machine)
+);
+
+-- One row per machine a release goes to (or comes back from).
+CREATE TABLE IF NOT EXISTS release_deployment (
+    release_id   TEXT NOT NULL REFERENCES release(id),
+    machine      TEXT NOT NULL,
+    action       TEXT NOT NULL DEFAULT 'deploy' CHECK(action IN ('deploy', 'rollback')),
+    executor     TEXT NOT NULL,
+    task_id      TEXT,
+    result       TEXT CHECK(result IN ('ok', 'failed', 'rolled_back')),
+    smoke        TEXT CHECK(smoke IN ('pass', 'fail')),
+    log_artifact TEXT,
+    started_at   TEXT NOT NULL,
+    at           TEXT,
+    PRIMARY KEY (release_id, machine, action)
+);
+"#;

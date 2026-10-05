@@ -213,6 +213,9 @@ Codes: `auth_failed`, `unsupported_version`, `not_found`, `invalid_request`,
 | `update_decision` | `decision_id` plus any of `title, body, options, recommendation, priority, deadline_at, ruling_option, ruling_text, ruling_reason, renotify?` | `decision` |
 | `delete_decision` | `decision_id` | `ok` |
 | `publish_decisions` | `items: [{decision_id, notify_bot_ids?, ruling_option?, ruling_text?, ruling_reason?}]` | `publish_result` |
+| `list_releases` | `project_id` | `releases` (newest first) |
+| `get_release` | `release_id` | `release` |
+| `release_rule` | `release_id, verdicts: [{item_id, verdict: ship\|hold\|rework, note?}], expected_version` | `release`. Needs `approve`, on the board's home daemon; see [Releases](#releases-and-the-deploy-gate) |
 | `set_decision_tags` | `decision_id, tags: [name]` | `decision` |
 | `list_tags` | – | `tags` |
 | `upsert_tag` | `name, description?, color?` | `tag` |
@@ -590,3 +593,34 @@ history is their call, and the tool error says so. `rename_tag` keeps every
 link, because decisions reference the tag id rather than its name. `delete_tag`
 removes the tag from every decision that carried it, leaving the decisions
 themselves untouched, and is the owner's alone — bots have neither request.
+
+## Releases and the deploy gate
+
+DevOps assembles a release package over MCP (`release_create`,
+`release_attach_build`, `release_submit`). Submitting checks every item as the
+Verify → Owner testing move would, moves them there, freezes the package (a
+hash of its items, builds and test results) and raises a decision for the
+owner. That decision is a release decision: `release.decision_id` names it.
+
+Only `release_rule` settles a release decision. `answer_decision`,
+`publish_decisions`, `hold_decision`, the other ruling requests and a bot's
+`withdraw_decision` are refused on it, and a bot can't call `release_rule` at
+all, so no relayed release ruling exists. The ruling checks the frozen hash
+and the version the owner reviewed, then applies the verdicts:
+
+| Verdicts | Release | Items |
+|---|---|---|
+| all `ship` | `approved` | → Deploying |
+| some `ship` | `repackaging` | ship stay in Owner testing; hold → Ready; rework → Doing |
+| all `hold` | `held`; the decision is held, not settled | stay |
+| no `ship` | `rejected` | hold → Ready; rework → Doing |
+
+`release_deploy` (DevOps) re-checks the gate every time: an approved package,
+a settled ruling answered by `owner` or `device:*` and not relayed, an
+unchanged hash, and only shipped items. It opens a task to the machine's
+tester (the bot holding the `tester` role for that machine), who fetches the
+verified builds with `install_release` and reports with `deploy_confirm`.
+When every required machine reports `ok`, the items move to Done and the
+release to `deployed`. A failure moves them back to Verify, sets
+`partially_deployed` and opens a rollback task to DevOps; `release_rollback`
+runs through the tester the same way.

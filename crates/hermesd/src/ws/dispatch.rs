@@ -48,6 +48,8 @@ const READ_ONLY: &[&str] = &[
     "list_tasks",
     "get_task",
     "list_workers",
+    "list_releases",
+    "get_release",
 ];
 
 /// Requests that exercise the owner's ruling authority.
@@ -68,6 +70,8 @@ const APPROVE_ONLY: &[&str] = &[
     // How much bots may do without asking is the owner's call (H-031).
     "set_project_permission_profile",
     "set_bot_permission_extras",
+    // The only way a release decision is settled (H-020 §2.2).
+    "release_rule",
 ];
 
 /// Capability required for each request type.
@@ -154,6 +158,9 @@ impl Conn {
             "update_decision" => self.update_decision(&req_id, req),
             "delete_decision" => self.delete_decision(&req_id, req),
             "publish_decisions" => self.publish_decisions(&req_id, req),
+            "list_releases" => self.list_releases(&req_id, req),
+            "get_release" => self.get_release(&req_id, req),
+            "release_rule" => self.release_rule(&req_id, req),
             "set_decision_tags" => self.set_decision_tags(&req_id, req),
             "list_tags" => self.list_tags(&req_id),
             "upsert_tag" => self.upsert_tag(&req_id, req),

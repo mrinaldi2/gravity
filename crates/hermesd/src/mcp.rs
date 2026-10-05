@@ -17,6 +17,7 @@ mod board;
 mod board_edit;
 mod board_schema;
 mod decisions;
+mod releases;
 mod remote;
 mod routines;
 mod schema;
