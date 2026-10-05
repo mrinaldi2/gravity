@@ -21,6 +21,9 @@ pub struct SettingsInput<'a> {
     pub artifacts: Option<&'a Path>,
     /// Folders outside the bot's own that it works in (`~/Developer`, …).
     pub trusted_paths: &'a [std::path::PathBuf],
+    /// The served release builds and their staging folder, as configured
+    /// and resolved: only the daemon writes there (CE-010 M3).
+    pub served: &'a [std::path::PathBuf],
     pub repo_url: Option<&'a str>,
     pub port: u16,
     /// The command that runs the guard hook.
@@ -198,6 +201,13 @@ fn hard_deny(input: &SettingsInput<'_>) -> Vec<String> {
         super::CONFIG_FILES
             .iter()
             .map(|name| format!("Edit({home}/{name})")),
+    );
+    // Every bot, DevOps included: builds go in through the daemon only.
+    deny.extend(
+        input
+            .served
+            .iter()
+            .map(|dir| format!("Edit({}/**)", rule_path(dir))),
     );
     deny.extend(STATIC_DENY.iter().map(|r| (*r).to_string()));
     deny

@@ -10,12 +10,15 @@
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::config::Config;
 use crate::decisions::{conflict, forbidden, invalid};
+
+use super::confine::{ServedDirs, Source};
 
 /// `[releases]` in `hermesd.toml`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -28,12 +31,16 @@ pub struct ServeConfig {
     /// without it.
     pub base_url: Option<String>,
     /// Where builds may be published from, besides the project's artifacts
-    /// (a leading `~/` is the user's home). `~/Developer` when empty.
+    /// (a leading `~/` is the user's home). When empty, the `<repo>-rel-*`
+    /// release worktrees in the trusted paths (CE-010 M2).
     pub source_roots: Vec<String>,
     /// The bundle id an iOS manifest names when the publish gives none.
     pub ios_bundle_id: Option<String>,
     /// The app's name in an iOS manifest; "The Hermes" when unset.
     pub ios_title: Option<String>,
+    /// Why `dir` was refused when the config loaded (CE-010 M1).
+    #[serde(skip)]
+    pub refused: Option<String>,
 }
 
 /// The served directory, as configured.
@@ -50,7 +57,8 @@ pub fn base_url(cfg: &Config) -> anyhow::Result<String> {
     let base = cfg.releases.base_url.as_deref().unwrap_or_default().trim();
     if !base.starts_with("https://") {
         return Err(invalid(format!(
-            "set [releases] base_url in hermesd.toml to the https:// address that serves {}",
+            "set [releases] base_url in hermesd.toml to the https:// address that serves {}; \
+             pass only that folder to `tailscale serve`, never the home",
             served_root(cfg).display()
         )));
     }
@@ -68,45 +76,6 @@ pub fn platform_for(file_name: &str) -> Option<&'static str> {
     }
 }
 
-/// The real path of a build file, which must lie in an allowed root once
-/// every symlink in it is resolved.
-pub fn source(cfg: &Config, artifacts: &Path, file: &Path) -> anyhow::Result<PathBuf> {
-    if !file.is_absolute() {
-        return Err(invalid("'file' must be an absolute path"));
-    }
-    let real = fs::canonicalize(file)
-        .map_err(|e| invalid(format!("can't read {}: {e}", file.display())))?;
-    if !real.is_file() {
-        return Err(invalid(format!("{} is not a regular file", real.display())));
-    }
-    let configured = &cfg.releases.source_roots;
-    let mut roots: Vec<PathBuf> = if configured.is_empty() {
-        vec![cfg.user_home.join("Developer")]
-    } else {
-        configured
-            .iter()
-            .map(|r| match r.strip_prefix("~/") {
-                Some(rest) => cfg.user_home.join(rest),
-                None => PathBuf::from(r),
-            })
-            .collect()
-    };
-    roots.push(artifacts.to_path_buf());
-    let inside = roots
-        .iter()
-        .filter_map(|r| fs::canonicalize(r).ok())
-        .any(|r| real.starts_with(r));
-    if !inside {
-        let names: Vec<String> = roots.iter().map(|r| r.display().to_string()).collect();
-        return Err(forbidden(format!(
-            "{} is outside the roots builds are published from ({})",
-            real.display(),
-            names.join(", ")
-        )));
-    }
-    Ok(real)
-}
-
 /// A build placed in the served directory.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Staged {
@@ -117,24 +86,26 @@ pub struct Staged {
     pub fresh: bool,
 }
 
-/// Copy `src` to `<root>/<release>/<platform>/<its name>`.
+/// Copy `src` to `<root>/<release>/<platform>/<its name>`, hashing what
+/// is read from its one open handle.
 pub fn stage(
-    root: &Path,
+    dirs: &ServedDirs,
     base_url: &str,
     release_id: &str,
     platform: &str,
-    src: &Path,
+    mut src: Source,
 ) -> anyhow::Result<Staged> {
     let name = src
+        .path
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or_else(|| invalid("the build file has no usable name"))?;
-    safe_name("the build's file name", name)?;
-    let dir = served_dir(root, release_id, platform)?;
-    let sha256 = sha256_file(src)?;
-    let path = dir.join(name);
-    let fresh = place(&path, &sha256, |out| {
-        io::copy(&mut fs::File::open(src)?, out).map(|_| ())
+        .ok_or_else(|| invalid("the build file has no usable name"))?
+        .to_string();
+    safe_name("the build's file name", &name)?;
+    let dir = served_dir(&dirs.root, release_id, platform)?;
+    let path = dir.join(&name);
+    let (fresh, sha256) = place(&path, &dirs.staging, |out| {
+        io::copy(&mut src.file, out).map(|_| ())
     })?;
     Ok(Staged {
         path,
@@ -146,15 +117,15 @@ pub fn stage(
 
 /// Write the iOS manifest next to the IPA it installs; returns its URL.
 pub fn write_manifest(
+    dirs: &ServedDirs,
     ipa: &Staged,
     bundle_id: &str,
     version: &str,
     title: &str,
 ) -> anyhow::Result<String> {
     let body = manifest(&ipa.url, bundle_id, version, title);
-    let sha = hex::encode(Sha256::digest(body.as_bytes()));
     let dir = ipa.path.parent().expect("staged in a directory");
-    place(&dir.join("manifest.plist"), &sha, |out| {
+    place(&dir.join("manifest.plist"), &dirs.staging, |out| {
         out.write_all(body.as_bytes())
     })?;
     let base = ipa.url.rsplit_once('/').expect("a url with a path").0;
@@ -228,56 +199,89 @@ fn served_dir(root: &Path, release_id: &str, platform: &str) -> anyhow::Result<P
     Ok(dir)
 }
 
-/// Put a file at `dest` that hashes to `sha256`, written by `write`. True
-/// when it was written; false when the same file is already there. A
-/// different file, or a symlink, is refused: the link goes in without
-/// replacing anything, so a concurrent publish can't be overwritten either.
+/// Put the file `write` produces at `dest`; returns whether it was written
+/// (false when the same file is already there) and its sha256. It is
+/// written in `staging`, outside the served tree, and linked in only once
+/// complete (S2). A different file, or a symlink, at `dest` is refused: the
+/// link goes in without replacing anything, so a concurrent publish can't be
+/// overwritten either.
 fn place(
     dest: &Path,
-    sha256: &str,
-    write: impl FnOnce(&mut fs::File) -> io::Result<()>,
-) -> anyhow::Result<bool> {
-    let taken = |dest: &Path| -> anyhow::Result<bool> {
-        let m = fs::symlink_metadata(dest)?;
-        if !m.is_file() {
-            return Err(forbidden(format!(
-                "{} exists and is not a regular file",
-                dest.display()
-            )));
-        }
-        if sha256_file(dest)? == sha256 {
-            return Ok(false);
-        }
-        Err(conflict(format!(
-            "{} is already published with different content; publish this build in a new release",
-            dest.display()
-        )))
-    };
-    if fs::symlink_metadata(dest).is_ok() {
-        return taken(dest);
-    }
+    staging: &Path,
+    write: impl FnOnce(&mut Hashing) -> io::Result<()>,
+) -> anyhow::Result<(bool, String)> {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
     let name = dest.file_name().and_then(|n| n.to_str()).unwrap_or("build");
-    let tmp = dest.with_file_name(format!(".{name}.{}.part", std::process::id()));
-    let written = (|| -> anyhow::Result<()> {
-        let mut out = fs::OpenOptions::new()
+    let n = NEXT.fetch_add(1, Ordering::Relaxed);
+    let tmp = staging.join(format!(".{name}.{}.{n}.part", std::process::id()));
+    let written = (|| -> anyhow::Result<String> {
+        let out = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&tmp)?;
+        let mut out = Hashing {
+            out,
+            hash: Sha256::new(),
+        };
         write(&mut out)?;
-        out.sync_all()?;
+        out.out.sync_all()?;
+        let sha256 = hex::encode(out.hash.finalize());
         anyhow::ensure!(
             sha256_file(&tmp)? == sha256,
-            "the build changed while it was copied; publish it again"
+            "the staged copy changed while it was written; publish it again"
         );
-        Ok(())
+        Ok(sha256)
     })();
-    let linked = written.and_then(|()| match fs::hard_link(&tmp, dest) {
-        Ok(()) => Ok(true),
-        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => taken(dest),
-        Err(e) => Err(e.into()),
+    let placed = written.and_then(|sha256| {
+        let fresh = if fs::symlink_metadata(dest).is_ok() {
+            taken(dest, &sha256)?
+        } else {
+            match fs::hard_link(&tmp, dest) {
+                Ok(()) => true,
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => taken(dest, &sha256)?,
+                Err(e) => return Err(e.into()),
+            }
+        };
+        Ok((fresh, sha256))
     });
     let _ = fs::remove_file(&tmp);
-    linked
+    placed
+}
+
+/// `dest` is already there: false when it is the same file, else refused.
+fn taken(dest: &Path, sha256: &str) -> anyhow::Result<bool> {
+    let m = fs::symlink_metadata(dest)?;
+    if !m.is_file() {
+        return Err(forbidden(format!(
+            "{} exists and is not a regular file",
+            dest.display()
+        )));
+    }
+    if sha256_file(dest)? == sha256 {
+        return Ok(false);
+    }
+    Err(conflict(format!(
+        "{} is already published with different content; publish this build in a new release",
+        dest.display()
+    )))
+}
+
+/// A writer that hashes what it writes.
+struct Hashing {
+    out: fs::File,
+    hash: Sha256,
+}
+
+impl Write for Hashing {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let n = self.out.write(buf)?;
+        self.hash.update(&buf[..n]);
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.out.flush()
+    }
 }
 
 /// A path component that can't climb out, hide, or need URL encoding.

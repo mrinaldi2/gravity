@@ -91,6 +91,19 @@ impl BotStart<'_> {
             .collect()
     }
 
+    /// The served release builds and their staging folder, as configured
+    /// and, where they exist, resolved.
+    pub fn served_dirs(&self) -> Vec<PathBuf> {
+        let root = crate::board::release::serve::served_root(self.cfg);
+        let mut dirs = Vec::new();
+        for dir in [crate::board::release::confine::staging_for(&root), root] {
+            let real = dir.canonicalize().ok().filter(|real| *real != dir);
+            dirs.push(dir);
+            dirs.extend(real);
+        }
+        dirs
+    }
+
     /// The guard hook's command line: this daemon binary, told whose folders
     /// are whose.
     pub fn guard_command(&self) -> String {
@@ -114,6 +127,7 @@ impl BotStart<'_> {
                     .then(|| PathBuf::from("/Applications")),
             )
             .map(|dir| ("--writable", dir))
+            .chain(self.served_dirs().into_iter().map(|dir| ("--served", dir)))
             .chain(
                 self.trusted_paths()
                     .into_iter()
@@ -175,6 +189,7 @@ impl BotStart<'_> {
             workspace: self.workspace,
             artifacts: self.artifacts,
             trusted_paths: &trusted,
+            served: &self.served_dirs(),
             repo_url: self.repo_url,
             port: self.cfg.port,
             guard_command: self.guard_command(),

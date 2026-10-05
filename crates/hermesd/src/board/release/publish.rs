@@ -18,6 +18,7 @@ use crate::decisions::{conflict, forbidden, invalid, not_found};
 use crate::messaging::{self, daemon_sender, Dm};
 
 use super::assemble::attach_build;
+use super::confine;
 use super::lifecycle::tell_installers;
 use super::model::{Release, ReleaseBuild, ReleaseStatus};
 use super::serve::{self, Staged};
@@ -67,8 +68,9 @@ pub fn publish(
     let cfg = &app.cfg;
     let base = serve::base_url(cfg)?;
     let artifacts = crate::paths::artifacts_dir(cfg, &project.dir_name);
-    let src = serve::source(cfg, &artifacts, Path::new(req.file.trim()))?;
+    let src = confine::source(cfg, &artifacts, Path::new(req.file.trim()))?;
     let name = src
+        .path
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or_default()
@@ -99,17 +101,12 @@ pub fn publish(
         ));
     }
 
-    let staged = serve::stage(
-        &serve::served_root(cfg),
-        &base,
-        &release.id,
-        &platform,
-        &src,
-    )?;
+    let dirs = confine::prepare(cfg)?;
+    let staged = serve::stage(&dirs, &base, &release.id, &platform, src)?;
     let install_url = match bundle_id.filter(|_| ios) {
         Some(bundle) => {
             let title = cfg.releases.ios_title.as_deref().unwrap_or("The Hermes");
-            let manifest = serve::write_manifest(&staged, &bundle, &version, title)?;
+            let manifest = serve::write_manifest(&dirs, &staged, &bundle, &version, title)?;
             format!("itms-services://?action=download-manifest&url={manifest}")
         }
         None => staged.url.clone(),

@@ -22,6 +22,7 @@ pub(super) fn ctx() -> GuardContext {
         releases: false,
         allow_main: false,
         full: false,
+        served: Vec::new(),
     }
 }
 
@@ -269,4 +270,80 @@ fn bsd_sed_in_place_takes_the_expression_as_the_script() {
     ] {
         assert_eq!(bash(command), None, "{command} was blocked");
     }
+}
+
+/// CE-010 M3: the served release builds are the daemon's to write, for every
+/// bot, DevOps with Publish included; reading them stays allowed.
+#[test]
+fn only_the_daemon_writes_the_served_builds() {
+    let served = "/Users/me/.gravity/releases";
+    // A served dir configured inside the artifacts, which bots may change.
+    let inside = "/Users/me/.gravity/projects/p/artifacts/served";
+    let devops = GuardContext {
+        bot_slug: Some("devops".into()),
+        releases: true,
+        served: vec![PathBuf::from(served), PathBuf::from(inside)],
+        ..ctx()
+    };
+    let call = |tool: &str, input: serde_json::Value| {
+        decide(
+            &json!({ "tool_name": tool, "tool_input": input,
+                     "cwd": "/Users/me/.gravity/projects/p/bots/dev/workspace" }),
+            &devops,
+        )
+    };
+    for path in [
+        format!("{served}/r1/ios/evil.html"),
+        format!("{served}/r1/ios/manifest.plist"),
+        "../../../../../releases/r1/ios/x.html".to_string(),
+        format!("{inside}/r1/desktop-mac/app.zip"),
+    ] {
+        for tool in ["Write", "Edit", "MultiEdit"] {
+            let reason = call(tool, json!({ "file_path": path }))
+                .unwrap_or_else(|| panic!("{tool} {path} was let through"));
+            assert!(reason.contains("served release builds"), "{reason}");
+        }
+    }
+    for command in [
+        format!("cp evil.html {served}/r1/ios/"),
+        format!("echo '<plist/>' > {served}/r1/ios/manifest.plist"),
+        "cat x >> ~/.gravity/releases/r1/ios/index.html".to_string(),
+        format!("cd {served} && rm -rf r1"),
+        format!("mv app.zip {inside}/r1/desktop-mac/app.zip"),
+    ] {
+        assert!(
+            call("Bash", json!({ "command": command })).is_some(),
+            "{command} was let through"
+        );
+    }
+    for (tool, input) in [
+        (
+            "Read",
+            json!({ "file_path": format!("{served}/r1/ios/manifest.plist") }),
+        ),
+        (
+            "Bash",
+            json!({ "command": format!("shasum -a 256 {served}/r1/ios/App.ipa") }),
+        ),
+        (
+            "Bash",
+            json!({ "command": "cp notes.md /Users/me/.gravity/projects/p/artifacts/" }),
+        ),
+        (
+            "Write",
+            json!({ "file_path": "/Users/me/.gravity/projects/p/artifacts/x.md" }),
+        ),
+    ] {
+        assert_eq!(
+            call(tool, input.clone()),
+            None,
+            "{tool} {input} was blocked"
+        );
+    }
+    // The generated settings deny the Edit tool there too, for DevOps as well.
+    let deny = rules(
+        &input(PermissionProfile::Trusted, &[PermissionExtra::Publish]),
+        "deny",
+    );
+    assert!(deny.contains(&format!("Edit(/{served}/**)")), "{deny:#?}");
 }

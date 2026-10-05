@@ -169,6 +169,7 @@ fn a_glob_through_the_old_home_link_is_denied_before_and_after_the_move() {
             releases: false,
             allow_main: false,
             full: false,
+            served: Vec::new(),
         };
         let cwd = home
             .join("projects/p/bots/dev/workspace")

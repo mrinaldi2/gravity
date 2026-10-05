@@ -298,16 +298,18 @@ impl Config {
             Some(p) => p.to_path_buf(),
             None => default_home().join(crate::brand::daemon_file(".toml")),
         };
-        if path.exists() {
+        let mut cfg = if path.exists() {
             let raw = std::fs::read_to_string(&path)
                 .with_context(|| format!("reading {}", path.display()))?;
             let mut cfg: Config =
                 toml::from_str(&raw).with_context(|| format!("parsing {}", path.display()))?;
             cfg.configured_port = cfg.port;
-            Ok(cfg)
+            cfg
         } else {
-            Ok(Config::default())
-        }
+            Config::default()
+        };
+        crate::board::release::confine::check_at_load(&mut cfg);
+        Ok(cfg)
     }
 
     pub fn db_path(&self) -> PathBuf {

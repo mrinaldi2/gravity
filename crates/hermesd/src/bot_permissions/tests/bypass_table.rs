@@ -270,6 +270,7 @@ fn an_existing_symlink_cannot_launder_a_path() {
         releases: false,
         allow_main: false,
         full: true,
+        served: Vec::new(),
     };
     let run = |command: &str| {
         decide(

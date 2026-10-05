@@ -22,6 +22,7 @@ use model::Release;
 
 pub mod assemble;
 pub mod cli;
+pub mod confine;
 pub mod deploy;
 pub mod lifecycle;
 pub mod model;

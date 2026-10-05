@@ -73,6 +73,7 @@ fn a_glob_in_any_windows_spelling_is_denied_through_the_junction() {
         releases: false,
         allow_main: false,
         full: false,
+        served: Vec::new(),
     };
     let cwd = new.join("projects/p/bots/dev/workspace");
     let call = |tool: &str, input: serde_json::Value| {
