@@ -71,6 +71,25 @@ instead.
    a checkout first has its unpushed work saved (see below). Its history
    and workspace are kept until retention reclaims them. A temporary bot that
    is never given a task is retired after ten minutes.
+5. **Cleaned up.** Right after it retires, the daemon deletes the worker's
+   `repo/` clone and its `scratch/` folder (`$THEHERMES_SCRATCH`), where the
+   worker is told to put any other clone, worktree or build output. A git
+   worktree there is also pruned from the repository it came from. The bot
+   needs no permission for this, and it doesn't wait on the bot: a worker
+   that stops early is cleaned up too. Nothing is deleted before the
+   commits no remote has are kept (ARCH-R40): each top-level git repository
+   in `repo/` and `scratch/` with such a ref is first written to
+   `<workspace>/salvage/<name>.bundle` (`git bundle create … --branches
+   --not --remotes`), and the parent is told the path. A repository that
+   can't be bundled is kept in place and reported instead. The daemon only
+   deletes inside a retired worker's own workspace under `<home>/projects`;
+   anything else is refused and logged. A failed salvage is not marked
+   salvaged. A folder still locked by an exiting
+   process is retried on the next pass, and every retired worker is swept
+   again when the daemon starts. The rest of the workspace (its notes and
+   `salvage/`) stays until retention. On Windows, workers share one Cargo target per machine
+   (`CARGO_TARGET_DIR=<home>/cache/worker-target`), deleted once the last
+   worker has retired (H-109).
 
 If the parent is deleted, its queued spawns are dropped and its running
 workers' tasks are cancelled. If the owner deletes a running worker, its task

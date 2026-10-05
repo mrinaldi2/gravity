@@ -25,9 +25,12 @@ use crate::db::Actor;
 use crate::mcp::tasks::close_cancelled;
 use crate::messaging::daemon_sender;
 
+pub mod bundle;
+mod cleanup;
 mod git;
 mod place;
 pub mod repo;
+pub mod scratch;
 mod spawn;
 
 pub use place::place_queued;
@@ -53,6 +56,13 @@ pub struct Workers {
     offering: StdMutex<HashSet<String>>,
     /// Retiring workers whose unpushed work is being saved.
     salvaging: StdMutex<HashSet<String>>,
+    /// Whether retired workers' leftovers were swept since the daemon started.
+    swept: std::sync::atomic::AtomicBool,
+    /// Retired workers whose clone couldn't be removed yet.
+    unclean: StdMutex<HashSet<String>>,
+    /// Retiring workers whose salvage failed: they retire unmarked, and
+    /// their commits are bundled before their clone is removed.
+    salvage_failed: StdMutex<HashSet<String>>,
 }
 
 impl Workers {
@@ -80,7 +90,8 @@ impl Workers {
 }
 
 /// Written to a retiring worker's workspace once its unpushed work has been
-/// saved, or found to need none, so a later pass does not try again.
+/// saved, or found to need none, so a later pass does not try again. Never
+/// written when saving failed.
 const SALVAGED_MARKER: &str = ".gravity-salvaged";
 
 /// Tell clients a project's queue changed.
@@ -214,8 +225,12 @@ pub async fn reconcile(app: &Arc<AppState>) -> anyhow::Result<()> {
         };
         if let Err(error) = botmgmt::archive_bot(app, &bot, &actor, Some("worker finished")) {
             tracing::warn!(bot_id = %bot.id, %error, "retiring a worker failed");
+            continue;
         }
+        Workers::set(&app.workers.salvage_failed).remove(&bot.id);
+        Workers::set(&app.workers.unclean).insert(bot.id.clone());
     }
+    cleanup::clean_retired(app).await;
     for project_id in app.db.projects_with_queued_workers()? {
         place_queued(app, &project_id).await;
     }
@@ -231,7 +246,7 @@ fn salvaged(app: &Arc<AppState>, bot: &bus::Bot) -> bool {
     let Some(checkout) = repo::checkout_of(&workspace) else {
         return true;
     };
-    if marker.exists() {
+    if marker.exists() || Workers::set(&app.workers.salvage_failed).contains(&bot.id) {
         return true;
     }
     if !Workers::set(&app.workers.salvaging).insert(bot.id.clone()) {
@@ -246,7 +261,9 @@ fn salvaged(app: &Arc<AppState>, bot: &bus::Bot) -> bool {
         if let Some(line) = saved.report(&checkout) {
             tell_parent(&app, &bot, &line);
         }
-        if let Err(error) = std::fs::write(&marker, "") {
+        if matches!(saved, repo::Salvaged::Failed(_)) {
+            Workers::set(&app.workers.salvage_failed).insert(bot.id.clone());
+        } else if let Err(error) = std::fs::write(&marker, "") {
             tracing::warn!(bot_id = %bot.id, %error, "could not mark a worker salvaged");
         }
         Workers::set(&app.workers.salvaging).remove(&bot.id);
@@ -261,6 +278,19 @@ fn tell_parent(app: &Arc<AppState>, bot: &bus::Bot, line: &str) {
     let Ok(Some(task)) = app.db.latest_task_to(&bot.id) else {
         return;
     };
+    let ended = match task.state {
+        TaskState::Done => "finished".to_string(),
+        state => format!("stopped: its task was {}", state.as_str()),
+    };
+    let body = format!("{} {ended}. {line}", bot.name);
+    notify_parent(app, bot, &crate::mcp::bot_sender(bot), &body);
+}
+
+/// A note from `sender` to whoever gave `bot` its task, on that task.
+fn notify_parent(app: &Arc<AppState>, bot: &bus::Bot, sender: &bus::Sender, body: &str) {
+    let Ok(Some(task)) = app.db.latest_task_to(&bot.id) else {
+        return;
+    };
     let Some(parent) = task
         .from_bot_id
         .as_deref()
@@ -268,16 +298,10 @@ fn tell_parent(app: &Arc<AppState>, bot: &bus::Bot, line: &str) {
     else {
         return;
     };
-    let ended = match task.state {
-        TaskState::Done => "finished".to_string(),
-        state => format!("stopped: its task was {}", state.as_str()),
-    };
-    let body = format!("{} {ended}. {line}", bot.name);
-    let sender = crate::mcp::bot_sender(bot);
     if let Err(error) = crate::messaging::send_dm(
         &app.db,
         &app.events,
-        crate::messaging::Dm::new(&parent.id, &sender, bus::MessageKind::Note, &body)
+        crate::messaging::Dm::new(&parent.id, sender, bus::MessageKind::Note, body)
             .re(&task.origin_message_id),
     ) {
         tracing::warn!(bot_id = %bot.id, %error, "could not tell the parent about saved work");

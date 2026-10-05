@@ -119,3 +119,45 @@ fn a_glob_in_any_windows_spelling_is_denied_through_the_junction() {
         None
     );
 }
+
+/// Git Bash's `/c/…` spelling of a bot's own folder is its own folder, not
+/// `C:\c\…` under the current one (H-109): a worker can remove its clone.
+#[test]
+fn a_bots_own_folder_in_git_bash_spelling_is_its_own() {
+    let target = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target");
+    std::fs::create_dir_all(&target).expect("mkdir target");
+    let root = tempfile::Builder::new()
+        .prefix("guard-msys-")
+        .tempdir_in(&target)
+        .expect("root");
+    let bot = root
+        .path()
+        .canonicalize()
+        .expect("real root")
+        .join("bots/dev");
+    let workspace = bot.join("workspace");
+    std::fs::create_dir_all(workspace.join("repo/target")).expect("mkdir");
+    let ctx = GuardContext {
+        home: root.path().join("home"),
+        user_home: root.path().join("user"),
+        writable: vec![bot.clone()],
+        worktrees: Vec::new(),
+        bot_slug: Some("dev".into()),
+        releases: false,
+        allow_main: false,
+        full: false,
+        served: Vec::new(),
+    };
+    let g = spelled(&workspace);
+    let msys = format!("/{}{}", g[..1].to_lowercase(), &g[2..]);
+    let call = |command: String| {
+        decide(
+            &json!({ "tool_name": "Bash", "tool_input": { "command": command },
+                     "cwd": workspace }),
+            &ctx,
+        )
+    };
+    assert_eq!(call(format!("rm -rf {msys}/repo/target")), None);
+    assert_eq!(call(format!("rm -rf {g}/repo/target")), None);
+    assert!(call("rm -rf /c/Windows/Temp/x".to_string()).is_some());
+}
