@@ -448,10 +448,13 @@ Bots run as the owner's user, so any secret a bot holds can be read by every oth
 
 The owner is known by their app's code identity or by an OK from them in the app, not by `client.token`, which any bot can read.
 
-- **Pin:** `hermesd service install` run from inside the app writes `<home>/secrets/owner-app.json`. On macOS this holds the app bundle's designated requirement. On Windows it holds the folder the app is installed in. The daemon reads the pin again on every check.
+- **The app's identity (H-110)** is compiled into hermesd; nothing is pinned in a file a bot could rewrite. A T4 `secrets/owner-app.json` is deleted at start.
+  - macOS: the code requirement `anchor apple generic and identifier "com.manuelrinaldi.thehermes" and certificate leaf[subject.OU] = "<Team ID>"`. The Team ID comes from `HERMES_TEAM_ID` at build time; without it a placeholder no app matches, so the app falls back to `client.token` in phase 1.
+  - Windows: an executable directly in `<Program Files>\The Hermes` (from `SHGetKnownFolderPath`, not the environment), other than `hermesd`. The setup installs per machine, so only an administrator can change that folder.
+  - A build with `HERMES_DEV_BUILD=1` (`scripts/dev.sh`) never enforces phase 2 storage, so an unsigned dev app keeps its `client.token`.
 - **Where to connect:** the daemon writes its endpoint address to `<home>/run/endpoint`.
 - **Methods.** A client sends one JSON-RPC request on the endpoint, before any bot traffic, and the connection closes after the answer.
-  - `hermes/owner_ticket`: the daemon checks the caller against the pin. On macOS that's the peer's audit token checked against the requirement. On Windows the peer's executable must be inside the pinned folder and must not be `hermesd`. A caller that passes gets `{"ticket": "…"}`.
+  - `hermes/owner_ticket`: the daemon checks the caller against the app's identity: on macOS the peer's audit token against the requirement, on Windows the peer's executable path. A caller that passes gets `{"ticket": "…"}`.
   - `hermes/owner_request {"command": "…", "cwd": "…"}`: the daemon raises a permission card filed under bot id `terminal` (tool `Terminal command`) and waits for the owner's answer. If the owner allows it, the caller gets a ticket.
   - The card's `origin` (also its `input`) carries separate fields (UX-014): `command` (no pid), `pid`, `process` (the pid's executable name), `launched_from` (the nearest ancestor that is an app or terminal: Terminal, iTerm2, Code, claude…), `cwd` (read from the OS; the client's `cwd` only where the OS can't tell, i.e. Windows) and `bot` (the name of the bot whose workspace holds `cwd`). A field that can't be read is left out. The client composes every line and never shows `summary`.
   - The app answers these cards with `allow_once` ("Allow this command") or `deny` (no reason); it offers no "Allow for session" and no single-key shortcuts for a terminal command.
@@ -460,6 +463,22 @@ The owner is known by their app's code identity or by an OK from them in the app
   - A caller inside a bot session is always refused: "a bot can't act as the owner" for `owner_ticket`, "Commands that act as the owner can't run from a bot's session." for `owner_request`.
   - Other refusals: "not the owner's app"; for `owner_request`, which the CLI prints as is, "You denied this command in The Hermes. It did not run.", "No answer in The Hermes, so the command did not run." and "Open The Hermes on this computer to allow this command, then run it again." (no app is connected to show the card).
 - **Clients:** the desktop app asks for a ticket on every connect. `hermesd` CLI owner commands ask the owner to allow them, printing "Asking for your OK in The Hermes app…". Both fall back to `client.token` only when the daemon has no endpoint (a daemon older than T4). The daemon accepts `client.token` until T6.
+- **Approve:** only a connection with the `approve` grant can answer a `terminal` card. Other connections get `forbidden`. Bot cards still need only `control`.
+
+### Secrets at rest (T5)
+
+- **Device tokens:** a newly paired device is stored as `secrets/device-<id>.sha256`, the sha256 of its token. The phone holds the only plaintext. Older `device-<id>.token` files still work.
+- **Phase 2:** this is `[auth] bot_bearer = "refuse"`, set per machine. At start, the daemon:
+  - hashes each old device file and deletes the plaintext;
+  - deletes `client.token` and every `bot-*.token`;
+  - never writes those files again.
+
+  The owner then connects only with a ticket (T4).
+- **Rolling back from phase 2:** the owner has to re-pair phones and run `hermesd service install` again, which writes a new `client.token`.
+- **Peer tokens:** `[auth] peer_tokens = "file"` (the default) or `"keychain"`.
+  - With `keychain` on macOS, `peer-*.token` files move into the login Keychain at start. The Keychain item's ACL trusts only the hermesd binary that created it.
+  - hermesd is ad-hoc signed, so after each update macOS asks once per link before the daemon may read it. Turn `keychain` on once hermesd is code-signed.
+  - On Windows and Linux the setting falls back to files. This is a known residual.
 
 ## Bot self-management
 

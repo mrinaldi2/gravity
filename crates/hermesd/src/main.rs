@@ -84,6 +84,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let mut cfg = Config::load(config_path.as_deref())?;
+    if let Some(e) = cfg.auth.hold_phase_two(hermesd::bus_auth::HOOKS_OVER_IPC) {
+        tracing::error!("{e}");
+    }
 
     // Everything but the service and the migration itself would otherwise
     // start a fresh, empty home next to the one holding the data.
@@ -172,12 +175,6 @@ async fn main() -> anyhow::Result<()> {
                         cfg.port,
                         pending.as_ref(),
                     )?;
-                    // The app this sidecar ships in is the owner (H-044 T4).
-                    match hermesd::bus_auth::owner::pin_app(&cfg.home, &source) {
-                        Ok(Some(_)) => println!("Pinned the app that installed the service"),
-                        Ok(None) => println!("Not inside an app: nothing pinned"),
-                        Err(e) => eprintln!("Couldn't pin the app: {e:#}"),
-                    }
                     println!(
                         "hermesd installed to {} and running ({})",
                         paths.bin_path().display(),

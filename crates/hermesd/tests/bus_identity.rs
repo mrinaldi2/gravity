@@ -3,7 +3,6 @@
 //! the daemon decides who it is from its place under a recorded session
 //! root, never from anything it sends. A stolen bearer token is worthless
 //! once bearers are refused.
-#![cfg(unix)]
 
 mod common;
 

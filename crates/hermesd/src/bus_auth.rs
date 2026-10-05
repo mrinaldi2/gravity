@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub mod app_identity;
 pub mod hook;
 pub mod ipc;
 pub mod origin;
@@ -53,6 +54,42 @@ pub enum BotTransport {
 pub struct AuthConfig {
     pub bot_bearer: BearerPolicy,
     pub bot_transport: BotTransport,
+    /// Where peer link tokens live: `file` or (macOS) `keychain` (T5).
+    pub peer_tokens: crate::secrets::PeerTokens,
+}
+
+/// Whether this build's hooks reach the daemon over the local endpoint
+/// (`hermesd hook <event>`, H-044 T3). Phase 2 refuses bearer tokens on
+/// `/hook` and `/hook/permission` too, so without it every bot's SessionStart
+/// and permission prompts would fail. A const, not a config key: only the
+/// code that ships the hook transport can claim it, and T3 sets it to `true`.
+pub const HOOKS_OVER_IPC: bool = false;
+
+impl AuthConfig {
+    /// Holds a machine in phase 1 when phase 2 is asked for but this build
+    /// has no hook transport (`hooks_over_ipc`, normally [`HOOKS_OVER_IPC`]).
+    /// Returns the error to report; the config is then `accept` again.
+    pub fn hold_phase_two(&mut self, hooks_over_ipc: bool) -> Option<String> {
+        if self.bot_bearer != BearerPolicy::Refuse || hooks_over_ipc {
+            return None;
+        }
+        self.bot_bearer = BearerPolicy::Accept;
+        Some(
+            "[auth] bot_bearer = \"refuse\" ignored: this build has no `hermesd hook` \
+             transport (H-044 T3), so refusing bearers would break every bot's hooks \
+             and delete the tokens needed to roll back. Staying in phase 1."
+                .to_string(),
+        )
+    }
+
+    /// Phase 2 keeps no owner or bot token on disk and hashes device tokens.
+    pub fn storage(&self) -> crate::secrets::Storage {
+        crate::secrets::Storage {
+            // A dev build never enforces: its unsigned app needs client.token.
+            enforce: self.bot_bearer == BearerPolicy::Refuse && !app_identity::DEV_BUILD,
+            peer_tokens: self.peer_tokens,
+        }
+    }
 }
 
 /// When each bot last used a bearer token, accepted or refused: what decides
@@ -165,4 +202,38 @@ pub fn bearer_bot(app: &crate::app::AppState, token: &str) -> Option<String> {
     let refused = app.cfg.auth.bot_bearer == BearerPolicy::Refuse;
     app.bearers.record(&bot_id, refused);
     (!refused).then_some(bot_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn refusing() -> AuthConfig {
+        AuthConfig {
+            bot_bearer: BearerPolicy::Refuse,
+            ..AuthConfig::default()
+        }
+    }
+
+    #[test]
+    fn phase_two_waits_for_the_hook_transport() {
+        let mut auth = refusing();
+        let error = auth.hold_phase_two(false).expect("refused");
+        assert!(
+            error.contains("T3") && error.contains("hermesd hook"),
+            "{error}"
+        );
+        assert_eq!(auth.bot_bearer, BearerPolicy::Accept, "stays in phase 1");
+        assert!(!auth.storage().enforce, "no token is deleted");
+
+        let mut auth = refusing();
+        assert_eq!(auth.hold_phase_two(true), None);
+        assert!(
+            auth.storage().enforce,
+            "phase 2 once hooks have their own way in"
+        );
+
+        let mut auth = AuthConfig::default();
+        assert_eq!(auth.hold_phase_two(false), None, "phase 1 needs nothing");
+    }
 }

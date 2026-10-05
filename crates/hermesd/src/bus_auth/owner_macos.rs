@@ -1,13 +1,11 @@
-//! macOS: the app's code signature (H-044 §3). `service install` pins the
-//! app bundle's designated requirement (an ad-hoc build's is its cdhash; a
-//! Developer ID build's names its team), and a peer is the app when the
-//! running process, named by its audit token, satisfies that requirement.
+//! macOS: the app's code signature (H-044 §3, H-110). A peer is the owner's
+//! app when the running process, named by its audit token, satisfies the
+//! requirement compiled into hermesd: signed by Apple's Developer ID chain
+//! for the owner's team, as the app's bundle identifier.
 
+use super::owner::Peer;
 use std::ffi::c_void;
 use std::os::raw::c_char;
-use std::path::Path;
-
-use super::owner::{Peer, Pin};
 
 type CFRef = *const c_void;
 
@@ -40,6 +38,7 @@ extern "C" {
     fn CFStringGetLength(string: CFRef) -> isize;
     fn CFStringGetMaximumSizeForEncoding(length: isize, encoding: u32) -> isize;
     fn CFStringGetCString(string: CFRef, buffer: *mut c_char, size: isize, encoding: u32) -> u8;
+    #[cfg(test)]
     fn CFURLCreateFromFileSystemRepresentation(
         alloc: CFRef,
         path: *const u8,
@@ -60,8 +59,11 @@ extern "C" {
     ) -> i32;
     fn SecCodeCheckValidity(code: CFRef, flags: u32, requirement: CFRef) -> i32;
     fn SecRequirementCreateWithString(text: CFRef, flags: u32, requirement: *mut CFRef) -> i32;
+    #[cfg(test)]
     fn SecStaticCodeCreateWithPath(path: CFRef, flags: u32, code: *mut CFRef) -> i32;
+    #[cfg(test)]
     fn SecCodeCopyDesignatedRequirement(code: CFRef, flags: u32, requirement: *mut CFRef) -> i32;
+    #[cfg(test)]
     fn SecRequirementCopyString(requirement: CFRef, flags: u32, text: *mut CFRef) -> i32;
 }
 
@@ -94,6 +96,7 @@ fn cf_string(text: &str) -> Option<Owned> {
     })
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn rust_string(string: &Owned) -> Option<String> {
     // SAFETY: `string` is a live CFString; the buffer is sized for it.
     unsafe {
@@ -107,27 +110,10 @@ fn rust_string(string: &Owned) -> Option<String> {
     }
 }
 
-/// The app bundle the sidecar ships in: `<App>.app/Contents/MacOS/hermesd`.
-pub fn pin_for(sidecar: &Path) -> anyhow::Result<Option<Pin>> {
-    let Some(bundle) = sidecar
-        .parent()
-        .and_then(Path::parent)
-        .and_then(Path::parent)
-    else {
-        return Ok(None);
-    };
-    if bundle.extension().and_then(|e| e.to_str()) != Some("app") {
-        return Ok(None);
-    }
-    Ok(Some(Pin {
-        requirement: Some(requirement_of(bundle)?),
-        app_dir: None,
-    }))
-}
-
 /// The designated requirement of the code at `path`, as text: what any later
 /// build must satisfy to count as the same app.
-fn requirement_of(path: &Path) -> anyhow::Result<String> {
+#[cfg(test)]
+fn requirement_of(path: &std::path::Path) -> anyhow::Result<String> {
     let path = path.to_string_lossy();
     // SAFETY: each object is checked for null and released by `Owned`.
     unsafe {
@@ -179,10 +165,14 @@ pub fn peer_audit_token(fd: std::os::fd::RawFd) -> Option<[u32; 8]> {
     (ok == 0 && len as usize == std::mem::size_of_val(&token)).then_some(token)
 }
 
-/// The running process the audit token names satisfies the pinned
-/// requirement: signed as the pinned app, and not modified since.
-pub fn is_pinned_app(pin: &Pin, peer: &Peer) -> bool {
-    let (Some(requirement), Some(token)) = (pin.requirement.as_deref(), peer.audit_token) else {
+/// The peer is the owner's signed app, unmodified since it was signed.
+pub fn is_owner_app(peer: &Peer) -> bool {
+    satisfies(&super::app_identity::requirement(), peer)
+}
+
+/// The running process the audit token names satisfies `requirement`.
+fn satisfies(requirement: &str, peer: &Peer) -> bool {
+    let Some(token) = peer.audit_token else {
         return false;
     };
     // SAFETY: each object is checked for null and released by `Owned`;
@@ -235,7 +225,7 @@ mod tests {
 
     /// The real signature check, against this test binary: its own audit
     /// token (from a socket pair) satisfies its own designated requirement,
-    /// and not one for another app.
+    /// and not one for another app, nor the owner's app requirement.
     #[test]
     fn a_process_satisfies_its_own_requirement_and_no_other() {
         let exe = std::env::current_exe().expect("exe");
@@ -246,23 +236,25 @@ mod tests {
             pid: std::process::id(),
             audit_token: Some(token),
         };
-        let pin = |requirement: &str| Pin {
-            requirement: Some(requirement.to_string()),
-            app_dir: None,
+        assert!(satisfies(&requirement, &me), "{requirement}");
+        assert!(!satisfies("identifier \"com.example.other\"", &me));
+        let no_token = Peer {
+            audit_token: None,
+            ..me
         };
-        assert!(is_pinned_app(&pin(&requirement), &me), "{requirement}");
-        assert!(!is_pinned_app(
-            &pin("identifier \"com.example.other\""),
-            &me
-        ));
-        assert!(!is_pinned_app(
-            &pin(&requirement),
-            &Peer {
-                audit_token: None,
-                ..me
-            }
-        ));
-        // A bare binary isn't in an app: nothing to pin.
-        assert!(pin_for(&exe).expect("checked").is_none());
+        assert!(!satisfies(&requirement, &no_token));
+        assert!(!is_owner_app(&me), "a test binary is not the owner's app");
+    }
+
+    /// The compiled requirement is one Security can parse: an unparsable
+    /// one would refuse every app without saying why.
+    #[test]
+    fn the_compiled_requirement_parses() {
+        let text = cf_string(&super::super::app_identity::requirement()).expect("cf");
+        let mut parsed: CFRef = std::ptr::null();
+        // SAFETY: `text` is a live CFString; `parsed` is released below.
+        let status = unsafe { SecRequirementCreateWithString(text.0, DEFAULT_FLAGS, &mut parsed) };
+        assert_eq!(status, 0);
+        drop(Owned::new(parsed));
     }
 }

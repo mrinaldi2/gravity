@@ -119,8 +119,46 @@
   Pop $0
 !macroend
 
+; Releases before H-110 installed per user (%LOCALAPPDATA%\The Hermes, an
+; HKCU uninstall entry). This setup installs per machine into Program Files,
+; where only an administrator can change the app the daemon trusts as the
+; owner's. Run the per-user copy's own uninstaller, silently: its hook stops
+; and removes the background task (POSTINSTALL installs it again from here)
+; and leaves the daemon home (%USERPROFILE%\.thehermes) alone. A silent
+; uninstall never ticks "delete app data", so the app's own data stays too.
+; HKCU is the owner's when they approve the UAC prompt themselves; if another
+; account elevates, nothing is found and the owner uninstalls the old copy
+; from Settings > Apps instead.
+!macro HERMES_REMOVE_PER_USER_INSTALL
+  Push $0
+  Push $5
+  ReadRegStr $5 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCTNAME}" "InstallLocation"
+  nsis_tauri_utils::StrReplace "$5" '"' ""
+  Pop $5
+  ${If} $5 != ""
+  ${AndIf} $5 != $INSTDIR
+  ${AndIf} ${FileExists} "$5\uninstall.exe"
+    DetailPrint "Removing the earlier per-user install in $5"
+    ; _?= runs the uninstaller in place, so ExecWait waits for it.
+    ExecWait '"$5\uninstall.exe" /S _?=$5' $0
+    ${If} $0 != 0
+      DetailPrint "The per-user uninstaller exited with $0"
+    ${EndIf}
+    Delete "$5\uninstall.exe"
+    RMDir "$5"
+  ${EndIf}
+  ; The entry goes even if its folder was already gone, so Apps & features
+  ; lists one The Hermes.
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCTNAME}"
+  DeleteRegKey HKCU "Software\${MANUFACTURER}\${PRODUCTNAME}"
+  DeleteRegKey /ifempty HKCU "Software\${MANUFACTURER}"
+  Pop $5
+  Pop $0
+!macroend
+
 !macro NSIS_HOOK_PREINSTALL
   !insertmacro GRAVITY_TAKE_OVER_LEGACY_INSTALL
+  !insertmacro HERMES_REMOVE_PER_USER_INSTALL
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL

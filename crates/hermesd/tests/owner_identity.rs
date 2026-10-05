@@ -3,24 +3,23 @@
 //! app; a CLI owner command gets one only after the owner allows it on a
 //! card. Bots get neither. The real signature check can't run in CI, so a
 //! double stands in for it, as the spec asks.
-#![cfg(unix)]
 
 mod common;
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use common::proxy::Proxy;
+use common::proxy::{is_launched_by, Proxy};
 use common::*;
 use hermesd::bus_auth::owner::{self, CodeCheck, Peer};
 use serde_json::{json, Value};
 
-/// The pinned app is the process with this pid, and nothing else.
+/// The owner's app is the proxy with this launcher pid, and nothing else.
 struct AppIs(u32);
 
 impl CodeCheck for AppIs {
     fn is_owner_app(&self, peer: &Peer) -> bool {
-        peer.pid == self.0
+        is_launched_by(self.0, peer.pid)
     }
 }
 

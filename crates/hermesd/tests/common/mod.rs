@@ -20,7 +20,6 @@ use tokio_tungstenite::tungstenite::Message as WsMsg;
 pub mod board;
 pub mod devtools;
 pub mod peers;
-#[cfg(unix)]
 pub mod proxy;
 pub mod releases;
 pub mod repo;
@@ -99,7 +98,11 @@ pub struct WsClient {
 impl WsClient {
     /// Connects as the desktop app: it shows permission and terminal cards.
     pub async fn connect(d: &TestDaemon) -> Self {
-        Self::connect_as(d, d.app.secrets.client_token()).await
+        match d.app.secrets.client_token() {
+            // Phase 2 has no client token: the owner's app gets a ticket.
+            "" => Self::connect_as(d, &d.app.owner.mint()).await,
+            token => Self::connect_as(d, token).await,
+        }
     }
 
     /// Connects as the owner, saying it supports these hello features only.

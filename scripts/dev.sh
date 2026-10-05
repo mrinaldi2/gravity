@@ -38,7 +38,9 @@ runtime = "$RUNTIME"
 supervision_interval_ms = 1000
 EOF
 
-cargo build -p hermesd --manifest-path "$ROOT/Cargo.toml"
+# An explicit dev build: never enforces phase 2 storage, since the app from
+# `tauri dev` is unsigned and connects with client.token (H-110).
+HERMES_DEV_BUILD=1 cargo build -p hermesd --manifest-path "$ROOT/Cargo.toml"
 
 # Job control puts each background child in its own process group, so cleanup
 # can signal the whole group. `tauri dev` in particular spawns Vite and the app
