@@ -10,6 +10,7 @@ pub mod feed;
 pub mod guards;
 pub mod handback;
 pub mod import;
+pub mod meetings;
 pub mod mirror;
 pub mod model;
 pub mod moves;

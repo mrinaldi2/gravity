@@ -36,6 +36,7 @@ mod decisions_publish;
 mod dispatch;
 mod entities;
 mod links;
+mod meetings;
 mod messaging;
 mod peers;
 mod permissions;

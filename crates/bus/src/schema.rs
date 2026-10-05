@@ -14,6 +14,7 @@ mod board;
 mod board_links;
 mod decisions;
 mod history;
+mod meetings;
 mod peers;
 mod permissions;
 mod releases;
@@ -27,6 +28,7 @@ use history::{
     MIGRATION_10, MIGRATION_11, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6,
     MIGRATION_7, MIGRATION_8, MIGRATION_9,
 };
+use meetings::MIGRATION_MEETINGS;
 use peers::{MIGRATION_14, MIGRATION_15, MIGRATION_16};
 use permissions::{MIGRATION_PERMISSIONS, MIGRATION_PERMISSION_EXTRAS_RELEASE_MAIN};
 use releases::{MIGRATION_RELEASES, MIGRATION_RELEASE_EVENTS};
@@ -60,6 +62,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_RELEASES,
     MIGRATION_RELEASE_EVENTS,
     MIGRATION_BOARD_WORKFLOW,
+    MIGRATION_MEETINGS,
 ];
 
 #[cfg(test)]

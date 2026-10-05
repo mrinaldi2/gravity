@@ -7,6 +7,7 @@
 
 /// Author of a change, as stored in `bot_revision.changed_by` and
 /// `decision.answered_by`.
+#[derive(Clone, Copy)]
 pub enum Actor<'a> {
     /// The owner, on the owner token.
     User,

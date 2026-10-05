@@ -1,9 +1,10 @@
-//! `dashboard_get {project_id}` (H-076): what U5's first four widgets show,
-//! in one read (H-018 §2.1). Needs you: releases awaiting a ruling, open and
-//! relayed decisions, P0 items, recent WIP overrides. The board's column
-//! strip with its blocked, stale, done and rework counts. The current
-//! release and the last two. The team, each bot with its items in Doing and
-//! its open tasks. Meetings and action items come with their own item (H-102).
+//! `dashboard_get {project_id}` (H-076): what U5's widgets show, in one read
+//! (H-018 §2.1). Needs you: releases awaiting a ruling, open and relayed
+//! decisions, P0 items, recent WIP overrides. The board's column strip with
+//! its blocked, stale, done and rework counts. The current release and the
+//! last two. The team, each bot with its items in Doing and its open tasks.
+//! Meetings (H-102): each series with its next time, the meeting collecting
+//! and the last one held; and the open action items.
 //!
 //! A board mirrored from its home serves the strip and the P0s from the
 //! mirror; its history, and so the weekly counts and releases, stay there.
@@ -115,6 +116,12 @@ impl Conn {
             .take(RELEASES_SHOWN)
             .map(|r| self.release_json(r))
             .collect::<anyhow::Result<Vec<_>>>()?;
+        // Meetings live with the board, on its home (H-102).
+        let (meetings, action_items) = if local {
+            crate::board::meetings::dashboard(&self.app, project_id)?
+        } else {
+            (json!([]), json!([]))
+        };
         let home = home_peer
             .as_deref()
             .map(|peer| crate::peer::board::home_name(&self.app, peer));
@@ -123,7 +130,7 @@ impl Conn {
             "home": home, "needs_you": needs.rows, "wip_overrides": needs.wip_overrides,
             "needs_you_note": Value::Null, "board": board,
             "releases": shown, "team": team,
-            "meetings": [], "action_items": [],
+            "meetings": meetings, "action_items": action_items,
         });
         match home_peer {
             Some(peer) => self.answer_later(

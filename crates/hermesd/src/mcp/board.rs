@@ -106,6 +106,9 @@ pub(super) fn call(
             let roles = app.db.project_roles(project)?;
             Ok(json!({ "roles": out(model_list_roles(roles))? }))
         }
+        meeting if super::meetings::handles(meeting) => {
+            super::meetings::call(app, &me.bot, roles, meeting, args)
+        }
         release if super::releases::handles(release) => {
             super::releases::call(app, &me.bot, roles, release, args)
         }
