@@ -96,7 +96,6 @@ impl Process {
         }))
     }
 
-    #[cfg(test)]
     pub fn pid(&self) -> u32 {
         self.pid
     }

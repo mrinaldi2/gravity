@@ -20,7 +20,9 @@ import NeedsYou from "./NeedsYou";
 import { useConfirmRelayed } from "./useConfirmRelayed";
 import { useDashboard } from "./useDashboard";
 import { useDashboardDrawers } from "./useDashboardDrawers";
-import { BoardWidget, MeetingsWidgets, ReleasesWidget, TeamWidget } from "./Widgets";
+import { ActionItemsWidget, MeetingsWidget } from "./MeetingWidgets";
+import { useActionItems } from "./useActionItems";
+import { BoardWidget, ReleasesWidget, TeamWidget } from "./Widgets";
 
 export interface DashboardViewProps {
   readonly client: DaemonApi;
@@ -88,6 +90,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const { client, project, bots, connected } = props;
   const { dashboard, error, refresh } = useDashboard(client, project.id, connected);
   const relayed = useConfirmRelayed(client, project.id, props.addToast, refresh);
+  const actionItems = useActionItems(client, project.id, props.addToast, refresh);
   const { reviewing, openItem, openReview, showItem, close: closeDrawer } = useDashboardDrawers();
 
   if (dashboard === null) {
@@ -149,7 +152,16 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             onOpen={() => props.onOpenTab("releases")}
           />
           <TeamWidget team={dashboard.team} bots={bots} onOpenBot={props.onOpenBot} />
-          <MeetingsWidgets />
+          <MeetingsWidget rows={dashboard.meetings} />
+          <ActionItemsWidget
+            actions={dashboard.action_items}
+            botName={botName}
+            canControl={connected && props.canControl}
+            onDone={(id) => void actionItems.setStatus(id, "done")}
+            onDrop={(id) => void actionItems.setStatus(id, "dropped")}
+            onPromote={(id) => void actionItems.promote(id)}
+            onItem={showItem}
+          />
         </div>
       </div>
       {reviewing ? (

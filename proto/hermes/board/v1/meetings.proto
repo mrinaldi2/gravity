@@ -1,0 +1,110 @@
+// Meetings and action items, contract version 1 (H-017 §1.5, H-020 §4).
+//
+// What bots send as MCP tools; their schemas are generated from these
+// messages (see requests.proto for the rules). The owner sends the same
+// requests over the WebSocket. Closed values travel as strings: a type or
+// status a newer daemon adds reads as text on an older client.
+syntax = "proto3";
+
+package hermes.board.v1;
+
+// Lead: create a meeting series, or change one (with `series_id`). Its
+// routine starts the facilitator's session on the cron with "run meeting".
+message MeetingSeriesUpsert {
+  string project_id = 1;
+  // Set to change a series; unset creates one.
+  optional string series_id = 2;
+  // standup, refinement, demo, retro or adhoc.
+  optional string type = 3;
+  // Unique in the project, e.g. "Daily standup".
+  optional string name = 4;
+  // Six- or seven-field cron with seconds, e.g. "0 0 9 * * Mon-Fri".
+  optional string cron = 5;
+  // IANA time zone, e.g. "Europe/Rome". Defaults to UTC.
+  optional string tz = 6;
+  // The bot that starts and closes each meeting: an id or a name.
+  optional string facilitator = 7;
+  // Bots (ids or names), or "owner".
+  repeated string attendees = 8;
+  // What the start freezes for the attendees; "board" today.
+  optional string input_scope = 9;
+  optional bool enabled = 10;
+}
+
+// The project's meeting series, with each one's next time, and its recent
+// meetings, newest first.
+message MeetingList {
+  string project_id = 1;
+  // Only meetings of this type.
+  optional string type = 2;
+  // Only series (and their next time); no past meetings.
+  optional bool upcoming = 3;
+}
+
+// One meeting in full: attendees, contributions, outputs, its action items
+// and the open ones carried over from earlier meetings of its series.
+message MeetingGet {
+  // e.g. "MTG-2026-10-05-standup".
+  string meeting_id = 1;
+}
+
+// Facilitator (or lead): start a meeting. Freezes the board as its inputs
+// and sends each attendee one note asking for a contribution.
+message MeetingStart {
+  string project_id = 1;
+  // The series to hold; unset starts an ad-hoc meeting.
+  optional string series_id = 2;
+  // Ad-hoc only: what it is about.
+  optional string name = 3;
+  // Ad-hoc only: bots (ids or names), or "owner".
+  repeated string attendees = 4;
+}
+
+// Attendee: add what you bring to a meeting that is collecting.
+message MeetingContribute {
+  string meeting_id = 1;
+  // e.g. "yesterday", "today", "blockers", "went well".
+  string section = 2;
+  // Markdown.
+  string body = 3;
+  // Item ids the contribution is about, e.g. "H-017".
+  repeated string item_refs = 4;
+}
+
+// Facilitator (or lead): close a meeting with its outputs and a summary of
+// at most ten lines, or skip it with a reason.
+message MeetingClose {
+  string meeting_id = 1;
+  // By section, e.g. {"decisions": "...", "blockers": "..."}.
+  map<string, string> outputs = 2;
+  optional string summary = 3;
+  // Set to mark the meeting skipped instead of held.
+  optional string skip_reason = 4;
+}
+
+// Facilitator (or lead): record an action item from a meeting.
+message ActionAdd {
+  string meeting_id = 1;
+  string text = 2;
+  // A bot (id or name), or "owner".
+  string owner = 3;
+  // RFC 3339, e.g. "2026-10-07T17:00:00Z".
+  optional string due_at = 4;
+}
+
+// The action's owner, the facilitator or the lead: tick, drop or reword it.
+message ActionUpdate {
+  string action_id = 1;
+  // open, done or dropped.
+  optional string status = 2;
+  optional string text = 3;
+  // RFC 3339; empty clears it.
+  optional string due_at = 4;
+}
+
+// Lead: turn an action into a chore on the board, linked to its meeting.
+message ActionPromote {
+  string action_id = 1;
+  // Defaults to the action's text.
+  optional string title = 2;
+}

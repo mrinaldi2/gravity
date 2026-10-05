@@ -33,6 +33,13 @@ pub enum Push {
     WorkersUpdated {
         project_id: String,
     },
+    /// A project's meetings or action items changed (H-102). Clients
+    /// refetch `meeting_list`, `meeting_get` or `dashboard_get`.
+    MeetingEvent {
+        project_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        meeting_id: Option<String>,
+    },
     /// A bot's sidebar preview line changed. Emitted once the finished turn is
     /// actually readable in the transcript, which lags the `ready` state.
     ActivityUpdate {

@@ -13,6 +13,8 @@ use anyhow::Context;
 use portable_pty::ChildKiller;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 #[cfg(windows)]
+mod job;
+#[cfg(windows)]
 mod windows;
 use tokio::sync::mpsc;
 

@@ -68,6 +68,11 @@ pub(crate) trait Host {
     fn owned(&self, _ids: &[Identity]) -> crate::holders::Owned {
         crate::holders::Owned::default()
     }
+    /// `error` with whatever holds the home named (H-040), asked before
+    /// anything is restarted, so the list is of what blocked the step.
+    fn explain(&self, error: anyhow::Error) -> anyhow::Error {
+        error
+    }
     /// What `binary --version` reports.
     fn version_of(&self, binary: &Path) -> anyhow::Result<String>;
     /// Waits for `/health` to report `version`.
@@ -171,6 +176,7 @@ pub(crate) fn upgrade(
     // 3. Disable and stop what runs now.
     for id in &old {
         if let Err(error) = host.disable(*id).and_then(|()| host.stop(*id)) {
+            let error = host.explain(error);
             discard_staged();
             // It may be half-stopped; put it back as it was.
             return Err(match start_all(host, &old) {
@@ -185,6 +191,7 @@ pub(crate) fn upgrade(
     let mut progress = Progress::default();
     let installed = install(layout, host, migration, staged, &version, &mut progress);
     if let Err(error) = installed {
+        let error = host.explain(error);
         discard_staged();
         return Err(match rollback(host, &old, &progress, migration) {
             Ok(()) if old.is_empty() => error.context("install failed and was undone"),
@@ -329,7 +336,8 @@ pub(crate) fn restart(bundled: &Path, layout: &Layout, host: &impl Host) -> anyh
         );
         return upgrade(bundled, layout, host, None);
     }
-    host.stop(Identity::Current)?;
+    host.stop(Identity::Current)
+        .map_err(|error| host.explain(error))?;
     host.start(Identity::Current)
 }
 

@@ -187,6 +187,13 @@ pub fn uninstall(paths: &ServicePaths) -> anyhow::Result<()> {
     // The installer's uninstall runs the installed daemon itself.
     let paths = &paths.running(&std::env::current_exe().unwrap_or_default());
     let host = TaskScheduler::new(paths, &paths.home, 0, System)?;
+    remove_all(paths, &host).map_err(|error| host.explain(error))
+}
+
+fn remove_all<S: Schtasks>(
+    paths: &ServicePaths,
+    host: &TaskScheduler<'_, S>,
+) -> anyhow::Result<()> {
     for id in host.installed() {
         host.disable(id)?;
         host.stop(id)?;

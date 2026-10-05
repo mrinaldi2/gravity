@@ -241,7 +241,9 @@ pub fn run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<State> {
     daemon_stopped(home, Duration::from_secs(30)).context("the daemon is still running")?;
     #[cfg(windows)]
     if !state.done(Step::Move) {
-        disk::probe_move(&plan.from)?;
+        // os error 5 here means something holds the home: name it (H-040).
+        disk::probe_move(&plan.from)
+            .map_err(|error| crate::holders::explain_held(error, &[plan.from.clone()]))?;
     }
     state.save()?;
     for step in Step::ALL {

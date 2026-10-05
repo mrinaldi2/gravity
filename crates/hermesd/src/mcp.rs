@@ -20,6 +20,7 @@ mod board_import;
 mod board_remote;
 mod board_schema;
 mod decisions;
+pub(crate) mod meetings;
 mod releases;
 mod remote;
 mod routines;

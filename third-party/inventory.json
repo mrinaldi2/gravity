@@ -4,14 +4,14 @@
     "x86_64-pc-windows-msvc"
   ],
   "inputs": {
-    "Cargo.lock": "5d1d0de030ee95375b8cce6aa269859110db605e82a915fc3038783e78c22d0b",
-    "Cargo.toml": "3d91169131dde353032603333be36732fc1aede0b8e8a4da95bd30e3c873cdce",
-    "crates/hermesd/Cargo.toml": "34512fda9aa0bb78b5e8b52db051d1c032f9638af504d293ff2e47d079ed9eeb",
+    "Cargo.lock": "27a100a087d865554f40b7cd565a4afe5408e4fcf2d94e6faafd26cb286b3174",
+    "Cargo.toml": "e79ffe5e60d4766d5905a327c8cf6b27ebb79b8dd17f44d6e9d966655e2684a5",
+    "crates/hermesd/Cargo.toml": "b3c2306bdcca9b3eeb97a3d51e6d6e61bf81a3bb0d0d3e6ec0ad473695dc95dd",
     "crates/bus/Cargo.toml": "5819fe1a3e52f7e68addf67e02f42145ff216cdd1e406fdee53b06df4af938cc",
-    "apps/desktop/src-tauri/Cargo.lock": "f74c75b3c86632a55840cd17e10559966c7dae1fe06afebdd6d4edad2e2049a1",
-    "apps/desktop/src-tauri/Cargo.toml": "0b9987bc9e0d401dd629fb5082bcbccc963d8ed0e6fb7000e427c7a544732738",
-    "apps/desktop/src-tauri/tauri.conf.json": "ff3b60024ca4332be007efe82382a6efd413457d8f5f971604a64108382bf3d7",
-    "apps/desktop/package.json": "3e02ecf797179555842586f3fcd940371f1810a118be28f89d48f3880f856bac",
+    "apps/desktop/src-tauri/Cargo.lock": "77a821b9bfa2ded5599ee5cf5c31540683f0eeafaf1c9ba9b3b83ee3a60a9f7e",
+    "apps/desktop/src-tauri/Cargo.toml": "228e49276271fa0ea57a30b5322b781658a3d7022faa3e146758b6a5251058c4",
+    "apps/desktop/src-tauri/tauri.conf.json": "14474c6a058aa168309540a5fa6f3ff98546fa504a9cc4fea0b704935d1c18dd",
+    "apps/desktop/package.json": "8a1927cf64ab29494bf5fe38188a16d454a3859efeeaf782e03cd9ec121369af",
     "apps/desktop/pnpm-lock.yaml": "fcc8b17d5228db54ab5f16def81e603100d855d0634cdbfbf7b9f21a1872cef1",
     "apps/desktop/vite.config.ts": "029db7146e224ff4381cb2fb69d8a72c3c803ddfd56d8af2bf3ca5ab6d093fd9",
     "apps/marketing/package.json": "eb06e030ffa6b5a299377e0c772d4691d6f03740a76269a0ddb3629c1a9472ae",
@@ -21,14 +21,14 @@
     "apps/marketing/src/updater-proxy.ts": "0883a34260e53b3248d60f9fa5fe9d9692f1215576c29907462bf84263989893",
     "apps/marketing/src/updater-bridge.ts": "9e2cd3920e4fba8444561f2f7393fe6bca641bba528fca3051ac152d28e9e72a",
     "apps/marketing/wrangler.updater-bridge.jsonc": "31c766018eef47e0b815ccfe2c69123bdb371459de3f99d566bc956780832fb8",
-    ".github/workflows/release.yml": "495a7db174cf5a2cbead2b6a65fdd59069b55232683cf3539135fe7790f1a884",
-    "scripts/prepare-sidecar.sh": "faadd904476fc7f823b16e498879325f5a84a056f192590853d1351d119cb44a",
+    ".github/workflows/release.yml": "e53ad86644ef0cc1d735441b27b9f7a1de724786a62f413e46aad7bc01492aed",
+    "scripts/prepare-sidecar.sh": "e63efecd8be723cca688e95c1449865309438b41f3d3017d68e0e279e2921e2f",
     "scripts/notices.py": "10a7ee5e9a4d9bd6c2f5a5db64d35f6880196cd5772c774bc91eacfa1af44e9f",
     "third-party/README.md": "f922720d5ad16db4808b4f15a14fbda044c22cd0a52cb6999dce26826ecc2694",
     "package.json": "299597abf0cdef57fbb880e083ce41fa20049a9f6389e3b62e8cca8448233bbc",
-    "apps/desktop/src-tauri/tauri.windows.conf.json": "ea00ae5836e5b33e3263c6afccc6faf40b72f74b2c0ff79fd94e3e647e41c453",
+    "apps/desktop/src-tauri/tauri.windows.conf.json": "009da41cc2a7db44633c4fa3e2a65bfca6417acfe8afe1fe5dba9a5bf7e75377",
     "scripts/prepare-sidecar.ps1": "5ceb045d862f21670b4941ee0152d52b7be56d9e67f9d358e78e6fd59e2a2848",
-    "apps/desktop/src-tauri/windows/installer-hooks.nsh": "bce944c724c6c662a4c0d22bee305c9bad634d709abd170cc1e7447083a53754",
+    "apps/desktop/src-tauri/windows/installer-hooks.nsh": "6f9b140ccf6c1017b8543840b55a42862c0c20a228bc2d62e2c6f8f12933bd81",
     ".github/workflows/windows.yml": "1f84bc91f27c0478b48fa5d806f0fa843c5d9734fb634cc82d4b49c8e5b3d9d9",
     "third-party/overrides/0322ceec0b8f15aa2d74a6173c07cc8c6f3764b3.txt": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
     "third-party/overrides/0852eae3adf81df4a705737ec733a408a3e9ddc0.txt": "c04b4216f1cd4c5a4f7fb2f2a1b0ae70d847e9e0cac7c9dee9bf8cc03177c449",
@@ -60,8 +60,8 @@
     "third-party/overrides/index.json": "7d1fb16e6984e5d8077696b8caa395c6be08db487ba9c30c2eab559cb724f7bb"
   },
   "outputs": {
-    "third-party/DAEMON_NOTICES.txt": "02a2de784e4658919bb9670cd10ccc73e974c8ab0d475a2f2cf2d2b23e56ff15",
-    "third-party/DESKTOP_NOTICES.txt": "50562244260f04edbdb476f16979b7dde170b021cba1303b60bd23f7e4618c58",
+    "third-party/DAEMON_NOTICES.txt": "5af38698b5edbc10050803ea1f2645682cd990ddf0ef622a97d3e34b377ce997",
+    "third-party/DESKTOP_NOTICES.txt": "82eb28cd81191334703e34713180cd25c30bfd38227de964aba78421fce5c47d",
     "apps/marketing/public/THIRD_PARTY_NOTICES.txt": "fe0e343d06cefa62f499f856b77f463d6ef41f7a42f2be4d9726895fc39657a8"
   },
   "packages": [
@@ -3815,7 +3815,7 @@
       "version": "0.10.1",
       "license": "MIT OR Apache-2.0",
       "components": {
-        "daemon": "build/test",
+        "daemon": "runtime",
         "desktop": "runtime"
       },
       "source": "https://static.crates.io/crates/core-foundation/core-foundation-0.10.1.crate",
@@ -9847,7 +9847,7 @@
       "version": "3.7.0",
       "license": "MIT OR Apache-2.0",
       "components": {
-        "daemon": "build/test",
+        "daemon": "runtime",
         "desktop": "runtime"
       },
       "source": "https://static.crates.io/crates/security-framework/security-framework-3.7.0.crate",
@@ -9869,7 +9869,7 @@
       "version": "2.17.0",
       "license": "MIT OR Apache-2.0",
       "components": {
-        "daemon": "build/test",
+        "daemon": "runtime",
         "desktop": "runtime"
       },
       "source": "https://static.crates.io/crates/security-framework-sys/security-framework-sys-2.17.0.crate",

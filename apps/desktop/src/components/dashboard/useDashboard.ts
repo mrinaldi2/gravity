@@ -1,5 +1,5 @@
 // The project dashboard's data (H-076): one `dashboard_get`, read again when
-// a decision changes and every half minute, so "as of" stays near now.
+// a decision or a meeting changes and every half minute, so "as of" stays near now.
 
 import { useCallback, useEffect, useState } from "react";
 import { useLoadOnConnect } from "../../hooks/useLoadOnConnect";
@@ -50,6 +50,11 @@ export function useDashboard(
       client.on("decision_update", again),
       client.on("decision_deleted", again),
       client.on("workers_updated", again),
+      client.on("meeting_event", (push) => {
+        if (push.project_id === projectId) {
+          again();
+        }
+      }),
     ];
     return () => {
       window.clearInterval(timer);
@@ -57,7 +62,7 @@ export function useDashboard(
         stop();
       }
     };
-  }, [client, connected, refresh]);
+  }, [client, connected, projectId, refresh]);
 
   return { dashboard, error, refresh };
 }

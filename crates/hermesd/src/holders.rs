@@ -80,11 +80,73 @@ pub fn list(roots: &[PathBuf]) -> anyhow::Result<Vec<Holder>> {
     ))
 }
 
-/// Windows has no `lsof`; the migration probes the home with a rename
-/// instead (see `migrate_home`).
+/// Windows has no `lsof`: the Restart Manager names the processes holding
+/// files under `roots` (H-040). The migration still probes the home with a
+/// rename, which also catches a working directory held there.
 #[cfg(windows)]
-pub fn list(_roots: &[PathBuf]) -> anyhow::Result<Vec<Holder>> {
-    Ok(Vec::new())
+pub fn list(roots: &[PathBuf]) -> anyhow::Result<Vec<Holder>> {
+    use anyhow::Context;
+    let mut out: Vec<Holder> = Vec::new();
+    for root in roots {
+        let files = rm::files_under(root, rm::MAX_FILES);
+        let found = rm::holders_of(&files)
+            .with_context(|| format!("asking the Restart Manager about {}", root.display()))?;
+        for holder in found {
+            if holder.pid == std::process::id() || out.iter().any(|h| h.pid == holder.pid) {
+                continue;
+            }
+            out.push(Holder {
+                pid: holder.pid,
+                pgid: None,
+                command: holder.exe,
+                cwd: false,
+                path: root.clone(),
+            });
+        }
+    }
+    Ok(out)
+}
+
+#[cfg(windows)]
+#[path = "holders_rm.rs"]
+pub mod rm;
+
+/// An access-denied or sharing-violation error anywhere in `error`'s chain:
+/// what a file held open under the home makes a move, rename or delete
+/// fail with on Windows (os error 5 or 32).
+pub fn is_held_error(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<std::io::Error>()
+            .and_then(std::io::Error::raw_os_error)
+            .is_some_and(|code| code == 5 || code == 32)
+    })
+}
+
+/// "held by node.exe (pid 4120), claude.exe (pid 3988)": what the owner
+/// reads, one executable name and PID per holder.
+pub fn held_by(holders: &[Holder]) -> String {
+    let named: Vec<String> = holders
+        .iter()
+        .map(|h| format!("{} (pid {})", h.command, h.pid))
+        .collect();
+    format!("held by {}", named.join(", "))
+}
+
+/// `error`, with the processes holding files under `roots` named when it is
+/// a held-file error and any are found. A lookup that fails leaves the
+/// error as it was.
+pub fn explain_held(error: anyhow::Error, roots: &[PathBuf]) -> anyhow::Error {
+    if !is_held_error(&error) {
+        return error;
+    }
+    match list(roots) {
+        Ok(holders) if !holders.is_empty() => error.context(format!(
+            "{}: stop them, or close what they have open there, then retry",
+            held_by(&holders)
+        )),
+        _ => error,
+    }
 }
 
 /// Parses `lsof -F pgcfn`: a `p` line starts each process, followed by its

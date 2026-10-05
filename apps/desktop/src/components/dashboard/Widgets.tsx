@@ -1,5 +1,5 @@
-// Widgets 2–6 of the dashboard (H-018 §2.1): the board strip, releases, the
-// team, and meetings and action items, empty until meetings land (H-102).
+// Widgets 2–4 of the dashboard (H-018 §2.1): the board strip, releases and
+// the team; meetings and action items are in MeetingWidgets.
 // Every state carries a glyph and a word, never colour alone.
 
 import type { ReactElement, ReactNode } from "react";
@@ -10,7 +10,7 @@ import BotAvatar from "../BotAvatar";
 import { BOT_STATE_LABEL } from "../bot/botStates";
 import { releaseTitle, rolloutLabel, statusLabel, testLabel } from "../releases/labels";
 
-function Widget(props: {
+export function Widget(props: {
   readonly id: string;
   readonly title: string;
   readonly wide?: boolean;
@@ -218,19 +218,5 @@ export function TeamWidget(props: {
         </ul>
       )}
     </Widget>
-  );
-}
-
-/** Widgets 5 and 6, until meetings land (H-102). */
-export function MeetingsWidgets(): ReactElement {
-  return (
-    <>
-      <Widget id="dash-meetings" title="Meetings">
-        <p className="dash-empty">No meetings yet.</p>
-      </Widget>
-      <Widget id="dash-actions" title="Action items">
-        <p className="dash-empty">No open action items.</p>
-      </Widget>
-    </>
   );
 }

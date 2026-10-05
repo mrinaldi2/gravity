@@ -1,8 +1,9 @@
 // The project dashboard's data over the JSON WebSocket (H-076, H-018 §2.1):
-// what widgets 1–4 show, in one `dashboard_get`. Meetings and action items
-// are empty until meetings land (H-102).
+// what its widgets show, in one `dashboard_get`. Meetings and action items
+// come from H-102.
 
 import type { Bot } from "./entities";
+import type { DashboardAction, MeetingRow } from "./meetings";
 import type { Release } from "./releases";
 
 /** A move made over a WIP limit: the lead's call, listed beside Needs you. */
@@ -103,8 +104,10 @@ export interface Dashboard {
   /** The current release and the last two, newest first. */
   readonly releases: readonly Release[];
   readonly team: readonly TeamRow[];
-  readonly meetings: readonly never[];
-  readonly action_items: readonly never[];
+  /** Each series, then ad-hoc meetings still collecting; empty off-home. */
+  readonly meetings: readonly MeetingRow[];
+  /** Open action items, soonest due first. */
+  readonly action_items: readonly DashboardAction[];
 }
 
 export type DashboardRequestBody =

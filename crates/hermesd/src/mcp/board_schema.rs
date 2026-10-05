@@ -156,9 +156,12 @@ fn public(schema: &Value) -> Value {
     out
 }
 
-/// The board tools and the release tools, which share the audiences.
+/// The board, release and meeting tools, which share the audiences.
 pub(super) fn all_tools() -> impl Iterator<Item = &'static BoardTool> {
-    BOARD_TOOLS.iter().chain(super::releases::RELEASE_TOOLS)
+    BOARD_TOOLS
+        .iter()
+        .chain(super::releases::RELEASE_TOOLS)
+        .chain(super::meetings::MEETING_TOOLS)
 }
 
 /// The `tools/list` entries for a bot with these roles.
@@ -327,7 +330,9 @@ mod tests {
         let all = board_tool_list(&[Role::Lead, Role::Tester, Role::Devops]);
         assert_eq!(
             all.len(),
-            BOARD_TOOLS.len() + super::super::releases::RELEASE_TOOLS.len()
+            BOARD_TOOLS.len()
+                + super::super::releases::RELEASE_TOOLS.len()
+                + super::super::meetings::MEETING_TOOLS.len()
         );
         assert!(!json!(all).to_string().contains("project_id"));
     }

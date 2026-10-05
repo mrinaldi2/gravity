@@ -3,6 +3,7 @@
 import type { BoardSummary, Dashboard, NeedsYou } from "../protocol/dashboard";
 import type { Bot } from "../protocol/entities";
 import { bot } from "./fixtures";
+import { ACTION_ITEMS, MEETING_ROWS } from "./meetingFixtures";
 import { deployment, release } from "./releaseFixtures";
 
 const DEV = bot({ id: "dd", name: "Desktop Dev", state: "working", avatar: "icon:moss" });
@@ -127,8 +128,8 @@ export function dashboard(over: Partial<Dashboard> = {}): Dashboard {
       { bot: TESTER, items: [], open_tasks: 1 },
       { bot: ARCH, items: [], open_tasks: 0 },
     ],
-    meetings: [],
-    action_items: [],
+    meetings: MEETING_ROWS,
+    action_items: ACTION_ITEMS,
     ...over,
   };
 }
@@ -150,7 +151,15 @@ export function offHome(over: Partial<Dashboard> = {}): Dashboard {
   return dashboard({ home: "mac", board: MIRRORED_BOARD, needs_you: rows, ...over });
 }
 
-/** A fresh project: nothing waits, no board, no release. */
+/** A fresh project: nothing waits, no board, no release, no meetings. */
 export function quietDashboard(): Dashboard {
-  return dashboard({ needs_you: [], wip_overrides: [], board: null, releases: [], team: [] });
+  return dashboard({
+    needs_you: [],
+    wip_overrides: [],
+    board: null,
+    releases: [],
+    team: [],
+    meetings: [],
+    action_items: [],
+  });
 }
