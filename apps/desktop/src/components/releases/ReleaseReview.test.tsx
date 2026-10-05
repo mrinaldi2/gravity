@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AddToast } from "../../app/useToasts";
 import type { Release, ReleaseRequestBody } from "../../protocol/releases";
 import { FakeDaemon } from "../../test/fakeDaemon";
-import { RELEASE_TITLES, deployment, release } from "../../test/releaseFixtures";
+import { CANCELLED, RELEASE_TITLES, deployment, release } from "../../test/releaseFixtures";
 import { actionToastSpy } from "../../test/spies";
 import ReleaseReview from "./ReleaseReview";
 import { UNDO_MS } from "./useDelayedSend";
@@ -218,8 +218,8 @@ describe("ReleaseReview", () => {
     expect(sent(fake)).toEqual([{ type: "release_resume", release_id: "rel-1" }]);
   });
 
-  it("says what a repackaging or cancelled package waits for", () => {
-    const { unmount } = render(
+  it("says what a repackaging package waits for, and which successor was cancelled", () => {
+    render(
       <Harness
         initial={release({
           status: "repackaging",
@@ -227,22 +227,17 @@ describe("ReleaseReview", () => {
             { item_id: "H-017", verdict: "ship", owner_note: null },
             { item_id: "H-020", verdict: "rework", owner_note: "font" },
           ],
+          events: [CANCELLED],
         })}
         client={daemon(release())}
         addToast={actionToastSpy()}
       />,
     );
     expect(screen.getByText(/building a new one without H-020/)).toBeInTheDocument();
-    unmount();
-    render(
-      <Harness
-        initial={release({ status: "cancelled" })}
-        client={daemon(release())}
-        addToast={actionToastSpy()}
-      />,
-    );
     expect(
-      screen.getByText(/Cancelled by DevOps/, { selector: ".release-banner *" }),
+      within(screen.getByRole("list", { name: "What happened" })).getByText(
+        "DevOps cancelled 0.16.1, a package that would have replaced this one: took H-021 along",
+      ),
     ).toBeInTheDocument();
   });
 });

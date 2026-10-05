@@ -1,6 +1,17 @@
 // Release packages for tests and stories (H-018 §4A).
 
-import type { Release, ReleaseDeployment } from "../protocol/releases";
+import type { Release, ReleaseDeployment, ReleaseEvent } from "../protocol/releases";
+
+/** A successor DevOps cancelled before submitting it (ARCH-R25). */
+export const CANCELLED: ReleaseEvent = {
+  release_id: "rel-2",
+  release_name: "0.16.1",
+  related_id: "rel-1",
+  kind: "cancelled",
+  actor: "ops",
+  note: "took H-021 along",
+  at: "2026-10-05T14:00:00Z",
+};
 
 const SHA = "a".repeat(64);
 
@@ -51,6 +62,7 @@ export function release(over: Partial<Release> = {}): Release {
       { machine: "win-pc", tester: "tester-win", build_sha256: SHA, result: "pass" },
     ],
     deployments: [],
+    events: [],
     can_rule: true,
     rule_on: null,
     ...over,

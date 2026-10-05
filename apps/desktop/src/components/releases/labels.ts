@@ -1,7 +1,7 @@
 // Owner-facing words for release packages (H-018 §4A.1). Every status and
 // result carries a glyph and a word, so nothing depends on colour.
 
-import type { Release, ReleaseStatus, ReleaseTest } from "../../protocol/releases";
+import type { Release, ReleaseEvent, ReleaseStatus, ReleaseTest } from "../../protocol/releases";
 
 export interface StatusLabel {
   readonly glyph: string;
@@ -24,7 +24,6 @@ const STATUS: Readonly<Record<ReleaseStatus, StatusLabel>> = {
   deployed: { glyph: "✓", word: "Live on every computer", tone: "ok" },
   rejected: { glyph: "⊘", word: "Rejected", tone: "off" },
   rolled_back: { glyph: "↩", word: "Rolled back", tone: "off" },
-  cancelled: { glyph: "⊘", word: "Cancelled by DevOps", tone: "off" },
 };
 
 export function statusLabel(status: ReleaseStatus): StatusLabel {
@@ -38,9 +37,18 @@ export function releaseTitle(release: Release): string {
 
 /** Packages still in play sit under Current; the rest are history. */
 export function isCurrent(release: Release): boolean {
-  return !["deployed", "rejected", "rolled_back", "superseded", "cancelled"].includes(
-    release.status,
-  );
+  return !["deployed", "rejected", "rolled_back", "superseded"].includes(release.status);
+}
+
+/** One line for an event on a package, e.g. a successor DevOps cancelled. */
+export function eventLine(event: ReleaseEvent, botName: (id: string) => string): string {
+  const who =
+    event.actor === "owner" || event.actor.startsWith("device:") ? "You" : botName(event.actor);
+  const what =
+    event.kind === "cancelled"
+      ? `${who} cancelled ${event.release_name}, a package that would have replaced this one`
+      : `${who}: ${event.kind} ${event.release_name}`;
+  return event.note ? `${what}: ${event.note}` : what;
 }
 
 export function testLabel(result: ReleaseTest["result"]): StatusLabel {

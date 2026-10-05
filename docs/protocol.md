@@ -629,11 +629,12 @@ runs through the tester the same way.
 
 **Lifecycle (H-020 §6).**
 
-- **Successor:** after a mixed ruling (`repackaging`) or a failed deploy (`partially_deployed`), DevOps calls `release_create` with `from`. The predecessor's shipped items join straight from Owner testing, and the predecessor becomes `superseded`. The successor is a new build, so it gets a new ruling. A failed deploy clears its items' `release_id`.
+- **Successor:** after a mixed ruling (`repackaging`) or a failed deploy (`partially_deployed`), DevOps calls `release_create` with `from`. The predecessor's shipped items join straight from Owner testing, and the predecessor becomes `superseded` when the successor is **submitted**. The successor is a new build, so it gets a new ruling. A failed deploy clears its items' `release_id`.
+- **Cancel:** `release_cancel {release_id, reason?}` (DevOps) removes a package that is still `assembling` or `built`; anything submitted or later is refused. Its items were never moved: a predecessor's shipped items stay in Owner testing for the predecessor, which can take a new successor, and items from Verify are free again. A `cancelled` event keeps who, why and what it held, and shows in the predecessor's `events`.
 - **Testing:**
   - DevOps fills `changelog` and `how_to_test` (`[{item_id?, platform, steps}]`) with `release_update` while the package is assembling.
-  - Each machine's tester records a result against one of the builds' sha256 with `release_test`.
-  - `release_submit` is refused until every required machine has passed the current builds. Required machines are the board's `required_machines` for the items' platforms, or with none configured, every machine with a tester; deploys finish on the same set.
+  - Each machine's tester records a result against one of the builds' sha256 with `release_test`. The build must be for that machine's platform: one whose `required_machines` lists it, or with none configured for it, the items' platforms (a build platform `desktop-mac` is a `desktop` build).
+  - `release_submit` is refused until every required machine has passed the current builds. Required machines are the board's `required_machines` for the items' platforms, or with none configured, every machine with a tester; deploys finish on the same set. With neither, submit is refused: an empty set is never a pass.
 - **Hold:** `release_hold` keeps the decision open and holds it (`remind_at` becomes its `held_until`). When the reminder comes due, the decision sweep resumes it and the package goes back to `awaiting_owner`. `release_unhold` does the same on request.
 - **Pause:** `release_pause` (owner, or DevOps over MCP) pauses a rollout in progress. Deploys and installs are refused with the reason, and every tester holding an open deploy task gets a note. `release_resume` returns it to `deploying`.
 - **Who may rule:** `can_rule` says whether this connection may rule (the approve grant, on the board's home). When it can't, `rule_on` names the home computer. `BoardSnapshot.can_rule` carries the same flag.

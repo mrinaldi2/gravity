@@ -80,6 +80,32 @@ pub struct ReleaseDeployment {
     pub at: Option<DateTime<Utc>>,
 }
 
+/// Something that happened to a package, kept beyond its row (ARCH-R25):
+/// today, a successor cancelled before it was submitted.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReleaseEvent {
+    pub release_id: String,
+    pub release_name: String,
+    /// The package the subject succeeded, when it did.
+    pub related_id: Option<String>,
+    pub kind: String,
+    /// Who did it: a bot id, `owner` or `device:<id>`.
+    pub actor: String,
+    pub note: Option<String>,
+    pub detail: Value,
+    pub at: DateTime<Utc>,
+}
+
+impl ReleaseEvent {
+    pub fn to_json(&self) -> Value {
+        json!({
+            "release_id": self.release_id, "release_name": self.release_name,
+            "related_id": self.related_id, "kind": self.kind, "actor": self.actor,
+            "note": self.note, "detail": self.detail, "at": self.at,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Release {
     pub id: String,
@@ -108,9 +134,29 @@ pub struct Release {
     pub builds: Vec<ReleaseBuild>,
     pub tests: Vec<ReleaseTest>,
     pub deployments: Vec<ReleaseDeployment>,
+    /// Its own events and those of packages that succeeded it.
+    pub events: Vec<ReleaseEvent>,
 }
 
 impl Release {
+    /// A mixed ruling or a failed deploy left it for a successor (§6.1).
+    pub fn awaits_successor(&self) -> bool {
+        matches!(
+            self.status,
+            ReleaseStatus::Repackaging | ReleaseStatus::PartiallyDeployed
+        )
+    }
+
+    /// `item_id` was shipped from this mixed package and waits in Owner
+    /// testing for its successor.
+    pub fn holds_shipped(&self, item_id: &str) -> bool {
+        self.status == ReleaseStatus::Repackaging
+            && self
+                .items
+                .iter()
+                .any(|i| i.item_id == item_id && i.verdict == Verdict::Ship)
+    }
+
     /// What tools and the WS surface return.
     pub fn to_json(&self) -> Value {
         json!({
@@ -150,6 +196,7 @@ impl Release {
                 "smoke": d.smoke.map(Smoke::as_str), "log_artifact": d.log_artifact,
                 "started_at": d.started_at, "at": d.at,
             })).collect::<Vec<_>>(),
+            "events": self.events.iter().map(ReleaseEvent::to_json).collect::<Vec<_>>(),
         })
     }
 }

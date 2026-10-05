@@ -1,12 +1,38 @@
 //! Release storage, part 2 (H-020 §6, B7b): what a package carries for
-//! testing, its successor link, and the hold and pause state.
+//! testing, its successor link, the hold and pause state, and the events
+//! kept beyond a cancelled package (ARCH-R25).
 
-use bus::now;
+use bus::{new_id, now};
 use chrono::{DateTime, Utc};
-use rusqlite::params;
+use rusqlite::{params, Connection};
 
+use crate::board::release::model::{ReleaseEvent, ReleaseStatus};
+
+use super::board::{from_json, parse_at};
 use super::board_tx::BoardTx;
 use super::ts;
+
+/// A package's own events and those of the packages that succeeded it,
+/// oldest first.
+pub(super) fn events_in(conn: &Connection, id: &str) -> rusqlite::Result<Vec<ReleaseEvent>> {
+    conn.prepare(
+        "SELECT release_id, release_name, related_id, kind, actor, note, detail, at
+         FROM release_event WHERE release_id = ?1 OR related_id = ?1 ORDER BY at, id",
+    )?
+    .query_map(params![id], |r| {
+        Ok(ReleaseEvent {
+            release_id: r.get(0)?,
+            release_name: r.get(1)?,
+            related_id: r.get(2)?,
+            kind: r.get(3)?,
+            actor: r.get(4)?,
+            note: r.get(5)?,
+            detail: from_json(r.get(6)?)?,
+            at: parse_at(r.get(7)?),
+        })
+    })?
+    .collect()
+}
 
 /// One machine's result against an exact build (H-020 §6.4).
 pub struct NewReleaseTest<'a> {
@@ -73,6 +99,66 @@ impl BoardTx<'_> {
             "UPDATE release SET supersedes = ?2 WHERE id = ?1",
             params![id, predecessor],
         )?;
+        Ok(())
+    }
+
+    /// Every open package an item is in: a successor's carried items are in
+    /// their predecessor too until the successor is submitted.
+    pub fn open_releases_of_item(&self, item_id: &str) -> anyhow::Result<Vec<String>> {
+        let mut ids = Vec::new();
+        let mut stmt = self.conn.prepare(
+            "SELECT r.id, r.status FROM release_item ri JOIN release r ON r.id = ri.release_id
+             WHERE ri.item_id = ?1 ORDER BY r.created_at",
+        )?;
+        let rows = stmt.query_map(params![item_id], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?;
+        for row in rows {
+            let (id, status) = row?;
+            if !ReleaseStatus::parse(&status).is_some_and(ReleaseStatus::is_closed) {
+                ids.push(id);
+            }
+        }
+        Ok(ids)
+    }
+
+    pub fn record_release_event(&self, e: &ReleaseEvent, project_id: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "INSERT INTO release_event(id, project_id, release_id, release_name, related_id,
+                                       kind, actor, note, detail, at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                new_id(),
+                project_id,
+                e.release_id,
+                e.release_name,
+                e.related_id,
+                e.kind,
+                e.actor,
+                e.note,
+                e.detail.to_string(),
+                ts(e.at)
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Remove a package that never reached the owner: its items, builds and
+    /// tests go with it. It has no decision and no deployments.
+    pub fn delete_release(&self, id: &str) -> anyhow::Result<()> {
+        for table in [
+            "release_test",
+            "release_build",
+            "release_item",
+            "release_deployment",
+        ] {
+            self.conn.execute(
+                &format!("DELETE FROM {table} WHERE release_id = ?1"),
+                params![id],
+            )?;
+        }
+        self.conn
+            .execute("DELETE FROM release WHERE id = ?1", params![id])?;
         Ok(())
     }
 

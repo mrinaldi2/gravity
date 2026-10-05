@@ -11,7 +11,7 @@ use crate::app::AppState;
 use crate::board::model::Role;
 use crate::board::release::assemble::{self, NewPackage};
 use crate::board::release::model::{DeployResult, ReleaseBuild, Smoke};
-use crate::board::release::{deploy, lifecycle, load, model::parse_arg, package, Caller};
+use crate::board::release::{cancel, deploy, lifecycle, load, model::parse_arg, package, Caller};
 use crate::db::NewReleaseTest;
 
 use super::board_schema::{decode, shared, tool, Audience, BoardTool};
@@ -26,6 +26,7 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
         Audience::Devops,
     ),
     tool("release_update", "ReleaseUpdate", Audience::Devops),
+    tool("release_cancel", "ReleaseCancel", Audience::Devops),
     tool("release_test", "ReleaseTest", Audience::Tester),
     shared(
         "release_submit",
@@ -105,6 +106,14 @@ pub(super) fn call(
                 req.changelog.as_deref(),
                 steps.as_ref(),
             )?)
+        }
+        "release_cancel" => {
+            let req: c::ReleaseCancel = decode("ReleaseCancel", args, project)?;
+            let done = cancel::cancel(app, &me, &req.release_id, req.reason.as_deref())?;
+            Ok(json!({
+                "cancelled": done.event.to_json(),
+                "predecessor": done.predecessor.map(|r| r.to_json()),
+            }))
         }
         "release_test" => {
             let req: c::ReleaseTest = decode("ReleaseTest", args, project)?;

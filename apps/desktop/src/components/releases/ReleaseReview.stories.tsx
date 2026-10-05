@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import type { Release } from "../../protocol/releases";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { bot, project } from "../../test/fixtures";
-import { RELEASE_TITLES, deployment, release } from "../../test/releaseFixtures";
+import { CANCELLED, RELEASE_TITLES, deployment, release } from "../../test/releaseFixtures";
 import ProjectWindow from "../project/ProjectWindow";
 import ReleaseReview from "./ReleaseReview";
 import ReleasesView from "./ReleasesView";
@@ -89,7 +89,19 @@ export const Paused: Story = () => (
   />
 );
 
-export const Cancelled: Story = () => <Review value={release({ status: "cancelled" })} />;
+/** A successor DevOps cancelled shows on the package it would have replaced. */
+export const SuccessorCancelled: Story = () => (
+  <Review
+    value={release({
+      status: "repackaging",
+      items: [
+        { item_id: "H-017", verdict: "ship", owner_note: null },
+        { item_id: "H-020", verdict: "rework", owner_note: "font falls back on win-pc" },
+      ],
+      events: [CANCELLED],
+    })}
+  />
+);
 
 /** The Releases tab in the project window, with a current package and history. */
 export const Tab: Story = () => {

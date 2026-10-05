@@ -1,6 +1,14 @@
 /* Releases (H-018 §4A): the package list, the release review shared with
    Decisions, and its dialogs. Status always pairs a glyph with a word. */
 
+.release-events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 .releases-view {
   display: grid;
   grid-template-columns: 300px 1fr;
