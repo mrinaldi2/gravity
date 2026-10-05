@@ -23,10 +23,24 @@ pub fn project_bot(app: &AppState, project_id: &str, name_or_id: &str) -> anyhow
         .ok_or_else(|| anyhow::anyhow!("no bot '{name_or_id}' in this project"))
 }
 
+/// The roles the lead may give or take away over MCP. Lead, DevOps and
+/// tester are the owner's alone (ARCH-R30 M1).
+const LEAD_ASSIGNS: [Role; 4] = [Role::Dev, Role::Coach, Role::ReviewerArch, Role::ReviewerUx];
+
 /// Gives the bot the role, or takes it away. A tester's machine is updated
-/// in place.
-pub fn set_role(app: &Arc<AppState>, project_id: &str, req: &c::RoleSet) -> anyhow::Result<()> {
+/// in place. The owner assigns any role; the lead only `LEAD_ASSIGNS`.
+pub fn set_role(
+    app: &Arc<AppState>,
+    project_id: &str,
+    req: &c::RoleSet,
+    by_owner: bool,
+) -> anyhow::Result<()> {
     let role = Role::from_wire(req.role)?;
+    anyhow::ensure!(
+        by_owner || LEAD_ASSIGNS.contains(&role),
+        "only the owner assigns {}",
+        role.as_str()
+    );
     let bot_id = project_bot(app, project_id, req.bot.trim())?;
     anyhow::ensure!(
         app.db.board_settings(project_id)?.is_some(),

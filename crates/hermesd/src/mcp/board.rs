@@ -102,7 +102,7 @@ pub(super) fn call(
         "item_move_check" => check(app, &me, decode("ItemMoveCheck", args, project)?),
         "role_set" => {
             let req: c::RoleSet = decode("RoleSet", args, project)?;
-            crate::board::team::set_role(app, project, &req)?;
+            crate::board::team::set_role(app, project, &req, false)?;
             let roles = app.db.project_roles(project)?;
             Ok(json!({ "roles": out(model_list_roles(roles))? }))
         }

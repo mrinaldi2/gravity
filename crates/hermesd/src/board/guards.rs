@@ -96,7 +96,8 @@ pub struct Context {
     pub ready: Vec<String>,
     pub required_machines: BTreeMap<Platform, Vec<String>>,
     pub load: BTreeMap<String, ColumnLoad>,
-    /// The bots holding a task linked to the item (open or done).
+    /// The bots holding an open task linked to the item, from the lead or
+    /// the owner.
     pub task_holders: Vec<String>,
 }
 
