@@ -30,9 +30,9 @@ describe("ServiceRecoveryBanner", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the installer's error exactly, holder list included", () => {
+  it("heads the installer's verbatim error with what failed", () => {
     const error = "daemon install failed: Error: still in use\n  pid 7 python3 (cwd /u/.gravity)";
-    render(
+    const { container } = render(
       <ServiceRecoveryBanner
         offer={OFFER}
         installing={false}
@@ -41,11 +41,34 @@ describe("ServiceRecoveryBanner", () => {
         onDismiss={vi.fn<() => void>()}
       />,
     );
-    expect(screen.getByLabelText("Installer output").textContent).toBe(error);
+    expect(screen.getByText("Couldn't finish the update.").parentElement?.textContent).toBe(
+      "Couldn't finish the update. The installer said:",
+    );
+    const output = container.querySelector("pre");
+    expect(output?.textContent).toBe(error);
+    expect(output).not.toHaveAttribute("aria-label");
+    expect(screen.queryByText(/still have the Hermes folder open/)).toBeNull();
   });
 
-  it("locks both buttons while the install runs", () => {
+  it("explains a held-open home in plain words", () => {
     render(
+      <ServiceRecoveryBanner
+        offer={OFFER}
+        installing={false}
+        error={"the home is still held open; quit these and try again:\n  pid 7 node"}
+        onInstall={vi.fn<() => void>()}
+        onDismiss={vi.fn<() => void>()}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "These programs still have the Hermes folder open. Quit them, then try again.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("locks both buttons and announces the action while it runs", () => {
+    const { container } = render(
       <ServiceRecoveryBanner
         offer={OFFER}
         installing
@@ -54,7 +77,10 @@ describe("ServiceRecoveryBanner", () => {
         onDismiss={vi.fn<() => void>()}
       />,
     );
-    expect(screen.getByRole("button", { name: "Working…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Finishing the update…" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Not now" })).toBeDisabled();
+    expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe(
+      "Finishing the update…",
+    );
   });
 });

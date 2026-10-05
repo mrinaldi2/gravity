@@ -1,4 +1,5 @@
 import type { ReactElement } from "react";
+import { failureHeadline, progressLabel } from "../../app/serviceRecovery";
 import type { RecoveryOffer } from "../../app/serviceRecovery";
 
 interface ServiceRecoveryBannerProps {
@@ -21,16 +22,28 @@ export default function ServiceRecoveryBanner({
   onInstall,
   onDismiss,
 }: ServiceRecoveryBannerProps): ReactElement {
+  const progress = progressLabel(offer.action);
   return (
     <div className="service-recovery" role="alert">
       <div className="service-recovery-text">
         <div className="service-recovery-title">{offer.title}</div>
         <div className="service-recovery-body">{offer.body}</div>
         {error === null ? null : (
-          <pre className="service-recovery-error" aria-label="Installer output">
-            {error}
-          </pre>
+          <>
+            <div className="service-recovery-failure">
+              <strong>{failureHeadline(offer.action)}</strong> The installer said:
+            </div>
+            <pre className="service-recovery-error">{error}</pre>
+            {error.includes("held open") ? (
+              <div className="service-recovery-body">
+                These programs still have the Hermes folder open. Quit them, then try again.
+              </div>
+            ) : null}
+          </>
         )}
+        <div className="visually-hidden" aria-live="polite">
+          {installing ? progress : ""}
+        </div>
       </div>
       <div className="service-recovery-actions">
         <button type="button" className="btn btn-small" disabled={installing} onClick={onDismiss}>
@@ -42,7 +55,7 @@ export default function ServiceRecoveryBanner({
           disabled={installing}
           onClick={onInstall}
         >
-          {installing ? "Working…" : offer.action}
+          {installing ? progress : offer.action}
         </button>
       </div>
     </div>
