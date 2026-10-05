@@ -149,6 +149,19 @@ message InstallRelease {
   string release_id = 1;
 }
 
+// Tester (or DevOps) installing a release on this computer: pause every
+// project here first and reap what holds the home (start), read the pause
+// (status), or end it if the install can't go ahead (resume). This computer
+// only. Needs the owner-granted quiesce extra and the same gate as
+// install_release. `hermesd release install` calls it for you.
+message InstallQuiesce {
+  string release_id = 1;
+  // start, status or resume.
+  string action = 2;
+  // The version this computer will run; defaults to its build's.
+  optional string version = 3;
+}
+
 // Tester (or DevOps): how a deploy or rollback on a machine went.
 message DeployConfirm {
   string release_id = 1;

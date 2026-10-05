@@ -89,13 +89,30 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
         !mine.is_empty(),
         "release {release} has no build for this computer"
     );
+    // Every project here pauses first, and what holds the home is reaped;
+    // this session is spared until the handoff (H-117 Q4, ARCH-R49 M1).
+    if !args.dry_run {
+        let version = mine.first().map(|b| b.version.as_str());
+        let paused = crate::quiesce::cli::call(cfg, "start", release, version).await?;
+        println!("{}", crate::quiesce::cli::describe(&paused));
+        anyhow::ensure!(
+            paused["proceed"] == true,
+            "the install waits until the processes above let go of the home; run it again then"
+        );
+    }
     for build in mine {
         let stage = stage::Stage::new(release)?;
         let installed = install_one(cfg, &args, build, &stage);
         if args.dry_run || installed.is_err() {
             stage.remove();
         }
-        installed?;
+        if let Err(e) = installed {
+            // Nothing was handed off: every project resumes now.
+            if !args.dry_run {
+                let _ = crate::quiesce::cli::call(cfg, "resume", release, None).await;
+            }
+            return Err(e);
+        }
     }
     if !args.dry_run {
         println!(

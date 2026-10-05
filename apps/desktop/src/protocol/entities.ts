@@ -10,7 +10,8 @@ export type PermissionExtra =
   | "daemon_restart"
   | "app_restart"
   | "install"
-  | "release_main";
+  | "release_main"
+  | "quiesce";
 
 export interface Project {
   readonly id: string;

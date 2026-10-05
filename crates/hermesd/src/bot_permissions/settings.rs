@@ -312,6 +312,11 @@ fn extra_allow(extra: PermissionExtra, workspace: &Path) -> Vec<String> {
         ],
         // Lifts the main denies above; nothing to allow without review.
         PermissionExtra::ReleaseMain => Vec::new(),
+        // The daemon checks the extra, the role and the release again (H-117).
+        PermissionExtra::Quiesce => vec![
+            "Bash(hermesd quiesce *)".to_string(),
+            "PowerShell(hermesd quiesce *)".to_string(),
+        ],
         PermissionExtra::Install => {
             if cfg!(windows) {
                 vec![

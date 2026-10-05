@@ -26,10 +26,14 @@ use crate::db::{NewQuiesce, Quiesce};
 use crate::decisions::conflict;
 use crate::events::Push;
 
+pub mod cli;
+mod outcome;
 pub mod reap;
 pub mod services;
 mod start;
+pub mod tool;
 
+pub use outcome::{announce, boot_outcome, on_boot};
 pub use start::start;
 
 /// How long a pause may stay open before it resumes by itself.
@@ -38,11 +42,9 @@ pub const DEFAULT_DEADLINE_MINUTES: i64 = 30;
 const DEADMAN_SECS: u64 = 15;
 
 /// What a bot shows while held.
+/// `Paused (install of 0.17.0)`: an install's reason names its release.
 pub fn reason_line(q: &Quiesce) -> String {
-    match &q.release_id {
-        Some(release) => format!("Paused (install of {release})"),
-        None => format!("Paused ({})", q.reason),
-    }
+    format!("Paused ({})", q.reason)
 }
 
 /// Who asked for the pause and why.

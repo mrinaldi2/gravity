@@ -89,6 +89,8 @@ pub fn spawn_workers(app: &Arc<AppState>) {
         });
     }
 
+    // An install's pause left open across its restart ends here (H-117 Q4).
+    crate::quiesce::on_boot(app);
     crate::quiesce::spawn_deadman(app.clone());
     crate::peer::mirror::spawn(app.clone());
     crate::peer::spawn_board_relay(app.clone());

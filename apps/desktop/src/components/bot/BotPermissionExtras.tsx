@@ -34,6 +34,11 @@ const EXTRAS: readonly {
     label: "Release to main",
     help: "Push and merge to main, in every profile. Give it to DevOps only.",
   },
+  {
+    id: "quiesce",
+    label: "Pause all projects for an install",
+    help: "Holds every project on this computer still while it installs an approved release, then resumes them. Give it to DevOps and the testers that install.",
+  },
 ];
 
 /**

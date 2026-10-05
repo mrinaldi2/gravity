@@ -52,15 +52,19 @@ pub enum PermissionExtra {
     /// Push and merge to `main` (DevOps only). Every other bot is denied
     /// that, by rule and by the guard, in every profile.
     ReleaseMain,
+    /// Pause every project on this computer for an install (H-117). The
+    /// daemon also requires DevOps or `install`, and an approved release.
+    Quiesce,
 }
 
 impl PermissionExtra {
-    pub const ALL: [PermissionExtra; 5] = [
+    pub const ALL: [PermissionExtra; 6] = [
         Self::Publish,
         Self::DaemonRestart,
         Self::AppRestart,
         Self::Install,
         Self::ReleaseMain,
+        Self::Quiesce,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -70,6 +74,7 @@ impl PermissionExtra {
             Self::AppRestart => "app_restart",
             Self::Install => "install",
             Self::ReleaseMain => "release_main",
+            Self::Quiesce => "quiesce",
         }
     }
 

@@ -306,3 +306,20 @@ fn rule_paths_are_absolute_on_both_platforms() {
     assert_eq!(rule_path(Path::new("/Users/me/x")), "//Users/me/x");
     assert_eq!(rule_path(Path::new(r"C:\Users\me\x")), "//c/Users/me/x");
 }
+
+/// H-117 Q4: the quiesce extra allows exactly `hermesd quiesce`, and only
+/// when granted; the daemon checks the extra, role and release again.
+#[test]
+fn the_quiesce_extra_allows_only_hermesd_quiesce() {
+    let without = rules(&input(PermissionProfile::Trusted, &[]), "allow");
+    assert!(!without.iter().any(|r| r.contains("hermesd quiesce")));
+    let with = rules(
+        &input(PermissionProfile::Trusted, &[PermissionExtra::Quiesce]),
+        "allow",
+    );
+    let added: Vec<&String> = with.iter().filter(|r| !without.contains(r)).collect();
+    assert_eq!(
+        added,
+        ["Bash(hermesd quiesce *)", "PowerShell(hermesd quiesce *)"]
+    );
+}

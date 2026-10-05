@@ -42,6 +42,11 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
     tool("release_pause", "ReleasePause", Audience::Devops),
     tool("release_resume", "ReleaseResume", Audience::Devops),
     tool("install_release", "InstallRelease", Audience::Tester),
+    tool(
+        "install_quiesce",
+        "InstallQuiesce",
+        Audience::TesterOrDevops,
+    ),
     tool("deploy_confirm", "DeployConfirm", Audience::TesterOrDevops),
 ];
 
@@ -186,6 +191,16 @@ pub(super) fn call(
         "install_release" => {
             let req: c::InstallRelease = decode("InstallRelease", args, project)?;
             deploy::install(app, &me, &req.release_id)
+        }
+        "install_quiesce" => {
+            let req: c::InstallQuiesce = decode("InstallQuiesce", args, project)?;
+            crate::quiesce::tool::call(
+                app,
+                &me,
+                req.action.trim(),
+                &req.release_id,
+                req.version.as_deref(),
+            )
         }
         "deploy_confirm" => {
             let req: c::DeployConfirm = decode("DeployConfirm", args, project)?;

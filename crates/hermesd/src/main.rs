@@ -138,6 +138,10 @@ async fn main() -> anyhow::Result<()> {
             hermesd::board::release::cli::run(&cfg, &args[1..]).await?;
             return Ok(());
         }
+        Some("quiesce") => {
+            hermesd::quiesce::cli::run(&cfg, &args[1..]).await?;
+            return Ok(());
+        }
         Some("peer") => {
             hermesd::peer::cli::run(&cfg, &args[1..]).await?;
             return Ok(());

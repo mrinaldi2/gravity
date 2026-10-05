@@ -773,6 +773,22 @@ stop = "brew services stop colima"
 start = "brew services start colima"
 ```
 
+**Installing (Q4).** The pause is the installing bot's to ask for, on its own computer only. It is the MCP tool `install_quiesce {release_id, action: start|status|resume, version?}`, also run as `hermesd quiesce start|status|resume <release>` over the local endpoint, which knows the bot by its process. The daemon allows it only when all of these hold:
+- the bot holds the `quiesce` extra, granted once by the owner ("Pause all projects for an install"; it allows `hermesd quiesce *`);
+- it is the project's DevOps, or holds the `install` extra;
+- it holds an open deploy task for an approved release, the same gate as `install_release`.
+
+A refusal says which of these is missing. `start` pauses with the caller as `exempt_bot`, reaps and answers `{quiesce, report, proceed}`. Its report is recorded on the release as a `quiesce` event, and each lead gets a note.
+
+`hermesd release install <release>` runs `start` itself before it stages anything:
+- **Something still holds the home** (`proceed` false): it prints the holders and stops.
+- **The install fails before the handoff:** it resumes the pause (`aborted`).
+- **The install is handed off:** the system's install job stops the daemon and every session. A daemon that boots with an install's pause open ends it:
+  - running the version being installed, it resumes as `install_ok`;
+  - any other version means the install was rolled back, and it resumes as `rolled_back`.
+
+  Either way the outcome goes on the release, and leads and DevOps are told. A pause left open by a crash in between resumes at its deadline.
+
 **WebSocket.**
 - `quiesce_status` (read) answers `{type: "quiesce", quiesce: …|null}`.
 - `quiesce_resume` (approve, the owner's **Resume now**) ends the pause.
