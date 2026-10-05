@@ -26,6 +26,8 @@ impl Stage {
             "hermes-install-{name}-{}",
             uuid::Uuid::new_v4().simple()
         ));
+        // Only mutated on unix, where the folder gets mode 0o700.
+        #[cfg_attr(not(unix), allow(unused_mut))]
         let mut builder = std::fs::DirBuilder::new();
         #[cfg(unix)]
         {

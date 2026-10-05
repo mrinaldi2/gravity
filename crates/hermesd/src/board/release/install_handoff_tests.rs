@@ -1,6 +1,8 @@
 use std::path::Path;
 
-use super::super::handoff::{cmd_script, launchd_plist, outcome, sh_script, Job};
+use super::super::handoff::{cmd_script, outcome, Job};
+#[cfg(unix)]
+use super::super::handoff::{launchd_plist, sh_script};
 
 fn job(home: &Path) -> Job {
     Job::new(
@@ -17,6 +19,8 @@ fn job(home: &Path) -> Job {
     )
 }
 
+// The sh script is for launchd and unix only; its paths use '/'.
+#[cfg(unix)]
 #[test]
 fn the_job_runs_once_records_its_outcome_and_cleans_up() {
     let home = Path::new("/h");
@@ -46,7 +50,11 @@ fn the_job_runs_once_records_its_outcome_and_cleans_up() {
     assert!(plist.contains("<key>RunAtLoad</key><true/>"));
     assert!(plist.contains("<key>KeepAlive</key><false/>"));
     assert!(plist.contains("a &amp;&amp; b &gt; c"), "escaped: {plist}");
+}
 
+#[test]
+fn the_windows_job_records_its_outcome_and_unschedules_itself() {
+    let job = job(Path::new("/h"));
     let cmd = cmd_script(&job);
     assert!(cmd.contains("echo %ERRORLEVEL%>"), "{cmd}");
     assert!(cmd.contains("schtasks /delete /tn \"com.thehermes.release-install.r1\" /f"));
