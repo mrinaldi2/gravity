@@ -3486,7 +3486,7 @@ Rust: core-foundation 0.10.1
 Declared license: MIT OR Apache-2.0
 Source: https://static.crates.io/crates/core-foundation/core-foundation-0.10.1.crate
 Source archive SHA-256: b2a6cd9ae233e7f62ba4e9353e81a88df7fc8a5987b8d445b4d90c879bd156f6
-Scope: build/test
+Scope: runtime
 
 --- LICENSE-APACHE ---
                               Apache License
@@ -28876,7 +28876,7 @@ Rust: security-framework 3.7.0
 Declared license: MIT OR Apache-2.0
 Source: https://static.crates.io/crates/security-framework/security-framework-3.7.0.crate
 Source archive SHA-256: b7f4bc775c73d9a02cde8bf7b2ec4c9d12743edf609006c7facc23998404cd1d
-Scope: build/test
+Scope: runtime
 
 --- LICENSE-APACHE ---
                               Apache License
@@ -29108,7 +29108,7 @@ Rust: security-framework-sys 2.17.0
 Declared license: MIT OR Apache-2.0
 Source: https://static.crates.io/crates/security-framework-sys/security-framework-sys-2.17.0.crate
 Source archive SHA-256: 6ce2691df843ecc5d231c0b14ece2acc3efb62c0a398c7e1d875f3983ce020e3
-Scope: build/test
+Scope: runtime
 
 --- LICENSE-APACHE ---
                               Apache License
