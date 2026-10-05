@@ -227,6 +227,40 @@ describe("DaemonSettings", () => {
     });
   });
 
+  it("offers the install instead of an error when no current service is installed", async () => {
+    const user = userEvent.setup();
+    Object.assign(window, { __TAURI_INTERNALS__: {} });
+    invoke.mockImplementation((command) => {
+      if (command === "restart_local_daemon") {
+        return Promise.reject(
+          "daemon restart failed: Error: no hermesd service installed at /u/Library/LaunchAgents/com.manuelrinaldi.thehermesd.plist",
+        );
+      }
+      if (command === "local_service_status") {
+        return Promise.resolve({ state: "legacy_only", port: 49777, version: null });
+      }
+      return Promise.resolve(null);
+    });
+    const { onToast } = renderPane(baseDaemon(), true, true);
+
+    await user.click(await screen.findByRole("button", { name: "Restart Hermes service" }));
+    await user.click(
+      screen.getAllByRole("button", { name: "Restart Hermes service" }).at(-1) as HTMLElement,
+    );
+    await user.click(await screen.findByRole("button", { name: "Finish the update" }));
+
+    await waitFor(() => {
+      expect(onToast).toHaveBeenCalledWith("info", "Hermes service running", expect.any(String));
+    });
+    expect(invoke).toHaveBeenCalledWith("install_local_daemon");
+    expect(onToast).not.toHaveBeenCalledWith(
+      "error",
+      "Couldn't restart the Hermes service",
+      expect.any(String),
+    );
+    Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
+  });
+
   it("still offers the restart when the config never loaded", async () => {
     const daemon = new FakeDaemon().onRequest("get_config", () => {
       throw new Error("no daemon");

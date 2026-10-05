@@ -4,7 +4,11 @@ import { captureException } from "../../analytics";
 import { useLoadOnConnect } from "../../hooks/useLoadOnConnect";
 import type { DaemonApi } from "../../protocol/api";
 import type { DaemonConfig, NotifyLevel } from "../../protocol/entities";
-import { restartLocalDaemon } from "../../setup";
+import { recoveryFor } from "../../app/serviceRecovery";
+import type { RecoveryOffer } from "../../app/serviceRecovery";
+import { installForRecovery } from "../../app/useServiceRecovery";
+import { localServiceStatus, restartLocalDaemon } from "../../setup";
+import type { ServiceStatus } from "../../setup";
 import { errText } from "../../util";
 import ConfirmDialog from "../overlay/ConfirmDialog";
 
@@ -102,25 +106,51 @@ interface RestartRowProps {
   readonly onToast: (level: NotifyLevel, title: string, body: string) => void;
 }
 
+interface Recovery {
+  readonly status: ServiceStatus;
+  readonly offer: RecoveryOffer;
+}
+
 /**
  * Bounces the launchd agent. Confirmed rather than immediate: bots run as
- * children of the daemon, so a restart cuts every session mid-turn.
+ * children of the daemon, so a restart cuts every session mid-turn. With no
+ * current service to bounce (a pre-rename agent left by an update that
+ * rolled back, or none at all) it offers the install instead.
  */
 function RestartRow({ onToast }: RestartRowProps): ReactElement {
   const [confirming, setConfirming] = useState(false);
-  const [restarting, setRestarting] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [recovery, setRecovery] = useState<Recovery | null>(null);
 
   const restart = async (): Promise<void> => {
     setConfirming(false);
-    setRestarting(true);
+    setBusy("Restarting…");
     try {
       await restartLocalDaemon();
       onToast("info", "Hermes service restarting", "The app reconnects once it is back up.");
     } catch (error) {
-      captureException(error, "daemon_restart");
-      onToast("error", "Couldn't restart the Hermes service", errText(error));
+      const status = await localServiceStatus();
+      const offer = status === null ? null : recoveryFor(status);
+      if (status !== null && offer !== null) {
+        setRecovery({ status, offer });
+      } else {
+        captureException(error, "daemon_restart");
+        onToast("error", "Couldn't restart the Hermes service", errText(error));
+      }
     } finally {
-      setRestarting(false);
+      setBusy(null);
+    }
+  };
+
+  const install = async (status: ServiceStatus): Promise<void> => {
+    setRecovery(null);
+    setBusy("Installing…");
+    const outcome = await installForRecovery(status);
+    setBusy(null);
+    if (outcome === "installed") {
+      onToast("info", "Hermes service running", "The app reconnects on its own.");
+    } else if (outcome !== "cancelled") {
+      onToast("error", "Couldn't install the Hermes service", outcome.error);
     }
   };
 
@@ -137,14 +167,27 @@ function RestartRow({ onToast }: RestartRowProps): ReactElement {
         <button
           type="button"
           className="btn btn-small"
-          disabled={restarting}
+          disabled={busy !== null}
           onClick={() => {
             setConfirming(true);
           }}
         >
-          {restarting ? "Restarting…" : "Restart Hermes service"}
+          {busy ?? "Restart Hermes service"}
         </button>
       </div>
+      {recovery === null ? null : (
+        <ConfirmDialog
+          title={recovery.offer.title}
+          body={recovery.offer.body}
+          confirmLabel={recovery.offer.action}
+          onConfirm={() => {
+            void install(recovery.status);
+          }}
+          onCancel={() => {
+            setRecovery(null);
+          }}
+        />
+      )}
       {confirming ? (
         <ConfirmDialog
           title="Restart the Hermes service?"
