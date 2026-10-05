@@ -48,6 +48,18 @@ launches and remotely reachable daemons require an available configured port.
 ```
 
 The desktop uninstaller also stops and removes its managed daemon task.
+
+Each bot session runs in its own Job Object with kill-on-close. Stopping a
+bot, its session ending, or the daemon exiting (including `service stop`)
+ends everything the bot started: `node`, `cargo`, servers it left running.
+None of them is left holding `%USERPROFILE%\.thehermes`. `service install`,
+`restart` and `uninstall`, and `migrate-home`, may still fail with "Access
+is denied" (os error 5) because some other program holds a file under the
+home. The error then names each holder by executable and PID, for example
+`held by Code.exe (pid 8120), node.exe (pid 4412)`. The holders are found
+through the Restart Manager, without WMI. Close them and retry. A program
+whose only tie to the home is its working directory holds no file, so it
+isn't named. Close terminals and Explorer windows open there.
 Uninstalling keeps the database, configuration and workspaces; deleting
 `%USERPROFILE%\.thehermes` after uninstall gives a completely fresh setup.
 The first-run wizard can still install a missing bundled daemon as a recovery step.

@@ -221,6 +221,37 @@ fn legacy_name(schtasks: &impl Schtasks, home: &Path) -> anyhow::Result<String> 
 }
 
 impl<S: Schtasks> Host for TaskScheduler<'_, S> {
+    /// The running daemons of `ids` and every process they started: the
+    /// stop ends them, so the preflight's Restart Manager list skips them.
+    fn owned(&self, ids: &[Identity]) -> crate::holders::Owned {
+        let mut owned = crate::holders::Owned::default();
+        for id in ids {
+            for (_, home, pid_path) in self.tasks(*id).unwrap_or_default() {
+                let mut tree = Vec::new();
+                if let Some(pid) = std::fs::read_to_string(&pid_path)
+                    .ok()
+                    .and_then(|p| p.trim().parse::<u32>().ok())
+                {
+                    tree.extend(process_tree::tree(pid).unwrap_or_default());
+                }
+                let executables = self.paths.daemon_executables(&home);
+                for daemon in process_tree::running(&executables).unwrap_or_default() {
+                    tree.extend(process_tree::tree(daemon.pid()).unwrap_or_default());
+                }
+                owned
+                    .pids
+                    .extend(tree.iter().map(process_tree::Process::pid));
+            }
+        }
+        owned
+    }
+
+    fn explain(&self, error: anyhow::Error) -> anyhow::Error {
+        let mut homes = vec![self.paths.home.clone()];
+        homes.extend(self.legacy.iter().map(|(_, home)| home.clone()));
+        crate::holders::explain_held(error, &homes)
+    }
+
     fn installed(&self) -> Vec<Identity> {
         let mut ids = Vec::new();
         if !self.legacy.is_empty() {

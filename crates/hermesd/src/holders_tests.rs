@@ -84,3 +84,40 @@ fn recorded_sessions_round_trip_through_the_file() {
     assert_eq!(recorded_sessions(tmp.path()), BTreeSet::from([12, 34]));
     assert!(recorded_sessions(&tmp.path().join("missing")).is_empty());
 }
+
+#[test]
+fn a_held_file_error_is_access_denied_or_a_sharing_violation() {
+    for code in [5, 32] {
+        let error = anyhow::Error::from(std::io::Error::from_raw_os_error(code)).context("moving");
+        assert!(is_held_error(&error), "{code}");
+    }
+    let other = anyhow::Error::from(std::io::Error::from_raw_os_error(2)).context("moving");
+    assert!(!is_held_error(&other));
+    assert!(!is_held_error(&anyhow::anyhow!("no io error")));
+    // Anything else passes through untouched, without a lookup.
+    let told = format!("{:#}", explain_held(other, &[PathBuf::from("/nowhere")]));
+    assert!(!told.contains("held by"), "{told}");
+}
+
+#[test]
+fn holders_are_named_by_exe_and_pid() {
+    let holder = |pid, command: &str| Holder {
+        pid,
+        pgid: None,
+        command: command.into(),
+        cwd: false,
+        path: PathBuf::from("home"),
+    };
+    assert_eq!(
+        held_by(&[holder(4120, "node.exe"), holder(3988, "claude.exe")]),
+        "held by node.exe (pid 4120), claude.exe (pid 3988)"
+    );
+}
+
+/// Ends a test's leftover `ping` by PID (Windows).
+#[cfg(windows)]
+pub fn end_ping(pid: u32) {
+    let _ = std::process::Command::new("taskkill")
+        .args(["/F", "/PID", &pid.to_string()])
+        .output();
+}
