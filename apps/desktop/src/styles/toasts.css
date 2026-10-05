@@ -45,6 +45,8 @@
   font-size: 12px;
   margin-top: 2px;
   overflow-wrap: anywhere;
+  /* Installer errors list one holder per line. */
+  white-space: pre-line;
 }
 
 .toast-actions {

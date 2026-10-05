@@ -196,6 +196,7 @@ pub fn run() {
             daemon::daemon_health,
             daemon::install_local_daemon,
             daemon::migration::home_migration_summary,
+            daemon::status::local_service_status,
             daemon::local_daemon_is_managed,
             daemon::restart_local_daemon,
             daemon::local_daemon_port,

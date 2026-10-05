@@ -127,7 +127,7 @@ impl Plan {
     /// saving the state leaves a log in the new home that does not know about
     /// the move yet; that move is recorded here, so resume and rollback both
     /// see it. Callers that change anything save the state themselves.
-    fn state(&self) -> anyhow::Result<Option<State>> {
+    pub(crate) fn state(&self) -> anyhow::Result<Option<State>> {
         let Some(path) = State::locate(&self.from, &self.to) else {
             return Ok(None);
         };
@@ -176,6 +176,16 @@ fn crash_point(_at: &str) -> anyhow::Result<()> {
 /// `THEHERMES_HOME` is the user's to migrate (`migrate-home --from --to`).
 pub fn pending(cfg: &Config) -> anyhow::Result<Option<Plan>> {
     pending_unless(cfg, crate::config::home_is_overridden())
+}
+
+/// Whether the default migration for `cfg` ran to the end, so the home now
+/// lives where it moved to.
+pub fn completed(cfg: &Config) -> bool {
+    Plan::default_for(cfg)
+        .state()
+        .ok()
+        .flatten()
+        .is_some_and(|state| state.is_complete())
 }
 
 /// [`pending`] with the override already decided.

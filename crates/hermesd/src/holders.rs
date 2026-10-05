@@ -194,11 +194,20 @@ pub fn recorded_sessions(home: &Path) -> BTreeSet<u32> {
 /// its descendants.
 #[cfg(unix)]
 pub fn descendant_groups(root: u32) -> BTreeSet<u32> {
+    tree(root).1
+}
+
+/// `root` and every descendant of it, and the descendants' process groups
+/// other than `root`'s own.
+#[cfg(unix)]
+fn tree(root: u32) -> (BTreeSet<u32>, BTreeSet<u32>) {
+    let mut found = BTreeSet::from([root]);
+    let mut groups = BTreeSet::new();
     let Ok(out) = std::process::Command::new("/bin/ps")
         .args(["-A", "-o", "pid=,ppid=,pgid="])
         .output()
     else {
-        return BTreeSet::new();
+        return (found, groups);
     };
     let table: Vec<[u32; 3]> = String::from_utf8_lossy(&out.stdout)
         .lines()
@@ -208,8 +217,6 @@ pub fn descendant_groups(root: u32) -> BTreeSet<u32> {
         })
         .collect();
     let own = table.iter().find(|[pid, ..]| *pid == root).map(|r| r[2]);
-    let mut found = BTreeSet::from([root]);
-    let mut groups = BTreeSet::new();
     loop {
         let before = found.len();
         for [pid, ppid, pgid] in &table {
@@ -218,8 +225,32 @@ pub fn descendant_groups(root: u32) -> BTreeSet<u32> {
             }
         }
         if found.len() == before {
-            return groups;
+            return (found, groups);
         }
+    }
+}
+
+/// The processes of a daemon `service install` is about to stop: the daemon,
+/// its descendants and the session groups it started. The install stops
+/// them itself, so the holder check made before the stop does not count
+/// them; the migration checks again once they are gone.
+#[derive(Debug, Default, Clone)]
+pub struct Owned {
+    pub pids: BTreeSet<u32>,
+    pub groups: BTreeSet<u32>,
+}
+
+impl Owned {
+    /// Adds the daemon `root` and everything it started.
+    #[cfg(unix)]
+    pub fn add_daemon(&mut self, root: u32) {
+        let (pids, groups) = tree(root);
+        self.pids.extend(pids);
+        self.groups.extend(groups);
+    }
+
+    pub fn covers(&self, holder: &Holder) -> bool {
+        self.pids.contains(&holder.pid) || holder.pgid.is_some_and(|g| self.groups.contains(&g))
     }
 }
 

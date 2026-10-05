@@ -66,6 +66,8 @@ struct FakeLaunchctl {
     disabled: RefCell<BTreeSet<String>>,
     calls: RefCell<Vec<String>>,
     fail: Option<String>,
+    /// Runs as an agent is booted out.
+    on_bootout: Option<Box<dyn Fn()>>,
 }
 
 impl FakeLaunchctl {
@@ -109,6 +111,9 @@ impl Launchctl for FakeLaunchctl {
     fn bootout(&self, plist: &Path) -> anyhow::Result<()> {
         self.call(format!("bootout {}", file_name(plist)))?;
         self.loaded.borrow_mut().remove(&file_name(plist));
+        if let Some(hook) = &self.on_bootout {
+            hook();
+        }
         Ok(())
     }
     fn bootstrap(&self, plist: &Path) -> anyhow::Result<()> {
@@ -359,4 +364,45 @@ fn an_overridden_home_never_takes_over_the_pre_rename_agent() {
     assert!(!calls.iter().any(|c| c.contains(LEGACY_LABEL)), "{calls:?}");
     assert_eq!(host.launchctl.loaded(), [CURRENT, LEGACY]);
     assert!(paths.legacy_plist_path().is_file());
+}
+
+#[path = "launchd_premigrate_tests.rs"]
+mod premigrate;
+
+/// The incident shape: an install that rolled back left only the pre-rename
+/// agent (disabled, so nothing runs it) while a daemon started by hand
+/// answers `/health`.
+#[test]
+fn the_status_report_names_a_lone_legacy_agent_and_an_unmanaged_daemon() {
+    let tmp = tempfile::tempdir().unwrap();
+    let paths = ServicePaths::new(tmp.path().join("home"), tmp.path().join("user"))
+        .with_home_overridden(false);
+    let legacy = paths.legacy_plist_path();
+    std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    std::fs::write(&legacy, "plist").unwrap();
+    let home = crate::service_report::HomeState {
+        migration_pending: false,
+        migrated: true,
+    };
+    let report = report_with(
+        &paths,
+        49777,
+        Some("0.14.2".into()),
+        home,
+        &FakeLaunchctl::default(),
+    );
+    assert_eq!(
+        serde_json::to_value(&report).unwrap(),
+        serde_json::json!({
+            "binary": false,
+            "service": false,
+            "service_running": false,
+            "legacy_service": true,
+            "legacy_running": false,
+            "migration_pending": false,
+            "migrated": true,
+            "port": 49777,
+            "version": "0.14.2",
+        })
+    );
 }

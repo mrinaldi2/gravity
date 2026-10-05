@@ -6,30 +6,36 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::{disk, files, sql, steps, Plan, State, Step};
+use crate::holders::Owned;
 
 /// Space kept free beyond the backup itself.
 const DISK_MARGIN: u64 = 512 * 1024 * 1024;
 
 /// Everything a run would touch, and anything that would stop it.
 pub fn dry_run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<bool> {
-    Ok(report(plan, out)?.is_empty())
+    Ok(report(plan, None, out)?.is_empty())
 }
 
-/// What would stop a run, apart from the daemon it is about to stop:
-/// `service install` checks this before it stops anything. Processes other
-/// than the daemon holding the home can only be told apart from the
-/// daemon's own once it has stopped; the run checks them then.
-pub fn blockers_before_stop(plan: &Plan) -> anyhow::Result<Vec<String>> {
-    let mut blockers = report(plan, &mut std::io::sink())?;
-    blockers.retain(|blocker| !blocker.starts_with(DAEMON_RUNNING));
-    Ok(blockers)
+/// What would stop a run, apart from the daemon it is about to stop and
+/// the processes in `owned` (that daemon's own, which the install stops
+/// with it): `service install` checks this before it stops anything, so a
+/// process holding the home blocks the install while everything still runs.
+/// The run checks again once the daemon has stopped.
+pub fn blockers_before_stop(plan: &Plan, owned: &Owned) -> anyhow::Result<Vec<String>> {
+    report(plan, Some(owned), &mut std::io::sink())
 }
 
 const DAEMON_RUNNING: &str = "a daemon is running against";
 
-fn report(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<Vec<String>> {
+/// `before_stop` holds the daemon's processes when the daemon is still to
+/// be stopped (see [`blockers_before_stop`]).
+fn report(
+    plan: &Plan,
+    before_stop: Option<&Owned>,
+    out: &mut dyn Write,
+) -> anyhow::Result<Vec<String>> {
     let state = plan.state()?;
-    let mut blockers = preflight(plan, state.as_ref());
+    let mut blockers = checks(plan, state.as_ref(), before_stop);
     writeln!(
         out,
         "migrate {} -> {}",
@@ -112,6 +118,10 @@ fn report(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<Vec<String>> {
 
 /// Reasons a run cannot start or resume.
 pub(super) fn preflight(plan: &Plan, state: Option<&State>) -> Vec<String> {
+    checks(plan, state, None)
+}
+
+fn checks(plan: &Plan, state: Option<&State>, before_stop: Option<&Owned>) -> Vec<String> {
     let mut blockers = Vec::new();
     if state.is_some_and(State::is_complete) {
         blockers.push("already migrated".to_string());
@@ -129,10 +139,14 @@ pub(super) fn preflight(plan: &Plan, state: Option<&State>) -> Vec<String> {
         }
     }
     let home = if moved { &plan.to } else { &plan.from };
-    if home.exists() && daemon_stopped(home, Duration::ZERO).is_err() {
+    let running = home.exists() && daemon_stopped(home, Duration::ZERO).is_err();
+    if running && before_stop.is_none() {
         blockers.push(format!("{DAEMON_RUNNING} {}", home.display()));
     } else if !moved && plan.source_is_real_home() {
-        blockers.extend(holder_blockers(plan));
+        blockers.extend(holder_blockers(
+            plan,
+            before_stop.unwrap_or(&Owned::default()),
+        ));
     }
     blockers
 }
@@ -140,8 +154,9 @@ pub(super) fn preflight(plan: &Plan, state: Option<&State>) -> Vec<String> {
 /// Processes other than the daemon working in or holding files under the old
 /// home. On macOS a rename succeeds under them, and one that writes by
 /// absolute path afterwards recreates a real, near-empty old home; on Windows
-/// they fail the move. Either way they are named, never killed.
-fn holder_blockers(plan: &Plan) -> Vec<String> {
+/// they fail the move. Either way they are named, never killed. Those in
+/// `owned` are left out.
+fn holder_blockers(plan: &Plan, owned: &Owned) -> Vec<String> {
     const SHOWN: usize = 20;
     let roots: Vec<PathBuf> = plan
         .path_pairs()
@@ -149,7 +164,10 @@ fn holder_blockers(plan: &Plan) -> Vec<String> {
         .map(|(from, _)| PathBuf::from(from))
         .collect();
     let holders = match crate::holders::list(&roots) {
-        Ok(holders) => holders,
+        Ok(mut holders) => {
+            holders.retain(|holder| !owned.covers(holder));
+            holders
+        }
         Err(error) => {
             tracing::warn!(%error, "could not list processes holding the home");
             return Vec::new();

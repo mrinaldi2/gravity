@@ -163,6 +163,31 @@ pub fn uninstall(paths: &ServicePaths) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// `service status --json`. Task Scheduler is not asked whether the task
+/// runs, so `/health` alone says whether a daemon answers.
+pub fn report(
+    paths: &ServicePaths,
+    configured_port: u16,
+    home: crate::service_report::HomeState,
+) -> crate::service_report::Report {
+    let port = crate::home::runtime_port(&paths.home).unwrap_or(configured_port);
+    let legacy_marker = crate::brand::legacy_daemon_file("-task.xml");
+    crate::service_report::Report {
+        binary: paths.bin_path().is_file() || paths.legacy_bin_path().is_file(),
+        service: paths.plist_path().is_file(),
+        service_running: None,
+        legacy_service: paths
+            .legacy_homes()
+            .iter()
+            .any(|home| home.join(&legacy_marker).is_file()),
+        legacy_running: None,
+        migration_pending: home.migration_pending,
+        migrated: home.migrated,
+        port,
+        version: crate::server::probe_health(port, Duration::from_secs(2)),
+    }
+}
+
 pub fn status(paths: &ServicePaths, configured_port: u16) -> bool {
     let port = crate::home::runtime_port(&paths.home).unwrap_or(configured_port);
     let installed = paths.bin_path().is_file() && paths.plist_path().is_file();

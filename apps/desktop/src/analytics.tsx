@@ -63,6 +63,7 @@ export type ErrorOperation =
   | "app_update"
   | "bot_create"
   | "bot_delete"
+  | "daemon_install"
   | "daemon_restart"
   | "decision_answer"
   | "decision_comment"

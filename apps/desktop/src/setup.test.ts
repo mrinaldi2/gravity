@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InstallCancelled, onHomeMigrationRequest } from "./app/homeMigration";
 import { DEFAULT_ENDPOINT } from "./settings";
-import { daemonLogTail, installLocalDaemon, localDaemonEndpoint, probeDaemon } from "./setup";
+import {
+  daemonLogTail,
+  installLocalDaemon,
+  localDaemonEndpoint,
+  localServiceStatus,
+  probeDaemon,
+} from "./setup";
 
 const invoke = vi.hoisted(() => vi.fn<(command: string, args?: unknown) => Promise<unknown>>());
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -15,6 +21,29 @@ afterEach(() => {
 function inTauri(): void {
   vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
 }
+
+describe("localServiceStatus", () => {
+  it("reads the state the Tauri shell classified", async () => {
+    inTauri();
+    invoke.mockResolvedValue({ state: "unmanaged", port: 49777, version: "0.14.2" });
+    await expect(localServiceStatus()).resolves.toEqual({
+      state: "unmanaged",
+      port: 49777,
+      version: "0.14.2",
+    });
+    expect(invoke).toHaveBeenCalledWith("local_service_status");
+  });
+
+  it("returns null for an unknown state, a home set by environment, or a failure", async () => {
+    inTauri();
+    invoke.mockResolvedValueOnce({ state: "sideways", port: 49777, version: null });
+    await expect(localServiceStatus()).resolves.toBeNull();
+    invoke.mockResolvedValueOnce(null);
+    await expect(localServiceStatus()).resolves.toBeNull();
+    invoke.mockRejectedValueOnce("bundled daemon not found");
+    await expect(localServiceStatus()).resolves.toBeNull();
+  });
+});
 
 describe("probeDaemon", () => {
   it("returns null outside the Tauri shell", async () => {

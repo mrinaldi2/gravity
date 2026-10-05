@@ -53,6 +53,7 @@ fn sidecar_path_for_exe(exe: &Path) -> Result<PathBuf, String> {
 
 mod home;
 pub(crate) mod migration;
+pub(crate) mod status;
 
 #[cfg(test)]
 use home::managed_markers;
@@ -65,7 +66,11 @@ pub(crate) use home::{daemon_home, user_home};
 /// Runs the bundled sidecar's own `service <action>`, the same code path the
 /// CLI uses.
 fn run_bundled_service(action: &str, failure: &str) -> Result<(), String> {
-    let out = run_sidecar(&["service", action])?;
+    run_bundled_service_args(&["service", action], failure)
+}
+
+fn run_bundled_service_args(args: &[&str], failure: &str) -> Result<(), String> {
+    let out = run_sidecar(args)?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
         return Err(format!("{failure}: {}", stderr.trim()));
@@ -154,7 +159,16 @@ pub fn install_local_daemon(
                 .to_string(),
         );
     }
-    install_bundled_local_daemon()
+    // Unconfirmed, the sidecar refuses rather than migrates, should the two
+    // checks ever disagree.
+    if confirmed_migration == Some(true) {
+        install_bundled_local_daemon()
+    } else {
+        run_bundled_service_args(
+            &["service", "install", "--no-migrate"],
+            "daemon install failed",
+        )
+    }
 }
 
 /// Updates an app-managed launchd daemon, but never creates a local service

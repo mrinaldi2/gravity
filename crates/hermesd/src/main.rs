@@ -122,7 +122,7 @@ async fn main() -> anyhow::Result<()> {
             // used to run the install.
             if args.iter().any(|a| a == "--help" || a == "-h") {
                 println!(
-                    "usage: hermesd service <install [--binary <path>] [--no-migrate]|uninstall|restart|status>"
+                    "usage: hermesd service <install [--binary <path>] [--no-migrate]|uninstall|restart|status [--json]>"
                 );
                 return Ok(());
             }
@@ -180,6 +180,15 @@ async fn main() -> anyhow::Result<()> {
                     println!("hermesd restarted ({})", hermesd::service::SERVICE_LABEL);
                 }
                 Some("status") => {
+                    if args.iter().any(|a| a == "--json") {
+                        let home = hermesd::service_report::HomeState {
+                            migration_pending: hermesd::migrate_home::pending(&cfg)?.is_some(),
+                            migrated: hermesd::migrate_home::completed(&cfg),
+                        };
+                        let report = hermesd::service::report(&paths, cfg.port, home);
+                        println!("{}", serde_json::to_string(&report)?);
+                        return Ok(());
+                    }
                     if !hermesd::service::status(&paths, cfg.port) {
                         std::process::exit(1);
                     }
