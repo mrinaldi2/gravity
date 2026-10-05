@@ -166,6 +166,103 @@
   color: var(--text-dim);
 }
 
+/* Off the board's home: where a row is acted on, in place of its button. */
+.dash-elsewhere {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.dash-note {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+/* The lead's WIP overrides, folded under Needs you (H-112). */
+.dash-info {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.dash-info summary {
+  cursor: pointer;
+}
+
+.dash-info ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+/* "Review N rulings…": each relayed ruling before one confirm (UX-016). */
+.relayed-dialog {
+  max-width: 520px;
+}
+
+.relayed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  margin: 0 0 12px;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.relayed-ruling {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.relayed-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.relayed-meta,
+.relayed-note,
+.relayed-changed {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.relayed-note,
+.relayed-changed {
+  margin: 0 0 16px;
+}
+
+.relayed-changed {
+  color: var(--text-strong);
+}
+
+.relayed-open {
+  flex: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.relayed-open:hover {
+  text-decoration: underline;
+}
+
+.relayed-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .dash-state {
   display: inline-flex;
   align-items: center;

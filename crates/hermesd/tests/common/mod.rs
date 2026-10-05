@@ -19,6 +19,7 @@ use tokio_tungstenite::tungstenite::Message as WsMsg;
 
 pub mod board;
 pub mod devtools;
+pub mod peer_board;
 pub mod peers;
 pub mod proxy;
 pub mod releases;

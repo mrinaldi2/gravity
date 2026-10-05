@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use crate::app::AppState;
 
 mod board;
+pub use board::Conflict;
 mod board_edit;
 mod board_import;
 mod board_remote;

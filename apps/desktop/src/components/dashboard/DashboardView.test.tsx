@@ -3,15 +3,25 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
-import type { Dashboard } from "../../protocol/dashboard";
-import { DASH_BOTS, MIRRORED_BOARD, dashboard, quietDashboard } from "../../test/dashboardFixtures";
+import type { Dashboard, NeedsYou as NeedsYouRow } from "../../protocol/dashboard";
+import type { Grant } from "../../protocol/entities";
+import {
+  DASH_BOTS,
+  MIRRORED_BOARD,
+  dashboard,
+  offHome,
+  quietDashboard,
+} from "../../test/dashboardFixtures";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { project } from "../../test/fixtures";
 import DashboardView from "./DashboardView";
 import { REFRESH_MS } from "./useDashboard";
 
-function setup(data: Dashboard | (() => Dashboard)) {
+function setup(data: Dashboard | (() => Dashboard), grants?: readonly Grant[]) {
   const fake = new FakeDaemon();
+  if (grants) {
+    fake.grants = grants;
+  }
   fake.onRequest("dashboard_get", () => ({
     type: "dashboard",
     req_id: "1",
@@ -56,21 +66,96 @@ describe("DashboardView", () => {
     const user = userEvent.setup();
     const { nav } = setup(dashboard());
     const needs = await screen.findByRole("region", { name: "Needs you · 4" });
-    const rows = within(needs).getAllByRole("listitem");
+    const rows = within(nth(within(needs).getAllByRole("list"), 0)).getAllByRole("listitem");
     expect(rows.map((r) => r.textContent)).toEqual([
       expect.stringContaining("0.16.0 is ready for you to test · 2 items"),
       expect.stringContaining("Push notifications"),
+      expect.stringContaining("Confirm 2 rulings Architect recorded for you"),
       expect.stringContaining("P0 · H-021 Pairing crash on iOS 18.1"),
-      expect.stringContaining("WIP override · Review · H-030"),
     ]);
-    expect(rows[2]).toHaveTextContent("Doing · iOS Dev");
-    expect(rows[3]).toHaveTextContent("WIP override: hotfix for 0.15.2 — Desktop Dev");
+    expect(rows[3]).toHaveTextContent("Doing · iOS Dev");
     expect(rows[1]).toHaveTextContent(/Raised by Architect · Answer by /);
 
     await user.click(within(nth(rows, 1)).getByRole("button", { name: /^Answer/ }));
     expect(nav.onOpenDecision).toHaveBeenCalledWith("dec-1");
-    await user.click(within(nth(rows, 2)).getByRole("button", { name: /^Open board/ }));
+    await user.click(within(nth(rows, 3)).getByRole("button", { name: /^Open board/ }));
     expect(nav.onOpenTab).toHaveBeenCalledWith("board");
+  });
+
+  it("folds the lead's WIP overrides under Needs you, out of its count", async () => {
+    setup(dashboard());
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    const folded = within(needs).getByText("1 WIP override this week");
+    expect(folded.closest("details")).not.toHaveAttribute("open");
+    expect(folded.closest("details")).toHaveTextContent(
+      "Review · H-030 Hotfix the installer — WIP override: hotfix for 0.15.2 — Desktop Dev",
+    );
+  });
+
+  it("leaves confirming rulings to the owner", async () => {
+    setup(dashboard());
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    const review = within(needs).getByRole("button", {
+      name: "Review 2 rulings Architect recorded for you",
+    });
+    expect(review).toHaveTextContent("Review 2 rulings…");
+    expect(review).toBeDisabled();
+    expect(review).toHaveAttribute("title", "Only the owner can confirm rulings");
+  });
+
+  it("names every bot that recorded rulings on the relayed row", async () => {
+    const by = [
+      { bot_id: "dd", count: 2 },
+      { bot_id: "arch", count: 1 },
+    ];
+    const rows: NeedsYouRow[] = [];
+    for (const r of dashboard().needs_you) {
+      rows.push(r.kind === "relayed" ? { ...r, count: 3, by } : r);
+    }
+    setup(dashboard({ needs_you: rows }));
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    expect(needs).toHaveTextContent("Confirm 3 rulings Desktop Dev and Architect recorded for you");
+    expect(
+      within(needs).getByRole("button", {
+        name: "Review 3 rulings Desktop Dev and Architect recorded for you",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the home's rows off-home, each saying what to do there", async () => {
+    setup(offHome());
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    const there = ["Review on mac", "Answer on mac", "Confirm on mac"].map((text) =>
+      within(needs).getByText(text),
+    );
+    for (const text of there) {
+      expect(text.tagName).toBe("SPAN");
+      expect(text.closest("li")).toHaveAttribute("aria-describedby", text.id);
+    }
+    expect(within(needs).getAllByRole("listitem")[2]).toHaveAccessibleDescription("Confirm on mac");
+    expect(within(needs).queryByText("On mac")).toBeNull();
+    expect(
+      within(needs)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Open board"]);
+  });
+
+  it("with the home away, says this may not be everything, and never 'Nothing'", async () => {
+    const note = "Can't reach mac right now, so this may not be everything that needs you.";
+    setup(dashboard({ home: "mac", needs_you: [], needs_you_note: note }));
+    const needs = await screen.findByRole("region", { name: "Needs you" });
+    expect(within(needs).getByText(note).tagName).toBe("STRONG");
+    expect(needs).not.toHaveTextContent("Nothing needs you");
+  });
+
+  it("with the home away, still lists this computer's rows under the note", async () => {
+    const note = "Can't reach mac right now, so this may not be everything that needs you.";
+    const local = dashboard().needs_you.filter((r) => r.kind === "decision");
+    setup(dashboard({ home: "mac", needs_you: local, needs_you_note: note }));
+    const needs = await screen.findByRole("region", { name: "Needs you · 1" });
+    expect(needs).toHaveTextContent(note);
+    expect(within(needs).getByRole("button", { name: /^Answer/ })).toBeInTheDocument();
   });
 
   it("names each row's action after what it acts on, starting with its visible words", async () => {
@@ -80,11 +165,13 @@ describe("DashboardView", () => {
     expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
       "Review 0.16.0",
       "Answer: Push notifications: pay for an APNs relay?",
+      "Review 2 rulings Architect recorded for you",
       "Open board at H-021",
-      "Open board at H-030",
     ]);
+    // "Review 2 rulings…" is said without its ellipsis.
     for (const button of buttons) {
-      expect(button.getAttribute("aria-label")).toMatch(new RegExp(`^${button.textContent}`));
+      const words = (button.textContent ?? "").replace(/…$/, "");
+      expect(button.getAttribute("aria-label")?.startsWith(words)).toBe(true);
     }
   });
 

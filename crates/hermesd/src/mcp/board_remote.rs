@@ -47,6 +47,10 @@ pub(super) async fn intercept(
         match app.peers.request(&link.peer_id, frame).await {
             Ok(mut result) => {
                 crate::peer::board::ids_from_home(app, link, &mut result);
+                // The home's stale-write answer, now in this computer's ids.
+                if let Some(conflict) = super::Conflict::from_result(&result) {
+                    return Some(Err(conflict.into()));
+                }
                 return Some(Ok(result));
             }
             Err(PeerError::Refused { code, .. }) if code == "no_board" => {}

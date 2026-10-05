@@ -15,6 +15,7 @@ import ReleaseReview from "../releases/ReleaseReview";
 import { botNamer, useItemTitles } from "../releases/ReleasesView";
 import { useReleaseActions } from "../releases/useReleases";
 import NeedsYou from "./NeedsYou";
+import { useConfirmRelayed } from "./useConfirmRelayed";
 import { useDashboard } from "./useDashboard";
 import { BoardWidget, MeetingsWidgets, ReleasesWidget, TeamWidget } from "./Widgets";
 
@@ -91,6 +92,7 @@ function ReviewDrawer(props: {
 export default function DashboardView(props: DashboardViewProps): ReactElement {
   const { client, project, bots, connected } = props;
   const { dashboard, error, refresh } = useDashboard(client, project.id, connected);
+  const relayed = useConfirmRelayed(client, project.id, props.addToast, refresh);
   const [reviewing, setReviewing] = useState<Release | null>(null);
   // The Review button that opened the drawer gets focus back when it closes.
   const opener = useRef<HTMLElement | null>(null);
@@ -148,11 +150,16 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
           <NeedsYou
             projectName={project.name}
             rows={dashboard.needs_you}
+            overrides={dashboard.wip_overrides ?? []}
+            note={dashboard.needs_you_note}
+            canApprove={connected && client.hasGrant("approve")}
+            confirming={relayed.confirming}
             botName={(id) => botName(id) ?? "a bot"}
             columnName={(key) => columns.get(key) ?? key}
             onReview={openReview}
             onDecision={props.onOpenDecision}
             onBoard={openBoard}
+            onConfirmRelayed={relayed.confirm}
           />
           <BoardWidget board={dashboard.board} home={dashboard.home} onOpen={openBoard} />
           <ReleasesWidget

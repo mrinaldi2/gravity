@@ -17,7 +17,7 @@ use crate::board::model::{ColumnCategory, Role};
 use crate::decisions::conflict;
 
 use super::model::{Release, ReleaseEvent};
-use super::{load, Caller};
+use super::{load, publish_touched, Caller};
 
 /// The record of a cancelled package, and the package it succeeded as it
 /// stands now.
@@ -36,7 +36,8 @@ pub fn cancel(
     let project = me.bot.project_id.as_str();
     let actor = me.actor();
     let reason = reason.map(str::trim).filter(|r| !r.is_empty());
-    app.db.board_tx(|t| {
+    let mut feed = app.board.writer();
+    let (cancelled, touched) = app.db.board_tx(|t| {
         let release = load(t, project, release_id)?;
         if !release.status.is_assembling() {
             return Err(conflict(format!(
@@ -51,14 +52,16 @@ pub fn cancel(
             .map(|id| t.release(id))
             .transpose()?
             .flatten();
-        let mut returned = Vec::new();
+        let (mut returned, mut touched) = (Vec::new(), Vec::new());
         for ri in &release.items {
             let item = t.item(&ri.item_id)?;
             // Never set before submit; cleared anyway so nothing points at
             // a package that is gone.
             if item.as_ref().and_then(|i| i.release_id.as_deref()) == Some(release.id.as_str()) {
                 let back = before.as_ref().filter(|b| b.holds_shipped(&ri.item_id));
-                t.set_item_release(&ri.item_id, back.map(|b| b.id.as_str()), &actor)?;
+                if t.set_item_release(&ri.item_id, back.map(|b| b.id.as_str()), &actor)? {
+                    touched.push(ri.item_id.clone());
+                }
             }
             let held = before
                 .as_ref()
@@ -96,6 +99,8 @@ pub fn cancel(
             Some(b) => t.release(&b.id)?,
             None => None,
         };
-        Ok(Cancelled { event, predecessor })
-    })
+        Ok((Cancelled { event, predecessor }, touched))
+    })?;
+    publish_touched(app, &mut feed, project, &touched, &[]);
+    Ok(cancelled)
 }

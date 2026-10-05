@@ -705,11 +705,13 @@ runs through the tester the same way.
 
 `dashboard_get {project_id}` (read) answers with `{type: "dashboard", dashboard}`, which holds what the dashboard's first four widgets show (H-018 §2.1, H-076):
 
-- **`needs_you`:** one row per thing waiting on the owner, each with a `kind`:
+- **`needs_you`:** only what the owner must act on (H-112), each row with a `kind`:
   - `release`: the package, with `can_rule`. Its decision gets no row of its own.
-  - `decision`: an open decision of the project, or a relayed ruling waiting for confirmation (`relayed: true`).
+  - `decision`: an open decision of the project.
+  - `relayed`: one row for every ruling a bot recorded for the owner and they haven't confirmed: `count`, `decision_ids`, `by` (`[{bot_id, count}]`), and `rulings` (`[{id, title, answer, bot_id, at}]`, what the confirm dialog lists). `confirm_relayed {project_id, decision_ids}` (approve) confirms those of `decision_ids` still relayed (ARCH-R42 M1) and answers `{type: "relayed_confirmed", confirmed: [ids], failed: [{id, message}], changed: [ids]}`; `changed` holds the ones answered, reopened or gone since, and the client rereads.
   - `p0`: an open P0 item.
-  - `wip_override`: a move made over a WIP limit in the last seven days, with its note.
+- **`wip_overrides`:** moves made over a WIP limit in the last seven days, with their notes. They're the lead's call, so they sit beside Needs you, not in it.
+- **Off the board's home:** this computer's own decisions are listed, and the daemon adds the home's rows (asked as peer request `dashboard_needs_you`), each with `elsewhere` naming the home, where they're acted on; `wip_overrides` are the home's too. When the home can't be reached, `needs_you_note` says so and names it.
 - **`board`:** null without a board. Otherwise:
   - `columns`: each visible column with its `count`, `wip_limit` and `wip_scope`.
   - `blocked` and `stale`: counts of open items.

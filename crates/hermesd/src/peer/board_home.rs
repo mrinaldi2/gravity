@@ -58,10 +58,17 @@ pub(super) fn serve_call(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> any
             )
         })?;
     let args = frame.get("args").cloned().unwrap_or_else(|| json!({}));
-    let mut result = crate::mcp::board_call_as(app, &stand_in.id, tool, &args)?;
-    if tool == "install_release" {
-        published_builds(&mut result)?;
-    }
+    let mut result = match crate::mcp::board_call_as(app, &stand_in.id, tool, &args) {
+        Ok(mut result) => {
+            if tool == "install_release" {
+                published_builds(&mut result)?;
+            }
+            result
+        }
+        // A stale write goes back as data, so the item in it gets the
+        // peer's ids below like any result (H-113).
+        Err(error) => error.downcast::<crate::mcp::Conflict>()?.to_result(),
+    };
     board_ids::json(&mut result, &|id| board_ids::to_peer(&app.db, &peer.id, id));
     Ok(result)
 }
@@ -91,6 +98,26 @@ pub(super) fn serve_read(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> any
         board_ids::to_peer(&app.db, &peer.id, id)
     });
     Ok(json!({ "response": response }))
+}
+
+/// `dashboard_needs_you {project_id}`: the dashboard's Needs you as this home
+/// has it, in the peer's ids (H-112). Rulings stay here, so no package can
+/// be ruled from there.
+pub(super) fn serve_needs_you(
+    app: &Arc<AppState>,
+    peer: &Peer,
+    frame: &Value,
+) -> anyhow::Result<Value> {
+    let link = home_link(app, peer, frame)?;
+    let since = chrono::Utc::now() - chrono::Duration::days(7);
+    let needs = crate::ws::home_needs_you(app, &link.project_id, since, |release| {
+        let mut v = release.to_json();
+        v["can_rule"] = json!(false);
+        Ok(v)
+    })?;
+    let mut answer = json!({ "rows": needs.rows, "wip_overrides": needs.wip_overrides });
+    board_ids::json(&mut answer, &|id| board_ids::to_peer(&app.db, &peer.id, id));
+    Ok(answer)
 }
 
 /// `board_snapshot {project_id}`: the whole board, in the peer's ids.

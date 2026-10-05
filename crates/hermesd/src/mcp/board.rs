@@ -167,12 +167,48 @@ pub(super) fn written(write: Write<Item>) -> anyhow::Result<Value> {
 
 pub(super) fn conflict(current: Item) -> anyhow::Error {
     let version = current.version;
-    let item = item_out(current).map(|v| v.to_string()).unwrap_or_default();
-    anyhow::anyhow!(
-        "conflict: the item changed since you read it; it is now version {version}. \
-         Check it and retry with expected_version {version}.\n{item}"
-    )
+    let item = item_out(current).unwrap_or(Value::Null);
+    Conflict { version, item }.into()
 }
+
+/// A stale write and the item as it is now. Typed, so the board's home can
+/// send it to a linked computer as data and have its ids rewritten like any
+/// result's, rather than as text that keeps the home's ids (H-113).
+#[derive(Debug)]
+pub struct Conflict {
+    pub version: u64,
+    pub item: Value,
+}
+
+impl Conflict {
+    /// As the home sends it in a `board_call` result.
+    pub fn to_result(&self) -> Value {
+        json!({ "conflict": self.item, "version": self.version })
+    }
+
+    /// From such a result, once its ids are this computer's.
+    pub fn from_result(result: &Value) -> Option<Self> {
+        let item = result.get("conflict").filter(|c| c.is_object())?;
+        Some(Self {
+            version: result["version"].as_u64()?,
+            item: item.clone(),
+        })
+    }
+}
+
+impl std::fmt::Display for Conflict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let version = self.version;
+        write!(
+            f,
+            "conflict: the item changed since you read it; it is now version {version}. \
+             Check it and retry with expected_version {version}.\n{}",
+            self.item
+        )
+    }
+}
+
+impl std::error::Error for Conflict {}
 
 /// Run a bot's board write holding the feed (B4), and push the changed
 /// item's card once it has committed, so open boards see bots' changes. The

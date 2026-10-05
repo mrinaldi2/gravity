@@ -10,15 +10,12 @@
 
 use std::collections::HashMap;
 
-use bus::DecisionState;
 use chrono::{Duration, Utc};
 use serde_json::{json, Value};
 
+use super::needs_you::home_needs_you;
 use super::Conn;
-use crate::board::model::{ColumnCategory, ItemCard, Priority};
-use crate::board::release::model::ReleaseStatus;
-use crate::db::DecisionFilter;
-use crate::decisions::authority::is_relayed;
+use crate::board::model::{ColumnCategory, ItemCard};
 
 /// The window "this week" covers: the last seven days, as of the read.
 const WEEK_DAYS: i64 = 7;
@@ -53,57 +50,13 @@ impl Conn {
         } else {
             Vec::new()
         };
-        let mut needs_you = Vec::new();
-        for release in releases
-            .iter()
-            .filter(|r| r.status == ReleaseStatus::AwaitingOwner)
-        {
-            needs_you.push(json!({ "kind": "release", "release": self.release_json(release)? }));
-        }
-        let release_decisions: Vec<&str> = releases
-            .iter()
-            .filter_map(|r| r.decision_id.as_deref())
-            .collect();
-        let decisions = db.list_decisions(&DecisionFilter {
-            project_id: Some(project_id),
-            states: &[DecisionState::Open, DecisionState::Settled],
-            tag: None,
-            bot_id: None,
-            query: None,
-            before: None,
-            limit: 200,
-        })?;
-        for d in decisions
-            .iter()
-            .filter(|d| !release_decisions.contains(&d.id.as_str()))
-        {
-            let relayed = is_relayed(d);
-            if d.state == DecisionState::Open || relayed {
-                needs_you.push(json!({
-                    "kind": "decision", "id": d.id, "title": d.title,
-                    "priority": d.priority, "deadline_at": d.deadline_at, "relayed": relayed,
-                    "raised_by": d.raised_by_bot_id,
-                }));
-            }
-        }
-        for card in cards
-            .iter()
-            .filter(open)
-            .filter(|c| c.priority == Priority::P0)
-        {
-            needs_you.push(json!({
-                "kind": "p0", "id": card.id, "title": card.title,
-                "column_key": card.column_key, "assignee": card.assignee,
-            }));
-        }
-        if local {
-            for o in db.wip_overrides_since(project_id, since)? {
-                needs_you.push(json!({
-                    "kind": "wip_override", "id": o.item_id, "title": o.title,
-                    "column_key": o.column_key, "actor": o.actor, "note": o.note, "at": o.at,
-                }));
-            }
-        }
+        // What's kept here: the board's rows when it lives here, and this
+        // computer's own decisions either way (they don't sync, H-030).
+        // Off-home the home's rows are added once it answers.
+        let home_peer = (!local)
+            .then(|| self.app.board_mirror.home_peer(project_id))
+            .flatten();
+        let needs = home_needs_you(&self.app, project_id, since, |r| self.release_json(r))?;
 
         let strip: Vec<Value> = columns
             .iter()
@@ -162,21 +115,64 @@ impl Conn {
             .take(RELEASES_SHOWN)
             .map(|r| self.release_json(r))
             .collect::<anyhow::Result<Vec<_>>>()?;
-        let home = (!local)
-            .then(|| self.app.board_mirror.home_peer(project_id))
-            .flatten()
-            .map(|peer| crate::peer::board::home_name(&self.app, &peer));
-        self.send(json!({
-            "type": "dashboard", "req_id": req_id,
-            "dashboard": {
-                "project_id": project_id, "as_of": now, "since": since,
-                "home": home, "needs_you": needs_you, "board": board,
-                "releases": shown, "team": team,
-                "meetings": [], "action_items": [],
-            },
-        }));
+        let home = home_peer
+            .as_deref()
+            .map(|peer| crate::peer::board::home_name(&self.app, peer));
+        let dashboard = json!({
+            "project_id": project_id, "as_of": now, "since": since,
+            "home": home, "needs_you": needs.rows, "wip_overrides": needs.wip_overrides,
+            "needs_you_note": Value::Null, "board": board,
+            "releases": shown, "team": team,
+            "meetings": [], "action_items": [],
+        });
+        match home_peer {
+            Some(peer) => self.answer_later(
+                req_id,
+                from_home(self.app.clone(), project_id.to_string(), peer, dashboard),
+            ),
+            None => {
+                self.send(json!({ "type": "dashboard", "req_id": req_id, "dashboard": dashboard }))
+            }
+        }
         Ok(())
     }
+}
+
+/// Off-home, Needs you adds the board's home's rows (H-112): read-only here,
+/// each marked with where to act on it. When the home can't be reached the
+/// dashboard says so.
+async fn from_home(
+    app: std::sync::Arc<crate::app::AppState>,
+    project_id: String,
+    home: String,
+    mut dashboard: Value,
+) -> anyhow::Result<Value> {
+    let name = crate::peer::board::home_name(&app, &home);
+    let frame = json!({ "type": "dashboard_needs_you", "project_id": project_id });
+    let link = app.db.project_link(&project_id, &home)?;
+    match (app.peers.request(&home, frame).await, link) {
+        (Ok(mut answer), Some(link)) => {
+            crate::peer::board::ids_from_home(&app, &link, &mut answer);
+            let mut rows = match answer["rows"].take() {
+                Value::Array(rows) => rows,
+                _ => Vec::new(),
+            };
+            for row in &mut rows {
+                row["elsewhere"] = json!(name);
+            }
+            if let Some(here) = dashboard["needs_you"].as_array_mut() {
+                here.extend(rows);
+            }
+            dashboard["wip_overrides"] = answer["wip_overrides"].take();
+        }
+        _ => {
+            // What's here may not be all; "nothing" can't be known (UX-016 §3).
+            dashboard["needs_you_note"] = json!(format!(
+                "Can't reach {name} right now, so this may not be everything that needs you."
+            ));
+        }
+    }
+    Ok(json!({ "type": "dashboard", "dashboard": dashboard }))
 }
 
 /// The columns and cards of a board mirrored from its home, in model types.

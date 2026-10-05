@@ -111,6 +111,43 @@ impl Conn {
         self.reply_decision(req_id, &view)
     }
 
+    /// Confirms the rulings bots recorded for the owner that the dashboard's
+    /// dialog listed (H-112, ARCH-R42 M1): only those `decision_ids` that are
+    /// still relayed in the project. The rest, answered, reopened or gone
+    /// since, come back as `changed`, so the dialog rereads instead of
+    /// confirming something unseen. Each goes through the single confirm's
+    /// checks; one that fails is reported and the rest still go.
+    pub(super) fn confirm_relayed(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        let project_id = Self::str_field(req, "project_id")?;
+        let ids: Vec<&str> = req
+            .get("decision_ids")
+            .and_then(Value::as_array)
+            .ok_or_else(|| anyhow::anyhow!("'decision_ids' is required"))?
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        let owner = self.owner();
+        let (mut confirmed, mut failed, mut changed) = (Vec::new(), Vec::new(), Vec::new());
+        for id in ids {
+            let still = self.app.db.get_decision(id)?.is_some_and(|d| {
+                d.project_id == project_id && crate::decisions::authority::is_relayed(&d)
+            });
+            if !still {
+                changed.push(id);
+                continue;
+            }
+            match decisions::confirm(&self.app, &owner, id) {
+                Ok(_) => confirmed.push(id),
+                Err(e) => failed.push(json!({ "id": id, "message": e.to_string() })),
+            }
+        }
+        self.send(json!({
+            "type": "relayed_confirmed", "req_id": req_id,
+            "confirmed": confirmed, "failed": failed, "changed": changed,
+        }));
+        Ok(())
+    }
+
     pub(super) fn withdraw_decision(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let view = decisions::withdraw(
             &self.app,
