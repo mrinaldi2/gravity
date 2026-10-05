@@ -1,6 +1,7 @@
 mod daemon;
 mod dictation;
 mod legacy_storage;
+mod owner;
 mod shortcut;
 mod updater;
 
@@ -8,10 +9,16 @@ use std::ffi::OsStr;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-/// Reads the daemon client token from `~/.thehermes/secrets/client.token`.
+/// The owner credential for the next connection: a one-time ticket the daemon
+/// grants this app by its code signature over the local endpoint (H-044 T4),
+/// or, from a daemon too old to ask, `~/.thehermes/secrets/client.token`.
 #[tauri::command]
 fn read_client_token() -> Result<String, String> {
-    let path = daemon::daemon_home()?.join("secrets/client.token");
+    let home = daemon::daemon_home()?;
+    if let Some(ticket) = owner::ticket(&home) {
+        return Ok(ticket);
+    }
+    let path = home.join("secrets/client.token");
     let token = std::fs::read_to_string(&path)
         .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
     Ok(token.trim().to_string())

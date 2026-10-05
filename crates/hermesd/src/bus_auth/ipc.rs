@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 
 use super::os::OsProcessTable;
+use super::owner::{self, Peer};
 use super::session::{session_of, ProcessTable};
 use crate::app::AppState;
 use crate::config::Config;
@@ -27,6 +28,22 @@ pub fn endpoint(cfg: &Config) -> PathBuf {
 #[cfg(windows)]
 pub fn endpoint(cfg: &Config) -> PathBuf {
     PathBuf::from(windows::pipe_name(&cfg.home))
+}
+
+/// Where the daemon writes its endpoint's address, for the desktop app,
+/// which knows the home but not the pipe name (H-044 T4).
+pub fn endpoint_file(home: &std::path::Path) -> PathBuf {
+    home.join("run").join("endpoint")
+}
+
+fn announce(cfg: &Config) {
+    let path = endpoint_file(&cfg.home);
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Err(e) = std::fs::write(&path, endpoint(cfg).to_string_lossy().as_bytes()) {
+        tracing::warn!(path = %path.display(), error = %e, "can't record the bus endpoint");
+    }
 }
 
 /// `bus-proxy`'s arguments for this daemon's endpoint.
@@ -54,14 +71,24 @@ pub async fn serve(app: Arc<AppState>) -> anyhow::Result<()> {
     let listener = tokio::net::UnixListener::bind(&path)?;
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
     tracing::info!(path = %path.display(), "bus endpoint listening");
+    announce(&app.cfg);
     loop {
         let (stream, _) = listener.accept().await?;
-        let pid = stream
+        let peer = stream
             .peer_cred()
             .ok()
             .and_then(|cred| cred.pid())
-            .and_then(|pid| u32::try_from(pid).ok());
-        tokio::spawn(serve_connection(app.clone(), stream, pid));
+            .and_then(|pid| u32::try_from(pid).ok())
+            .map(|pid| Peer {
+                pid,
+                #[cfg(target_os = "macos")]
+                audit_token: super::owner_os::peer_audit_token(std::os::fd::AsRawFd::as_raw_fd(
+                    &stream,
+                )),
+                #[cfg(not(target_os = "macos"))]
+                audit_token: None,
+            });
+        tokio::spawn(serve_connection(app.clone(), stream, peer));
     }
 }
 
@@ -73,18 +100,15 @@ pub async fn serve(app: Arc<AppState>) -> anyhow::Result<()> {
 /// One connection: resolved once to the bot whose session the caller runs
 /// in, then checked again before every request, so a restarted session's
 /// old processes are cut off.
-pub(super) async fn serve_connection<S>(app: Arc<AppState>, stream: S, peer_pid: Option<u32>)
+pub(super) async fn serve_connection<S>(app: Arc<AppState>, stream: S, peer: Option<Peer>)
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
     let roots = app.supervisor.session_roots();
     let table = OsProcessTable;
-    let resolved = peer_pid
-        .and_then(|pid| table.info(pid))
-        .and_then(|peer| session_of(&roots, &table, peer));
-    if resolved.is_none() {
-        tracing::warn!(?peer_pid, "bus connection from no bot session refused");
-    }
+    let resolved = peer
+        .and_then(|peer| table.info(peer.pid))
+        .and_then(|info| session_of(&roots, &table, info));
     let (reader, mut writer) = tokio::io::split(stream);
     let mut lines = BufReader::new(reader).lines();
     while let Ok(Some(line)) = lines.next_line().await {
@@ -100,10 +124,17 @@ where
             }
             continue;
         };
+        // The owner's app or a CLI owner command asking for a ticket: one
+        // answer, then the connection is done.
+        if let Some(reply) = owner::handle(&app, peer, resolved.is_some(), &request).await {
+            let _ = send(&mut writer, &reply).await;
+            return;
+        }
         let current = resolved
             .as_ref()
             .filter(|(root, bot)| roots.bot_of(*root).as_deref() == Some(bot.as_str()));
         let Some((_, bot_id)) = current else {
+            tracing::warn!(pid = ?peer.map(|p| p.pid), "bus request from no bot session refused");
             let id = request.get("id").cloned().unwrap_or(Value::Null);
             let _ = send(&mut writer, &error(id, NOT_A_SESSION, "not a bot session")).await;
             return;

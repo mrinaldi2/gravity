@@ -309,7 +309,9 @@ fn handshake(
 
     // The owner token (same machine, mode 0600) grants everything; device
     // tokens carry explicit scoped capabilities and can be revoked.
-    let (caps, device_id) = if app.secrets.verify_client(token) {
+    // A one-time ticket from the local endpoint is the owner too (H-044 T4):
+    // the desktop app by its signature, a CLI command by the owner's card.
+    let (caps, device_id) = if app.secrets.verify_client(token) || app.owner.redeem(token) {
         (
             vec![Capability::Read, Capability::Control, Capability::Approve],
             None,

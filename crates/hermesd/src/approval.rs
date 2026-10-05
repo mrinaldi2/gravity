@@ -238,6 +238,20 @@ async fn decide(
     }
 }
 
+/// What an owner-command card is filed under: a terminal, not a bot (H-044).
+pub const TERMINAL: &str = "terminal";
+
+/// Asks the owner, on a card, whether a command run in a terminal may act as
+/// them (H-044 T4). `Some(true)` when allowed, `Some(false)` when denied or
+/// left unanswered, `None` when no app is open to ask.
+pub async fn ask_owner(app: &AppState, command: &str, pid: u32) -> Option<bool> {
+    let input = serde_json::json!({ "command": format!("{command} (pid {pid})") });
+    match decide(app, TERMINAL, "Allow from Terminal", &input, None).await? {
+        Decision::Answered(Answer::AllowOnce | Answer::AllowSession, _) => Some(true),
+        Decision::Answered(Answer::Deny, _) | Decision::Expired => Some(false),
+    }
+}
+
 /// One line for the card: the command, the file, or the tool's own name.
 fn summary(tool: &str, input: &Value) -> String {
     let field = |key: &str| input[key].as_str().filter(|v| !v.is_empty());
