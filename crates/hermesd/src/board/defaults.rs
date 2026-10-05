@@ -170,28 +170,31 @@ pub fn key_for(project_name: &str) -> String {
     }
 }
 
-/// The role a bot's name suggests, for seeding a new board: "Team Lead" leads,
-/// "Architect" reviews architecture, and so on. Only a first guess; the lead
-/// or owner sets roles properly.
+/// The role a new board gives a bot from its name (H-037): the team's
+/// standard names, case-insensitive, and testers by prefix ("Tester",
+/// "Tester Win"). Any other name gets no role; the lead or owner sets roles
+/// properly.
 pub fn guess_role(bot_name: &str) -> Option<Role> {
-    let name = bot_name.to_lowercase();
-    let has = |needle: &str| name.contains(needle);
-    if has("lead") {
+    let name = bot_name.trim().to_lowercase();
+    match name.as_str() {
+        "team lead" => Some(Role::Lead),
+        "scrum master" => Some(Role::Coach),
+        "devops" => Some(Role::Devops),
+        "architect" => Some(Role::ReviewerArch),
+        "ux designer" => Some(Role::ReviewerUx),
+        "desktop dev" | "ios dev" => Some(Role::Dev),
+        _ if name.starts_with("tester") => Some(Role::Tester),
+        _ => None,
+    }
+}
+
+/// A bot's seeded role: the project's lead leads, everyone else as
+/// `guess_role` says.
+pub fn seed_role(bot_name: &str, is_project_lead: bool) -> Option<Role> {
+    if is_project_lead {
         Some(Role::Lead)
-    } else if has("scrum") || has("coach") {
-        Some(Role::Coach)
-    } else if has("devops") {
-        Some(Role::Devops)
-    } else if has("architect") {
-        Some(Role::ReviewerArch)
-    } else if has("ux") || has("designer") {
-        Some(Role::ReviewerUx)
-    } else if has("tester") || has("qa") {
-        Some(Role::Tester)
-    } else if has("dev") || has("engineer") {
-        Some(Role::Dev)
     } else {
-        None
+        guess_role(bot_name)
     }
 }
 
@@ -210,14 +213,19 @@ mod tests {
     #[test]
     fn roles_are_guessed_from_names() {
         assert_eq!(guess_role("Team Lead"), Some(Role::Lead));
+        assert_eq!(guess_role("team lead"), Some(Role::Lead));
+        assert_eq!(guess_role("Scrum Master"), Some(Role::Coach));
+        assert_eq!(guess_role("DevOps"), Some(Role::Devops));
         assert_eq!(guess_role("Architect"), Some(Role::ReviewerArch));
         assert_eq!(guess_role("UX Designer"), Some(Role::ReviewerUx));
-        assert_eq!(guess_role("iOS QA"), Some(Role::Tester));
-        assert_eq!(guess_role("DevOps"), Some(Role::Devops));
+        assert_eq!(guess_role("Tester"), Some(Role::Tester));
+        assert_eq!(guess_role("Tester Win"), Some(Role::Tester));
         assert_eq!(guess_role("Desktop Dev"), Some(Role::Dev));
-        assert_eq!(guess_role("Scrum Master"), Some(Role::Coach));
-        assert_eq!(guess_role("Context Engineer"), Some(Role::Dev));
+        assert_eq!(guess_role("iOS Dev"), Some(Role::Dev));
+        assert_eq!(guess_role("Context Engineer"), None);
+        assert_eq!(guess_role("Lead Writer"), None);
         assert_eq!(guess_role("Writer"), None);
+        assert_eq!(seed_role("Writer", true), Some(Role::Lead));
     }
 
     #[test]

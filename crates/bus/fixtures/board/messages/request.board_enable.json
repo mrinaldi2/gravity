@@ -1,0 +1,8 @@
+{
+  "reqId": "19",
+  "boardRequest": {
+    "boardEnable": {
+      "projectId": "p1"
+    }
+  }
+}

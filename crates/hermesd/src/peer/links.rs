@@ -24,6 +24,10 @@ pub(super) struct ProjectSide {
     pub project_name: String,
     #[serde(default)]
     pub bots: Vec<RemoteBot>,
+    /// Whether the project has a board on the sender's side. A daemon that
+    /// predates it sends none, read as no board.
+    #[serde(default)]
+    pub has_board: bool,
 }
 
 pub(super) fn side(app: &AppState, project: &Project) -> anyhow::Result<ProjectSide> {
@@ -31,6 +35,7 @@ pub(super) fn side(app: &AppState, project: &Project) -> anyhow::Result<ProjectS
         project_id: project.id.clone(),
         project_name: Db::display_project_name(project),
         bots: roster::roster(app, &project.id)?,
+        has_board: app.db.board_settings(&project.id)?.is_some(),
     })
 }
 
@@ -47,15 +52,15 @@ fn live_project(app: &AppState, project_id: &str) -> anyhow::Result<Project> {
         .ok_or_else(|| refuse("not_found", "project not found"))
 }
 
-/// One home per board (H-020 §1.3, ARCH-R9 M1′). A linked project's board
-/// lives on the side the other one dials, so a project whose board is here
-/// can't be linked through a peer this daemon dials: the board would end up
-/// on both sides.
-fn board_stays_home(app: &AppState, peer: &Peer, project_id: &str) -> anyhow::Result<()> {
-    if peer.url.is_some() && app.db.board_settings(project_id)?.is_some() {
+/// One home per board (H-020 §1.3, H-037). A linked project's board is
+/// served by the one side that has it, so two projects that each have a
+/// board can't be linked: the team would have two homes.
+fn one_board_home(app: &AppState, project_id: &str, theirs: &ProjectSide) -> anyhow::Result<()> {
+    if theirs.has_board && app.db.board_settings(project_id)?.is_some() {
         return Err(refuse(
             "conflict",
-            "this project's board lives here; link it from the other computer instead",
+            "both computers already have a board for this project, and a linked team \
+             has one board home; link a project that has no board on one side",
         ));
     }
     Ok(())
@@ -75,7 +80,6 @@ pub async fn link(
 ) -> anyhow::Result<Project> {
     let project = live_project(app, project_id)?;
     let peer = live_peer(app, peer_id)?;
-    board_stays_home(app, &peer, project_id)?;
     if !app.peers.is_online(peer_id) {
         return Err(refuse("unavailable", format!("{} is offline", peer.name)));
     }
@@ -98,6 +102,7 @@ pub async fn link(
     let result = app.peers.request(peer_id, frame).await?;
     let theirs: ProjectSide = serde_json::from_value(result)?;
     let adopted = (|| -> anyhow::Result<()> {
+        one_board_home(app, project_id, &theirs)?;
         let clashing = roster::clashes(app, project_id, peer_id, &theirs.bots)?;
         if !clashing.is_empty() {
             return Err(roster::clash_refusal(&clashing));
@@ -230,6 +235,9 @@ pub(super) fn serve_list(app: &AppState, peer: &Peer) -> anyhow::Result<Value> {
             "name": Db::display_project_name(&project),
             "bot_count": app.db.count_live_bots(&project.id)?,
             "linked_project_id": link.map(|l| l.remote_project_id),
+            // Asked before the owner starts a board on a linked project
+            // (ARCH-R18 M1).
+            "has_board": app.db.board_settings(&project.id)?.is_some(),
         }));
     }
     Ok(json!({ "projects": projects }))
@@ -257,7 +265,7 @@ pub(super) fn serve_link(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> any
     let project = match frame.get("remote_project_id").and_then(Value::as_str) {
         Some(id) => {
             let project = live_project(app, id)?;
-            board_stays_home(app, peer, &project.id)?;
+            one_board_home(app, &project.id, &theirs)?;
             if app.db.project_link(&project.id, &peer.id)?.is_some() {
                 return Err(refuse(
                     "conflict",

@@ -170,6 +170,7 @@ fn arm_of(envelope: &bus::contract::wire::Envelope) -> String {
                 board_request::Request::ItemAssign(_) => "item_assign",
                 board_request::Request::ItemRank(_) => "item_rank",
                 board_request::Request::ItemCheckAc(_) => "item_check_ac",
+                board_request::Request::BoardEnable(_) => "board_enable",
             }
         ),
         Body::BoardResponse(r) => format!(
@@ -219,6 +220,7 @@ const ARMS: &[&str] = &[
     "request.item_assign",
     "request.item_rank",
     "request.item_check_ac",
+    "request.board_enable",
     "response.board",
     "response.item",
     "response.history",

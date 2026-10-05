@@ -4,6 +4,7 @@ use bus::contract::board as c;
 use bus::Capability;
 
 use super::{not_found, refuse, Refusal};
+use crate::app::AppState;
 use crate::board::contract::MapError;
 use crate::board::model as m;
 use crate::board::moves;
@@ -15,34 +16,22 @@ const HISTORY_PAGE: u32 = 100;
 const HISTORY_MAX: u32 = 500;
 
 impl Conn {
-    /// The whole board, current with the project's push `seq`. The number is
-    /// read first: a change landing in between is in the snapshot and comes
-    /// again as a push, which the client applies harmlessly.
+    /// The whole board, current with the project's push `seq`, enabling it
+    /// first when `board_get` may (see `enable_board`).
     pub(super) fn snapshot(&self, project_id: &str) -> Result<c::BoardSnapshot, Refusal> {
-        let seq = self.app.board.seq(project_id);
-        let db = &self.app.db;
-        let snapshot = match db.board_read(|t| t.snapshot(project_id))? {
-            Some(snapshot) => snapshot,
-            None => {
-                self.enable_board(project_id)?;
-                db.board_read(|t| t.snapshot(project_id))?
-                    .ok_or_else(|| refuse("internal", "the board was enabled but is missing"))?
-            }
-        };
-        Ok(c::BoardSnapshot {
-            settings: Some(snapshot.settings.into()),
-            columns: snapshot.columns.into_iter().map(Into::into).collect(),
-            cards: snapshot.cards.into_iter().map(Into::into).collect(),
-            roles: snapshot.roles.into_iter().map(Into::into).collect(),
-            seq,
-        })
+        if let Some(snapshot) = snapshot(&self.app, project_id)? {
+            return Ok(snapshot);
+        }
+        self.enable_board(project_id, Enable::Auto)?;
+        snapshot(&self.app, project_id)?
+            .ok_or_else(|| refuse("internal", "the board was enabled but is missing"))
     }
 
-    /// A project's first `board_get` enables its board (B2 defaults), on
-    /// this daemon as its home. Enabling is a change, so it needs `control`.
-    /// A project that already has a board keeps its home: this runs only
-    /// when it has none.
-    fn enable_board(&self, project_id: &str) -> Result<(), Refusal> {
+    /// Enables a project's board here with the B2 defaults, recording this
+    /// daemon as its home (H-037). `board_get` does it on its own only for
+    /// a project with no link: which computer of a linked team is the home
+    /// is the owner's call, made with `board_enable`.
+    pub(super) fn enable_board(&self, project_id: &str, how: Enable) -> Result<(), Refusal> {
         let db = &self.app.db;
         if !db
             .get_project(project_id)?
@@ -50,21 +39,18 @@ impl Conn {
         {
             return Err(refuse("not_found", format!("no project {project_id}")));
         }
-        if !self.caps.contains(&Capability::Control) {
-            return Err(refuse(
-                "no_board",
-                "This project has no board yet; enabling it needs the control grant.",
-            ));
-        }
-        // One home per project (H-020 §1.3). Until boards forward (B9), a
-        // linked project's board lives on the side that accepted the link:
-        // the dialing side would otherwise grow a second board.
-        for link in db.project_links(project_id)? {
-            if db.get_peer(&link.peer_id)?.is_some_and(|p| p.url.is_some()) {
+        if how == Enable::Auto {
+            if !self.caps.contains(&Capability::Control) {
                 return Err(refuse(
                     "no_board",
-                    "This project is linked; its board lives on its home computer \
-                     (board forwarding comes later).",
+                    "This project has no board yet; enabling it needs the control grant.",
+                ));
+            }
+            if !db.project_links(project_id)?.is_empty() {
+                return Err(refuse(
+                    "no_board",
+                    "This project is linked with another computer, so its board isn't \
+                     started on its own. Start it on the computer that should be its home.",
                 ));
             }
         }
@@ -159,6 +145,52 @@ impl Conn {
                 .collect(),
         })
     }
+}
+
+/// Who enables a board: `board_get` on its own, or the owner on purpose.
+/// The whole board, or none before it is enabled. The push `seq` is read
+/// first: a change landing in between is in the snapshot and comes again as
+/// a push, which the client applies harmlessly.
+pub(super) fn snapshot(
+    app: &AppState,
+    project_id: &str,
+) -> Result<Option<c::BoardSnapshot>, Refusal> {
+    let seq = app.board.seq(project_id);
+    let Some(snapshot) = app.db.board_read(|t| t.snapshot(project_id))? else {
+        return Ok(None);
+    };
+    served_here(app, &snapshot.settings.home_daemon_id)?;
+    Ok(Some(c::BoardSnapshot {
+        settings: Some(snapshot.settings.into()),
+        columns: snapshot.columns.into_iter().map(Into::into).collect(),
+        cards: snapshot.cards.into_iter().map(Into::into).collect(),
+        roles: snapshot.roles.into_iter().map(Into::into).collect(),
+        seq,
+    }))
+}
+
+/// One home per board (H-020 §1.3, H-037): only the daemon named in
+/// `home_daemon_id` serves it.
+fn served_here(app: &AppState, home_daemon_id: &str) -> Result<(), Refusal> {
+    let db = &app.db;
+    if home_daemon_id == db.daemon_id()? {
+        return Ok(());
+    }
+    let home = db
+        .list_peers()?
+        .into_iter()
+        .find(|p| p.daemon_id.as_deref() == Some(home_daemon_id))
+        .map_or_else(|| "another computer".to_string(), |p| p.name);
+    Err(refuse(
+        "no_board",
+        format!("This project's board lives on {home}; open it there."),
+    ))
+}
+
+#[derive(PartialEq, Eq)]
+pub(super) enum Enable {
+    Auto,
+    Owner,
 }
 
 fn wire_list<T>(

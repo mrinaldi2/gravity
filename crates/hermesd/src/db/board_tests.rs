@@ -86,6 +86,31 @@ fn a_new_board_gets_columns_templates_and_guessed_roles_once() {
     assert_eq!(db.board_columns(&p).unwrap().len(), 9);
 }
 
+/// A tester verifies on its own machine: a linked tester's is its peer's.
+#[test]
+fn a_linked_tester_is_seeded_with_its_machine() {
+    let db = Db::open_in_memory().unwrap();
+    let p = db.create_project("Gravity", "gravity").unwrap();
+    let pc = db.create_peer("win-pc", None).unwrap();
+    let remote = bus::RemoteBot {
+        id: "r1".into(),
+        name: "Tester Win".into(),
+        description: String::new(),
+        avatar: String::new(),
+        runtime: bus::BotRuntime::default(),
+        project: "Gravity".into(),
+        temporary: false,
+    };
+    db.create_linked_bot(&p.id, &remote, &pc.id).unwrap();
+    db.ensure_board(&p.id, "d-mac", None).unwrap();
+    let roles = db.project_roles(&p.id).unwrap();
+    assert_eq!(roles.len(), 1);
+    assert_eq!(
+        (roles[0].role, roles[0].machine.as_deref()),
+        (Role::Tester, Some("win-pc"))
+    );
+}
+
 #[test]
 fn board_keys_stay_unique_across_projects() {
     let (db, _) = board();
