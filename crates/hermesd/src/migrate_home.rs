@@ -242,8 +242,9 @@ pub fn run(plan: &Plan, out: &mut dyn Write) -> anyhow::Result<State> {
     #[cfg(windows)]
     if !state.done(Step::Move) {
         // os error 5 here means something holds the home: name it (H-040).
-        disk::probe_move(&plan.from)
-            .map_err(|error| crate::holders::explain_held(error, &[plan.from.clone()]))?;
+        disk::probe_move(&plan.from).map_err(|error| {
+            crate::holders::explain_held(error, std::slice::from_ref(&plan.from))
+        })?;
     }
     state.save()?;
     for step in Step::ALL {
