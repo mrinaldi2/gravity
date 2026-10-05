@@ -1,11 +1,11 @@
-import { CalendarClock, LayoutDashboard, Package } from "lucide-react";
+import { CalendarClock, LayoutDashboard } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
 import { PROJECT_TAB_LABEL } from "./ProjectTabs";
 
 /** The tabs that are placeholders until their views land. */
-export type UpcomingTab = Extract<ProjectTab, "dashboard" | "releases" | "meetings">;
+export type UpcomingTab = Extract<ProjectTab, "dashboard" | "meetings">;
 
 const UPCOMING: Readonly<
   Record<UpcomingTab, { readonly icon: LucideIcon; readonly text: string }>
@@ -13,10 +13,6 @@ const UPCOMING: Readonly<
   dashboard: {
     icon: LayoutDashboard,
     text: "What needs you, the board at a glance, releases, the team and how work is flowing, in one place.",
-  },
-  releases: {
-    icon: Package,
-    text: "Release packages for you to test and approve, and where each one is deployed.",
   },
   meetings: {
     icon: CalendarClock,

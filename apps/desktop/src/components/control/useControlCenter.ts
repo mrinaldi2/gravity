@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
+import type { AddToast } from "../../app/useToasts";
 import type { Permissions } from "../permissions/usePermissions";
 import type { DaemonApi } from "../../protocol/api";
 import type { Decision } from "../../protocol/decisions";
-import type { Bot, NotifyLevel, Project } from "../../protocol/entities";
+import type { Bot, Project } from "../../protocol/entities";
 import { controlView, rememberControlView } from "./controlSession";
 import type { RegistryFilter } from "./decisions";
 import type { BotLookups } from "./useBotLookups";
@@ -31,7 +32,8 @@ export interface ControlCenterOptions {
   readonly connected: boolean;
   readonly canControl: boolean;
   readonly decisionId?: string;
-  readonly onToast: (level: NotifyLevel, title: string, body: string) => void;
+  /** Toasts; a release ruling's Undo rides on one with an action. */
+  readonly onToast: AddToast;
   /** Every bot's permission prompts, shown above the decisions. */
   readonly permissions?: Permissions;
   readonly onOpenBot?: (botId: string) => void;
