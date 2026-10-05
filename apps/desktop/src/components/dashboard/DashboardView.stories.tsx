@@ -24,12 +24,7 @@ function Window({ data }: { readonly data: Dashboard }): ReactElement {
   const bots = data.team.map((row) => row.bot);
   return (
     <div className="main" style={{ height: 900 }}>
-      <ProjectWindow
-        project={hermes}
-        botCount={bots.length}
-        tab="dashboard"
-        onSelectTab={noTab}
-      >
+      <ProjectWindow project={hermes} botCount={bots.length} tab="dashboard" onSelectTab={noTab}>
         <DashboardView
           client={client}
           project={hermes}
