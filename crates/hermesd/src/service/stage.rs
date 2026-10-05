@@ -145,9 +145,13 @@ pub(crate) fn version_of(binary: &Path) -> anyhow::Result<String> {
     parse_version(&String::from_utf8_lossy(&out.stdout))
 }
 
-/// The version in `hermesd --version` output (`hermesd 0.15.0`).
+/// The version in `hermesd --version` output (`hermesd 0.15.0`), on its
+/// first line: later lines say more about the build (its identity, H-114).
 pub(crate) fn parse_version(output: &str) -> anyhow::Result<String> {
     let version = output
+        .lines()
+        .next()
+        .unwrap_or_default()
         .split_whitespace()
         .last()
         .context("the binary reported no version")?;

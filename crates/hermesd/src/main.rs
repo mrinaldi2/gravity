@@ -67,6 +67,10 @@ async fn main() -> anyhow::Result<()> {
     // `service install` runs a staged binary with this to check it starts.
     if args.first().map(String::as_str) == Some("--version") {
         println!("hermesd {}", hermesd::app::DAEMON_VERSION);
+        println!(
+            "identity: {}",
+            hermesd::bus_auth::app_identity::identity_line()
+        );
         return Ok(());
     }
     let config_path = flag_value(&args, "--config");

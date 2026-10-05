@@ -278,6 +278,7 @@ fn report_with<L: Launchctl>(
         migrated: home.migrated,
         port,
         version,
+        identity: crate::bus_auth::app_identity::identity_line(),
     }
 }
 
@@ -292,6 +293,10 @@ pub fn status(paths: &ServicePaths, configured_port: u16) -> bool {
     // reporting nothing.
     let version = crate::server::probe_health(port, std::time::Duration::from_secs(2));
     let reachable = version.is_some();
+    println!(
+        "identity  {}",
+        crate::bus_auth::app_identity::identity_line()
+    );
     println!(
         "binary    {} ({})",
         if bin { "installed" } else { "missing" },

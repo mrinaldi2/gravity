@@ -8,6 +8,8 @@ import { isTauri } from "./tauri";
 export interface DaemonHealth {
   readonly status: string;
   readonly version: string;
+  /** How the daemon's build knows this app (H-114); absent before 0.16.2. */
+  readonly identity?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -33,7 +35,10 @@ export async function probeDaemon(endpoint: Endpoint): Promise<DaemonHealth | nu
       typeof result["status"] === "string" &&
       typeof result["version"] === "string"
     ) {
-      return { status: result["status"], version: result["version"] };
+      const identity = result["identity"];
+      return typeof identity === "string"
+        ? { status: result["status"], version: result["version"], identity }
+        : { status: result["status"], version: result["version"] };
     }
   } catch {
     // fall through to null

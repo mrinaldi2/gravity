@@ -34,6 +34,8 @@ fn the_status_report_names_a_lone_legacy_agent_and_an_unmanaged_daemon() {
             "migrated": true,
             "port": 49777,
             "version": "0.14.2",
+            // H-114: how this build knows the owner's app.
+            "identity": crate::bus_auth::app_identity::identity_line(),
         })
     );
 }

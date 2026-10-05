@@ -11,6 +11,7 @@ import { installLocalDaemon, probeDaemon } from "../../setup";
 import { isTauri } from "../../tauri";
 import { checkForAppUpdate } from "../../updater";
 import { compareVersions } from "../../version";
+import { useDaemonIdentity } from "./useDaemonIdentity";
 
 interface AboutSettingsProps {
   readonly endpoint: Endpoint;
@@ -105,6 +106,48 @@ function UpdateAction({ update, onCheck, onInstall }: UpdateActionProps): ReactE
   );
 }
 
+/** The Hermes service: its version, its build's identity (H-114), and the
+ *  update when the app is newer. */
+function ServiceRow(props: {
+  readonly version: string;
+  readonly connected: boolean;
+  readonly identity: string;
+  readonly needsUpdate: boolean;
+  readonly updating: boolean;
+  readonly onUpdate: () => void;
+}): ReactElement {
+  let shown = "not connected";
+  if (props.version.length > 0) {
+    shown = props.connected ? props.version : `${props.version} · not connected`;
+  }
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <div className="settings-row-label">Hermes service</div>
+        <div className="settings-row-help">
+          The hermesd this app is connected to.
+          {props.identity.length > 0 ? (
+            <span className="mono"> identity: {props.identity}</span>
+          ) : null}
+        </div>
+      </div>
+      <div className="settings-row-control">
+        <span className="settings-value">{shown}</span>
+        {props.needsUpdate ? (
+          <button
+            type="button"
+            className="btn btn-small"
+            disabled={props.updating}
+            onClick={props.onUpdate}
+          >
+            {props.updating ? "Updating…" : "Update Hermes service"}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 /** Versions and the manual update check. */
 export default function AboutSettings(props: AboutSettingsProps): ReactElement {
   const { endpoint, daemonVersion, addToast } = props;
@@ -113,6 +156,7 @@ export default function AboutSettings(props: AboutSettingsProps): ReactElement {
   const [daemonUpdating, setDaemonUpdating] = useState(false);
   const updateLocalDaemon = isLocalEndpoint(endpoint);
   const localDaemonVersion = useLocalDaemonVersion(endpoint, daemonVersion, updateLocalDaemon);
+  const identity = useDaemonIdentity(endpoint);
   const daemonNeedsUpdate =
     isTauri() &&
     updateLocalDaemon &&
@@ -170,31 +214,16 @@ export default function AboutSettings(props: AboutSettingsProps): ReactElement {
         <span className="settings-value">{appVersion ?? "dev (browser)"}</span>
       </div>
 
-      <div className="settings-row">
-        <div className="settings-row-text">
-          <div className="settings-row-label">Hermes service</div>
-          <div className="settings-row-help">The hermesd this app is connected to.</div>
-        </div>
-        <div className="settings-row-control">
-          <span className="settings-value">
-            {localDaemonVersion.length > 0
-              ? `${localDaemonVersion}${daemonVersion.length > 0 ? "" : " · not connected"}`
-              : "not connected"}
-          </span>
-          {daemonNeedsUpdate ? (
-            <button
-              type="button"
-              className="btn btn-small"
-              disabled={daemonUpdating}
-              onClick={() => {
-                void updateDaemon();
-              }}
-            >
-              {daemonUpdating ? "Updating…" : "Update Hermes service"}
-            </button>
-          ) : null}
-        </div>
-      </div>
+      <ServiceRow
+        version={localDaemonVersion}
+        connected={daemonVersion.length > 0}
+        identity={identity}
+        needsUpdate={daemonNeedsUpdate}
+        updating={daemonUpdating}
+        onUpdate={() => {
+          void updateDaemon();
+        }}
+      />
 
       {isTauri() ? (
         <div className="settings-row">

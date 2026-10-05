@@ -72,6 +72,26 @@ pub const APP_IDENTITY_KNOWN: bool = !cfg!(target_os = "macos") || is_team_id(TE
 
 pub const DEV_BUILD: bool = option_env!("HERMES_DEV_BUILD").is_some();
 
+/// How this build knows the owner's app, for `--version`, `service status`
+/// and the About box (H-114).
+pub fn identity_line() -> String {
+    describe(DEV_BUILD, cfg!(target_os = "macos"), cfg!(windows), TEAM_ID)
+}
+
+fn describe(dev: bool, macos: bool, windows: bool, team: &str) -> String {
+    if dev {
+        "dev build (phase 2 disabled)".into()
+    } else if macos && is_team_id(team) {
+        format!("signed {team}")
+    } else if macos {
+        "no Team ID (phase 2 disabled)".into()
+    } else if windows {
+        format!("app in Program Files\\{WINDOWS_APP_FOLDER}")
+    } else {
+        "no desktop app".into()
+    }
+}
+
 /// The folder the perMachine installer puts the app in, under Program Files.
 pub const WINDOWS_APP_FOLDER: &str = "The Hermes";
 
@@ -117,6 +137,30 @@ pub fn is_installed_daemon(binary: &Path, app_dir: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_identity_line_says_how_the_app_is_known() {
+        assert_eq!(
+            describe(true, true, false, "ABCDE12345"),
+            "dev build (phase 2 disabled)"
+        );
+        assert_eq!(
+            describe(false, true, false, "ABCDE12345"),
+            "signed ABCDE12345"
+        );
+        assert_eq!(
+            describe(false, true, false, PLACEHOLDER_TEAM_ID),
+            "no Team ID (phase 2 disabled)"
+        );
+        assert_eq!(
+            describe(false, false, true, PLACEHOLDER_TEAM_ID),
+            "app in Program Files\\The Hermes"
+        );
+        assert_eq!(
+            describe(false, false, false, PLACEHOLDER_TEAM_ID),
+            "no desktop app"
+        );
+    }
 
     #[test]
     fn the_requirement_names_the_team_and_the_app() {

@@ -11,6 +11,9 @@ use serde::Serialize;
 pub struct DaemonHealth {
     pub status: String,
     pub version: String,
+    /// How the daemon's build knows this app (H-114); absent before 0.16.2.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<String>,
 }
 
 /// Probes `http://<host>:<port>/health`; `None` means nothing answered.
@@ -30,6 +33,10 @@ pub fn daemon_health(host: String, port: u16) -> Option<DaemonHealth> {
     Some(DaemonHealth {
         status: body.get("status")?.as_str()?.to_string(),
         version: body.get("version")?.as_str()?.to_string(),
+        identity: body
+            .get("identity")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
     })
 }
 

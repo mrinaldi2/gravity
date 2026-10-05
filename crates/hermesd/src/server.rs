@@ -35,6 +35,7 @@ async fn health(State(app): State<Arc<AppState>>) -> impl IntoResponse {
     Json(json!({
         "status": if db_healthy { "ok" } else { "degraded" },
         "version": crate::app::DAEMON_VERSION,
+        "identity": crate::bus_auth::app_identity::identity_line(),
         "stale_build": app.stale_build(),
         "db_healthy": db_healthy,
         "delivery_backlog": app.db.delivery_backlog().unwrap_or(-1),
