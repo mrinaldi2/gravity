@@ -157,12 +157,34 @@ pub struct OwnerAction {
     /// The last 64 KB of output, redacted.
     pub output_tail: Option<String>,
     pub reject_reason: Option<String>,
+    /// On the target, for a peer's offer (R3): this daemon's linked project.
+    /// `proposal.project_id` stays the proposer's, as the hash covers it.
+    pub local_project_id: Option<String>,
 }
 
 impl OwnerAction {
+    /// The project it belongs to on this computer.
+    pub fn project_here(&self) -> &str {
+        self.local_project_id
+            .as_deref()
+            .unwrap_or(&self.proposal.project_id)
+    }
+
+    /// The peer that offered this copy, on the computer it runs on (R3).
+    pub fn offered_by(&self) -> Option<&str> {
+        self.origin.strip_prefix("peer:")
+    }
+
     /// What clients and bots read: never the full output, only its
     /// redacted tail.
     pub fn to_json(&self) -> Value {
+        let mut v = self.wire();
+        v["project_id"] = json!(self.project_here());
+        v
+    }
+
+    /// Every field as the proposer hashed it, for the peer link (R3).
+    pub fn wire(&self) -> Value {
         let p = &self.proposal;
         json!({
             "id": self.id, "project_id": p.project_id, "proposed_by": p.proposed_by,
@@ -175,6 +197,58 @@ impl OwnerAction {
             "run_by": self.run_by, "run_at": self.run_at, "finished_at": self.finished_at,
             "exit_code": self.exit_code, "output_tail": self.output_tail,
             "reject_reason": self.reject_reason,
+        })
+    }
+}
+
+/// An action as the peer link carries it ([`OwnerAction::wire`]).
+#[derive(Deserialize)]
+struct Wire {
+    id: String,
+    #[serde(flatten)]
+    proposal: Proposal,
+    sha256: String,
+    #[serde(default)]
+    flags: Vec<String>,
+    origin: String,
+    state: State,
+    created_at: DateTime<Utc>,
+    expires_at: DateTime<Utc>,
+    run_by: Option<String>,
+    run_at: Option<DateTime<Utc>>,
+    finished_at: Option<DateTime<Utc>>,
+    exit_code: Option<i32>,
+    output_tail: Option<String>,
+    reject_reason: Option<String>,
+}
+
+impl OwnerAction {
+    /// Reads a peer's copy. Its hash must be the one its fields give, or
+    /// it is refused: what a client shows is always what would run.
+    pub fn from_wire(value: &Value) -> anyhow::Result<OwnerAction> {
+        let w: Wire = serde_json::from_value(value.clone())?;
+        anyhow::ensure!(
+            w.proposal.sha256() == w.sha256,
+            "the linked computer's copy of owner action {} doesn't match its hash",
+            w.id
+        );
+        Ok(OwnerAction {
+            id: w.id,
+            proposal: w.proposal,
+            sha256: w.sha256,
+            flags: w.flags,
+            origin: w.origin,
+            state: w.state,
+            created_at: w.created_at,
+            expires_at: w.expires_at,
+            run_by: w.run_by,
+            run_at: w.run_at,
+            finished_at: w.finished_at,
+            exit_code: w.exit_code,
+            output_path: None,
+            output_tail: w.output_tail,
+            reject_reason: w.reject_reason,
+            local_project_id: None,
         })
     }
 }

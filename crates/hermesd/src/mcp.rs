@@ -182,7 +182,10 @@ async fn remote_call(app: &Arc<AppState>, bot_id: &str, params: &Value) -> Optio
         Some(result) => result,
         None => match remote::intercept(app, bot_id, name, &args).await {
             Some(result) => result,
-            None => board_remote::intercept(app, bot_id, name, &args).await?,
+            None => match owner_actions::intercept(app, bot_id, name, &args).await {
+                Some(result) => result,
+                None => board_remote::intercept(app, bot_id, name, &args).await?,
+            },
         },
     };
     Some(match result {
@@ -211,7 +214,6 @@ fn tool_call(app: &Arc<AppState>, bot_id: &str, params: &Value) -> Result<Value,
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
     let out = match name {
         "send_message" => send_message(app, bot_id, &args),
-        owner if owner_actions::handles(owner) => owner_actions::call(app, bot_id, owner, &args),
         "complete_task" => complete_task(app, bot_id, &args),
         "cancel_task" => cancel_task(app, bot_id, &args),
         "list_bots" => list_bots(app, bot_id),

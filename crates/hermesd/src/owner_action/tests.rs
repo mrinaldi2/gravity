@@ -87,6 +87,7 @@ fn stored(db: &Db, content: &str) -> OwnerAction {
         output_path: None,
         output_tail: None,
         reject_reason: None,
+        local_project_id: None,
     };
     db.insert_owner_action(&a).unwrap();
     a

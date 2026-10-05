@@ -121,7 +121,7 @@ impl Conn {
             .db
             .list_owner_actions(project, 100)?
             .iter()
-            .map(|a| a.to_json())
+            .map(|a| owner_action::view(&self.app, a))
             .collect();
         self.send(json!({ "type": "owner_actions", "req_id": req_id, "actions": actions }));
         Ok(())
@@ -144,10 +144,9 @@ impl Conn {
             .into_iter()
             .map(|(at, actor, event)| json!({ "at": at, "actor": actor, "event": event }))
             .collect();
-        self.send(
-            json!({ "type": "owner_action", "req_id": req_id, "action": a.to_json(),
-                          "audit": audit }),
-        );
+        self.send(json!({ "type": "owner_action", "req_id": req_id,
+                    "action": owner_action::view(&self.app, &a),
+                          "audit": audit }));
         Ok(())
     }
 
@@ -165,16 +164,54 @@ impl Conn {
             );
             return Err(e);
         }
-        let a = owner_action::start_run(&self.app, &self.actor().as_stored(), id, sha)?;
-        self.send(json!({ "type": "owner_action", "req_id": req_id, "action": a.to_json() }));
+        let by = self.actor().as_stored();
+        let a = owner_action::load(&self.app, None, id)?;
+        if !owner_action::is_elsewhere(&self.app, &a) {
+            let running = owner_action::start_run(&self.app, &by, id, sha)?;
+            self.send(json!({ "type": "owner_action", "req_id": req_id,
+                              "action": owner_action::view(&self.app, &running) }));
+            return Ok(());
+        }
+        // It runs on a linked computer: forwarded now, or refused (R3).
+        let (app, sha) = (self.app.clone(), sha.to_string());
+        self.answer_action(req_id, async move {
+            crate::peer::owner_actions::run_there(&app, &a, &sha, &by).await
+        });
         Ok(())
+    }
+
+    /// Answers `req_id` with the action `work` ends with, off this task.
+    fn answer_action(
+        &self,
+        req_id: &Value,
+        work: impl std::future::Future<Output = anyhow::Result<owner_action::model::OwnerAction>>
+            + Send
+            + 'static,
+    ) {
+        let (app, out, req_id) = (self.app.clone(), self.out.clone(), req_id.clone());
+        tokio::spawn(async move {
+            let reply = match work.await {
+                Ok(a) => json!({ "type": "owner_action", "req_id": req_id,
+                                 "action": owner_action::view(&app, &a) }),
+                Err(e) => {
+                    let code = crate::decisions::error_code(&e)
+                        .unwrap_or_else(|| crate::peer::error_code(&e, "internal"));
+                    json!({ "type": "error", "req_id": req_id, "code": code,
+                            "message": e.to_string() })
+                }
+            };
+            let _ = out.send(reply);
+        });
     }
 
     pub(super) fn owner_action_reject(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let id = Self::str_field(req, "id")?;
         let reason = req.get("reason").and_then(Value::as_str);
-        let a = owner_action::reject(&self.app, &self.actor(), id, reason)?;
-        self.send(json!({ "type": "owner_action", "req_id": req_id, "action": a.to_json() }));
+        let (app, by) = (self.app.clone(), self.actor().as_stored());
+        let (id, reason) = (id.to_string(), reason.map(str::to_string));
+        self.answer_action(req_id, async move {
+            owner_action::reject(&app, &by, &id, reason.as_deref()).await
+        });
         Ok(())
     }
 }

@@ -12,7 +12,8 @@ use super::{parse_ts, ts, Db};
 
 const COLUMNS: &str = "id, project_id, proposed_by, item_id, decision_id, target_machine, shell, \
      cwd, content, pinned_files, reason, timeout_s, sha256, flags, origin, state, created_at, \
-     expires_at, run_by, run_at, finished_at, exit_code, output_path, output_tail, reject_reason";
+     expires_at, run_by, run_at, finished_at, exit_code, output_path, output_tail, reject_reason, \
+     local_project_id";
 
 fn bad(text: &str) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(
@@ -57,6 +58,7 @@ fn row(r: &Row<'_>) -> rusqlite::Result<OwnerAction> {
         output_path: r.get(22)?,
         output_tail: r.get(23)?,
         reject_reason: r.get(24)?,
+        local_project_id: r.get(25)?,
     })
 }
 
@@ -66,9 +68,9 @@ impl Db {
         self.lock().execute(
             "INSERT INTO owner_action (id, project_id, proposed_by, item_id, decision_id,
                  target_machine, shell, cwd, content, pinned_files, reason, timeout_s, sha256,
-                 flags, origin, state, created_at, expires_at)
+                 flags, origin, state, created_at, expires_at, local_project_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                     ?17, ?18)",
+                     ?17, ?18, ?19)",
             params![
                 a.id,
                 p.project_id,
@@ -88,6 +90,7 @@ impl Db {
                 a.state.as_str(),
                 ts(a.created_at),
                 ts(a.expires_at),
+                a.local_project_id,
             ],
         )?;
         Ok(())
@@ -105,7 +108,8 @@ impl Db {
         limit: usize,
     ) -> anyhow::Result<Vec<OwnerAction>> {
         let sql = format!(
-            "SELECT {COLUMNS} FROM owner_action WHERE (?1 IS NULL OR project_id = ?1)
+            "SELECT {COLUMNS} FROM owner_action
+             WHERE (?1 IS NULL OR coalesce(local_project_id, project_id) = ?1)
              ORDER BY created_at DESC LIMIT ?2"
         );
         let conn = self.lock();
@@ -170,6 +174,29 @@ impl Db {
             "UPDATE owner_action SET state = ?2, reject_reason = ?3, finished_at = ?4
              WHERE id = ?1 AND state = 'proposed'",
             params![id, state.as_str(), reason, ts(now)],
+        )?;
+        Ok(changed == 1)
+    }
+
+    /// The proposer's copy follows the target's (R3): only the run's
+    /// fields, never what was proposed. `false` when there is no such row.
+    pub fn mirror_owner_action(&self, from: &OwnerAction) -> anyhow::Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE owner_action SET state = ?2, run_by = ?3, run_at = ?4, finished_at = ?5,
+                 exit_code = ?6, output_tail = ?7, reject_reason = ?8, flags = ?9
+             WHERE id = ?1 AND sha256 = ?10",
+            params![
+                from.id,
+                from.state.as_str(),
+                from.run_by,
+                from.run_at.map(ts),
+                from.finished_at.map(ts),
+                from.exit_code,
+                from.output_tail,
+                from.reject_reason,
+                serde_json::to_string(&from.flags)?,
+                from.sha256,
+            ],
         )?;
         Ok(changed == 1)
     }

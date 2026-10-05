@@ -34,12 +34,16 @@ CREATE TABLE IF NOT EXISTS owner_action (
     exit_code      INTEGER,
     output_path    TEXT,
     output_tail    TEXT,
-    reject_reason  TEXT
+    reject_reason  TEXT,
+    -- On the computer it runs on, for an action a linked computer offered
+    -- (H-117 R3): this daemon's own project the peer's project is linked to.
+    local_project_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_owner_action_project ON owner_action(project_id, created_at);
 CREATE TRIGGER IF NOT EXISTS owner_action_immutable
 BEFORE UPDATE OF project_id, proposed_by, item_id, decision_id, target_machine, shell, cwd,
-    content, pinned_files, reason, timeout_s, sha256, origin, created_at ON owner_action
+    content, pinned_files, reason, timeout_s, sha256, origin, created_at, local_project_id
+    ON owner_action
 BEGIN
     SELECT RAISE(ABORT, 'an owner action is immutable once proposed');
 END;

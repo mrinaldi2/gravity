@@ -830,6 +830,14 @@ A bot proposes an exact command for the owner to run; only the owner runs it.
   - the proposing bot gets a note with the exit code and the tail, and the item or decision gets the same as a comment.
 - **Audit:** append-only `owner_action_audit` (proposed, viewed, refused, run, finished, rejected, withdrawn), mirrored to `<home>/logs/owner-actions.log`.
 
+**On a linked computer (R3).** `target_machine` names a linked computer, and `shell` is required, since this computer's default may not run there. The offer and the run go over that computer's peer link:
+- **Offer.** The proposing daemon sends peer request `owner_action_offer {id, proposal}`. The target checks it as it would its own bot's proposal (characters, size, shell for its OS, cwd), hashes the pinned files itself, and stores its own copy under the same id, with `origin: "peer:<peer id>"` and its own linked project as the local project. It answers `{action}`. The proposer stores that copy only if every field but the pin hashes is what it offered and the hash matches the fields. Clients see `target_name`.
+- **Run, reject, withdraw.** A client on the proposing daemon sends the usual WS requests, which the proposer forwards as `owner_action_run {id, sha256, approved_by}` and `owner_action_close {id, state: rejected|withdrawn, reason?, actor}`.
+  - The target acts only on an action that peer offered (otherwise `not_found`, audited as refused), by its own copy's hash, through the same single-use claim.
+  - A link that is down fails at once with `unavailable` ("… is offline"), and nothing is queued.
+- **Progress.** The target sends `owner_action_update {action}` on every change and `owner_action_output {id, chunk}` while it runs. The proposer accepts them only from the computer the action targets, follows its copy and re-pushes both to its own clients.
+- **Records.** The target keeps the full log and the audit. The proposer tells its bot how it ended, once, and leaves a comment on its item or decision.
+
 ## The project dashboard
 
 `dashboard_get {project_id}` (read) answers with `{type: "dashboard", dashboard}`, which holds what the dashboard's widgets show (H-018 §2.1, H-076, H-102):

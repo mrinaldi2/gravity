@@ -33,6 +33,9 @@ pub(super) fn handle(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> anyho
         "board_snapshot" => super::board_home::serve_snapshot(app, &peer, frame),
         "board_read" => super::board_home::serve_read(app, &peer, frame),
         "dashboard_needs_you" => super::board_home::serve_needs_you(app, &peer, frame),
+        "owner_action_offer" => super::owner_actions::serve_offer(app, &peer, frame),
+        "owner_action_run" => super::owner_actions::serve_run(app, &peer, frame),
+        "owner_action_close" => super::owner_actions::serve_close(app, &peer, frame),
         "create_bot" => super::remote_bots::serve_create(app, &peer, frame),
         "update_bot" => super::remote_bots::serve_update(app, &peer, frame),
         "delete_bot" => super::remote_bots::serve_delete(app, &peer, frame),
@@ -63,6 +66,8 @@ pub(super) fn event(app: &Arc<AppState>, peer_id: &str, frame: &Value) {
         "project_roster" => super::mirror::receive_roster(app, peer_id, frame),
         "project_links" => super::mirror::receive_links(app, peer_id, frame),
         "board_event" => super::board::receive_event(app, peer_id, frame),
+        "owner_action_update" => super::owner_actions::receive_update(app, peer_id, frame),
+        "owner_action_output" => super::owner_actions::receive_output(app, peer_id, frame),
         _ => {}
     }
 }

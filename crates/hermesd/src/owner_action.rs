@@ -18,11 +18,11 @@
 //!   mirrored to `<home>/logs/owner-actions.log`.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 use serde_json::{json, Value};
 
-use crate::actor::Actor;
 use crate::app::AppState;
 use crate::decisions::{conflict, forbidden, invalid, not_found};
 use crate::events::Push;
@@ -32,8 +32,11 @@ pub mod model;
 pub mod redact;
 pub mod run;
 mod running;
+mod tell;
 
 pub use running::{pin_drift, start_run};
+use tell::tell;
+pub use tell::{follow, is_elsewhere};
 pub mod validate;
 
 /// How long a proposal waits for the owner.
@@ -56,7 +59,7 @@ pub struct ProposeRequest<'a> {
 
 /// Paths a bot can write: bot workspaces and worktrees, artifacts, and the
 /// owner's trusted folders where worktrees live.
-fn writable_roots(app: &AppState) -> Vec<PathBuf> {
+pub(crate) fn writable_roots(app: &AppState) -> Vec<PathBuf> {
     let mut roots = vec![app.cfg.home.join("projects")];
     let home = &app.cfg.user_home;
     for path in &app.cfg.trusted_paths {
@@ -68,15 +71,35 @@ fn writable_roots(app: &AppState) -> Vec<PathBuf> {
     roots
 }
 
-fn sha256_of(path: &str) -> anyhow::Result<String> {
+pub(crate) fn sha256_of(path: &str) -> anyhow::Result<String> {
     crate::quiesce::file_sha256(std::path::Path::new(path))
         .map_err(|e| invalid(format!("can't pin {path}: {e}")))
 }
 
+/// What clients see: the action, and the linked computer it runs on by
+/// name.
+pub fn view(app: &AppState, a: &OwnerAction) -> Value {
+    let mut v = a.to_json();
+    if is_elsewhere(app, a) {
+        v["target_name"] = json!(crate::peer::owner_actions::target_name(
+            app,
+            &a.proposal.target_machine
+        ));
+    }
+    v
+}
+
+/// Tells this computer's clients, and the computer that offered it (R3).
 fn changed(app: &AppState, a: &OwnerAction) {
     app.events.push(Push::OwnerActionUpdate {
-        action: Box::new(a.to_json()),
+        action: Box::new(view(app, a)),
     });
+    if let Some(peer) = a.offered_by() {
+        app.peers.notify(
+            peer,
+            json!({ "type": "owner_action_update", "action": a.wire() }),
+        );
+    }
 }
 
 /// Appends to the audit and its log mirror; a failed mirror write is only
@@ -98,12 +121,24 @@ pub fn audit(app: &AppState, id: &str, actor: &str, event: &str, detail: Value) 
     }
 }
 
-/// A bot proposes an action (validated, hashed, stored as is).
-pub fn propose(
-    app: &AppState,
+/// A bot proposes an action (validated, hashed, stored as is). One for a
+/// linked computer is offered there first, and stored here as the copy the
+/// target acknowledged (R3).
+pub async fn propose(
+    app: &Arc<AppState>,
     bot: &bus::Bot,
     req: &ProposeRequest<'_>,
 ) -> anyhow::Result<OwnerAction> {
+    let proposal = prepare(app, bot, req)?;
+    if proposal.target_machine != app.db.daemon_id()? {
+        return crate::peer::owner_actions::offer(app, proposal).await;
+    }
+    store(app, proposal, "bot", writable_roots(app))
+}
+
+/// A checked proposal. For a linked computer the pinned files are named
+/// only: the target hashes its own.
+fn prepare(app: &AppState, bot: &bus::Bot, req: &ProposeRequest<'_>) -> anyhow::Result<Proposal> {
     let here = app.db.daemon_id()?;
     let target = match req.target.map(str::trim) {
         None | Some("" | "here") => here.clone(),
@@ -111,7 +146,11 @@ pub fn propose(
     };
     let shell = match req.shell {
         Some(s) => Shell::parse(s.trim()).ok_or_else(|| invalid(format!("unknown shell {s}")))?,
-        None => Shell::here(),
+        None if target == here => Shell::here(),
+        // This computer's default may not run there.
+        None => return Err(invalid(
+            "name the shell for that computer: powershell or cmd on Windows, zsh or bash on a Mac",
+        )),
     };
     validate::content(req.content)?;
     validate::visible("the reason", req.reason)?;
@@ -144,48 +183,46 @@ pub fn propose(
         .map(|path| {
             Ok(Pinned {
                 path: path.clone(),
-                sha256: sha256_of(path)?,
+                sha256: if target == here {
+                    sha256_of(path)?
+                } else {
+                    String::new()
+                },
             })
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
-    let proposal = Proposal {
+    Ok(Proposal {
         project_id: bot.project_id.clone(),
         proposed_by: format!("bot:{}", bot.id),
         item_id: req.item_id.map(str::to_string),
         decision_id: req.decision_id.map(str::to_string),
-        target_machine: target.clone(),
+        target_machine: target,
         shell,
         cwd: req.cwd.to_string(),
         content: req.content.to_string(),
         pinned_files,
         reason: req.reason.trim().to_string(),
         timeout_s: validate::timeout(req.timeout_s)?,
-    };
-    if target != here {
-        // Offered to the target first, which keeps its own copy (R3).
-        return crate::peer::owner_actions::offer(app, proposal, writable_roots(app));
-    }
-    store(app, proposal, "bot", writable_roots(app))
+    })
 }
 
-/// Stores a proposal as a new action: the daemon's own templates (R4) and
-/// peers' offers (R3) come here too.
-pub fn store(
-    app: &AppState,
+/// A new, waiting action for `proposal`, flagged against `writable`.
+pub fn new_action(
+    id: String,
     proposal: Proposal,
     origin: &str,
-    writable: Vec<PathBuf>,
-) -> anyhow::Result<OwnerAction> {
+    writable: &[PathBuf],
+) -> OwnerAction {
     let pinned: Vec<String> = proposal
         .pinned_files
         .iter()
         .map(|p| p.path.clone())
         .collect();
     let now = Utc::now();
-    let action = OwnerAction {
-        id: bus::new_id(),
+    OwnerAction {
+        id,
         sha256: proposal.sha256(),
-        flags: validate::unpinned_writable(&proposal.content, &writable, &pinned),
+        flags: validate::unpinned_writable(&proposal.content, writable, &pinned),
         origin: origin.to_string(),
         state: State::Proposed,
         created_at: now,
@@ -197,67 +234,81 @@ pub fn store(
         output_path: None,
         output_tail: None,
         reject_reason: None,
+        local_project_id: None,
         proposal,
-    };
+    }
+}
+
+/// Stores a proposal as a new action: the daemon's own templates (R4) come
+/// here too.
+pub fn store(
+    app: &AppState,
+    proposal: Proposal,
+    origin: &str,
+    writable: Vec<PathBuf>,
+) -> anyhow::Result<OwnerAction> {
+    insert(app, new_action(bus::new_id(), proposal, origin, &writable))
+}
+
+/// Records a new action as it is, audited and announced.
+pub fn insert(app: &AppState, action: OwnerAction) -> anyhow::Result<OwnerAction> {
     app.db.insert_owner_action(&action)?;
     audit(
         app,
         &action.id,
         &action.proposal.proposed_by,
         "proposed",
-        json!({ "sha256": action.sha256, "origin": origin }),
+        json!({ "sha256": action.sha256, "origin": action.origin }),
     );
     changed(app, &action);
     Ok(action)
 }
 
-/// An action of `project_id`.
+/// An action of `project_id` (this computer's project id).
 pub fn load(app: &AppState, project_id: Option<&str>, id: &str) -> anyhow::Result<OwnerAction> {
     let _ = app.db.expire_owner_actions(Utc::now());
     match app.db.get_owner_action(id)? {
-        Some(a) if project_id.is_none_or(|p| a.proposal.project_id == p) => Ok(a),
+        Some(a) if project_id.is_none_or(|p| a.project_here() == p) => Ok(a),
         _ => Err(not_found(format!("no owner action {id}"))),
     }
 }
 
-/// The proposing bot withdraws its own proposal.
-pub fn withdraw(app: &AppState, bot: &bus::Bot, id: &str) -> anyhow::Result<OwnerAction> {
+/// The proposing bot withdraws its own proposal, on the computer it targets
+/// too.
+pub async fn withdraw(
+    app: &Arc<AppState>,
+    bot: &bus::Bot,
+    id: &str,
+) -> anyhow::Result<OwnerAction> {
     let a = load(app, Some(&bot.project_id), id)?;
-    if a.proposal.proposed_by != format!("bot:{}", bot.id) {
+    let by = a.proposal.proposed_by.clone();
+    if by != format!("bot:{}", bot.id) {
         return Err(forbidden("only the bot that proposed it can withdraw it"));
     }
-    close(
-        app,
-        &a,
-        State::Withdrawn,
-        None,
-        &a.proposal.proposed_by.clone(),
-    )
+    if is_elsewhere(app, &a) {
+        return crate::peer::owner_actions::close_there(app, &a, State::Withdrawn, None, &by).await;
+    }
+    close_as(app, &a, State::Withdrawn, None, &by)
 }
 
-/// The owner rejects a proposal; the proposer is told why.
-pub fn reject(
-    app: &AppState,
-    actor: &Actor<'_>,
+/// The owner (stored as `actor`) rejects a proposal; the proposer is told
+/// why.
+pub async fn reject(
+    app: &Arc<AppState>,
+    actor: &str,
     id: &str,
     reason: Option<&str>,
 ) -> anyhow::Result<OwnerAction> {
     let a = load(app, None, id)?;
-    let closed = close(app, &a, State::Rejected, reason, &actor.as_stored())?;
-    tell(
-        app,
-        &closed,
-        &format!(
-            "The owner rejected owner action {} ({}){}",
-            closed.id,
-            first_line(&closed.proposal.content),
-            reason.map(|r| format!(": {r}")).unwrap_or_default()
-        ),
-    );
-    Ok(closed)
+    if is_elsewhere(app, &a) {
+        return crate::peer::owner_actions::close_there(app, &a, State::Rejected, reason, actor)
+            .await;
+    }
+    close_as(app, &a, State::Rejected, reason, actor)
 }
 
-fn close(
+/// Closes a waiting action here, rejected or withdrawn by `actor`.
+pub(crate) fn close_as(
     app: &AppState,
     a: &OwnerAction,
     to: State,
@@ -274,31 +325,8 @@ fn close(
     audit(app, &a.id, actor, to.as_str(), json!({ "reason": reason }));
     let closed = load(app, None, &a.id)?;
     changed(app, &closed);
+    tell(app, &closed);
     Ok(closed)
-}
-
-fn first_line(content: &str) -> String {
-    let line = content.lines().next().unwrap_or_default();
-    line.chars().take(80).collect()
-}
-
-/// A note to the proposing bot, and a comment on its card or decision.
-fn tell(app: &AppState, a: &OwnerAction, body: &str) {
-    if let Some(bot_id) = a.proposal.proposed_by.strip_prefix("bot:") {
-        let sender = crate::messaging::user_sender();
-        let dm = crate::messaging::Dm::new(bot_id, &sender, bus::MessageKind::Note, body);
-        if let Err(e) = crate::messaging::send_dm(&app.db, &app.events, dm) {
-            tracing::warn!(error = %e, "owner action note failed");
-        }
-    }
-    if let Some(item) = &a.proposal.item_id {
-        let _ = app.db.add_item_comment(item, body, None, &Actor::User);
-    }
-    if let Some(decision) = &a.proposal.decision_id {
-        let _ = app
-            .db
-            .insert_decision_comment(decision, bus::CommentAuthorKind::User, None, body);
-    }
 }
 
 #[cfg(test)]

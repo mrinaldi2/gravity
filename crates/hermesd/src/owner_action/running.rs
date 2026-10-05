@@ -10,7 +10,7 @@ use crate::decisions::{conflict, invalid};
 use crate::events::Push;
 
 use super::model::{OwnerAction, State};
-use super::{audit, changed, first_line, load, redact, run, sha256_of, tell};
+use super::{audit, changed, load, redact, run, sha256_of, tell};
 
 /// Claims the action for one run (by the hash the owner's client showed)
 /// and runs it in the background. Returns it, running.
@@ -72,11 +72,20 @@ async fn execute(app: &Arc<AppState>, a: OwnerAction) {
     let drift = pin_drift(&a);
     let ran = if drift.is_empty() {
         let id = a.id.clone();
-        let events = app.events.clone();
+        let feed = app.clone();
+        // The computer that offered it watches too (R3).
+        let peer = a.offered_by().map(str::to_string);
         run::execute(&a.proposal, &log, move |chunk| {
-            events.push(Push::OwnerActionOutput {
+            let chunk = redact::redact(chunk);
+            if let Some(peer) = &peer {
+                feed.peers.notify(
+                    peer,
+                    json!({ "type": "owner_action_output", "id": id, "chunk": chunk }),
+                );
+            }
+            feed.events.push(Push::OwnerActionOutput {
                 id: id.clone(),
-                chunk: redact::redact(chunk),
+                chunk,
             });
         })
         .await
@@ -111,26 +120,6 @@ async fn execute(app: &Arc<AppState>, a: OwnerAction) {
     );
     if let Ok(done) = load(app, None, &a.id) {
         changed(app, &done);
-        let short: String = tail
-            .chars()
-            .rev()
-            .take(3000)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect();
-        tell(
-            app,
-            &done,
-            &format!(
-                "Owner action {} ({}) {}{}.\n{short}",
-                done.id,
-                first_line(&done.proposal.content),
-                ran.state.as_str().replace('_', " "),
-                ran.exit_code
-                    .map(|c| format!(", exit {c}"))
-                    .unwrap_or_default(),
-            ),
-        );
+        tell(app, &done);
     }
 }
