@@ -147,7 +147,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
           <NeedsYou
             projectName={project.name}
             rows={dashboard.needs_you}
-            botName={botName}
+            botName={(id) => botName(id) ?? "a bot"}
             columnName={(key) => columns.get(key) ?? key}
             onReview={openReview}
             onDecision={props.onOpenDecision}
