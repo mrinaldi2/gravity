@@ -56,6 +56,7 @@ fn release_row(r: &Row<'_>) -> rusqlite::Result<Release> {
         builds: Vec::new(),
         tests: Vec::new(),
         deployments: Vec::new(),
+        events: Vec::new(),
     })
 }
 
@@ -127,6 +128,7 @@ fn release_in(conn: &Connection, id: &str) -> rusqlite::Result<Option<Release>> 
             })
         })?
         .collect::<Result<_, _>>()?;
+    release.events = super::release_life::events_in(conn, id)?;
     Ok(Some(release))
 }
 

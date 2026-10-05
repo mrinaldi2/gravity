@@ -9,7 +9,7 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use crate::app::AppState;
-use crate::board::model::Role;
+use crate::board::model::{Platform, Role};
 use crate::db::{BoardTx, NewReleaseTest};
 use crate::decisions::{conflict, forbidden, invalid};
 
@@ -23,14 +23,7 @@ pub const TEST_RESULTS: &[&str] = &["pass", "fail", "blocked"];
 /// `required_machines` for its items' platforms, or with none configured,
 /// every machine a tester is assigned to (ARCH-R23 F2).
 pub fn required_machines(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<Vec<String>> {
-    let mut platforms = Vec::new();
-    for ri in &release.items {
-        platforms.extend(
-            t.item(&ri.item_id)?
-                .map(|i| i.platforms)
-                .unwrap_or_default(),
-        );
-    }
+    let platforms = item_platforms(t, release)?;
     let settings = t.settings(&release.project_id)?;
     let mut machines: BTreeSet<String> = settings
         .iter()
@@ -49,11 +42,68 @@ pub fn required_machines(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<V
     Ok(machines.into_iter().collect())
 }
 
+fn item_platforms(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<Vec<Platform>> {
+    let mut platforms = Vec::new();
+    for ri in &release.items {
+        platforms.extend(
+            t.item(&ri.item_id)?
+                .map(|i| i.platforms)
+                .unwrap_or_default(),
+        );
+    }
+    platforms.sort_unstable_by_key(|p| p.as_str());
+    platforms.dedup();
+    Ok(platforms)
+}
+
+/// The platforms `machine` tests this package for (ARCH-R25 F2): those whose
+/// `required_machines` list it, or with none listing it, the items'
+/// platforms when the machine is required as a tester machine.
+fn machine_platforms(
+    t: &BoardTx<'_>,
+    release: &Release,
+    machine: &str,
+) -> anyhow::Result<Vec<Platform>> {
+    let configured: Vec<Platform> = t
+        .settings(&release.project_id)?
+        .iter()
+        .flat_map(|s| s.required_machines.iter())
+        .filter(|(_, machines)| machines.iter().any(|m| m == machine))
+        .map(|(p, _)| *p)
+        .collect();
+    if !configured.is_empty() {
+        return Ok(configured);
+    }
+    if required_machines(t, release)?.iter().any(|m| m == machine) {
+        return item_platforms(t, release);
+    }
+    Ok(Vec::new())
+}
+
+/// A build is for a platform when it names it, alone or with a variant
+/// (`desktop-mac` is a desktop build).
+fn build_is_for(build_platform: &str, platform: Platform) -> bool {
+    let p = platform.as_str();
+    build_platform == p
+        || build_platform
+            .strip_prefix(p)
+            .is_some_and(|rest| rest.starts_with('-'))
+}
+
 /// Every required machine has a pass against one of the package's current
-/// builds; the refusal names the ones that haven't.
+/// builds; the refusal names the ones that haven't. No required machine at
+/// all is a refusal, never a vacuous pass (ARCH-R25 F1).
 pub fn check_tested(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<()> {
     let builds: Vec<&str> = release.builds.iter().map(|b| b.sha256.as_str()).collect();
-    let missing: Vec<String> = required_machines(t, release)?
+    let required = required_machines(t, release)?;
+    if required.is_empty() {
+        return Err(conflict(format!(
+            "release {} has no machine to test it on: set the board's required_machines for its \
+             items' platforms, or assign a tester to a machine",
+            release.name
+        )));
+    }
+    let missing: Vec<String> = required
         .into_iter()
         .filter(|m| {
             !release.tests.iter().any(|r| {
@@ -150,14 +200,28 @@ pub fn record_test(
                 release.status.as_str()
             )));
         }
-        if !release
+        let Some(build) = release
             .builds
             .iter()
-            .any(|b| b.sha256 == result.build_sha256)
-        {
+            .find(|b| b.sha256 == result.build_sha256)
+        else {
             return Err(invalid(
                 "'build_sha256' must be one of the release's builds",
             ));
+        };
+        let platforms = machine_platforms(t, &release, result.machine)?;
+        if !platforms.iter().any(|p| build_is_for(&build.platform, *p)) {
+            let names: Vec<&str> = platforms.iter().map(|p| p.as_str()).collect();
+            return Err(invalid(format!(
+                "that sha256 is the {} build; {} tests {} for this release",
+                build.platform,
+                result.machine,
+                if names.is_empty() {
+                    "no platform".to_string()
+                } else {
+                    names.join(", ")
+                }
+            )));
         }
         t.record_release_test(&release.id, result)?;
         Ok(t.release(&release.id)?.expect("loaded"))

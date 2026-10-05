@@ -92,3 +92,25 @@ CREATE TABLE IF NOT EXISTS release_deployment (
     PRIMARY KEY (release_id, machine, action)
 );
 "#;
+
+/// What happened to a package that its own row can't show (ARCH-R25 M1): a
+/// cancelled package is removed, and this keeps who cancelled it, why, and
+/// what it held. `related_id` is the package it succeeded, so that one's
+/// history shows the cancelled successor. No foreign key on `release_id`:
+/// the row outlives the package. Safe to run again.
+pub(super) const MIGRATION_RELEASE_EVENTS: &str = r#"
+CREATE TABLE IF NOT EXISTS release_event (
+    id           TEXT PRIMARY KEY,
+    project_id   TEXT NOT NULL REFERENCES project(id),
+    release_id   TEXT NOT NULL,
+    release_name TEXT NOT NULL,
+    related_id   TEXT,
+    kind         TEXT NOT NULL,
+    actor        TEXT NOT NULL,
+    note         TEXT,
+    detail       TEXT NOT NULL DEFAULT '{}',
+    at           TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_release_event_release ON release_event(release_id, at);
+CREATE INDEX IF NOT EXISTS idx_release_event_related ON release_event(related_id, at);
+"#;

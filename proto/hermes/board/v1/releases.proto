@@ -31,7 +31,8 @@ message ReleaseCreate {
   // Markdown, compiled from the items' change notes.
   optional string changelog = 5;
   // The package this one succeeds after a mixed ruling or a failed deploy
-  // (H-020 §6.1): its shipped items may come along, and it is superseded.
+  // (H-020 §6.1): its shipped items may come along. It is superseded when
+  // this one is submitted.
   optional string from = 6;
 }
 
@@ -59,8 +60,9 @@ message ReleaseUpdate {
   HowToTestList how_to_test = 4;
 }
 
-// Tester: your machine's result for a package, against one of its builds.
-// Submit needs a pass from every required machine on the current builds.
+// Tester: your machine's result for a package, against one of its builds for
+// your machine's platform. Submit needs a pass from every required machine on
+// the current builds.
 message ReleaseTest {
   string release_id = 1;
   string machine = 2;
@@ -83,6 +85,15 @@ message ReleasePause {
 // DevOps: resume a paused rollout.
 message ReleaseResume {
   string release_id = 1;
+}
+
+// DevOps: call off a package that hasn't been submitted. It is removed and an
+// event records it. A predecessor's shipped items stay in Owner testing for
+// that package, which can then take a new successor; items from Verify are free.
+message ReleaseCancel {
+  string release_id = 1;
+  // Why; kept in the event.
+  optional string reason = 2;
 }
 
 // DevOps: add or replace one platform's build while the package is assembling.

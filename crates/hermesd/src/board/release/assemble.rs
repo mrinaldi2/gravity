@@ -10,11 +10,11 @@ use bus::{DecisionKind, Priority};
 use crate::app::AppState;
 use crate::board::guards::{self, Move, Who};
 use crate::board::model::{ColumnCategory, Role, Unmet};
-use crate::db::NewRelease;
+use crate::db::{BoardTx, NewRelease};
 use crate::decisions::service::{raise, RaiseRequest};
 use crate::decisions::{conflict, invalid};
 
-use super::model::{Release, ReleaseBuild, ReleaseStatus, Verdict};
+use super::model::{Release, ReleaseBuild, ReleaseStatus};
 use super::package::{check_tested, decision_body};
 use super::{daemon_move, frozen_hash, load, publish_moves, Caller};
 
@@ -25,7 +25,8 @@ pub struct NewPackage<'a> {
     pub changelog: &'a str,
     pub how_to_test: serde_json::Value,
     /// The package this one succeeds (H-020 §6.1): its shipped items, still
-    /// in Owner testing, may come along, and it becomes `superseded`.
+    /// in Owner testing, may come along. It becomes `superseded` when this
+    /// one is submitted, so a cancelled successor can be built again.
     pub from: Option<&'a str>,
 }
 
@@ -48,12 +49,7 @@ pub fn create(
     let project = &me.bot.project_id;
     app.db.board_tx(|t| {
         let from = req.from.map(|id| load(t, project, id)).transpose()?;
-        if let Some(old) = from.as_ref().filter(|r| {
-            !matches!(
-                r.status,
-                ReleaseStatus::Repackaging | ReleaseStatus::PartiallyDeployed
-            )
-        }) {
+        if let Some(old) = from.as_ref().filter(|r| !r.awaits_successor()) {
             return Err(conflict(format!(
                 "release {} is {}; only a package being repackaged or one that failed to deploy \
                  has a successor",
@@ -72,11 +68,7 @@ pub fn create(
                 _ => return Err(invalid(format!("no item {id} in this project"))),
             };
             // A predecessor's shipped items wait in Owner testing for it.
-            let shipped = from.as_ref().is_some_and(|old| {
-                old.items
-                    .iter()
-                    .any(|i| i.item_id == *id && i.verdict == Verdict::Ship)
-            });
+            let shipped = from.as_ref().is_some_and(|old| old.holds_shipped(id));
             let in_place = item.category == ColumnCategory::Verify
                 || (shipped && item.category == ColumnCategory::Approval);
             if !in_place {
@@ -86,14 +78,17 @@ pub fn create(
                     item.column_key
                 )));
             }
-            if let Some(other) = t.open_release_of_item(id)? {
-                if from.as_ref().map(|r| r.id.as_str()) != Some(other.as_str()) {
-                    return Err(conflict(format!("{id} is already in release {other}")));
-                }
+            let from_id = from.as_ref().map(|r| r.id.as_str());
+            if let Some(other) = t
+                .open_releases_of_item(id)?
+                .into_iter()
+                .find(|other| Some(other.as_str()) != from_id)
+            {
+                return Err(conflict(format!(
+                    "{id} is already in release {other}; cancel that package first if it is \
+                     still being assembled"
+                )));
             }
-        }
-        if let Some(old) = &from {
-            t.set_release_status(&old.id, ReleaseStatus::Superseded)?;
         }
         let created = t.insert_release(&NewRelease {
             project_id: project,
@@ -165,6 +160,7 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
             )));
         }
         check_tested(t, &release)?;
+        let before = predecessor(t, &release)?;
         let approval = t
             .columns(project)?
             .into_iter()
@@ -217,12 +213,11 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
         let release = t.release(&release.id)?.expect("loaded");
         t.freeze_release(&release.id, Some(&frozen_hash(&release)), None)?;
         t.set_release_status(&release.id, ReleaseStatus::AwaitingOwner)?;
-        let before = release
-            .supersedes
-            .as_deref()
-            .map(|id| t.release(id))
-            .transpose()?
-            .flatten();
+        // The predecessor is over only now: until this submit, cancelling
+        // the successor leaves it repackaging (ARCH-R25 M1).
+        if let Some(old) = &before {
+            t.set_release_status(&old.id, ReleaseStatus::Superseded)?;
+        }
         Ok((t.release(&release.id)?.expect("loaded"), before, moved))
     })?;
     publish_moves(app, &mut feed, project, &moved);
@@ -257,20 +252,51 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
             Ok(t.release(&release.id)?.expect("loaded"))
         }),
         Err(e) => {
-            unsubmit(app, me, &release)?;
+            unsubmit(app, me, &release, before.as_ref())?;
             Err(e)
         }
     }
 }
 
-/// Take back a submit whose decision could not be raised.
-fn unsubmit(app: &Arc<AppState>, me: &Caller<'_>, release: &Release) -> anyhow::Result<()> {
+/// The package a successor replaces, refused unless it is still waiting for
+/// one: a failed deploy may have been retried and finished meanwhile.
+fn predecessor(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<Option<Release>> {
+    let Some(id) = release.supersedes.as_deref() else {
+        return Ok(None);
+    };
+    let old = t.release(id)?.expect("supersedes names a package");
+    if !old.awaits_successor() {
+        return Err(conflict(format!(
+            "release {} is now {}; it no longer needs this successor, so cancel {}",
+            old.name,
+            old.status.as_str(),
+            release.name
+        )));
+    }
+    Ok(Some(old))
+}
+
+/// Take back a submit whose decision could not be raised. A predecessor's
+/// shipped items stay in Owner testing, in that package again.
+fn unsubmit(
+    app: &Arc<AppState>,
+    me: &Caller<'_>,
+    release: &Release,
+    before: Option<&Release>,
+) -> anyhow::Result<()> {
     let project = me.bot.project_id.as_str();
     let actor = me.actor();
     let mut feed = app.board.writer();
     let moved = app.db.board_tx(|t| {
         let mut moved = Vec::new();
+        if let Some(old) = before {
+            t.set_release_status(&old.id, old.status)?;
+        }
         for ri in &release.items {
+            if let Some(old) = before.filter(|old| old.holds_shipped(&ri.item_id)) {
+                t.set_item_release(&ri.item_id, Some(&old.id), &actor)?;
+                continue;
+            }
             let note = "the release decision could not be raised";
             let from = daemon_move(
                 t,
