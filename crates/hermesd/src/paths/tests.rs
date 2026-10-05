@@ -121,3 +121,16 @@ fn system_md_speaks_of_hermes_and_the_registered_bus() {
     assert!(md.contains("the owner can watch it from Hermes."));
     assert!(!md.contains("Gravity"));
 }
+
+/// SessionStart is the only report of a session's inbox socket, so it must
+/// survive a daemon that is not serving yet (H-038).
+#[cfg(unix)]
+#[test]
+fn the_session_start_hook_retries_a_daemon_that_is_still_booting() {
+    let settings = super::unix_hooks::settings(49777, "TOKEN");
+    let command = settings["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+        .as_str()
+        .expect("command");
+    assert!(command.contains("--retry 5"), "{command}");
+    assert!(command.contains("--retry-connrefused"), "{command}");
+}

@@ -55,7 +55,14 @@ impl Supervisor {
         self.restart_bot(bot_id)
     }
 
+    /// The owner's restart: also hands the connect watchdog its full budget
+    /// back, so a bot it gave up on is watched again.
     pub fn restart_bot(&self, bot_id: &str) -> anyhow::Result<()> {
+        self.reset_watchdog(bot_id);
+        self.restart_session(bot_id)
+    }
+
+    pub(super) fn restart_session(&self, bot_id: &str) -> anyhow::Result<()> {
         let previous = self.state(bot_id);
         let session = {
             let mut bots = self.lock_bots();

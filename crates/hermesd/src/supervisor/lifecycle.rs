@@ -41,11 +41,9 @@ impl Supervisor {
             // restart with Claude Code's trust dialog.
             if self.inner.cfg.runtime == crate::config::RuntimeKind::Pty
                 && bot.runtime == bus::BotRuntime::ClaudeCode
+                && !self.trust_or_defer(bot_id, &workspace)
             {
-                if let Err(e) = crate::paths::trust_workspace(&self.inner.cfg.user_home, &workspace)
-                {
-                    tracing::warn!(bot_id, error = %e, "could not trust bot workspace");
-                }
+                return Ok(()); // config lock busy; the reconciler retries
             }
             // Only fills in what is missing, so a bot provisioned before
             // `FACTS.md` existed gets one without losing what it has written.
@@ -243,6 +241,10 @@ impl Supervisor {
             if !self.wants_start(&bot.id) {
                 continue;
             }
+            // Staggered: a boot starts Claude Code sessions a few at a time.
+            if bot.runtime == bus::BotRuntime::ClaudeCode && self.start_slots_full() {
+                continue;
+            }
             if let Err(e) = self.start_bot(&bot.id) {
                 tracing::warn!(bot_id = %bot.id, error = %format!("{e:#}"), "autostart failed");
                 // Back off like a crash so an unresolvable runtime does not
@@ -251,6 +253,7 @@ impl Supervisor {
                 self.report_start_failure(&bot.id, &e);
             }
         }
+        self.watch_connections();
     }
 
     /// True when the next start should hand the runtime `--continue`: the bot
@@ -391,10 +394,4 @@ impl Supervisor {
             self.inner.events.push(Push::notice("error", title, reason));
         }
     }
-}
-
-/// Restart delay for the nth consecutive crash: 2s doubling to a 5 minute cap.
-fn backoff(crashes: u32) -> Duration {
-    let shift = crashes.saturating_sub(1).min(8);
-    (BASE_BACKOFF * 2u32.pow(shift)).min(MAX_BACKOFF)
 }

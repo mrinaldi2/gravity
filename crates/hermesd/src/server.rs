@@ -57,9 +57,10 @@ pub fn spawn_workers(app: &Arc<AppState>) {
         tracing::warn!(error = %e, "artifacts dir backfill failed");
     }
 
-    // Bots are always-on: bring every live bot up now, then keep reconciling
-    // so crashes come back and nothing waits on a user pressing Start.
-    app.supervisor.reconcile();
+    // Bots are always-on: the first tick fires at once and brings every live
+    // bot up, later ones bring crashes back so nothing waits on a Start.
+    // Not run inline: `serve` must be serving before the first session's
+    // SessionStart hook reports its inbox socket (H-038).
     {
         let app = app.clone();
         tokio::spawn(async move {
@@ -193,7 +194,6 @@ pub async fn serve(
     bound: BoundServer,
     reclaim_configured_port: bool,
 ) -> anyhow::Result<Stop> {
-    spawn_workers(&app);
     let (stop_tx, _) = tokio::sync::broadcast::channel::<()>(1);
     let mut handles = Vec::new();
     let addresses: Vec<IpAddr> = bound.listeners.iter().map(|(addr, _)| addr.ip()).collect();
@@ -211,6 +211,9 @@ pub async fn serve(
             tracing::info!(%addr, "listener closed");
         }));
     }
+    // Only now start bots: a hook that fires before the listeners serve times
+    // out, and a lost SessionStart leaves the bot unreachable.
+    spawn_workers(&app);
 
     let stop = if reclaim_configured_port {
         let configured_port = bound.configured_port;

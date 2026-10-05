@@ -19,6 +19,12 @@ const CLAUDE_CONFIG_LOCK_RETRY: Duration = Duration::from_millis(50);
 /// Giving up is safe: the caller logs and the next start tries again.
 const CLAUDE_CONFIG_LOCK_WAIT: Duration = Duration::from_millis(500);
 
+/// The config lock stayed held past the wait: a contended moment, not a
+/// broken config, so the caller can come back later.
+#[derive(Debug, thiserror::Error)]
+#[error("{} stayed locked by another Claude Code process", .0.display())]
+pub struct ConfigLocked(pub PathBuf);
+
 /// Mark a daemon-created workspace as trusted in Claude Code's global project
 /// state so its first interactive session does not stop at the trust dialog.
 ///
@@ -33,7 +39,7 @@ pub fn trust_workspace(user_home: &Path, workspace: &Path) -> anyhow::Result<()>
         .canonicalize()
         .with_context(|| format!("resolving workspace {}", workspace.display()))?;
     let workspace_key = project_key(&workspace)?;
-    let config_path = user_home.join(".claude.json");
+    let config_path = claude_config_path(user_home);
 
     // The common case is a workspace that is already trusted. Read it unlocked:
     // taking the shared lock for a no-op would make a live session's own save
@@ -68,6 +74,11 @@ pub fn trust_workspace(user_home: &Path, workspace: &Path) -> anyhow::Result<()>
         serde_json::Value::Bool(true),
     );
     atomic_write_private_json(&config_path, &config)
+}
+
+/// Claude Code's global config, which holds the trust list.
+pub fn claude_config_path(user_home: &Path) -> PathBuf {
+    user_home.join(".claude.json")
 }
 
 /// A missing config is an empty one: Claude Code writes it on first run, and
@@ -135,10 +146,7 @@ impl ClaudeConfigLock {
                 let _ = fs::remove_dir(&dir);
             }
             if Instant::now() >= deadline {
-                anyhow::bail!(
-                    "{} stayed locked by another Claude Code process",
-                    config_path.display()
-                );
+                return Err(ConfigLocked(config_path.to_path_buf()).into());
             }
             std::thread::sleep(CLAUDE_CONFIG_LOCK_RETRY);
         }
