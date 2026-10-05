@@ -146,7 +146,12 @@ impl BoardTx<'_> {
     /// Remove a package that never reached the owner: its items, builds and
     /// tests go with it. It has no decision and no deployments.
     pub fn delete_release(&self, id: &str) -> anyhow::Result<()> {
-        for table in ["release_test", "release_build", "release_item", "release_deployment"] {
+        for table in [
+            "release_test",
+            "release_build",
+            "release_item",
+            "release_deployment",
+        ] {
             self.conn.execute(
                 &format!("DELETE FROM {table} WHERE release_id = ?1"),
                 params![id],

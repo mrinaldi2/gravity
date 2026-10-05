@@ -60,7 +60,9 @@ pub fn cancel(
                 let back = before.as_ref().filter(|b| b.holds_shipped(&ri.item_id));
                 t.set_item_release(&ri.item_id, back.map(|b| b.id.as_str()), &actor)?;
             }
-            let held = before.as_ref().is_some_and(|b| b.holds_shipped(&ri.item_id))
+            let held = before
+                .as_ref()
+                .is_some_and(|b| b.holds_shipped(&ri.item_id))
                 && item.is_some_and(|i| i.category == ColumnCategory::Approval);
             returned.push(json!({
                 "item_id": ri.item_id,
@@ -68,20 +70,20 @@ pub fn cancel(
             }));
         }
         let event = ReleaseEvent {
-                release_id: release.id.clone(),
-                release_name: release.name.clone(),
-                related_id: release.supersedes.clone(),
-                kind: "cancelled".into(),
-                actor: me.bot.id.clone(),
-                note: reason.map(str::to_string),
-                detail: json!({
-                    "status": release.status.as_str(),
-                    "items": returned,
-                    "builds": release.builds.iter().map(|b| json!({
-                        "platform": b.platform, "version": b.version, "sha256": b.sha256,
-                    })).collect::<Vec<_>>(),
-                }),
-                at: bus::now(),
+            release_id: release.id.clone(),
+            release_name: release.name.clone(),
+            related_id: release.supersedes.clone(),
+            kind: "cancelled".into(),
+            actor: me.bot.id.clone(),
+            note: reason.map(str::to_string),
+            detail: json!({
+                "status": release.status.as_str(),
+                "items": returned,
+                "builds": release.builds.iter().map(|b| json!({
+                    "platform": b.platform, "version": b.version, "sha256": b.sha256,
+                })).collect::<Vec<_>>(),
+            }),
+            at: bus::now(),
         };
         t.record_release_event(&event, project)?;
         t.delete_release(&release.id)?;

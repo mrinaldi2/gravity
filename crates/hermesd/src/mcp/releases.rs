@@ -11,9 +11,7 @@ use crate::app::AppState;
 use crate::board::model::Role;
 use crate::board::release::assemble::{self, NewPackage};
 use crate::board::release::model::{DeployResult, ReleaseBuild, Smoke};
-use crate::board::release::{
-    cancel, deploy, lifecycle, load, model::parse_arg, package, Caller,
-};
+use crate::board::release::{cancel, deploy, lifecycle, load, model::parse_arg, package, Caller};
 use crate::db::NewReleaseTest;
 
 use super::board_schema::{decode, shared, tool, Audience, BoardTool};
