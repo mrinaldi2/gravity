@@ -64,8 +64,9 @@ pub struct AuthConfig {
 /// (`hermesd hook <event>`, H-044 T3). Phase 2 refuses bearer tokens on
 /// `/hook` and `/hook/permission` too, so without it every bot's SessionStart
 /// and permission prompts would fail. A const, not a config key: only the
-/// code that ships the hook transport can claim it, and T3 sets it to `true`.
-pub const HOOKS_OVER_IPC: bool = false;
+/// code that ships the hook transport can claim it. `true` since the T3
+/// transport is merged (ARCH-R37 M1).
+pub const HOOKS_OVER_IPC: bool = true;
 
 impl AuthConfig {
     /// Holds a machine in phase 1 when phase 2 is asked for but this build
@@ -282,5 +283,12 @@ mod tests {
             .is_some();
         let placeholder = app_identity::TEAM_ID == app_identity::PLACEHOLDER_TEAM_ID;
         assert_eq!(held, cfg!(target_os = "macos") && placeholder);
+    }
+
+    #[test]
+    fn this_build_lets_phase_two_through() {
+        let mut auth = refusing();
+        assert_eq!(auth.hold_phase_two(HOOKS_OVER_IPC), None, "T3 is merged");
+        assert_eq!(auth.bot_bearer, BearerPolicy::Refuse);
     }
 }
