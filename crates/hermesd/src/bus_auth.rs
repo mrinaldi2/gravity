@@ -17,7 +17,13 @@ use serde::{Deserialize, Serialize};
 
 pub mod hook;
 pub mod ipc;
+pub mod origin;
 pub mod os;
+pub mod owner;
+pub mod owner_client;
+#[cfg(target_os = "macos")]
+mod owner_macos;
+mod owner_os;
 pub mod proxy;
 pub mod session;
 

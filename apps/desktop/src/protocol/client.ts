@@ -279,8 +279,9 @@ export class DaemonClient implements DaemonApi {
         token,
         client: CLIENT_ID,
         // This app shows permission cards, so the daemon may hold a bot's
-        // prompt for it instead of leaving it to the terminal.
-        features: ["permission_cards"],
+        // prompt for it instead of leaving it to the terminal; and it renders
+        // terminal cards for what they are, so it may see and answer them.
+        features: ["permission_cards", "terminal_card"],
         contracts: CONTRACTS,
       });
       if (replyIs(reply, "error")) {

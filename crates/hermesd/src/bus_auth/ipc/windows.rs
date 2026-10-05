@@ -154,16 +154,20 @@ pub(super) async fn serve(app: Arc<AppState>) -> anyhow::Result<()> {
     let mut attrs = only_this_user()?;
     let mut server = create(&name, &mut attrs, true)?;
     tracing::info!(pipe = %name, "bus endpoint listening");
+    super::announce(&app.cfg);
     loop {
         server.connect().await?;
         let accepted = crate::bus_auth::os::now();
         let connected = server;
         server = create(&name, &mut attrs, false)?;
-        let pid = client_pid(&connected);
+        let peer = client_pid(&connected).map(|pid| crate::bus_auth::owner::Peer {
+            pid,
+            audit_token: None,
+        });
         tokio::spawn(super::serve_connection(
             app.clone(),
             connected,
-            pid,
+            peer,
             accepted,
         ));
     }

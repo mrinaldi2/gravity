@@ -1,9 +1,10 @@
 import { useState } from "react";
 import type { KeyboardEvent, ReactElement } from "react";
 import type { PermissionAnswer, PermissionRequest } from "../../protocol/chat";
-import { toolDisplayName } from "../../toolNames";
+import { TERMINAL_TITLE, isTerminal, permissionTitle } from "./permissionTitle";
 import { errText, fmtTimestamp } from "../../util";
 import CodeBlock from "../chat/CodeBlock";
+import TerminalCard from "./TerminalCard";
 import type { Permissions } from "./usePermissions";
 
 interface PermissionCardsProps {
@@ -16,7 +17,10 @@ interface PermissionCardsProps {
   readonly onOpenBot?: (botId: string) => void;
 }
 
-/** Tools waiting on the owner, one card each, oldest first. */
+/**
+ * Tools waiting on the owner, one card each, oldest first. A terminal
+ * command asking to act as the owner goes above every bot's card.
+ */
 export default function PermissionCards({
   permissions,
   canAnswer,
@@ -26,18 +30,33 @@ export default function PermissionCards({
   if (permissions.pending.length === 0) {
     return null;
   }
+  const terminals = permissions.pending.filter(isTerminal);
+  const newest = terminals.at(-1);
   return (
     <div className="permission-cards" aria-label="Permission requests">
-      {permissions.pending.map((request) => (
-        <PermissionCard
+      <div className="visually-hidden" aria-live="polite">
+        {newest === undefined ? "" : `${TERMINAL_TITLE}: ${newest.origin?.command ?? ""}`}
+      </div>
+      {terminals.map((request) => (
+        <TerminalCard
           key={request.id}
           request={request}
           canAnswer={canAnswer}
           onAnswer={permissions.answer}
-          botName={botName?.(request.bot_id) ?? (botName === undefined ? undefined : "A bot")}
-          onOpenBot={onOpenBot}
         />
       ))}
+      {permissions.pending
+        .filter((request) => !isTerminal(request))
+        .map((request) => (
+          <PermissionCard
+            key={request.id}
+            request={request}
+            canAnswer={canAnswer}
+            onAnswer={permissions.answer}
+            botName={botName?.(request.bot_id) ?? (botName === undefined ? undefined : "A bot")}
+            onOpenBot={onOpenBot}
+          />
+        ))}
     </div>
   );
 }
@@ -62,9 +81,7 @@ function PermissionHead({
 }): ReactElement {
   return (
     <div className="permission-head">
-      <span className="permission-label">
-        {`${botName ?? "A bot"} wants to run ${toolDisplayName(request.tool)}`}
-      </span>
+      <span className="permission-label">{permissionTitle(request, botName)}</span>
       {botName === undefined || onOpenBot === undefined ? null : (
         <button
           type="button"
@@ -89,6 +106,7 @@ const KEYS: Readonly<Record<string, PermissionAnswer>> = {
   d: "deny",
 };
 
+/** A bot's tool waiting on the owner. */
 function PermissionCard({
   request,
   canAnswer,

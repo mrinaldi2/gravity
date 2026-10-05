@@ -95,6 +95,13 @@ permission prompts and can answer them (`answer_permission`). The daemon only ho
 a Claude Code prompt for the app while at least one such client with the `control`
 grant is connected; otherwise the prompt stays in the bot's terminal.
 
+Terminal cards (an owner command waiting on the owner, bot id `terminal`) need a second
+feature, `"terminal_card"`, which the desktop app sends from 0.16. A client without it
+never sees one: not in `permission_request` / `permission_resolved` pushes, not in
+`list_permissions`, and `answer_permission` on one is refused with `forbidden`. With no
+connected client that sends both features, `owner_request` is refused as if no app were
+open.
+
 Two credential kinds are accepted as `token`:
 
 - **Owner token** (`~/.thehermes/secrets/client.token`) — full grants, same machine.
@@ -290,7 +297,7 @@ breaking wire-shape change; v1 clients must upgrade before connecting.
   line changed. Sent when a finished turn becomes readable in the transcript, which lags
   the `ready` state; see Semantics.
 - `delivery_update`: `{ "delivery": {...} }`.
-- `permission_request`: `{ "request": { "id", "bot_id", "tool", "summary", "input", "created_at", "expires_at" } }`
+- `permission_request`: `{ "request": { "id", "bot_id", "tool", "summary", "input", "created_at", "expires_at", "origin"? } }`
   — a bot's tool waits on the owner. Unanswered by `expires_at` (config
   `permission_timeout_seconds`, default 600) it is denied.
 - `permission_resolved`: `{ "request_id", "bot_id", "outcome" }` — outcome ∈
@@ -436,6 +443,23 @@ Bots run as the owner's user, so any secret a bot holds can be read by every oth
   - The root is checked again on every request, so a restarted session's old processes are cut off.
 - **`[auth] bot_bearer`:** `accept` (the default, phase 1) still takes a bot's bearer token on `POST /mcp` and the hook endpoints; `refuse` (phase 2) answers 401. Every bearer use is recorded per bot, so a machine moves to `refuse` once no bot has used one for a day.
 - **`[auth] bot_transport`:** `stdio` (the default); `http` writes the old HTTP entry back into each bot's config on its next start, as a rollback.
+
+### The owner on the endpoint (T4)
+
+The owner is known by their app's code identity or by an OK from them in the app, not by `client.token`, which any bot can read.
+
+- **Pin:** `hermesd service install` run from inside the app writes `<home>/secrets/owner-app.json`. On macOS this holds the app bundle's designated requirement. On Windows it holds the folder the app is installed in. The daemon reads the pin again on every check.
+- **Where to connect:** the daemon writes its endpoint address to `<home>/run/endpoint`.
+- **Methods.** A client sends one JSON-RPC request on the endpoint, before any bot traffic, and the connection closes after the answer.
+  - `hermes/owner_ticket`: the daemon checks the caller against the pin. On macOS that's the peer's audit token checked against the requirement. On Windows the peer's executable must be inside the pinned folder and must not be `hermesd`. A caller that passes gets `{"ticket": "…"}`.
+  - `hermes/owner_request {"command": "…", "cwd": "…"}`: the daemon raises a permission card filed under bot id `terminal` (tool `Terminal command`) and waits for the owner's answer. If the owner allows it, the caller gets a ticket.
+  - The card's `origin` (also its `input`) carries separate fields (UX-014): `command` (no pid), `pid`, `process` (the pid's executable name), `launched_from` (the nearest ancestor that is an app or terminal: Terminal, iTerm2, Code, claude…), `cwd` (read from the OS; the client's `cwd` only where the OS can't tell, i.e. Windows) and `bot` (the name of the bot whose workspace holds `cwd`). A field that can't be read is left out. The client composes every line and never shows `summary`.
+  - The app answers these cards with `allow_once` ("Allow this command") or `deny` (no reason); it offers no "Allow for session" and no single-key shortcuts for a terminal command.
+- **Tickets:** single use, valid for 60 s. A ticket is passed as the `token` in WS `hello` and grants the same capabilities as the client token.
+- **Refusals:** error `-32002`.
+  - A caller inside a bot session is always refused: "a bot can't act as the owner" for `owner_ticket`, "Commands that act as the owner can't run from a bot's session." for `owner_request`.
+  - Other refusals: "not the owner's app"; for `owner_request`, which the CLI prints as is, "You denied this command in The Hermes. It did not run.", "No answer in The Hermes, so the command did not run." and "Open The Hermes on this computer to allow this command, then run it again." (no app is connected to show the card).
+- **Clients:** the desktop app asks for a ticket on every connect. `hermesd` CLI owner commands ask the owner to allow them, printing "Asking for your OK in The Hermes app…". Both fall back to `client.token` only when the daemon has no endpoint (a daemon older than T4). The daemon accepts `client.token` until T6.
 
 ## Bot self-management
 

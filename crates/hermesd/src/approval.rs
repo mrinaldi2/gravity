@@ -44,6 +44,10 @@ pub struct PermissionRequest {
     pub input: String,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    /// A terminal card's facts, field by field (UX-014): the client composes
+    /// its lines from these and never shows `summary`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Value>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -83,22 +87,38 @@ pub struct Approvals {
     pending: Mutex<HashMap<String, Pending>>,
     /// Connected clients that show permission cards and may answer them.
     answerers: AtomicUsize,
+    /// Those of them that also render terminal cards (`terminal_card`) and
+    /// hold approve, so could allow one: only they make a terminal command
+    /// wait for the app (ARCH-R36).
+    terminal_answerers: AtomicUsize,
 }
 
 /// Held by a connection that can answer permission cards; dropping it, when
 /// the connection closes, takes that client out of the count.
-pub struct Answerer(Arc<AppState>);
+pub struct Answerer(Arc<AppState>, bool);
 
 impl Drop for Answerer {
     fn drop(&mut self) {
         self.0.approvals.answerers.fetch_sub(1, Ordering::SeqCst);
+        if self.1 {
+            self.0
+                .approvals
+                .terminal_answerers
+                .fetch_sub(1, Ordering::SeqCst);
+        }
     }
 }
 
-/// Counts a connection in as able to answer permission cards.
-pub fn answerer(app: &Arc<AppState>) -> Answerer {
+/// Counts a connection in as able to answer permission cards, and terminal
+/// cards too when it renders them and holds approve.
+pub fn answerer(app: &Arc<AppState>, terminal_cards: bool) -> Answerer {
     app.approvals.answerers.fetch_add(1, Ordering::SeqCst);
-    Answerer(app.clone())
+    if terminal_cards {
+        app.approvals
+            .terminal_answerers
+            .fetch_add(1, Ordering::SeqCst);
+    }
+    Answerer(app.clone(), terminal_cards)
 }
 
 impl Approvals {
@@ -117,17 +137,35 @@ impl Approvals {
         out
     }
 
-    /// Answers a pending prompt. Errors when it is no longer pending.
+    /// Whether a pending prompt is a terminal card (filed under `TERMINAL`).
+    pub fn is_terminal(&self, request_id: &str) -> bool {
+        self.lock()
+            .get(request_id)
+            .is_some_and(|p| p.request.bot_id == TERMINAL)
+    }
+
+    /// Answers a pending prompt. Errors when it is no longer pending, and with
+    /// [`NeedsApprove`] when a terminal command's card is answered without the
+    /// approve grant: allowing it lets that command act as the owner.
     pub fn answer(
         &self,
         request_id: &str,
         answer: Answer,
         reason: Option<String>,
+        can_approve: bool,
     ) -> anyhow::Result<PermissionRequest> {
-        let pending = self
-            .lock()
-            .remove(request_id)
-            .ok_or_else(|| anyhow::anyhow!("that permission prompt is no longer waiting"))?;
+        let pending = {
+            let mut pending = self.lock();
+            let waiting = pending
+                .get(request_id)
+                .ok_or_else(|| anyhow::anyhow!("that permission prompt is no longer waiting"))?;
+            if waiting.request.bot_id == TERMINAL && !can_approve {
+                return Err(NeedsApprove.into());
+            }
+            pending
+                .remove(request_id)
+                .expect("present: checked under the same lock")
+        };
         let request = pending.request.clone();
         // A closed receiver means the asker just gave up; the prompt is gone
         // either way, so the answer has nothing left to decide.
@@ -186,8 +224,13 @@ async fn decide(
     runtime_key: Option<u64>,
 ) -> Option<Decision> {
     // No app that could answer is open: the prompt belongs in the terminal,
-    // exactly as it was before cards existed.
-    if app.approvals.answerers.load(Ordering::SeqCst) == 0 {
+    // exactly as it was before cards existed. A terminal card needs a client
+    // that renders it: one that doesn't never sees it (H-044 T4).
+    let answerers = match bot_id {
+        TERMINAL => &app.approvals.terminal_answerers,
+        _ => &app.approvals.answerers,
+    };
+    if answerers.load(Ordering::SeqCst) == 0 {
         return None;
     }
     let window = Duration::from_secs(app.cfg.permission_timeout_seconds.clamp(1, MAX_WINDOW_SECS));
@@ -203,6 +246,7 @@ async fn decide(
         ),
         created_at,
         expires_at: created_at + chrono::Duration::from_std(window).ok()?,
+        origin: (bot_id == TERMINAL).then(|| input.clone()),
     };
     let (tx, rx) = oneshot::channel();
     app.approvals.lock().insert(
@@ -236,6 +280,46 @@ async fn decide(
             settle.outcome = Some(Outcome::Expired);
             Some(Decision::Expired)
         }
+    }
+}
+
+/// What an owner-command card is filed under: a terminal, not a bot (H-044).
+pub const TERMINAL: &str = "terminal";
+
+/// How the owner answered a terminal card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnerAnswer {
+    Allowed,
+    Denied,
+    /// The card closed unanswered.
+    Expired,
+    /// No app is open to ask.
+    NoApp,
+}
+
+/// A terminal command's card answered by a connection without approve.
+#[derive(Debug)]
+pub struct NeedsApprove;
+
+impl std::fmt::Display for NeedsApprove {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("allowing a terminal command to act as you requires the approve capability")
+    }
+}
+
+impl std::error::Error for NeedsApprove {}
+
+/// Asks the owner, on a card, whether a command run in a terminal may act as
+/// them (H-044 T4). The card shows where it came from (UX-014).
+pub async fn ask_owner(app: &AppState, origin: &crate::bus_auth::origin::Origin) -> OwnerAnswer {
+    let input = serde_json::to_value(origin).unwrap_or_default();
+    match decide(app, TERMINAL, "Terminal command", &input, None).await {
+        Some(Decision::Answered(Answer::AllowOnce | Answer::AllowSession, _)) => {
+            OwnerAnswer::Allowed
+        }
+        Some(Decision::Answered(Answer::Deny, _)) => OwnerAnswer::Denied,
+        Some(Decision::Expired) => OwnerAnswer::Expired,
+        None => OwnerAnswer::NoApp,
     }
 }
 

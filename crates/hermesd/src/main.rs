@@ -172,6 +172,12 @@ async fn main() -> anyhow::Result<()> {
                         cfg.port,
                         pending.as_ref(),
                     )?;
+                    // The app this sidecar ships in is the owner (H-044 T4).
+                    match hermesd::bus_auth::owner::pin_app(&cfg.home, &source) {
+                        Ok(Some(_)) => println!("Pinned the app that installed the service"),
+                        Ok(None) => println!("Not inside an app: nothing pinned"),
+                        Err(e) => eprintln!("Couldn't pin the app: {e:#}"),
+                    }
                     println!(
                         "hermesd installed to {} and running ({})",
                         paths.bin_path().display(),

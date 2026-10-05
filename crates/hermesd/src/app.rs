@@ -69,6 +69,8 @@ pub struct AppState {
     pub board_mirror: crate::board::mirror::BoardMirror,
     /// Bots that used a bearer token, and when (H-044 phase 1).
     pub bearers: crate::bus_auth::BearerLog,
+    /// The owner's one-time tickets and the app check behind them (H-044 T4).
+    pub owner: crate::bus_auth::owner::Owner,
     pub started_at: Instant,
     /// Wall-clock start, kept alongside the monotonic `started_at` purely so
     /// [`AppState::stale_build`] can compare it against a file mtime.
@@ -108,6 +110,7 @@ impl AppState {
             secrets.clone(),
             auto_compact.clone(),
         );
+        let cfg_home = cfg.home.clone();
         let app = Arc::new(Self {
             cfg,
             db,
@@ -123,6 +126,7 @@ impl AppState {
             board: crate::board::feed::BoardFeed::default(),
             board_mirror: crate::board::mirror::BoardMirror::default(),
             bearers: crate::bus_auth::BearerLog::default(),
+            owner: crate::bus_auth::owner::Owner::new(&cfg_home),
             started_at: Instant::now(),
             started_wall: SystemTime::now(),
         });

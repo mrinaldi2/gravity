@@ -125,7 +125,8 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
     );
   }
 
-  const botName = botNamer(bots);
+  const named = botNamer(bots);
+  const botName = (id: string): string => named(id) ?? "a bot";
   const columns = new Map(dashboard.board?.columns.map((c) => [c.key, c.name]) ?? []);
   const openBoard = (): void => props.onOpenTab("board");
   return (

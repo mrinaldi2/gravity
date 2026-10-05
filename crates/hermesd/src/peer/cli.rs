@@ -128,8 +128,10 @@ pub(crate) struct Daemon {
 impl Daemon {
     pub(crate) async fn connect(cfg: &Config) -> anyhow::Result<Self> {
         let port = crate::home::runtime_port(&cfg.home).unwrap_or(cfg.port);
-        let token = std::fs::read_to_string(cfg.secrets_dir().join("client.token"))
-            .map_err(|e| anyhow::anyhow!("cannot read the owner token: {e}"))?;
+        // The owner allows the command on a card (H-044 T4); a daemon from
+        // before that still takes `client.token`.
+        let token =
+            crate::bus_auth::owner_client::cli_credential(&cfg.home, &cfg.secrets_dir()).await?;
         let url = format!("ws://127.0.0.1:{port}/ws");
         let (socket, _) = tokio_tungstenite::connect_async(url.as_str())
             .await
