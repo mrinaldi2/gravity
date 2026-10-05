@@ -437,6 +437,22 @@ Bots run as the owner's user, so any secret a bot holds can be read by every oth
 - **`[auth] bot_bearer`:** `accept` (the default, phase 1) still takes a bot's bearer token on `POST /mcp` and the hook endpoints; `refuse` (phase 2) answers 401. Every bearer use is recorded per bot, so a machine moves to `refuse` once no bot has used one for a day.
 - **`[auth] bot_transport`:** `stdio` (the default); `http` writes the old HTTP entry back into each bot's config on its next start, as a rollback.
 
+### The owner on the endpoint (T4)
+
+The owner is known by their app's code identity or by an OK from them in the app, not by `client.token`, which any bot can read.
+
+- **Pin:** `hermesd service install` run from inside the app writes `<home>/secrets/owner-app.json`. On macOS this holds the app bundle's designated requirement. On Windows it holds the folder the app is installed in. The daemon reads the pin again on every check.
+- **Where to connect:** the daemon writes its endpoint address to `<home>/run/endpoint`.
+- **Methods.** A client sends one JSON-RPC request on the endpoint, before any bot traffic, and the connection closes after the answer.
+  - `hermes/owner_ticket`: the daemon checks the caller against the pin. On macOS that's the peer's audit token checked against the requirement. On Windows the peer's executable must be inside the pinned folder and must not be `hermesd`. A caller that passes gets `{"ticket": "…"}`.
+  - `hermes/owner_request {"command": "…"}`: the daemon raises a permission card filed under bot id `terminal` (tool `Allow from Terminal`, input `{"command": "<command> (pid N)"}`) and waits for the owner's answer. If the owner allows it, the caller gets a ticket.
+  - The app answers these cards with `allow_once` or `deny`; it offers no "Allow for session" for a terminal command.
+- **Tickets:** single use, valid for 60 s. A ticket is passed as the `token` in WS `hello` and grants the same capabilities as the client token.
+- **Refusals:** error `-32002`.
+  - A caller inside a bot session is always refused ("a bot can't act as the owner").
+  - Other refusals: "not the owner's app", "the owner didn't allow it", and "open The Hermes to allow this command" (no app is connected to show the card).
+- **Clients:** the desktop app asks for a ticket on every connect. `hermesd` CLI owner commands ask the owner to allow them, printing "Asking for your OK in The Hermes app…". Both fall back to `client.token` only when the daemon has no endpoint (a daemon older than T4). The daemon accepts `client.token` until T6.
+
 ## Bot self-management
 
 Advertised as the `bot_self_management` capability in `hello_ok`. Every change
