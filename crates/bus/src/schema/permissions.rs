@@ -17,3 +17,22 @@ CREATE TABLE bot_permission_extra (
     PRIMARY KEY (bot_id, extra)
 );
 "#;
+
+/// `release_main` (H-031 fixes) was added to `PermissionExtra` after the
+/// CHECK above was merged, so granting it failed (H-039). SQLite cannot alter
+/// a CHECK, so the table is rebuilt with one that names every extra.
+///
+/// Safe to run again on a table already rebuilt (a downgrade followed by a
+/// reinstall can rewind `schema_version`): it clears any leftover copy and
+/// keeps every row, `release_main` ones included.
+pub(super) const MIGRATION_PERMISSION_EXTRAS_RELEASE_MAIN: &str = r#"
+DROP TABLE IF EXISTS bot_permission_extra_new;
+CREATE TABLE bot_permission_extra_new (
+    bot_id TEXT NOT NULL REFERENCES bot(id),
+    extra  TEXT NOT NULL CHECK(extra IN ('publish', 'daemon_restart', 'app_restart', 'install', 'release_main')),
+    PRIMARY KEY (bot_id, extra)
+);
+INSERT OR IGNORE INTO bot_permission_extra_new(bot_id, extra) SELECT bot_id, extra FROM bot_permission_extra;
+DROP TABLE bot_permission_extra;
+ALTER TABLE bot_permission_extra_new RENAME TO bot_permission_extra;
+"#;

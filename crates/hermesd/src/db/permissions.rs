@@ -117,4 +117,26 @@ mod tests {
             [PermissionExtra::Install]
         );
     }
+
+    /// The table's CHECK must name every extra, or granting the one it
+    /// misses fails while the app thinks it worked (H-039).
+    #[test]
+    fn the_table_accepts_every_extra() {
+        let db = Db::open_in_memory().unwrap();
+        let p = db.create_project("Hermes", "hermes").unwrap();
+        let bot = db
+            .create_bot(&p.id, "DevOps", "", "", "", "/tmp/w", "devops", None)
+            .unwrap();
+        for extra in PermissionExtra::ALL {
+            db.set_bot_permission_extras(&bot.id, &[extra])
+                .unwrap_or_else(|e| panic!("{} refused: {e:#}", extra.as_str()));
+            assert_eq!(db.bot_permission_extras(&bot.id).unwrap(), [extra]);
+        }
+        db.set_bot_permission_extras(&bot.id, &PermissionExtra::ALL)
+            .unwrap();
+        assert_eq!(
+            db.bot_permission_extras(&bot.id).unwrap(),
+            PermissionExtra::ALL
+        );
+    }
 }

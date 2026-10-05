@@ -1,9 +1,10 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
+import { DaemonError } from "../protocol/connection";
 import { FakeDaemon } from "../test/fakeDaemon";
 import * as fx from "../test/fixtures";
-import { toastSpy } from "../test/spies";
+import { botSpy, toastSpy } from "../test/spies";
 import BotPermissionExtras from "./bot/BotPermissionExtras";
 import ProjectPermissionsForm from "./ProjectPermissionsForm";
 
@@ -137,5 +138,28 @@ describe("BotPermissionExtras", () => {
       bot_id: "b1",
       extras: ["release_main"],
     });
+  });
+
+  it("shows a refused change inline and leaves the box off", async () => {
+    const user = userEvent.setup();
+    const daemon = owner().onRequest("set_bot_permission_extras", () => {
+      throw new DaemonError("internal", "the extras could not be saved: CHECK constraint failed");
+    });
+    const updated = botSpy();
+    const toast = toastSpy();
+    render(
+      <BotPermissionExtras
+        client={daemon}
+        bot={fx.bot()}
+        connected
+        onBotUpdated={updated}
+        onToast={toast}
+      />,
+    );
+    await user.click(screen.getByRole("checkbox", { name: /Release to main/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be saved/);
+    expect(screen.getByRole("checkbox", { name: /Release to main/ })).not.toBeChecked();
+    expect(updated).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
   });
 });

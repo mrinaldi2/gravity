@@ -49,6 +49,8 @@ export default function BotPermissionExtras({
   onToast,
 }: BotPermissionExtrasProps): ReactElement | null {
   const [saving, setSaving] = useState(false);
+  // A refused change stays visible next to the boxes it was about (H-039).
+  const [failure, setFailure] = useState<string | null>(null);
   if (!client.capabilities.includes("permission_profiles") || bot.peer != null) {
     return null;
   }
@@ -58,6 +60,7 @@ export default function BotPermissionExtras({
   const toggle = async (extra: PermissionExtra, on: boolean): Promise<void> => {
     const next = on ? [...granted, extra] : granted.filter((e) => e !== extra);
     setSaving(true);
+    setFailure(null);
     try {
       const reply = await client.request(
         { type: "set_bot_permission_extras", bot_id: bot.id, extras: next },
@@ -66,7 +69,7 @@ export default function BotPermissionExtras({
       onBotUpdated(reply.bot);
       onToast("info", "Permissions changed", `${reply.bot.name} is restarting with them.`);
     } catch (error) {
-      onToast("error", "Couldn't change the bot's permissions", errText(error));
+      setFailure(`Couldn't change the bot's permissions: ${errText(error)}`);
     } finally {
       setSaving(false);
     }
@@ -88,6 +91,11 @@ export default function BotPermissionExtras({
           </span>
         </label>
       ))}
+      {failure != null && (
+        <p className="field-error" role="alert">
+          {failure}
+        </p>
+      )}
       <span className="field-hint">
         {owner
           ? "Used in the Trusted and Full profiles (Release to main in every profile). Changing them restarts the bot."
