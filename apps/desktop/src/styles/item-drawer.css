@@ -140,6 +140,20 @@
   outline-offset: -2px;
 }
 
+/* A description's template sections read as small headings here. */
+.drawer-overview .markdown h1,
+.drawer-overview .markdown h2,
+.drawer-overview .markdown h3 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.drawer-overview .markdown p {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
 .drawer-overview h4 {
   margin: 14px 0 6px;
   font-size: 12px;
