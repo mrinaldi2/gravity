@@ -77,6 +77,22 @@ export function dashboard(over: Partial<Dashboard> = {}): Dashboard {
         count: 2,
         decision_ids: ["dec-7", "dec-8"],
         by: [{ bot_id: "arch", count: 2 }],
+        rulings: [
+          {
+            id: "dec-7",
+            title: "Ship builds on Fridays?",
+            answer: "Yes, before noon only.\nNever on a release week.",
+            bot_id: "arch",
+            at: "2026-10-04T08:30:00Z",
+          },
+          {
+            id: "dec-8",
+            title: "Keep the old app icon?",
+            answer: "No",
+            bot_id: "arch",
+            at: "2026-10-04T11:15:00Z",
+          },
+        ],
       },
     ],
     wip_overrides: [

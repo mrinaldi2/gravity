@@ -81,9 +81,9 @@ async fn needs_you_off_home_shows_the_homes_rows_or_where_to_look() {
         vec![("Which PC test plan?".to_string(), Value::Null)]
     );
     assert!(
-        d["needs_you_note"]
-            .as_str()
-            .is_some_and(|n| n.contains("can't be reached")),
+        d["needs_you_note"].as_str().is_some_and(|n| n
+            .ends_with(" right now, so this may not be everything that needs you.")
+            && n.starts_with("Can't reach ")),
         "{d}"
     );
 }

@@ -213,17 +213,63 @@ async fn relayed_rulings_are_one_row_the_owner_confirms_at_once() {
                         "capabilities": ["read", "control"]}))
         .await;
     let mut tablet = common::board::connect_with(&pair.d, token_str(&created)).await;
+    let ids = relayed[0]["decision_ids"].clone();
+    assert_eq!(relayed[0]["rulings"][0]["answer"], "yes", "{d}");
     let refused = tablet
-        .request(json!({"type": "confirm_relayed", "project_id": project}))
+        .request(json!({"type": "confirm_relayed", "project_id": project, "decision_ids": ids}))
         .await;
     assert_eq!(refused["code"], "forbidden", "{refused}");
 
     let confirmed = owner
-        .request(json!({"type": "confirm_relayed", "project_id": project}))
+        .request(json!({"type": "confirm_relayed", "project_id": project, "decision_ids": ids}))
         .await;
     assert_eq!(confirmed["type"], "relayed_confirmed", "{confirmed}");
     assert_eq!(confirmed["confirmed"].as_array().unwrap().len(), 2);
     assert_eq!(confirmed["failed"], json!([]));
+    assert_eq!(confirmed["changed"], json!([]));
     let d = dashboard(&mut owner, &project).await;
     assert!(kinds(&d, "relayed").is_empty(), "{d}");
+}
+
+/// The dialog confirms what it listed (ARCH-R42 M1): a ruling relayed after
+/// the dashboard was read stays unconfirmed, and one no longer relayed comes
+/// back as `changed`.
+#[tokio::test]
+async fn a_relay_recorded_after_the_snapshot_is_not_confirmed() {
+    let (pair, mut bots) = project_with_bots(&["Team Lead"]).await;
+    let project = pair
+        .d
+        .app
+        .db
+        .get_bot(&pair.ids[0])
+        .unwrap()
+        .unwrap()
+        .project_id;
+    let record = |title: &str| json!({"title": title, "body": "Said at the terminal.", "ruling_text": "yes"});
+    bots[0]
+        .call("record_decision", record("Ship on Fridays"))
+        .await;
+    let mut owner = WsClient::connect(&pair.d).await;
+    let d = dashboard(&mut owner, &project).await;
+    let shown = kinds(&d, "relayed")[0]["decision_ids"].clone();
+    let first = shown[0].clone();
+
+    // While the dialog is open: another relay, and the shown one confirmed.
+    bots[0]
+        .call("record_decision", record("Keep the old icon"))
+        .await;
+    let one = owner
+        .request(json!({"type": "confirm_relayed", "project_id": project, "decision_ids": shown}))
+        .await;
+    assert_eq!(one["confirmed"], json!([first]), "{one}");
+    let again = owner
+        .request(json!({"type": "confirm_relayed", "project_id": project, "decision_ids": [first]}))
+        .await;
+    assert_eq!(again["confirmed"], json!([]), "{again}");
+    assert_eq!(again["changed"], json!([first]), "{again}");
+
+    let d = dashboard(&mut owner, &project).await;
+    let left = kinds(&d, "relayed");
+    assert_eq!(left[0]["count"], 1, "the later relay waits: {d}");
+    assert_eq!(left[0]["rulings"][0]["title"], "Keep the old icon");
 }

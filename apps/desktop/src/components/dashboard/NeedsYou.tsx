@@ -1,20 +1,26 @@
 // Widget 1, Needs you (H-018 §2.1, H-112): only what waits on the owner,
 // most urgent first, each row with one primary action. Releases open their
 // review in a drawer, decisions open in Decisions, items open the board.
-// Rulings a bot recorded for the owner are one row, confirmed together.
-// WIP overrides are the lead's call, so they sit below, folded away. Off the
-// board's home, the home's rows say where to act on them.
+// Rulings a bot recorded for the owner are one row, reviewed in a dialog
+// and confirmed together (UX-016). WIP overrides are the lead's call, so
+// they sit below, folded away. Off the board's home, the home's rows say
+// what to do there.
 
+import { useCallback, useId, useState } from "react";
 import type { ReactElement } from "react";
 import type { NeedsYou as Row, WipOverride } from "../../protocol/dashboard";
 import type { Release } from "../../protocol/releases";
-import { releaseTitle, testLabel } from "../releases/labels";
+import { plural, releaseTitle, testLabel } from "../releases/labels";
+import { names, when } from "./needsYouText";
+import RelayedDialog from "./RelayedDialog";
+import type { ConfirmOutcome } from "./useConfirmRelayed";
 
 interface NeedsYouActions {
   readonly onReview: (release: Release) => void;
   readonly onDecision: (decisionId: string) => void;
   readonly onBoard: () => void;
-  readonly onConfirmRelayed: () => void;
+  /** Confirms exactly these relayed rulings, as the dialog listed them. */
+  readonly onConfirmRelayed: (decisionIds: readonly string[]) => Promise<ConfirmOutcome>;
 }
 
 interface NeedsYouProps extends NeedsYouActions {
@@ -33,6 +39,7 @@ interface NeedsYouProps extends NeedsYouActions {
 
 type Legacy = Extract<Row, { readonly kind: "wip_override" }>;
 type Shown = Exclude<Row, Legacy>;
+type Relayed = Extract<Shown, { readonly kind: "relayed" }>;
 
 /** Releases, then decisions and relayed rulings, then P0s (§2.1). */
 const ORDER: Readonly<Record<Shown["kind"], number>> = {
@@ -42,32 +49,12 @@ const ORDER: Readonly<Record<Shown["kind"], number>> = {
   p0: 3,
 };
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
-
-function when(at: string): string {
-  return new Date(at).toLocaleString([], {
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 /** "bot:<id>", "user", "device:…": who made a move, in words. */
 function actorName(actor: string, botName: (id: string) => string): string {
   if (actor.startsWith("bot:")) {
     return botName(actor.slice(4));
   }
   return "You";
-}
-
-/** "Team Lead", "Team Lead and PM", "Team Lead, PM and QA". */
-function names(list: readonly string[]): string {
-  if (list.length <= 1) {
-    return list[0] ?? "A bot";
-  }
-  return `${list.slice(0, -1).join(", ")} and ${list.at(-1) ?? ""}`;
 }
 
 interface RowViewProps {
@@ -82,13 +69,17 @@ interface RowViewProps {
   readonly disabled?: boolean;
   /** Why the action is unavailable, as its tooltip. */
   readonly why?: string;
+  /** What to do on the computer that holds it: "Review", "Answer", "Confirm". */
+  readonly verb: string;
   /** Off-home: the computer to act on it, in place of the button. */
   readonly elsewhere?: string;
 }
 
 function RowView(props: RowViewProps): ReactElement {
+  const there = useId();
+  const away = props.elsewhere !== undefined;
   return (
-    <li className="dash-row">
+    <li className="dash-row" aria-describedby={away ? there : undefined}>
       <span className={`dash-glyph dash-tone-${props.tone ?? "plain"}`} aria-hidden="true">
         {props.glyph}
       </span>
@@ -96,7 +87,11 @@ function RowView(props: RowViewProps): ReactElement {
         <div className="dash-row-title">{props.title}</div>
         <div className="dash-row-meta">{props.meta}</div>
       </div>
-      {props.elsewhere === undefined ? (
+      {away ? (
+        <span id={there} className="dash-elsewhere">
+          {props.verb} on {props.elsewhere}
+        </span>
+      ) : (
         <button
           type="button"
           className="btn btn-small"
@@ -107,8 +102,6 @@ function RowView(props: RowViewProps): ReactElement {
         >
           {props.action}
         </button>
-      ) : (
-        <span className="dash-elsewhere">On {props.elsewhere}</span>
       )}
     </li>
   );
@@ -129,6 +122,7 @@ function releaseRow(
     action: "Review",
     label: `Review ${releaseTitle(r.release)}`,
     onAction: () => props.onReview(r.release),
+    verb: "Review",
   };
 }
 
@@ -151,23 +145,23 @@ function decisionRow(
     action,
     label: `${action}: ${r.title}`,
     onAction: () => props.onDecision(r.id),
+    verb: action,
   };
 }
 
-function relayedRow(
-  r: Extract<Shown, { readonly kind: "relayed" }>,
-  props: NeedsYouProps,
-): RowViewProps {
+function relayedRow(r: Relayed, props: NeedsYouProps, onReview: () => void): RowViewProps {
   const by = names(r.by.map((b) => props.botName(b.bot_id)));
+  const count = plural(r.count, "ruling");
   return {
     glyph: "◇",
-    title: `Confirm ${plural(r.count, "ruling")} ${by} recorded for you`,
+    title: `Confirm ${count} ${by} recorded for you`,
     meta: "Recorded on your behalf. Confirming makes them your own word.",
-    action: props.confirming ? "Confirming…" : "Confirm all",
-    label: `Confirm all ${plural(r.count, "ruling")} ${by} recorded for you`,
-    onAction: props.onConfirmRelayed,
+    action: `Review ${count}…`,
+    label: `Review ${count} ${by} recorded for you`,
+    onAction: onReview,
     disabled: !props.canApprove || props.confirming,
     why: props.canApprove ? undefined : "Only the owner can confirm rulings",
+    verb: "Confirm",
   };
 }
 
@@ -187,17 +181,18 @@ function p0Row(r: Extract<Shown, { readonly kind: "p0" }>, props: NeedsYouProps)
     action: "Open board",
     label: `Open board at ${r.id}`,
     onAction: props.onBoard,
+    verb: "Open",
   };
 }
 
-function rowProps(r: Shown, props: NeedsYouProps): RowViewProps {
+function rowProps(r: Shown, props: NeedsYouProps, onReviewRelayed: () => void): RowViewProps {
   switch (r.kind) {
     case "release":
       return releaseRow(r, props);
     case "decision":
       return decisionRow(r, props);
     case "relayed":
-      return relayedRow(r, props);
+      return relayedRow(r, props, onReviewRelayed);
     case "p0":
       return p0Row(r, props);
   }
@@ -208,7 +203,7 @@ function rowKey(r: Shown): string {
     case "release":
       return `release-${r.release.id}`;
     case "relayed":
-      return "relayed";
+      return `relayed-${r.elsewhere ?? "here"}`;
     default:
       return `${r.kind}-${r.id}`;
   }
@@ -238,31 +233,61 @@ function Overrides(props: {
   );
 }
 
+/** The relayed rulings this computer can confirm, as the daemon last read them. */
+function localRelayed(rows: readonly Shown[]): Relayed | undefined {
+  return rows.find((r): r is Relayed => r.kind === "relayed" && r.elsewhere === undefined);
+}
+
 export default function NeedsYou(props: NeedsYouProps): ReactElement {
+  const [reviewing, setReviewing] = useState(false);
   // A daemon before 0.16.2 sends overrides as rows: they move below too.
   const legacy = props.rows.filter((r): r is Legacy => r.kind === "wip_override");
   const rows = props.rows.filter((r): r is Shown => r.kind !== "wip_override");
   // oxlint-disable-next-line unicorn/no-array-sort
   rows.sort((a, b) => ORDER[a.kind] - ORDER[b.kind]);
+  const relayed = localRelayed(rows);
+  // Every ruling confirmed or answered meanwhile: nothing left to review,
+  // and a later relay doesn't reopen the dialog by itself.
+  if (reviewing && relayed === undefined) {
+    setReviewing(false);
+  }
+  const openReview = useCallback((): void => setReviewing(true), []);
+  const closeReview = useCallback((): void => setReviewing(false), []);
   return (
     <section className="dash-widget dash-wide" aria-labelledby="dash-needs-you">
       {/* At zero the empty sentence says it; no "· 0" badge (UX-010). */}
       <h2 id="dash-needs-you">Needs you{rows.length > 0 ? ` · ${rows.length}` : ""}</h2>
-      {props.note ? <p className="dash-note">{props.note}</p> : null}
-      {rows.length === 0 ? (
-        <p className="dash-empty">Nothing needs you in {props.projectName}.</p>
-      ) : (
+      {props.note ? (
+        <p className="dash-note">
+          <strong>{props.note}</strong>
+        </p>
+      ) : null}
+      {rows.length > 0 ? (
         <ul className="dash-rows">
           {rows.map((r) => (
-            <RowView key={rowKey(r)} {...rowProps(r, props)} elsewhere={r.elsewhere} />
+            <RowView key={rowKey(r)} {...rowProps(r, props, openReview)} elsewhere={r.elsewhere} />
           ))}
         </ul>
-      )}
+      ) : null}
+      {/* With the home away, nothing here can't be known (UX-016 §3). */}
+      {rows.length === 0 && !props.note ? (
+        <p className="dash-empty">Nothing needs you in {props.projectName}.</p>
+      ) : null}
       <Overrides
         overrides={[...props.overrides, ...legacy]}
         botName={props.botName}
         columnName={props.columnName}
       />
+      {reviewing && relayed ? (
+        <RelayedDialog
+          rulings={relayed.rulings}
+          botName={props.botName}
+          confirming={props.confirming}
+          onConfirm={props.onConfirmRelayed}
+          onOpen={props.onDecision}
+          onClose={closeReview}
+        />
+      ) : null}
     </section>
   );
 }

@@ -166,8 +166,9 @@ async fn from_home(
             dashboard["wip_overrides"] = answer["wip_overrides"].take();
         }
         _ => {
+            // What's here may not be all; "nothing" can't be known (UX-016 §3).
             dashboard["needs_you_note"] = json!(format!(
-                "Needs you is kept on {name}, which can't be reached right now."
+                "Can't reach {name} right now, so this may not be everything that needs you."
             ));
         }
     }

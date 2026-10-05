@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
-import type { Dashboard } from "../../protocol/dashboard";
+import type { Dashboard, NeedsYou as NeedsYouRow } from "../../protocol/dashboard";
 import type { Grant } from "../../protocol/entities";
 import {
   DASH_BOTS,
@@ -95,46 +95,67 @@ describe("DashboardView", () => {
   it("leaves confirming rulings to the owner", async () => {
     setup(dashboard());
     const needs = await screen.findByRole("region", { name: "Needs you · 4" });
-    const confirm = within(needs).getByRole("button", {
-      name: "Confirm all 2 rulings Architect recorded for you",
+    const review = within(needs).getByRole("button", {
+      name: "Review 2 rulings Architect recorded for you",
     });
-    expect(confirm).toBeDisabled();
-    expect(confirm).toHaveAttribute("title", "Only the owner can confirm rulings");
+    expect(review).toHaveTextContent("Review 2 rulings…");
+    expect(review).toBeDisabled();
+    expect(review).toHaveAttribute("title", "Only the owner can confirm rulings");
   });
 
-  it("confirms every relayed ruling at once, as the owner", async () => {
-    const user = userEvent.setup();
-    const { fake } = setup(dashboard(), ["read", "control", "approve"]);
-    fake.onRequest("confirm_relayed", () => ({
-      type: "relayed_confirmed",
-      req_id: "2",
-      confirmed: ["dec-7", "dec-8"],
-      failed: [],
-    }));
+  it("names every bot that recorded rulings on the relayed row", async () => {
+    const by = [
+      { bot_id: "dd", count: 2 },
+      { bot_id: "arch", count: 1 },
+    ];
+    const rows: NeedsYouRow[] = [];
+    for (const r of dashboard().needs_you) {
+      rows.push(r.kind === "relayed" ? { ...r, count: 3, by } : r);
+    }
+    setup(dashboard({ needs_you: rows }));
     const needs = await screen.findByRole("region", { name: "Needs you · 4" });
-    await user.click(
+    expect(needs).toHaveTextContent("Confirm 3 rulings Desktop Dev and Architect recorded for you");
+    expect(
       within(needs).getByRole("button", {
-        name: "Confirm all 2 rulings Architect recorded for you",
+        name: "Review 3 rulings Desktop Dev and Architect recorded for you",
       }),
-    );
-    expect(fake.requests.map((r) => r.body)).toContainEqual({
-      type: "confirm_relayed",
-      project_id: "p1",
-    });
+    ).toBeInTheDocument();
   });
 
-  it("shows the home's rows off-home, to act on there, or says where to look", async () => {
-    setup(
-      offHome({ needs_you_note: "Needs you is kept on mac, which can't be reached right now." }),
-    );
+  it("shows the home's rows off-home, each saying what to do there", async () => {
+    setup(offHome());
     const needs = await screen.findByRole("region", { name: "Needs you · 4" });
-    expect(needs).toHaveTextContent("Needs you is kept on mac, which can't be reached right now.");
-    expect(within(needs).getAllByText("On mac")).toHaveLength(3);
+    const there = ["Review on mac", "Answer on mac", "Confirm on mac"].map((text) =>
+      within(needs).getByText(text),
+    );
+    for (const text of there) {
+      expect(text.tagName).toBe("SPAN");
+      expect(text.closest("li")).toHaveAttribute("aria-describedby", text.id);
+    }
+    expect(within(needs).getAllByRole("listitem")[2]).toHaveAccessibleDescription("Confirm on mac");
+    expect(within(needs).queryByText("On mac")).toBeNull();
     expect(
       within(needs)
         .getAllByRole("button")
         .map((b) => b.textContent),
     ).toEqual(["Open board"]);
+  });
+
+  it("with the home away, says this may not be everything, and never 'Nothing'", async () => {
+    const note = "Can't reach mac right now, so this may not be everything that needs you.";
+    setup(dashboard({ home: "mac", needs_you: [], needs_you_note: note }));
+    const needs = await screen.findByRole("region", { name: "Needs you" });
+    expect(within(needs).getByText(note).tagName).toBe("STRONG");
+    expect(needs).not.toHaveTextContent("Nothing needs you");
+  });
+
+  it("with the home away, still lists this computer's rows under the note", async () => {
+    const note = "Can't reach mac right now, so this may not be everything that needs you.";
+    const local = dashboard().needs_you.filter((r) => r.kind === "decision");
+    setup(dashboard({ home: "mac", needs_you: local, needs_you_note: note }));
+    const needs = await screen.findByRole("region", { name: "Needs you · 1" });
+    expect(needs).toHaveTextContent(note);
+    expect(within(needs).getByRole("button", { name: /^Answer/ })).toBeInTheDocument();
   });
 
   it("names each row's action after what it acts on, starting with its visible words", async () => {
@@ -144,11 +165,13 @@ describe("DashboardView", () => {
     expect(buttons.map((b) => b.getAttribute("aria-label"))).toEqual([
       "Review 0.16.0",
       "Answer: Push notifications: pay for an APNs relay?",
-      "Confirm all 2 rulings Architect recorded for you",
+      "Review 2 rulings Architect recorded for you",
       "Open board at H-021",
     ]);
+    // "Review 2 rulings…" is said without its ellipsis.
     for (const button of buttons) {
-      expect(button.getAttribute("aria-label")).toMatch(new RegExp(`^${button.textContent}`));
+      const words = (button.textContent ?? "").replace(/…$/, "");
+      expect(button.getAttribute("aria-label")?.startsWith(words)).toBe(true);
     }
   });
 

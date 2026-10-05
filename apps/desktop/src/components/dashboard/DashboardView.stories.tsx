@@ -3,15 +3,23 @@ import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
 import type { Dashboard } from "../../protocol/dashboard";
-import { MIRRORED_BOARD, dashboard, offHome, quietDashboard } from "../../test/dashboardFixtures";
+import {
+  DASH_BOTS,
+  MIRRORED_BOARD,
+  dashboard,
+  offHome,
+  quietDashboard,
+} from "../../test/dashboardFixtures";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { project } from "../../test/fixtures";
 import ProjectWindow from "../project/ProjectWindow";
 import DashboardView from "./DashboardView";
+import RelayedDialog from "./RelayedDialog";
 
 const noTab = (_tab: ProjectTab): void => {};
 const noop = (): void => {};
 const noToast: AddToast = () => {};
+const botName = (id: string): string => DASH_BOTS.find((b) => b.id === id)?.name ?? "a bot";
 
 function Window({ data }: { readonly data: Dashboard }): ReactElement {
   const hermes = project({ id: "p1", name: "The Hermes" });
@@ -55,10 +63,28 @@ export const HomeAway: Story = () => (
       releases: [],
       needs_you: [],
       wip_overrides: [],
-      needs_you_note: "Needs you is kept on mac, which can't be reached right now.",
+      needs_you_note: "Can't reach mac right now, so this may not be everything that needs you.",
     })}
   />
 );
+/** "Review 2 rulings…" open: what one confirm would make the owner's own. */
+export const RelayedReview: Story = () => {
+  const data = dashboard();
+  const relayed = data.needs_you.find((r) => r.kind === "relayed");
+  return (
+    <>
+      <Window data={data} />
+      <RelayedDialog
+        rulings={relayed?.kind === "relayed" ? relayed.rulings : []}
+        botName={botName}
+        confirming={false}
+        onConfirm={() => Promise.resolve("done")}
+        onOpen={noop}
+        onClose={noop}
+      />
+    </>
+  );
+};
 /** A new project: every widget's empty state. */
 export const Quiet: Story = () => <Window data={quietDashboard()} />;
 /** On imac or win-pc: the board as mirrored from its home. */

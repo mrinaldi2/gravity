@@ -57,10 +57,7 @@ pub(crate) fn home_needs_you(
             "raised_by": d.raised_by_bot_id,
         }));
     }
-    let relayed: Vec<(&str, &str)> = relayed
-        .iter()
-        .map(|d| (d.id.as_str(), relayed_by(d).unwrap_or_default()))
-        .collect();
+    let relayed: Vec<Value> = relayed.iter().map(|d| relayed_ruling(d)).collect();
     if let Some(row) = relayed_row(&relayed) {
         rows.push(row);
     }
@@ -118,23 +115,39 @@ fn relayed_by(decision: &Decision) -> Option<&str> {
         .strip_prefix("owner-via-bot:")
 }
 
-/// One row for every relayed ruling (`(decision, bot)`): how many, and
-/// which bots recorded them.
-fn relayed_row(relayed: &[(&str, &str)]) -> Option<Value> {
+/// What the confirm dialog lists for one relayed ruling: its title, the
+/// recorded answer, the bot that recorded it (`bot_id`, so a linked
+/// computer reads it in its own ids) and when.
+fn relayed_ruling(decision: &Decision) -> Value {
+    let ruling = decision.ruling.as_ref();
+    json!({
+        "id": decision.id, "title": decision.title,
+        "answer": ruling.map(|r| r.text.as_str()).unwrap_or_default(),
+        "bot_id": relayed_by(decision).unwrap_or_default(),
+        "at": ruling.map(|r| r.answered_at),
+    })
+}
+
+/// One row for every relayed ruling (from `relayed_ruling`): how many,
+/// which bots recorded them, and each one, for the dialog that confirms
+/// exactly those.
+fn relayed_row(relayed: &[Value]) -> Option<Value> {
     if relayed.is_empty() {
         return None;
     }
     let mut by: BTreeMap<&str, usize> = BTreeMap::new();
-    for (_, bot) in relayed {
-        *by.entry(bot).or_default() += 1;
+    for ruling in relayed {
+        *by.entry(ruling["bot_id"].as_str().unwrap_or_default())
+            .or_default() += 1;
     }
     let by: Vec<Value> = by
         .into_iter()
         .map(|(bot_id, count)| json!({ "bot_id": bot_id, "count": count }))
         .collect();
-    let ids: Vec<&str> = relayed.iter().map(|(id, _)| *id).collect();
+    let ids: Vec<&Value> = relayed.iter().map(|r| &r["id"]).collect();
     Some(json!({
         "kind": "relayed", "count": relayed.len(), "decision_ids": ids, "by": by,
+        "rulings": relayed,
     }))
 }
 
@@ -144,13 +157,20 @@ mod tests {
 
     #[test]
     fn relayed_rulings_are_one_row_counted_by_bot() {
-        let row = relayed_row(&[("d1", "lead"), ("d2", "lead"), ("d3", "pm")]).expect("a row");
+        let ruling = |id: &str, by: &str| json!({ "id": id, "title": id, "bot_id": by });
+        let rulings = [
+            ruling("d1", "lead"),
+            ruling("d2", "lead"),
+            ruling("d3", "pm"),
+        ];
+        let row = relayed_row(&rulings).expect("a row");
         assert_eq!(row["count"], 3);
         assert_eq!(row["decision_ids"], json!(["d1", "d2", "d3"]));
         assert_eq!(
             row["by"],
             json!([{"bot_id": "lead", "count": 2}, {"bot_id": "pm", "count": 1}])
         );
+        assert_eq!(row["rulings"][2]["title"], "d3");
         assert!(relayed_row(&[]).is_none());
     }
 }

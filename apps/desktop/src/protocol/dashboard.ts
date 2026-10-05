@@ -15,6 +15,17 @@ export interface WipOverride {
   readonly at: string;
 }
 
+/** One ruling a bot recorded for the owner, as the confirm dialog lists it. */
+export interface RelayedRuling {
+  readonly id: string;
+  readonly title: string;
+  /** The recorded answer, verbatim. */
+  readonly answer: string;
+  /** The bot that recorded it. */
+  readonly bot_id: string;
+  readonly at: string | null;
+}
+
 type Row =
   | { readonly kind: "release"; readonly release: Release }
   | {
@@ -34,6 +45,8 @@ type Row =
       readonly count: number;
       readonly decision_ids: readonly string[];
       readonly by: readonly { readonly bot_id: string; readonly count: number }[];
+      /** Each one, for the dialog that confirms them (ARCH-R42 M1). */
+      readonly rulings: readonly RelayedRuling[];
     }
   | {
       readonly kind: "p0";
@@ -96,8 +109,12 @@ export interface Dashboard {
 
 export type DashboardRequestBody =
   | { readonly type: "dashboard_get"; readonly project_id: string }
-  /** Confirms every relayed ruling of the project; needs approve. */
-  | { readonly type: "confirm_relayed"; readonly project_id: string };
+  /** Confirms those of the listed relayed rulings that still are; needs approve. */
+  | {
+      readonly type: "confirm_relayed";
+      readonly project_id: string;
+      readonly decision_ids: readonly string[];
+    };
 
 export type DashboardReply =
   | { readonly type: "dashboard"; readonly dashboard: Dashboard }
@@ -105,4 +122,6 @@ export type DashboardReply =
       readonly type: "relayed_confirmed";
       readonly confirmed: readonly string[];
       readonly failed: readonly { readonly id: string; readonly message: string }[];
+      /** Listed but no longer relayed: the list changed, so reread it. */
+      readonly changed: readonly string[];
     };

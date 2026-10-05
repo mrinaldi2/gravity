@@ -71,8 +71,11 @@ pub async fn board() -> Board {
         .unwrap();
     db.assign_item(&item.id, item.version, Some(&stand_in), &Actor::User)
         .unwrap();
-    // As starting the board does: the PC hears of it and mirrors it.
-    mac.app.board.writer().publish(Change {
+    // As starting the board does: the PC hears of it and mirrors it. Wait
+    // for the snapshot taken after this change, not an earlier fetch (the
+    // link's own) that found the board half made: a later one landing after
+    // a test's watch would push a SettingsChanged and skew its seq.
+    let started = mac.app.board.writer().publish(Change {
         project_id: &mac_app,
         kind: ChangeKind::SettingsChanged,
         item_id: "",
@@ -80,11 +83,11 @@ pub async fn board() -> Board {
         from_column: None,
     });
     let win = &p.win;
-    wait_until("the PC mirrors the board", || {
+    wait_until("the PC mirrors the board as of that change", || {
         win.app
             .board_mirror
             .get(&win_app)
-            .is_some_and(|m| !m.snapshot.cards.is_empty())
+            .is_some_and(|m| m.snapshot.seq >= started && !m.snapshot.cards.is_empty())
     })
     .await;
     let token = win.app.secrets.bot_token(&tester_id).expect("token");
