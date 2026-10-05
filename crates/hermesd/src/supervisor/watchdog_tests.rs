@@ -258,7 +258,10 @@ async fn a_hung_start_stops_holding_its_slot_after_the_warmup() {
     };
     cfg.startup.connect_timeout_ms = 60_000;
     cfg.startup.max_concurrent_starts = 1;
-    cfg.startup.warmup_ms = 200;
+    // Long enough that no scheduler stall can run it out before the slot is
+    // checked; the test ends the warmup itself by backdating the start.
+    let warmup = Duration::from_secs(60);
+    cfg.startup.warmup_ms = warmup.as_millis() as u64;
     let db = Db::open(&home.path().join("bus.sqlite")).expect("db");
     let project_id = db.create_project("p", "p").expect("project").id;
     let (release, rx) = std::sync::mpsc::channel();
@@ -305,12 +308,13 @@ async fn a_hung_start_stops_holding_its_slot_after_the_warmup() {
     sup.reconcile();
     assert_eq!(starts(), 1, "the hung start's slot was not held");
 
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while !sup.has_session(&ids[1]) {
-        assert!(Instant::now() < deadline, "the next bot never started");
-        sup.reconcile();
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
+    // The warmup runs out: the hung start began a full warmup ago.
+    sup.lock_bots()
+        .get_mut(&ids[0])
+        .expect("hung handle")
+        .starting_since = Instant::now().checked_sub(warmup).expect("backdate");
+    sup.reconcile();
+    assert!(sup.has_session(&ids[1]), "the next bot never started");
     release.send(()).expect("release");
     hung.await.expect("join").expect("hung start");
 }
