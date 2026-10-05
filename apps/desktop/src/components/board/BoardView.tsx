@@ -229,6 +229,20 @@ function Board(props: BoardProps): ReactElement {
   };
 
   const canMove = canControl ? moves.openMenu : null;
+  // The owner's call, on the board's home (H-099).
+  const setLimit =
+    (column: BoardColumn) =>
+    async (wipLimit: number | undefined): Promise<void> => {
+      await boardCall(
+        client,
+        {
+          case: "columnSetLimit",
+          value: { projectId: project.id, columnKey: column.key, wipLimit },
+        },
+        "board",
+      );
+      refresh();
+    };
 
   const { ui } = moves;
   return (
@@ -290,6 +304,7 @@ function Board(props: BoardProps): ReactElement {
               summary={summary}
               drop={drop}
               botsById={botsById}
+              onSetLimit={model.canRule ? setLimit(column) : undefined}
               onCollapse={
                 column.category === ColumnCategory.INBOX
                   ? () => {

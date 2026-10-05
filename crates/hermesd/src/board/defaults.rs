@@ -224,7 +224,8 @@ mod tests {
         assert_eq!(guess_role("Tester Win"), Some(Role::Tester));
         assert_eq!(guess_role("Desktop Dev"), Some(Role::Dev));
         assert_eq!(guess_role("iOS Dev"), Some(Role::Dev));
-        assert_eq!(guess_role("Context Engineer"), None);
+        // Context Engineer reviews security work (H-099).
+        assert_eq!(guess_role("Context Engineer"), Some(Role::ReviewerArch));
         assert_eq!(guess_role("Lead Writer"), None);
         assert_eq!(guess_role("Writer"), None);
         assert_eq!(seed_role("Writer", true), Some(Role::Lead));
