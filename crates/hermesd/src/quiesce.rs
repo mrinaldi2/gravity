@@ -27,6 +27,7 @@ use crate::decisions::conflict;
 use crate::events::Push;
 
 pub mod cli;
+pub mod fallback;
 mod outcome;
 pub mod reap;
 pub mod services;

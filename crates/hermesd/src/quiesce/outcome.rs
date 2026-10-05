@@ -39,6 +39,11 @@ pub fn summary(report: &Value) -> String {
         line.push_str(&format!(
             " {unresolved} other processes still hold the home, so the install waits."
         ));
+        if let Some(card) = report["owner_action"]["id"].as_str() {
+            line.push_str(&format!(
+                " The owner has a Run card ({card}) that stops them; start again once it ran."
+            ));
+        }
     }
     line
 }

@@ -15,7 +15,8 @@ use crate::app::AppState;
 use crate::db::Quiesce;
 use crate::holders::{self, ledger};
 
-use super::{pause_all, reap, services, PauseRequest};
+use super::{fallback, pause_all, reap, services, PauseRequest};
+use crate::owner_action;
 
 /// Pauses (or, for the same release, takes up the open pause again), reaps
 /// and reports. The report's `unresolved` lists what still holds the home;
@@ -69,6 +70,12 @@ pub fn start(
     let phase = if unresolved.is_empty() {
         "ready"
     } else {
+        // The owner gets one Run card that stops them (R4).
+        match fallback::file(app, &q, &unresolved, &services) {
+            Ok(Some(card)) => report["owner_action"] = owner_action::view(app, &card),
+            Ok(None) => {}
+            Err(e) => tracing::warn!(error = %e, "could not file the owner's Run card"),
+        }
         "blocked"
     };
     app.db.set_quiesce_phase(&q.id, phase, &report)?;

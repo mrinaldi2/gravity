@@ -214,6 +214,10 @@ pub struct ServiceOutcome {
     pub name: String,
     pub stopped: bool,
     pub detail: String,
+    /// Its configured stop line, when running it failed: the owner's Run
+    /// card offers it (R4).
+    #[serde(skip)]
+    pub failed_stop: Option<String>,
 }
 
 /// The list in effect: the one read at start. The file's current list, when
@@ -253,6 +257,7 @@ pub fn stop_holding(app: &AppState, q: &Quiesce, holders: &[Holder]) -> Vec<Serv
                     "not running"
                 }
                 .to_string(),
+                failed_stop: None,
             });
             continue;
         }
@@ -264,6 +269,7 @@ pub fn stop_holding(app: &AppState, q: &Quiesce, holders: &[Holder]) -> Vec<Serv
             name: spec.name.clone(),
             stopped: stop.ok,
             detail: stop.output.trim().chars().take(500).collect(),
+            failed_stop: (!stop.ok).then(|| spec.stop.clone()),
         });
     }
     if let Err(e) = app.db.set_quiesce_services(&q.id, &stopped_names) {

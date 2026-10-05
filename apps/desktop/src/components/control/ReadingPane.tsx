@@ -50,6 +50,7 @@ export default function ReadingPane(props: ReadingPaneProps): ReactElement {
               ← Back
             </button>
           ) : null}
+          {props.ownerActions}
           {props.release}
         </div>
       </section>
