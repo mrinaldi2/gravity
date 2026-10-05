@@ -90,6 +90,12 @@ async fn a_cancelled_successor_frees_its_items_and_another_ships() {
     let events = &cancelled["predecessor"]["events"];
     assert_eq!(events[0]["release_id"], wrong_id.as_str(), "{events}");
     assert_eq!(events[0]["note"], "c isn't ready");
+    // The deleted test results stay on the record.
+    assert_eq!(
+        events[0]["detail"]["tests"],
+        json!([{"machine": "mac", "build_sha256": "a".repeat(64), "result": "pass"}]),
+        "{events}"
+    );
     let gone = r.bots[0].call_raw("release_get", get(&wrong_id)).await;
     assert!(error_text(&gone).contains("no release"), "{gone}");
 

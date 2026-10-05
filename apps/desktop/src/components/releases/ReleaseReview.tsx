@@ -15,7 +15,7 @@ import {
 import type { ReturnTo } from "./ReleaseDialogs";
 import { TestSummary } from "./ReleaseSections";
 import type { LeftOut } from "./ReleaseSections";
-import { Banner, ReviewBar, ReviewTabs, failingMachines } from "./ReviewParts";
+import { Banner, ReviewBar, ReviewEvents, ReviewTabs, failingMachines } from "./ReviewParts";
 import type { BarAction } from "./ReviewParts";
 import type { ReleaseActions } from "./useReleases";
 
@@ -104,6 +104,7 @@ export default function ReleaseReview({
         {release.supersedes ? " · replaces an earlier package" : ""}
       </p>
       <Banner release={release} actions={actions} canControl={canControl} />
+      <ReviewEvents release={release} botName={botName} />
       <TestSummary release={release} botName={botName} />
       <ReviewTabs
         release={release}

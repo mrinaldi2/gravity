@@ -82,6 +82,11 @@ pub fn cancel(
                 "builds": release.builds.iter().map(|b| json!({
                     "platform": b.platform, "version": b.version, "sha256": b.sha256,
                 })).collect::<Vec<_>>(),
+                // The test results go with the package (ARCH-R26 follow-up):
+                // kept here so what each machine reported stays on the record.
+                "tests": release.tests.iter().map(|r| json!({
+                    "machine": r.machine, "build_sha256": r.build_sha256, "result": r.result,
+                })).collect::<Vec<_>>(),
             }),
             at: bus::now(),
         };

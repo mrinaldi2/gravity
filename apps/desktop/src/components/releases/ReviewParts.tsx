@@ -4,7 +4,7 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
 import type { Release } from "../../protocol/releases";
-import { statusLabel } from "./labels";
+import { eventLine, statusLabel } from "./labels";
 import { Changelog, Glyph, HowToTest, ItemsList, Rollout } from "./ReleaseSections";
 import type { LeftOut } from "./ReleaseSections";
 import type { ReleaseActions } from "./useReleases";
@@ -233,7 +233,6 @@ export function Banner(props: {
         </p>
       );
     case "superseded":
-    case "cancelled":
     case "rejected":
     case "rolled_back":
       return (
@@ -244,6 +243,26 @@ export function Banner(props: {
     default:
       return null;
   }
+}
+
+/** What happened around the package, in the order it happened: a successor DevOps cancelled. */
+export function ReviewEvents(props: {
+  readonly release: Release;
+  readonly botName: (id: string) => string;
+}): ReactElement | null {
+  if (props.release.events.length === 0) {
+    return null;
+  }
+  return (
+    <ul className="release-events" aria-label="What happened">
+      {props.release.events.map((e) => (
+        <li key={`${e.release_id}-${e.kind}-${e.at}`}>
+          <span aria-hidden="true">⊘ </span>
+          {eventLine(e, props.botName)}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function failedOn(release: Release): string[] {

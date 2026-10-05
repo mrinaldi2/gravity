@@ -15,8 +15,24 @@ export type ReleaseStatus =
   | "partially_deployed"
   | "deployed"
   | "rejected"
-  | "rolled_back"
-  | "cancelled";
+  | "rolled_back";
+
+/**
+ * Something that happened to a package, kept after the package itself may
+ * be gone: today, a successor DevOps cancelled before submitting it. It is
+ * listed on the package it would have replaced.
+ */
+export interface ReleaseEvent {
+  readonly release_id: string;
+  readonly release_name: string;
+  /** The package the subject succeeded, when it did. */
+  readonly related_id: string | null;
+  readonly kind: string;
+  /** A bot id, `owner` or `device:<id>`. */
+  readonly actor: string;
+  readonly note: string | null;
+  readonly at: string;
+}
 
 type Verdict = "pending" | "ship" | "hold" | "rework";
 
@@ -88,6 +104,8 @@ export interface Release {
   readonly builds: readonly ReleaseBuild[];
   readonly tests: readonly ReleaseTest[];
   readonly deployments: readonly ReleaseDeployment[];
+  /** Its own events and those of packages that would have succeeded it. */
+  readonly events: readonly ReleaseEvent[];
   /** Whether this connection may rule on it (the approve grant, on its home). */
   readonly can_rule?: boolean;
   /** When it can't: the computer where the owner can. */
