@@ -231,6 +231,59 @@ async fn with_no_app_to_answer_the_prompt_stays_in_the_terminal() {
     assert!(b.d.app.approvals.list(None).is_empty());
 }
 
+/// ARCH-R35 M1: a terminal command's card takes approve, since allowing it
+/// makes the command the owner; a bot's card stays on control.
+#[tokio::test]
+async fn a_control_device_answers_bot_cards_but_not_terminal_ones() {
+    let mut b = bot_with(|_| {}).await;
+    let created =
+        b.c.request(json!({"type": "create_device", "name": "tablet",
+                        "capabilities": ["read", "control"]}))
+            .await;
+    let mut device = WsClient::connect_as(&b.d, token_str(&created)).await;
+
+    let app = b.d.app.clone();
+    let asking =
+        tokio::spawn(
+            async move { hermesd::approval::ask_owner(&app, "hermesd board import", 1).await },
+        );
+    let terminal_card = device
+        .wait_for(|v| v["type"] == "permission_request" && v["request"]["bot_id"] == "terminal")
+        .await;
+    let refused = device
+        .request(json!({"type": "answer_permission",
+                        "request_id": terminal_card["request"]["id"], "decision": "allow_once"}))
+        .await;
+    assert_eq!(refused["code"], "forbidden", "{refused}");
+    assert_eq!(
+        b.d.app.approvals.list(Some("terminal")).len(),
+        1,
+        "still waiting"
+    );
+
+    let call = hook(&b);
+    let bot_card = device
+        .wait_for(|v| {
+            v["type"] == "permission_request" && v["request"]["bot_id"] == b.bot_id.as_str()
+        })
+        .await;
+    let answered = device
+        .request(json!({"type": "answer_permission",
+                        "request_id": bot_card["request"]["id"], "decision": "allow_once"}))
+        .await;
+    assert_eq!(answered["type"], "permission", "{answered}");
+    let (status, _) = call.await.expect("hook");
+    assert_eq!(status, 200);
+
+    // The owner, with approve, settles the terminal card.
+    let settled =
+        b.c.request(json!({"type": "answer_permission",
+                        "request_id": terminal_card["request"]["id"], "decision": "deny"}))
+            .await;
+    assert_eq!(settled["type"], "permission", "{settled}");
+    assert_eq!(asking.await.expect("ask"), Some(false));
+}
+
 #[tokio::test]
 async fn a_runtime_permission_is_answered_through_its_session() {
     let mut b = bot_with(|_| {}).await;

@@ -116,17 +116,28 @@ impl Approvals {
         out
     }
 
-    /// Answers a pending prompt. Errors when it is no longer pending.
+    /// Answers a pending prompt. Errors when it is no longer pending, and with
+    /// [`NeedsApprove`] when a terminal command's card is answered without the
+    /// approve grant: allowing it lets that command act as the owner.
     pub fn answer(
         &self,
         request_id: &str,
         answer: Answer,
         reason: Option<String>,
+        can_approve: bool,
     ) -> anyhow::Result<PermissionRequest> {
-        let pending = self
-            .lock()
-            .remove(request_id)
-            .ok_or_else(|| anyhow::anyhow!("that permission prompt is no longer waiting"))?;
+        let pending = {
+            let mut pending = self.lock();
+            let waiting = pending
+                .get(request_id)
+                .ok_or_else(|| anyhow::anyhow!("that permission prompt is no longer waiting"))?;
+            if waiting.request.bot_id == TERMINAL && !can_approve {
+                return Err(NeedsApprove.into());
+            }
+            pending
+                .remove(request_id)
+                .expect("present: checked under the same lock")
+        };
         let request = pending.request.clone();
         // A closed receiver means the asker just gave up; the prompt is gone
         // either way, so the answer has nothing left to decide.
@@ -240,6 +251,18 @@ async fn decide(
 
 /// What an owner-command card is filed under: a terminal, not a bot (H-044).
 pub const TERMINAL: &str = "terminal";
+
+/// A terminal command's card answered by a connection without approve.
+#[derive(Debug)]
+pub struct NeedsApprove;
+
+impl std::fmt::Display for NeedsApprove {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("allowing a terminal command to act as you requires the approve capability")
+    }
+}
+
+impl std::error::Error for NeedsApprove {}
 
 /// Asks the owner, on a card, whether a command run in a terminal may act as
 /// them (H-044 T4). `Some(true)` when allowed, `Some(false)` when denied or
