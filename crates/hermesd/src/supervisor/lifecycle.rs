@@ -30,9 +30,8 @@ impl Supervisor {
         // Refresh the cooperative settings so existing bots pick up current
         // hooks (inbox-socket reporting, crossSessionInbound) on every start.
         if workspace.exists() {
-            if let Err(e) =
-                crate::paths::write_hook_settings(&workspace, self.inner.cfg.port, BOT_TOKEN_ENV)
-            {
+            let hooks = crate::bus_auth::hook_transport(&self.inner.cfg);
+            if let Err(e) = crate::paths::write_hook_settings(&workspace, &hooks) {
                 tracing::warn!(bot_id, error = %e, "failed to refresh hook settings");
             }
             // Re-assert trust on every start, not just at creation: bots
@@ -123,7 +122,13 @@ impl Supervisor {
             }
         }
 
-        let mut env = crate::brand::bot_token_vars(token);
+        // The bearer token only while it is still accepted (H-044 phase 1):
+        // once refused, a session's environment holds nothing to steal.
+        let mut env = if crate::bus_auth::bearer_in_env(&self.inner.cfg) {
+            crate::brand::bot_token_vars(token)
+        } else {
+            Vec::new()
+        };
         if let Some(window) = self.inner.auto_compact.effective(&self.inner.cfg) {
             env.push((AUTO_COMPACT_WINDOW_ENV.to_string(), window.to_string()));
         }

@@ -7,6 +7,33 @@ use super::session::{ProcInfo, ProcessTable};
 /// The live process table of this machine.
 pub struct OsProcessTable;
 
+/// The current time in the units this OS's table reports start times in,
+/// taken when a connection is accepted (`session::session_of`).
+#[cfg(target_os = "macos")]
+pub fn now() -> Option<u64> {
+    let since = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?;
+    u64::try_from(since.as_micros()).ok()
+}
+
+/// Clock ticks since boot, rounded up a tick: `/proc/uptime` is coarser
+/// than the start times it is compared with.
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn now() -> Option<u64> {
+    let uptime = std::fs::read_to_string("/proc/uptime").ok()?;
+    let secs: f64 = uptime.split_whitespace().next()?.parse().ok()?;
+    // SAFETY: sysconf has no preconditions.
+    let ticks = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
+    (ticks > 0).then(|| (secs * ticks as f64).ceil() as u64 + 1)
+}
+
+/// FILETIME, 100 ns since 1601, as `GetProcessTimes` reports creation.
+#[cfg(windows)]
+pub fn now() -> Option<u64> {
+    Some(windows::system_time())
+}
+
 #[cfg(target_os = "macos")]
 impl ProcessTable for OsProcessTable {
     fn info(&self, pid: u32) -> Option<ProcInfo> {
@@ -89,6 +116,7 @@ mod windows {
         fn Process32FirstW(snapshot: RawHandle, entry: *mut ProcessEntry) -> i32;
         fn Process32NextW(snapshot: RawHandle, entry: *mut ProcessEntry) -> i32;
         fn OpenProcess(access: u32, inherit: i32, pid: u32) -> RawHandle;
+        fn GetSystemTimeAsFileTime(time: *mut u64);
         fn GetProcessTimes(
             process: RawHandle,
             creation: *mut u64,
@@ -96,6 +124,13 @@ mod windows {
             kernel: *mut u64,
             user: *mut u64,
         ) -> i32;
+    }
+
+    pub(super) fn system_time() -> u64 {
+        let mut time = 0u64;
+        // SAFETY: `time` is a FILETIME-sized output.
+        unsafe { GetSystemTimeAsFileTime(&mut time) };
+        time
     }
 
     /// The parent pid Toolhelp records for `pid`.
@@ -160,5 +195,7 @@ mod tests {
         let parent = OsProcessTable.info(me.ppid).expect("its parent");
         assert!(parent.start <= me.start, "{parent:?} started after {me:?}");
         assert!(OsProcessTable.info(u32::MAX - 1).is_none());
+        // This process started before now, in the table's own units.
+        assert!(me.start <= now().expect("now"), "{me:?}");
     }
 }

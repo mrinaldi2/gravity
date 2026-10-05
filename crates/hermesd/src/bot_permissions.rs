@@ -283,7 +283,7 @@ pub fn without_interim_settings(
     (args, interim)
 }
 
-fn quote(text: &str) -> String {
+pub(crate) fn quote(text: &str) -> String {
     if cfg!(windows) {
         format!("\"{text}\"")
     } else {

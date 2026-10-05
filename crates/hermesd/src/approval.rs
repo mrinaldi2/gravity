@@ -23,6 +23,7 @@ mod claude;
 mod runtime;
 
 pub use claude::permission_hook;
+pub(crate) use claude::permission_output;
 pub use runtime::watch;
 
 /// How long Claude Code waits on the hook. Kept above any answer window the

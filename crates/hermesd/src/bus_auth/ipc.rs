@@ -29,6 +29,17 @@ pub fn endpoint(cfg: &Config) -> PathBuf {
     PathBuf::from(windows::pipe_name(&cfg.home))
 }
 
+/// The endpoint as a hook command line names it. A pipe goes without its
+/// `\\.\pipe\` prefix, whose backslashes a shell would eat; `hermesd hook`
+/// puts it back.
+pub fn hook_endpoint(cfg: &Config) -> String {
+    let endpoint = endpoint(cfg).to_string_lossy().into_owned();
+    match endpoint.strip_prefix(r"\\.\pipe\") {
+        Some(name) => name.to_string(),
+        None => endpoint,
+    }
+}
+
 /// `bus-proxy`'s arguments for this daemon's endpoint.
 pub fn proxy_args(cfg: &Config) -> Vec<String> {
     vec![
@@ -56,12 +67,13 @@ pub async fn serve(app: Arc<AppState>) -> anyhow::Result<()> {
     tracing::info!(path = %path.display(), "bus endpoint listening");
     loop {
         let (stream, _) = listener.accept().await?;
+        let accepted = super::os::now();
         let pid = stream
             .peer_cred()
             .ok()
             .and_then(|cred| cred.pid())
             .and_then(|pid| u32::try_from(pid).ok());
-        tokio::spawn(serve_connection(app.clone(), stream, pid));
+        tokio::spawn(serve_connection(app.clone(), stream, pid, accepted));
     }
 }
 
@@ -72,16 +84,22 @@ pub async fn serve(app: Arc<AppState>) -> anyhow::Result<()> {
 
 /// One connection: resolved once to the bot whose session the caller runs
 /// in, then checked again before every request, so a restarted session's
-/// old processes are cut off.
-pub(super) async fn serve_connection<S>(app: Arc<AppState>, stream: S, peer_pid: Option<u32>)
-where
+/// old processes are cut off. `accepted` is when it was accepted
+/// (`os::now`); without it nothing resolves.
+pub(super) async fn serve_connection<S>(
+    app: Arc<AppState>,
+    stream: S,
+    peer_pid: Option<u32>,
+    accepted: Option<u64>,
+) where
     S: AsyncRead + AsyncWrite + Unpin,
 {
     let roots = app.supervisor.session_roots();
     let table = OsProcessTable;
     let resolved = peer_pid
         .and_then(|pid| table.info(pid))
-        .and_then(|peer| session_of(&roots, &table, peer));
+        .zip(accepted)
+        .and_then(|(peer, accepted)| session_of(&roots, &table, peer, accepted));
     if resolved.is_none() {
         tracing::warn!(?peer_pid, "bus connection from no bot session refused");
     }
@@ -108,7 +126,11 @@ where
             let _ = send(&mut writer, &error(id, NOT_A_SESSION, "not a bot session")).await;
             return;
         };
-        if let Some(reply) = crate::mcp::rpc_response(&app, bot_id, &request).await {
+        let reply = match super::hook::serve(&app, bot_id, &request).await {
+            Some(reply) => Some(reply),
+            None => crate::mcp::rpc_response(&app, bot_id, &request).await,
+        };
+        if let Some(reply) = reply {
             if send(&mut writer, &reply).await.is_err() {
                 return;
             }
@@ -116,7 +138,7 @@ where
     }
 }
 
-fn error(id: Value, code: i64, message: &str) -> Value {
+pub(super) fn error(id: Value, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
 }
 

@@ -2,7 +2,9 @@
 //! root process of every session it starts, and a caller is that bot when one
 //! of its ancestors, at most eight levels up, is that root. Each step up must
 //! be at least as old as the step below it, so a parent pid the OS has handed
-//! to an unrelated, newer process can't join a chain.
+//! to an unrelated, newer process can't join a chain. The caller itself must
+//! have started before its connection was accepted, so a pid reused between
+//! connect and accept can't stand in for the process that connected.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -80,12 +82,18 @@ impl SessionRoots {
 
 /// The bot whose session `peer` runs in, with the root it was found under.
 /// `None` for a process in no session: a terminal, another user's tool, or
-/// one that detached and was reparented.
+/// one that detached and was reparented. `accepted` is when the connection
+/// was accepted, in the table's own units (`os::now`): a peer that started
+/// later holds a reused pid, not the one that connected.
 pub fn session_of(
     roots: &SessionRoots,
     table: &dyn ProcessTable,
     peer: ProcInfo,
+    accepted: u64,
 ) -> Option<(ProcKey, String)> {
+    if peer.start > accepted {
+        return None;
+    }
     let mut current = peer;
     for _ in 0..=MAX_DEPTH {
         if let Some(bot) = roots.bot_of(current.key()) {
@@ -128,6 +136,9 @@ mod tests {
         }
     }
 
+    /// An accept time after every process in the tests' tables.
+    const NOW: u64 = 1_000;
+
     fn roots(table: &Fake, pid: u32, bot: &str) -> SessionRoots {
         let roots = SessionRoots::default();
         roots.record_pid(table, pid, bot);
@@ -140,11 +151,11 @@ mod tests {
         let table = Fake::new(&[(1, 0, 0), (100, 1, 10), (200, 100, 20), (300, 200, 30)]);
         let roots = roots(&table, 100, "A");
         let peer = table.info(300).unwrap();
-        let (key, bot) = session_of(&roots, &table, peer).expect("in A's session");
+        let (key, bot) = session_of(&roots, &table, peer, NOW).expect("in A's session");
         assert_eq!((bot.as_str(), key.pid), ("A", 100));
         // The root itself is A too.
         assert_eq!(
-            session_of(&roots, &table, table.info(100).unwrap())
+            session_of(&roots, &table, table.info(100).unwrap(), NOW)
                 .unwrap()
                 .1,
             "A"
@@ -156,7 +167,10 @@ mod tests {
         // 300 double-forked and was reparented to launchd: no root above it.
         let table = Fake::new(&[(1, 0, 0), (100, 1, 10), (300, 1, 30)]);
         let roots = roots(&table, 100, "A");
-        assert_eq!(session_of(&roots, &table, table.info(300).unwrap()), None);
+        assert_eq!(
+            session_of(&roots, &table, table.info(300).unwrap(), NOW),
+            None
+        );
     }
 
     #[test]
@@ -165,11 +179,17 @@ mod tests {
         // after 300; 250 now sits under A's root, but it isn't 300's parent.
         let table = Fake::new(&[(1, 0, 0), (100, 1, 10), (250, 100, 40), (300, 250, 30)]);
         let roots = roots(&table, 100, "A");
-        assert_eq!(session_of(&roots, &table, table.info(300).unwrap()), None);
+        assert_eq!(
+            session_of(&roots, &table, table.info(300).unwrap(), NOW),
+            None
+        );
         // A root recorded for an earlier process of the same pid isn't this one.
         let stale = SessionRoots::default();
         stale.record(ProcKey { pid: 100, start: 5 }, "A");
-        assert_eq!(session_of(&stale, &table, table.info(100).unwrap()), None);
+        assert_eq!(
+            session_of(&stale, &table, table.info(100).unwrap(), NOW),
+            None
+        );
     }
 
     #[test]
@@ -183,11 +203,23 @@ mod tests {
         let roots = roots(&table, 100, "A");
         let deepest = 200 + MAX_DEPTH as u32;
         assert_eq!(
-            session_of(&roots, &table, table.info(deepest).unwrap()),
+            session_of(&roots, &table, table.info(deepest).unwrap(), NOW),
             None
         );
         let within = table.info(deepest - 1).unwrap();
-        assert_eq!(session_of(&roots, &table, within).unwrap().1, "A");
+        assert_eq!(session_of(&roots, &table, within, NOW).unwrap().1, "A");
+    }
+
+    #[test]
+    fn a_caller_started_after_its_connection_was_accepted_is_refused() {
+        // 300 connected and exited; its pid went to a newer process under
+        // A's root before the daemon read the pid's process.
+        let table = Fake::new(&[(1, 0, 0), (100, 1, 10), (300, 100, 50)]);
+        let roots = roots(&table, 100, "A");
+        let peer = table.info(300).unwrap();
+        assert_eq!(session_of(&roots, &table, peer, 40), None);
+        // Started before the accept (or in the same tick): the caller.
+        assert_eq!(session_of(&roots, &table, peer, 50).unwrap().1, "A");
     }
 
     #[test]
@@ -195,14 +227,20 @@ mod tests {
         let table = Fake::new(&[(1, 0, 0), (100, 1, 10), (101, 1, 11)]);
         let roots = roots(&table, 100, "A");
         roots.record_pid(&table, 101, "A");
-        assert_eq!(session_of(&roots, &table, table.info(100).unwrap()), None);
         assert_eq!(
-            session_of(&roots, &table, table.info(101).unwrap())
+            session_of(&roots, &table, table.info(100).unwrap(), NOW),
+            None
+        );
+        assert_eq!(
+            session_of(&roots, &table, table.info(101).unwrap(), NOW)
                 .unwrap()
                 .1,
             "A"
         );
         roots.forget("A");
-        assert_eq!(session_of(&roots, &table, table.info(101).unwrap()), None);
+        assert_eq!(
+            session_of(&roots, &table, table.info(101).unwrap(), NOW),
+            None
+        );
     }
 }

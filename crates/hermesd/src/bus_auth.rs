@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub mod hook;
 pub mod ipc;
 pub mod os;
 pub mod proxy;
@@ -74,6 +75,37 @@ impl BearerLog {
         let seen = self.seen.lock().unwrap_or_else(|e| e.into_inner());
         seen.get(bot_id).copied()
     }
+}
+
+/// How a session's Claude Code hooks reach the daemon.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HookTransport {
+    /// `<command> hook <event> --endpoint <endpoint>`, identified by process.
+    Ipc { command: String, endpoint: String },
+    /// curl / PowerShell with the bearer token in `token_env`: the rollback.
+    Http { port: u16, token_env: String },
+}
+
+/// The hooks a bot's settings get, following `[auth] bot_transport` as its
+/// `mcp.json` does.
+pub fn hook_transport(cfg: &crate::config::Config) -> HookTransport {
+    match cfg.auth.bot_transport {
+        BotTransport::Http => HookTransport::Http {
+            port: cfg.port,
+            token_env: crate::brand::BOT_TOKEN_ENV.to_string(),
+        },
+        BotTransport::Stdio => HookTransport::Ipc {
+            command: proxy_command(),
+            endpoint: ipc::hook_endpoint(cfg),
+        },
+    }
+}
+
+/// Whether bot sessions still get their bearer token in the environment:
+/// only while it is accepted (phase 1), and the hooks and bus no longer use
+/// it unless `bot_transport = "http"`.
+pub fn bearer_in_env(cfg: &crate::config::Config) -> bool {
+    cfg.auth.bot_bearer == BearerPolicy::Accept
 }
 
 /// The command a session runs as its stdio bus server: this daemon's own

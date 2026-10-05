@@ -39,7 +39,12 @@ fn mcp_config_carries_the_bots_own_browser() {
 #[test]
 fn hook_settings_use_the_new_token_and_guard_the_current_home() {
     let tmp = tempfile::tempdir().expect("tmp");
-    write_hook_settings(tmp.path(), 49777, brand::BOT_TOKEN_ENV).expect("write");
+    // The rollback transport (`bot_transport = "http"`) still names a token.
+    let http = hermesd::bus_auth::HookTransport::Http {
+        port: 49777,
+        token_env: brand::BOT_TOKEN_ENV.to_string(),
+    };
+    write_hook_settings(tmp.path(), &http).expect("write");
     let raw = std::fs::read_to_string(tmp.path().join(".claude/settings.json")).expect("read");
     assert!(raw.contains("Read(~/.thehermes/secrets/**)"));
     assert!(raw.contains("Read(~/.gravity/secrets/**)"));

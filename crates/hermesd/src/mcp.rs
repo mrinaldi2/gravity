@@ -81,19 +81,29 @@ pub async fn hook_handler(
     } else {
         query.event.as_str()
     };
+    if on_hook(&app, &bot_id, event, &body) {
+        StatusCode::OK
+    } else {
+        StatusCode::BAD_REQUEST
+    }
+}
+
+/// A lifecycle hook from `bot_id`'s session, over HTTP or the local endpoint
+/// (`hermesd hook`, H-044). False when it names no event.
+pub(crate) fn on_hook(app: &AppState, bot_id: &str, event: &str, body: &Value) -> bool {
     if event.is_empty() {
-        return StatusCode::BAD_REQUEST;
+        return false;
     }
     // SessionStart reports the session's inbox socket for channel delivery.
     if let Some(socket) = body.get("socket").and_then(|v| v.as_str()) {
         let msg_token = body.get("msg_token").and_then(|v| v.as_str());
-        app.supervisor.set_msg_socket(&bot_id, socket, msg_token);
+        app.supervisor.set_msg_socket(bot_id, socket, msg_token);
     }
     let message = body.get("message").and_then(|v| v.as_str());
     let transcript_path = body.get("transcript_path").and_then(|v| v.as_str());
     app.supervisor
-        .on_hook_with_transcript(&bot_id, event, message, transcript_path);
-    StatusCode::OK
+        .on_hook_with_transcript(bot_id, event, message, transcript_path);
+    true
 }
 
 /// POST /mcp — JSON-RPC 2.0 (MCP Streamable HTTP, request/response subset).

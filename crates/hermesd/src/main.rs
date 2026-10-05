@@ -60,6 +60,10 @@ async fn main() -> anyhow::Result<()> {
     if args.first().map(String::as_str) == Some("bus-proxy") {
         std::process::exit(hermesd::bus_auth::proxy::run(&args[1..]).await);
     }
+    // Claude Code's hooks (H-044): over the local endpoint, not curl.
+    if args.first().map(String::as_str) == Some("hook") {
+        std::process::exit(hermesd::bus_auth::hook::run(&args[1..]).await);
+    }
     // `service install` runs a staged binary with this to check it starts.
     if args.first().map(String::as_str) == Some("--version") {
         println!("hermesd {}", hermesd::app::DAEMON_VERSION);

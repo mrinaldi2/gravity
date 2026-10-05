@@ -25,31 +25,40 @@ pub async fn run(args: &[String]) -> i32 {
     }
 }
 
-#[cfg(unix)]
 async fn connect(endpoint: &str) -> anyhow::Result<()> {
-    let stream = tokio::net::UnixStream::connect(endpoint)
+    let stream = open(endpoint)
         .await
         .map_err(|e| anyhow::anyhow!("can't reach the Hermes service at {endpoint}: {e}"))?;
     relay(stream).await
 }
 
+#[cfg(unix)]
+pub(super) type Stream = tokio::net::UnixStream;
 #[cfg(windows)]
-async fn connect(endpoint: &str) -> anyhow::Result<()> {
+pub(super) type Stream = tokio::net::windows::named_pipe::NamedPipeClient;
+
+/// Connects to the daemon's endpoint. Shared with `hermesd hook`.
+#[cfg(unix)]
+pub(super) async fn open(endpoint: &str) -> std::io::Result<Stream> {
+    tokio::net::UnixStream::connect(endpoint).await
+}
+
+#[cfg(windows)]
+pub(super) async fn open(endpoint: &str) -> std::io::Result<Stream> {
     use tokio::net::windows::named_pipe::ClientOptions;
     // ERROR_PIPE_BUSY: every instance is taken for a moment; try again.
     const PIPE_BUSY: i32 = 231;
     let mut tries = 0;
-    let pipe = loop {
+    loop {
         match ClientOptions::new().open(endpoint) {
-            Ok(pipe) => break pipe,
+            Ok(pipe) => return Ok(pipe),
             Err(e) if e.raw_os_error() == Some(PIPE_BUSY) && tries < 50 => {
                 tries += 1;
                 tokio::time::sleep(std::time::Duration::from_millis(20)).await;
             }
-            Err(e) => anyhow::bail!("can't reach the Hermes service at {endpoint}: {e}"),
+            Err(e) => return Err(e),
         }
-    };
-    relay(pipe).await
+    }
 }
 
 /// Copies stdin to the endpoint and the endpoint to stdout. The daemon

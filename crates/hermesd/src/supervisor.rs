@@ -327,6 +327,15 @@ impl Supervisor {
         Ok(())
     }
 
+    /// The session's inbox socket, as last reported.
+    pub fn msg_socket_path(&self, bot_id: &str) -> Option<std::path::PathBuf> {
+        let bots = self.lock_bots();
+        bots.get(bot_id)?
+            .msg_socket
+            .as_ref()
+            .map(|s| s.path.clone())
+    }
+
     /// Record the session's inbox socket, reported by the SessionStart hook.
     pub fn set_msg_socket(&self, bot_id: &str, path: &str, token: Option<&str>) {
         if path.is_empty() {
