@@ -264,6 +264,29 @@ fn only_the_owner_closes_verify_without_a_release_and_never_a_released_item() {
 }
 
 #[test]
+fn the_owner_does_not_close_an_item_in_an_open_package() {
+    let mut c = case(Cat::Verify);
+    c.reason = Some("shipped by hand");
+    assert!(run(&c, Cat::Done).is_empty());
+    c.ctx.open_package = Some("0.16.0".into());
+    assert_eq!(run(&c, Cat::Done), ["done.in_package"]);
+    let to = column(Cat::Done);
+    let mv = Move {
+        to: &to,
+        reason: c.reason,
+        override_reason: None,
+    };
+    assert!(!closes_without_release(&c.item, &mv, &c.who, &c.ctx));
+    let refused = evaluate(&c.item, &mv, &c.who, &c.ctx);
+    assert!(refused[0].text.contains("package 0.16.0"), "{refused:?}");
+    c.who = bot("lead", LEAD);
+    assert_eq!(
+        run(&c, Cat::Done),
+        ["role.not_allowed", "done.flow", "done.outcome"]
+    );
+}
+
+#[test]
 fn same_column_is_refused_even_for_the_daemon() {
     let mut c = case(Cat::Doing);
     c.who = Who::Daemon;

@@ -8,6 +8,7 @@ use crate::board::model::*;
 use crate::board::moves::{item_move, MoveRequest, Moved, CLOSED_WITHOUT_RELEASE};
 
 use super::board_tests::new_item;
+use super::releases::NewRelease;
 use super::{Actor, Db};
 
 const FIXTURE: &str = include_str!("../../tests/fixtures/board_import_backlog.md");
@@ -205,6 +206,33 @@ fn the_owner_closes_an_imported_item_out_of_verify_and_it_is_logged() {
     for actor in [&OWNER, &dev] {
         assert!(matches!(close(&db, "H-003", actor), Moved::Refused(_)));
     }
+}
+
+/// A package DevOps is still assembling holds its items, though their
+/// `release_id` is not set until it freezes (ARCH-R24).
+#[test]
+fn the_owner_does_not_close_an_item_in_an_assembling_package() {
+    let (db, p) = board("G");
+    db.board_import(&p, "d-home", &parse(FIXTURE), false, &OWNER)
+        .unwrap();
+    db.board_tx(|t| {
+        t.insert_release(&NewRelease {
+            project_id: &p,
+            name: "0.16.0",
+            display_version: None,
+            changelog: "",
+            how_to_test: &serde_json::json!([]),
+            created_by: "ops",
+            items: &["H-043".to_string()],
+        })
+    })
+    .unwrap();
+    let Moved::Refused(refused) = close(&db, "H-043", &OWNER) else {
+        panic!("it is the package's to move");
+    };
+    assert_eq!(refused[0].code, "done.in_package");
+    assert!(refused[0].text.contains("package 0.16.0"));
+    assert_eq!(db.get_item("H-043").unwrap().unwrap().release_id, None);
 }
 
 #[test]

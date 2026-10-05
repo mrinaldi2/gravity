@@ -87,13 +87,26 @@ async fn devops_publishes_and_installs_check_the_served_file() {
     let raw = ops.call_raw("release_publish", publish.clone()).await;
     assert!(error_text(&raw).contains("different content"), "{raw}");
 
-    // Test, submit, rule, deploy: the tester's install checks the served file.
-    r.bots[2]
+    // The item is a daemon one, so the mac tester reports on the daemon
+    // build, never on the iOS one (B7b-m1 F2).
+    let daemon = builds.join("hermesd.zip");
+    std::fs::write(&daemon, "daemon bytes").unwrap();
+    let mac = ops
         .call(
-            "release_test",
-            json!({"release_id": id, "machine": "mac", "build_sha256": sha, "result": "pass"}),
+            "release_publish",
+            json!({"release_id": id, "file": daemon.display().to_string(),
+                   "platform": "daemon", "version": "0.16.0"}),
         )
-        .await;
+        .await["published"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let test = |sha: &str| json!({"release_id": id, "machine": "mac", "build_sha256": sha, "result": "pass"});
+    let raw = r.bots[2].call_raw("release_test", test(&sha)).await;
+    assert!(error_text(&raw).contains("is the ios build"), "{raw}");
+
+    // Test, submit, rule, deploy: the tester's install checks the served files.
+    r.bots[2].call("release_test", test(&mac)).await;
     let release = r.bots[1]
         .call("release_submit", json!({"release_id": id}))
         .await["release"]
@@ -117,6 +130,7 @@ async fn devops_publishes_and_installs_check_the_served_file() {
     let install = json!({"release_id": id});
     let got = r.bots[2].call("install_release", install.clone()).await;
     assert_eq!(got["builds"][0]["verified"], true, "{got}");
+    assert_eq!(got["builds"][1]["verified"], true, "{got}");
 
     // A changed served file refuses the install and pauses the rollout.
     std::fs::write(served.join("TheHermes.ipa"), "tampered").unwrap();

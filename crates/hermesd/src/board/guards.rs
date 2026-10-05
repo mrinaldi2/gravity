@@ -90,6 +90,8 @@ pub struct Context {
     pub ready: Vec<String>,
     pub required_machines: BTreeMap<Platform, Vec<String>>,
     pub load: BTreeMap<String, ColumnLoad>,
+    /// The version of the open release package the item is in, if any.
+    pub open_package: Option<String>,
 }
 
 impl Context {
@@ -158,9 +160,15 @@ pub fn rule(from: Cat, to: Cat) -> Rule {
 
 /// The owner closing an item out of Verify that is in no release package
 /// (ARCH-R22 F1): until B7 builds packages, nothing else takes shipped work
-/// to Done. An item with a release stays the release's to move, and a move
-/// `Finish` already allows needs no escape.
+/// to Done. An item with a release, or in a package still being assembled
+/// (ARCH-R24), stays the release's to move, and a move `Finish` already
+/// allows needs no escape.
 pub fn closes_without_release(item: &Item, mv: &Move<'_>, who: &Who, ctx: &Context) -> bool {
+    would_close_without_release(item, mv, who, ctx) && ctx.open_package.is_none()
+}
+
+/// `closes_without_release` without the open package check.
+fn would_close_without_release(item: &Item, mv: &Move<'_>, who: &Who, ctx: &Context) -> bool {
     *who == Who::Owner
         && item.category == Cat::Verify
         && mv.to.category == Cat::Done

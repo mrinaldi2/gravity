@@ -75,6 +75,15 @@ pub(super) fn conditions(
             // work out of Verify with a reason (ARCH-R22 F1).
             if super::closes_without_release(item, mv, who, ctx) {
                 need_reason("It skips the release; say why it is done.");
+            } else if let (true, Some(version)) = (
+                super::would_close_without_release(item, mv, who, ctx),
+                &ctx.open_package,
+            ) {
+                out.push(unmet(
+                    "done.in_package",
+                    format!("It's in package {version}, which is still being assembled."),
+                    Some("DevOps can cancel the package or drop the item first."),
+                ));
             } else {
                 out.extend(finish(item, ctx));
             }

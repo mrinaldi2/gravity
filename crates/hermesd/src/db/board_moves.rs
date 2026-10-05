@@ -109,6 +109,12 @@ impl BoardTx<'_> {
             ready,
             required_machines: settings.required_machines,
             load: self.column_loads(project_id, item)?,
+            open_package: match self.open_release_of_item(&item.id)? {
+                Some(id) => self
+                    .release(&id)?
+                    .map(|r| r.display_version.unwrap_or(r.name)),
+                None => None,
+            },
         })
     }
 
