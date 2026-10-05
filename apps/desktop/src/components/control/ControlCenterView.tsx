@@ -3,6 +3,7 @@ import PermissionCards from "../permissions/PermissionCards";
 import ControlBody from "./ControlBody";
 import ControlTop from "./ControlTop";
 import DeleteDecisionDialog from "./DeleteDecisionDialog";
+import OwnerActionList from "../ownerActions/OwnerActionList";
 import ReleaseReview from "../releases/ReleaseReview";
 import { botNamer, useItemTitles } from "../releases/ReleasesView";
 import { useDecisionRelease } from "../releases/useDecisionRelease";
@@ -48,6 +49,17 @@ export default function ControlCenterView(props: ControlCenterOptions): ReactEle
       textareaRef={cc.textareaRef}
       onDelete={cc.setDeleting}
       release={release}
+      ownerActions={
+        state.reading === undefined ? undefined : (
+          <OwnerActionList
+            client={props.client}
+            connected={props.connected}
+            scope={{ projectId: state.reading.project_id, decisionId: state.reading.id }}
+            addToast={props.onToast}
+            botName={(id) => props.bots.find((bot) => bot.id === id)?.name ?? "a bot"}
+          />
+        )
+      }
     />
   );
 

@@ -26,6 +26,8 @@ interface ReadingPaneProps {
   readonly onDelete: (decision: Decision) => void;
   /** A release decision's review, which replaces the ruling UI (H-018 §1). */
   readonly release?: ReactElement;
+  /** The decision's commands for the owner to run (H-117). */
+  readonly ownerActions?: ReactElement;
 }
 
 /** The article plus, for an open decision, the composer docked under it. */
@@ -79,6 +81,7 @@ export default function ReadingPane(props: ReadingPaneProps): ReactElement {
           onConfirm={() => void api.confirm(decision.id)}
           onDelete={() => props.onDelete(decision)}
         />
+        {props.ownerActions}
       </div>
       {decision.state === "open" ? (
         <Composer

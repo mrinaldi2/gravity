@@ -8,6 +8,7 @@ import type { Bot, Project } from "../../protocol/entities";
 import type { BoardColumn, ItemCard } from "../../protocol/gen/hermes/board/v1/board_pb";
 import { ColumnCategory } from "../../protocol/gen/hermes/board/v1/board_pb";
 import BoardCard from "./BoardCard";
+import { ItemOwnerActions } from "../ownerActions/OwnerActionList";
 import BoardDrawer from "./BoardDrawer";
 import BoardColumnView, { InboxRail } from "./BoardColumnView";
 import type { DropState } from "./BoardColumnView";
@@ -348,7 +349,9 @@ function Board(props: BoardProps): ReactElement {
         canControl={canControl}
         onOpen={setOpened}
         onMove={canMove}
-      />
+      >
+        <ItemOwnerActions {...props} projectId={project.id} itemId={opened} />
+      </BoardDrawer>
       {ui.kind === "menu" ? (
         <MoveMenu
           card={ui.card}

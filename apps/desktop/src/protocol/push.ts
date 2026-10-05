@@ -15,6 +15,8 @@ export function emptyHandlers(): PushHandlerSets {
     workers_updated: new Set(),
     meeting_event: new Set(),
     quiesce_update: new Set(),
+    owner_action_update: new Set(),
+    owner_action_output: new Set(),
     activity_update: new Set(),
     delivery_update: new Set(),
     routine_run_update: new Set(),

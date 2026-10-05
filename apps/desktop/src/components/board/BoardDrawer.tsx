@@ -3,7 +3,7 @@
 // move menu, so a move from the drawer runs the same guards as a drag.
 // Closing returns focus to the card of the item shown (UX-012).
 
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { BoardApi } from "../../protocol/board";
 import type { Bot } from "../../protocol/entities";
 import type { BoardColumn, ItemCard } from "../../protocol/gen/hermes/board/v1/board_pb";
@@ -20,6 +20,8 @@ interface BoardDrawerProps {
   readonly canControl: boolean;
   readonly onOpen: (id: string | null) => void;
   readonly onMove: ((card: ItemCard, anchor: Anchor) => void) | null;
+  /** The open item's commands for the owner (H-117), above its tabs. */
+  readonly children?: ReactNode;
 }
 
 /** Focuses the board card of `id`, when the board shows it. */
@@ -59,6 +61,8 @@ export default function BoardDrawer(props: BoardDrawerProps): ReactElement | nul
       }}
       onMove={move && card ? (anchor) => move(card, anchor) : undefined}
       onStep={step}
-    />
+    >
+      {props.children}
+    </ItemDrawer>
   );
 }

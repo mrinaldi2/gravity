@@ -20,6 +20,7 @@ import type {
 } from "./agents";
 import type { DashboardReply } from "./dashboard";
 import type { MeetingReply } from "./meetings";
+import type { OwnerAction, OwnerActionReply } from "./ownerActions";
 import type { Quiesce, QuiesceReply } from "./quiesce";
 import type { ReleaseReply } from "./releases";
 import type { BotTask } from "./tasks";
@@ -63,6 +64,7 @@ export type ServerReply =
   | (ReplyBase & DashboardReply)
   | (ReplyBase & MeetingReply)
   | (ReplyBase & QuiesceReply)
+  | (ReplyBase & OwnerActionReply)
   | (ReplyBase & {
       readonly type: "hello_ok";
       readonly protocol_version: number;
@@ -267,6 +269,10 @@ export type ServerPush =
   | { readonly type: "workers_updated"; readonly project_id: string }
   /** Every project here paused for an install, or resumed (H-117). */
   | { readonly type: "quiesce_update"; readonly quiesce: Quiesce | null }
+  /** An owner action was proposed, ran or closed (H-117). */
+  | { readonly type: "owner_action_update"; readonly action: OwnerAction }
+  /** Redacted output of a running owner action, as it comes. */
+  | { readonly type: "owner_action_output"; readonly id: string; readonly chunk: string }
   /** A project's meetings or action items changed (H-102). */
   | { readonly type: "meeting_event"; readonly project_id: string; readonly meeting_id?: string }
   | { readonly type: "activity_update"; readonly activity: BotActivity }

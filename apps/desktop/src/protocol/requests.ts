@@ -4,6 +4,7 @@ import type { BrowserInputEvent } from "./agents";
 import type { PermissionAnswer } from "./chat";
 import type { DashboardRequestBody } from "./dashboard";
 import type { MeetingRequestBody } from "./meetings";
+import type { OwnerActionRequestBody } from "./ownerActions";
 import type { QuiesceRequestBody } from "./quiesce";
 import type { DecisionRequestBody } from "./decisionRequests";
 import type { ReleaseRequestBody } from "./releases";
@@ -23,6 +24,7 @@ export type ClientRequestBody =
   | DashboardRequestBody
   | MeetingRequestBody
   | QuiesceRequestBody
+  | OwnerActionRequestBody
   | {
       readonly type: "hello";
       readonly protocol_version: number;

@@ -6,7 +6,7 @@
 // (UX-012); the caller returns it on close.
 
 import { useEffect, useRef, useState } from "react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { escapeIsTheDrawers } from "../../../hooks/useDrawerEscape";
 import type { BoardApi } from "../../../protocol/board";
 import type { Bot } from "../../../protocol/entities";
@@ -36,6 +36,8 @@ export interface ItemDrawerProps {
   readonly now?: () => number;
   /** The tab it opens on; Overview unless a story shows another. */
   readonly initialTab?: Tab;
+  /** Shown above the tabs: the item's commands for the owner (H-117). */
+  readonly children?: ReactNode;
 }
 
 type Tab = "overview" | "links" | "activity";
@@ -108,6 +110,7 @@ export default function ItemDrawer(props: ItemDrawerProps): ReactElement {
             step={nextStep(columns, column, check)}
             assignee={item.assignee ? who(`bot:${item.assignee}`) : null}
           />
+          {props.children}
           {detail ? (
             <DrawerTabs
               detail={detail}

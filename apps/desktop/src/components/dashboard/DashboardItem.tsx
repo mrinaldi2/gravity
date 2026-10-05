@@ -3,7 +3,7 @@
 // stay on the board, which "Open board" reaches.
 
 import { useEffect, useState } from "react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { BoardApi } from "../../protocol/board";
 import { boardCall } from "../../protocol/board";
 import type { Bot } from "../../protocol/entities";
@@ -17,6 +17,8 @@ export default function DashboardItem(props: {
   readonly bots: readonly Bot[];
   readonly canComment: boolean;
   readonly onClose: () => void;
+  /** The item's commands for the owner (H-117), above its tabs. */
+  readonly children?: ReactNode;
 }): ReactElement {
   const { api, projectId } = props;
   const [columns, setColumns] = useState<readonly BoardColumn[]>([]);
@@ -45,6 +47,8 @@ export default function DashboardItem(props: {
       bots={props.bots}
       canComment={props.canComment}
       onClose={props.onClose}
-    />
+    >
+      {props.children}
+    </ItemDrawer>
   );
 }

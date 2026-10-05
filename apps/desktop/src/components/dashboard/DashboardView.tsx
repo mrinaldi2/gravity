@@ -15,6 +15,7 @@ import type { Release } from "../../protocol/releases";
 import ReleaseReview from "../releases/ReleaseReview";
 import { botNamer, useItemTitles } from "../releases/ReleasesView";
 import { useReleaseActions } from "../releases/useReleases";
+import OwnerActionList from "../ownerActions/OwnerActionList";
 import DashboardItem from "./DashboardItem";
 import NeedsYou from "./NeedsYou";
 import { useConfirmRelayed } from "./useConfirmRelayed";
@@ -146,6 +147,14 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             onConfirmRelayed={relayed.confirm}
             onItem={showItem}
           />
+          <OwnerActionList
+            client={client}
+            connected={connected}
+            scope={{ projectId: project.id, waitingOnly: true }}
+            addToast={props.addToast}
+            botName={botName}
+            title="Commands for you to run"
+          />
           <BoardWidget board={dashboard.board} home={dashboard.home} onOpen={openBoard} />
           <ReleasesWidget
             releases={dashboard.releases}
@@ -186,7 +195,15 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
           bots={bots}
           canComment={props.canControl}
           onClose={closeDrawer}
-        />
+        >
+          <OwnerActionList
+            client={client}
+            connected={connected}
+            scope={{ projectId: project.id, itemId: openItem }}
+            addToast={props.addToast}
+            botName={botName}
+          />
+        </DashboardItem>
       ) : null}
     </div>
   );

@@ -17,6 +17,7 @@ import { dispatchPush, emptyHandlers } from "./push";
 import type { ClientRequestBody, FireBody, RequestBody } from "./requests";
 import { isReply, parseServerMessage, replyIs } from "./wire";
 import { CONTRACTS } from "./contracts";
+import { OWNER_ACTIONS_FEATURE } from "./ownerActions";
 import type { BoardEvent } from "./gen/hermes/board/v1/requests_pb";
 
 interface PendingRequest {
@@ -280,8 +281,9 @@ export class DaemonClient implements DaemonApi {
         client: CLIENT_ID,
         // This app shows permission cards, so the daemon may hold a bot's
         // prompt for it instead of leaving it to the terminal; and it renders
-        // terminal cards for what they are, so it may see and answer them.
-        features: ["permission_cards", "terminal_card"],
+        // terminal cards for what they are, so it may see and answer them;
+        // and it shows owner actions (H-117), so it may run them.
+        features: ["permission_cards", "terminal_card", OWNER_ACTIONS_FEATURE],
         contracts: CONTRACTS,
       });
       if (replyIs(reply, "error")) {
