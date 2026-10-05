@@ -13,6 +13,7 @@ mod schema;
 const FILES: &[&str] = &[
     "hermes/board/v1/board.proto",
     "hermes/board/v1/requests.proto",
+    "hermes/board/v1/releases.proto",
     "hermes/wire/v1/envelope.proto",
 ];
 

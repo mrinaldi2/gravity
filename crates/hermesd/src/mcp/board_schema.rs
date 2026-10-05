@@ -24,6 +24,9 @@ pub(super) enum Audience {
     Member,
     Lead,
     Tester,
+    Devops,
+    /// Deploy reports: the tester carrying it out, or DevOps.
+    TesterOrDevops,
 }
 
 pub(super) struct BoardTool {
@@ -34,12 +37,16 @@ pub(super) struct BoardTool {
     pub about: &'static str,
 }
 
-const fn tool(name: &'static str, message: &'static str, audience: Audience) -> BoardTool {
+pub(super) const fn tool(
+    name: &'static str,
+    message: &'static str,
+    audience: Audience,
+) -> BoardTool {
     shared(name, message, audience, "")
 }
 
 /// A tool whose message the WebSocket surface shares, described for bots.
-const fn shared(
+pub(super) const fn shared(
     name: &'static str,
     message: &'static str,
     audience: Audience,
@@ -106,6 +113,10 @@ impl Audience {
             Audience::Member => !roles.is_empty(),
             Audience::Lead => roles.contains(&Role::Lead),
             Audience::Tester => roles.contains(&Role::Tester),
+            Audience::Devops => roles.contains(&Role::Devops),
+            Audience::TesterOrDevops => {
+                roles.contains(&Role::Tester) || roles.contains(&Role::Devops)
+            }
         }
     }
 }
@@ -144,10 +155,14 @@ fn public(schema: &Value) -> Value {
     out
 }
 
+/// The board tools and the release tools, which share the audiences.
+pub(super) fn all_tools() -> impl Iterator<Item = &'static BoardTool> {
+    BOARD_TOOLS.iter().chain(super::releases::RELEASE_TOOLS)
+}
+
 /// The `tools/list` entries for a bot with these roles.
 pub(super) fn board_tool_list(roles: &[Role]) -> Vec<Value> {
-    BOARD_TOOLS
-        .iter()
+    all_tools()
         .filter(|t| t.audience.admits(roles))
         .map(|t| {
             let schema = message_schema(t.message);
@@ -299,12 +314,15 @@ mod tests {
 
     #[test]
     fn every_tool_has_its_message_and_every_enum_resolves() {
-        for tool in BOARD_TOOLS {
+        for tool in all_tools() {
             assert!(schemas().contains_key(tool.message), "{}", tool.message);
         }
         // Panics on an enum with no spellings.
-        let all = board_tool_list(&[Role::Lead, Role::Tester]);
-        assert_eq!(all.len(), BOARD_TOOLS.len());
+        let all = board_tool_list(&[Role::Lead, Role::Tester, Role::Devops]);
+        assert_eq!(
+            all.len(),
+            BOARD_TOOLS.len() + super::super::releases::RELEASE_TOOLS.len()
+        );
         assert!(!json!(all).to_string().contains("project_id"));
     }
 

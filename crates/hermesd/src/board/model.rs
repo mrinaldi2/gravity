@@ -51,6 +51,7 @@ macro_rules! text_enum {
         }
     };
 }
+pub(crate) use text_enum;
 
 text_enum!(
     /// The canonical category a column maps to; guards and metrics key on it.

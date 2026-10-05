@@ -16,6 +16,7 @@ mod decisions;
 mod history;
 mod peers;
 mod permissions;
+mod releases;
 mod workers;
 
 use base::MIGRATION_1;
@@ -28,6 +29,7 @@ use history::{
 };
 use peers::{MIGRATION_14, MIGRATION_15, MIGRATION_16};
 use permissions::{MIGRATION_PERMISSIONS, MIGRATION_PERMISSION_EXTRAS_RELEASE_MAIN};
+use releases::{MIGRATION_RELEASES, MIGRATION_RELEASE_EVENTS};
 use workers::{MIGRATION_18, MIGRATION_19};
 
 pub const MIGRATIONS: &[&str] = &[
@@ -55,6 +57,8 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_BOARD_LINKS,
     MIGRATION_PERMISSIONS,
     MIGRATION_PERMISSION_EXTRAS_RELEASE_MAIN,
+    MIGRATION_RELEASES,
+    MIGRATION_RELEASE_EVENTS,
 ];
 
 #[cfg(test)]

@@ -230,6 +230,7 @@ pub fn withdraw(
 ) -> anyhow::Result<DecisionView> {
     let decision = load(app, decision_id)?;
     may(actor, Action::Withdraw, &decision)?;
+    super::authority::release_review_only(app, decision_id)?;
     if !app.db.try_withdraw(decision_id, reason.trim())? {
         return Err(conflict(format!(
             "decision {decision_id} is already {}",

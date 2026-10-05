@@ -274,6 +274,10 @@ message BoardSnapshot {
   repeated ProjectRole roles = 4;
   // The project's push sequence this snapshot is current with.
   uint64 seq = 5;
+  // Whether this connection may rule on the project's releases: the owner's
+  // own credentials with the approve grant (a board is served only on its
+  // home, where rulings are made). H-020 §6.5.
+  bool can_rule = 6;
 }
 
 message ItemDetail {

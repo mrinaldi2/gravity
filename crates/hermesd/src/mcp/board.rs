@@ -16,7 +16,7 @@ use crate::board::model::{Item, ItemType, Platform, Priority, Role, Unmet};
 use crate::board::moves::{item_move as move_item, item_move_check, MoveRequest, Moved};
 use crate::db::Write;
 
-use super::board_schema::{decode, friendly, BOARD_TOOLS};
+use super::board_schema::{all_tools, decode, friendly};
 use super::caller;
 
 /// The calling bot, in a project that has a board.
@@ -66,7 +66,7 @@ pub(super) fn listed_roles(app: &Arc<AppState>, bot: &bus::Bot) -> anyhow::Resul
 }
 
 pub(super) fn is_board_tool(name: &str) -> bool {
-    BOARD_TOOLS.iter().any(|t| t.name == name)
+    all_tools().any(|t| t.name == name)
 }
 
 /// Run a board tool. Tools a bot's roles don't list are refused here too.
@@ -83,8 +83,7 @@ pub(super) fn call(
             "this project has no board yet; the owner starts it from the Board tab on its home computer"
         )
     })?;
-    let tool = BOARD_TOOLS
-        .iter()
+    let tool = all_tools()
         .find(|t| t.name == name)
         .expect("checked by is_board_tool");
     anyhow::ensure!(
@@ -101,6 +100,9 @@ pub(super) fn call(
         "item_move_check" => check(app, &me, decode("ItemMoveCheck", args, project)?),
         "board_import" => {
             super::board_import::call(app, &me, decode("BoardImport", args, project)?)
+        }
+        release if super::releases::handles(release) => {
+            super::releases::call(app, &me.bot, roles, release, args)
         }
         _ => super::board_edit::call(app, &me, name, args),
     }

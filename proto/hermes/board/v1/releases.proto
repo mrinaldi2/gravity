@@ -1,0 +1,144 @@
+// Release packages and the deploy gate, contract version 1 (H-020 §2, §6).
+//
+// What DevOps and testers send as MCP tools; their schemas are generated
+// from these messages (see requests.proto for the rules). The owner rules on
+// a package over the WebSocket (`release_rule`), never through a bot.
+// Closed values travel as strings: a status, verdict or result a newer daemon
+// adds reads as text on an older client rather than failing to decode.
+syntax = "proto3";
+
+package hermes.board.v1;
+
+// The project's release packages, newest first.
+message ReleaseList {
+  string project_id = 1;
+}
+
+// One release package in full: items with verdicts, builds, deployments.
+message ReleaseGet {
+  string release_id = 1;
+}
+
+// DevOps: start a package from items in Verify.
+message ReleaseCreate {
+  string project_id = 1;
+  // Unique in the project, e.g. "R-2026-W41" or "0.16.0".
+  string name = 2;
+  // The version the owner sees, e.g. "0.16.0".
+  optional string display_version = 3;
+  // Item ids, e.g. "H-017"; each must be in Verify and in no other open package.
+  repeated string items = 4;
+  // Markdown, compiled from the items' change notes.
+  optional string changelog = 5;
+  // The package this one succeeds after a mixed ruling or a failed deploy
+  // (H-020 §6.1): its shipped items may come along. It is superseded when
+  // this one is submitted.
+  optional string from = 6;
+}
+
+// One platform's steps for trying a package, shown to the owner.
+message HowToTest {
+  // The item the steps are for, when they are for one.
+  optional string item_id = 1;
+  // e.g. "desktop-mac", "ios".
+  string platform = 2;
+  repeated string steps = 3;
+}
+
+// The whole how-to-test list, where "unset" and "none" must differ.
+message HowToTestList {
+  repeated HowToTest values = 1;
+}
+
+// DevOps: fill in what the owner reads, while the package is assembling.
+message ReleaseUpdate {
+  string release_id = 1;
+  optional string display_version = 2;
+  // Markdown, compiled from the items' change notes.
+  optional string changelog = 3;
+  // Replaces the list.
+  HowToTestList how_to_test = 4;
+}
+
+// Tester: your machine's result for a package, against one of its builds for
+// your machine's platform. Submit needs a pass from every required machine on
+// the current builds.
+message ReleaseTest {
+  string release_id = 1;
+  string machine = 2;
+  // The sha256 of the build you tested.
+  string build_sha256 = 3;
+  // "pass", "fail" or "blocked".
+  string result = 4;
+  optional uint32 checks_passed = 5;
+  optional uint32 checks_total = 6;
+  optional string log_artifact = 7;
+}
+
+// DevOps: pause a rollout; testers holding its deploy tasks are told not to install.
+message ReleasePause {
+  string release_id = 1;
+  // Why; the testers read it.
+  string reason = 2;
+}
+
+// DevOps: resume a paused rollout.
+message ReleaseResume {
+  string release_id = 1;
+}
+
+// DevOps: call off a package that hasn't been submitted. It is removed and an
+// event records it. A predecessor's shipped items stay in Owner testing for
+// that package, which can then take a new successor; items from Verify are free.
+message ReleaseCancel {
+  string release_id = 1;
+  // Why; kept in the event.
+  optional string reason = 2;
+}
+
+// DevOps: add or replace one platform's build while the package is assembling.
+message ReleaseAttachBuild {
+  string release_id = 1;
+  // e.g. "desktop-mac", "desktop-win", "ios", "daemon".
+  string platform = 2;
+  string version = 3;
+  // Where the build is: a local path or an artifact path.
+  string artifact = 4;
+  // The build's sha256, 64 lowercase hex digits; installs are checked against it.
+  string sha256 = 5;
+  optional string url = 6;
+  optional string install_url = 7;
+}
+
+// DevOps: freeze the package, move its items to Owner testing and ask the owner.
+message ReleaseSubmit {
+  string release_id = 1;
+}
+
+// DevOps: send an approved package to a machine; opens a task to its tester.
+message ReleaseDeploy {
+  string release_id = 1;
+  string machine = 2;
+}
+
+// DevOps: take a package back off a machine; opens a task to its tester.
+message ReleaseRollback {
+  string release_id = 1;
+  string machine = 2;
+}
+
+// Tester: the verified builds of the package DevOps tasked you to install.
+message InstallRelease {
+  string release_id = 1;
+}
+
+// Tester (or DevOps): how a deploy or rollback on a machine went.
+message DeployConfirm {
+  string release_id = 1;
+  string machine = 2;
+  // "ok", "failed", or "rolled_back" for a rollback.
+  string result = 3;
+  // "pass" or "fail".
+  optional string smoke = 4;
+  optional string log_artifact = 5;
+}

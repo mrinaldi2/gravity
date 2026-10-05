@@ -16,6 +16,7 @@ use crate::db::Actor;
 use crate::events::Push;
 
 use super::authority::is_relayed;
+use super::authority::release_review_only;
 use super::publish::notify_phase;
 use super::service::{current_edit, load, owner_only, pushed};
 use super::validate::*;
@@ -32,6 +33,7 @@ pub fn answer(
     reason: Option<&str>,
 ) -> anyhow::Result<DecisionView> {
     owner_only(actor, "answer a decision")?;
+    release_review_only(app, decision_id)?;
     let decision = load(app, decision_id)?;
     let text = text.trim();
     if text.is_empty() {
@@ -66,6 +68,7 @@ pub fn unanswer(
     decision_id: &str,
 ) -> anyhow::Result<DecisionView> {
     owner_only(actor, "discard a draft ruling")?;
+    release_review_only(app, decision_id)?;
     if !app.db.try_unanswer(decision_id)? {
         return Err(conflict("that decision has no draft ruling to discard"));
     }
@@ -84,6 +87,7 @@ pub fn hold(
     comment: Option<&str>,
 ) -> anyhow::Result<DecisionView> {
     owner_only(actor, "hold a decision")?;
+    release_review_only(app, decision_id)?;
     let decision = load(app, decision_id)?;
     let until = checked_deadline(until)?;
     if !app.db.try_hold(decision_id, until)? {
@@ -115,6 +119,7 @@ pub fn resume(
     decision_id: &str,
 ) -> anyhow::Result<DecisionView> {
     owner_only(actor, "resume a decision")?;
+    release_review_only(app, decision_id)?;
     if !app.db.try_resume(decision_id)? {
         return Err(conflict("that decision is not held"));
     }
@@ -138,6 +143,7 @@ pub fn confirm(
     decision_id: &str,
 ) -> anyhow::Result<DecisionView> {
     owner_only(actor, "confirm a relayed ruling")?;
+    release_review_only(app, decision_id)?;
     let decision = load(app, decision_id)?;
     if !is_relayed(&decision) {
         return Err(conflict(
@@ -165,6 +171,7 @@ pub fn reopen(
     body: Option<&str>,
 ) -> anyhow::Result<DecisionView> {
     owner_only(actor, "reopen a decision")?;
+    release_review_only(app, decision_id)?;
     let old = load(app, decision_id)?;
     if old.state != DecisionState::Settled {
         return Err(conflict("only a settled decision can be reopened"));
@@ -200,6 +207,7 @@ pub fn reopen(
 /// this one is confirmed in the client for that reason.
 pub fn delete(app: &Arc<AppState>, actor: &Actor<'_>, decision_id: &str) -> anyhow::Result<()> {
     owner_only(actor, "delete a decision")?;
+    release_review_only(app, decision_id)?;
     if !app.db.delete_decision(decision_id)? {
         return Err(not_found("no decision with that id"));
     }
@@ -245,6 +253,7 @@ pub fn update(
     patch: &Patch<'_>,
 ) -> anyhow::Result<DecisionView> {
     owner_only(actor, "edit a decision")?;
+    release_review_only(app, decision_id)?;
     let decision = load(app, decision_id)?;
     let mut edit = current_edit(&decision);
     if let Some(title) = patch.title {

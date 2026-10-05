@@ -99,8 +99,8 @@ describe("ProjectWindow", () => {
 
 describe("ComingSoon", () => {
   it("says what the tab will hold", () => {
-    render(<ComingSoon tab="releases" />);
-    expect(screen.getByRole("heading", { name: "Releases is coming soon" })).toBeInTheDocument();
-    expect(screen.getByText(/Release packages for you to test and approve/)).toBeInTheDocument();
+    render(<ComingSoon tab="meetings" />);
+    expect(screen.getByRole("heading", { name: "Meetings is coming soon" })).toBeInTheDocument();
+    expect(screen.getByText(/Stand-ups, demos and retros/)).toBeInTheDocument();
   });
 });

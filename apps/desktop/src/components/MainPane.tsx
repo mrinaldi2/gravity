@@ -16,6 +16,7 @@ import ConversationsView from "./conversations/ConversationsView";
 import ComingSoon, { isUpcomingTab } from "./project/ComingSoon";
 import ProjectWindow from "./project/ProjectWindow";
 import ProjectView from "./ProjectView";
+import ReleasesView from "./releases/ReleasesView";
 import NewProjectForm from "./sidebar/NewProjectForm";
 
 interface MainPaneProps {
@@ -95,6 +96,17 @@ function ProjectPane(props: ProjectPaneProps): ReactElement {
   let content: ReactElement;
   if (isUpcomingTab(tab)) {
     content = <ComingSoon tab={tab} />;
+  } else if (tab === "releases") {
+    content = (
+      <ReleasesView
+        client={client}
+        project={project}
+        bots={bots}
+        connected={connected}
+        canControl={canControl}
+        addToast={props.addToast}
+      />
+    );
   } else if (tab === "board") {
     content = (
       <BoardView

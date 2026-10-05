@@ -213,6 +213,11 @@ Codes: `auth_failed`, `unsupported_version`, `not_found`, `invalid_request`,
 | `update_decision` | `decision_id` plus any of `title, body, options, recommendation, priority, deadline_at, ruling_option, ruling_text, ruling_reason, renotify?` | `decision` |
 | `delete_decision` | `decision_id` | `ok` |
 | `publish_decisions` | `items: [{decision_id, notify_bot_ids?, ruling_option?, ruling_text?, ruling_reason?}]` | `publish_result` |
+| `list_releases` | `project_id` | `releases` (newest first), each with `can_rule` and `rule_on` |
+| `get_release` | `release_id` | `release`, with `can_rule` and `rule_on` |
+| `release_rule` | `release_id, verdicts: [{item_id, verdict: ship\|hold\|rework, note?}], expected_version` | `release`. Needs `approve`, on the board's home daemon; see [Releases](#releases-and-the-deploy-gate) |
+| `release_hold` / `release_unhold` | `release_id, note?, remind_at?` (RFC 3339) / `release_id` | `release`. Needs `approve` |
+| `release_pause` / `release_resume` | `release_id, reason` / `release_id` | `release` |
 | `set_decision_tags` | `decision_id, tags: [name]` | `decision` |
 | `list_tags` | – | `tags` |
 | `upsert_tag` | `name, description?, color?` | `tag` |
@@ -590,3 +595,46 @@ history is their call, and the tool error says so. `rename_tag` keeps every
 link, because decisions reference the tag id rather than its name. `delete_tag`
 removes the tag from every decision that carried it, leaving the decisions
 themselves untouched, and is the owner's alone — bots have neither request.
+
+## Releases and the deploy gate
+
+DevOps assembles a release package over MCP (`release_create`,
+`release_attach_build`, `release_submit`). Submitting checks every item as the
+Verify → Owner testing move would, moves them there, freezes the package (a
+hash of its items, builds and test results) and raises a decision for the
+owner. That decision is a release decision: `release.decision_id` names it.
+
+Only `release_rule` settles a release decision. `answer_decision`,
+`publish_decisions`, `hold_decision`, the other ruling requests and a bot's
+`withdraw_decision` are refused on it, and a bot can't call `release_rule` at
+all, so no relayed release ruling exists. The ruling checks the frozen hash
+and the version the owner reviewed, then applies the verdicts:
+
+| Verdicts | Release | Items |
+|---|---|---|
+| all `ship` | `approved` | → Deploying |
+| some `ship` | `repackaging` | ship stay in Owner testing; hold → Ready; rework → Doing |
+| all `hold` | `held`; the decision is held, not settled | stay |
+| no `ship` | `rejected` | hold → Ready; rework → Doing |
+
+`release_deploy` (DevOps) re-checks the gate every time: an approved package,
+a settled ruling answered by `owner` or `device:*` and not relayed, an
+unchanged hash, and only shipped items. It opens a task to the machine's
+tester (the bot holding the `tester` role for that machine), who fetches the
+verified builds with `install_release` and reports with `deploy_confirm`.
+When every required machine reports `ok`, the items move to Done and the
+release to `deployed`. A failure moves them back to Verify, sets
+`partially_deployed` and opens a rollback task to DevOps; `release_rollback`
+runs through the tester the same way.
+
+**Lifecycle (H-020 §6).**
+
+- **Successor:** after a mixed ruling (`repackaging`) or a failed deploy (`partially_deployed`), DevOps calls `release_create` with `from`. The predecessor's shipped items join straight from Owner testing, and the predecessor becomes `superseded` when the successor is **submitted**. The successor is a new build, so it gets a new ruling. A failed deploy clears its items' `release_id`.
+- **Cancel:** `release_cancel {release_id, reason?}` (DevOps) removes a package that is still `assembling` or `built`; anything submitted or later is refused. Its items were never moved: a predecessor's shipped items stay in Owner testing for the predecessor, which can take a new successor, and items from Verify are free again. A `cancelled` event keeps who, why and what it held, and shows in the predecessor's `events`.
+- **Testing:**
+  - DevOps fills `changelog` and `how_to_test` (`[{item_id?, platform, steps}]`) with `release_update` while the package is assembling.
+  - Each machine's tester records a result against one of the builds' sha256 with `release_test`. The build must be for that machine's platform: one whose `required_machines` lists it, or with none configured for it, the items' platforms (a build platform `desktop-mac` is a `desktop` build).
+  - `release_submit` is refused until every required machine has passed the current builds. Required machines are the board's `required_machines` for the items' platforms, or with none configured, every machine with a tester; deploys finish on the same set. With neither, submit is refused: an empty set is never a pass.
+- **Hold:** `release_hold` keeps the decision open and holds it (`remind_at` becomes its `held_until`). When the reminder comes due, the decision sweep resumes it and the package goes back to `awaiting_owner`. `release_unhold` does the same on request.
+- **Pause:** `release_pause` (owner, or DevOps over MCP) pauses a rollout in progress. Deploys and installs are refused with the reason, and every tester holding an open deploy task gets a note. `release_resume` returns it to `deploying`.
+- **Who may rule:** `can_rule` says whether this connection may rule (the approve grant, on the board's home). When it can't, `rule_on` names the home computer. `BoardSnapshot.can_rule` carries the same flag.
