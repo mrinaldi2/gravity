@@ -220,6 +220,26 @@ impl Db {
         Ok(Some(ahead + 1))
     }
 
+    /// The board item a spawn works on, linked to its task once it has one.
+    pub fn set_worker_item(&self, worker_id: &str, item_id: &str) -> anyhow::Result<()> {
+        self.lock().execute(
+            "INSERT OR REPLACE INTO worker_item(worker_id, item_id) VALUES (?1, ?2)",
+            params![worker_id, item_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn worker_item(&self, worker_id: &str) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .lock()
+            .query_row(
+                "SELECT item_id FROM worker_item WHERE worker_id = ?1",
+                params![worker_id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
     /// Move a queued spawn to running, dropping why it waited. False when it
     /// already left the queue, which is what keeps two dispatches from
     /// starting it twice.

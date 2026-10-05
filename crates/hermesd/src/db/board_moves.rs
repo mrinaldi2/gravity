@@ -88,6 +88,26 @@ impl BoardTx<'_> {
         Ok(rows)
     }
 
+    /// The bots holding an open task linked to the item that the board's
+    /// lead or the owner (no sending bot) gave them (ARCH-R30 M2). A task
+    /// from anyone else, or one already done, grants nothing.
+    pub fn task_holders(&self, item_id: &str) -> anyhow::Result<Vec<String>> {
+        let rows = self
+            .conn
+            .prepare(
+                "SELECT DISTINCT t.to_bot_id FROM item_link l
+                 JOIN item i ON i.id = l.item_id
+                 JOIN task t ON t.id = l.ref
+                 WHERE l.item_id = ?1 AND l.kind = 'task' AND t.state = 'open'
+                   AND (t.from_bot_id IS NULL OR EXISTS (
+                       SELECT 1 FROM project_role r WHERE r.project_id = i.project_id
+                         AND r.role = 'lead' AND r.bot_id = t.from_bot_id))",
+            )?
+            .query_map(params![item_id], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        Ok(rows)
+    }
+
     /// Everything the guards need about `item` besides the item.
     pub fn move_context(&self, project_id: &str, item: &Item) -> anyhow::Result<Context> {
         let settings = settings_in(self.conn, project_id)?
@@ -115,6 +135,7 @@ impl BoardTx<'_> {
                     .map(|r| r.display_version.unwrap_or(r.name)),
                 None => None,
             },
+            task_holders: self.task_holders(&item.id)?,
         })
     }
 

@@ -243,6 +243,20 @@ impl Db {
         Ok(removed > 0)
     }
 
+    /// Sets or clears a column's WIP limit. False when there is no such column.
+    pub fn set_column_limit(
+        &self,
+        project_id: &str,
+        key: &str,
+        limit: Option<u32>,
+    ) -> anyhow::Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE board_column SET wip_limit = ?3 WHERE project_id = ?1 AND key = ?2",
+            params![project_id, key, limit],
+        )?;
+        Ok(changed == 1)
+    }
+
     /// The latest version of every template of one kind.
     pub fn templates(&self, project_id: &str, kind: TemplateKind) -> anyhow::Result<Vec<Template>> {
         let conn = self.lock();

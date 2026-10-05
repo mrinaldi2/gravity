@@ -18,8 +18,11 @@ use super::Conn;
 use crate::actor::Actor;
 use crate::board::feed::{card_after_commit, BoardChange, BoardFeed, Change, ChangeKind};
 use crate::board::moves::{self, MoveRequest, Moved};
+use crate::board::team;
 
 mod enable;
+mod forward;
+mod mirrored;
 mod reads;
 
 /// A request refused before the board service answered it: no grant, an
@@ -62,6 +65,17 @@ fn lock(projects: &Mutex<HashSet<String>>) -> MutexGuard<'_, HashSet<String>> {
     projects.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// The board as its home serves it, for a peer that mirrors it (B9).
+/// `None` when the project has no board; refused when it lives elsewhere.
+pub(crate) use forward::peer_read;
+
+pub(crate) fn home_snapshot(
+    app: &crate::app::AppState,
+    project_id: &str,
+) -> anyhow::Result<Option<c::BoardSnapshot>> {
+    reads::snapshot(app, project_id).map_err(|r| crate::peer::refuse(r.code, r.message))
+}
+
 /// What answering a request needs: the response, or none when the handler
 /// already sent it itself (`board_watch` orders it before its pushes).
 type Reply = Result<Option<Response>, Refusal>;
@@ -98,7 +112,9 @@ impl Conn {
             | Request::BoardWatch(_)
             | Request::BoardUnwatch(_) => Capability::Read,
             // Choosing the board's home is the owner's call (H-037).
-            Request::BoardEnable(_) => Capability::Approve,
+            Request::BoardEnable(_) | Request::ColumnSetLimit(_) | Request::RoleSet(_) => {
+                Capability::Approve
+            }
             _ => Capability::Control,
         };
         if !self.caps.contains(&cap) {
@@ -110,9 +126,22 @@ impl Conn {
                 ),
             ));
         }
+        if let Some((project, home)) = self.mirrored_item(&request)? {
+            self.forward_read(req_id, project, home, request);
+            return Ok(None);
+        }
         Ok(Some(match request {
             Request::BoardGet(r) => Response::Board(self.snapshot(&r.project_id)?),
             Request::BoardEnable(r) => return self.board_enable(req_id, r.project_id),
+            Request::ColumnSetLimit(r) => {
+                team::set_column_limit(&self.app, &r.project_id, &r.column_key, r.wip_limit)
+                    .map_err(invalid)?;
+                Response::Board(self.snapshot(&r.project_id)?)
+            }
+            Request::RoleSet(r) => {
+                team::set_role(&self.app, &r.project_id, &r, true).map_err(invalid)?;
+                Response::Board(self.snapshot(&r.project_id)?)
+            }
             Request::BoardWatch(r) => {
                 self.board_watch(req_id, &r.project_id)?;
                 return Ok(None);
@@ -125,7 +154,10 @@ impl Conn {
             }
             Request::ItemGet(r) => Response::Item(self.item_get(&r.id)?),
             Request::ItemHistory(r) => Response::History(self.item_history(&r)?),
-            Request::ItemQuery(r) => Response::Items(self.item_query(&r)?),
+            Request::ItemQuery(r) => match self.mirrored_query(&r) {
+                Some(items) => Response::Items(items?),
+                None => Response::Items(self.item_query(&r)?),
+            },
             Request::ItemMoveCheck(r) => Response::MoveCheck(self.item_move_check(&r.id)?),
             Request::ItemMove(r) => Response::Moved(self.item_move(&r)?),
             // Bots make these edits over MCP (B5); the owner's item drawer
@@ -295,6 +327,10 @@ fn event(event: c::BoardEvent) -> c::BoardPush {
     c::BoardPush {
         push: Some(c::board_push::Push::BoardEvent(event)),
     }
+}
+
+fn invalid(e: anyhow::Error) -> Refusal {
+    refuse("invalid_request", e.to_string())
 }
 
 fn not_found(id: &str) -> Refusal {

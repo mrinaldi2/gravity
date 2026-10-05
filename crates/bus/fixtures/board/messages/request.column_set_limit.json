@@ -1,0 +1,10 @@
+{
+  "reqId": "20",
+  "boardRequest": {
+    "columnSetLimit": {
+      "projectId": "p1",
+      "columnKey": "review",
+      "wipLimit": 4
+    }
+  }
+}

@@ -23,6 +23,7 @@ pub mod peers;
 pub mod releases;
 pub mod repo;
 pub mod tasks;
+pub mod team;
 
 pub struct TestDaemon {
     pub app: Arc<AppState>,

@@ -51,10 +51,16 @@ impl Who {
         (!named.is_empty()).then(|| named.iter().any(|id| self.is(Some(id))))
     }
 
-    /// A reviewer named on the item, or any reviewer when none is named.
-    fn reviews(&self, item: &Item) -> bool {
-        self.named(item, PersonRole::Reviewer)
-            .unwrap_or_else(|| self.has(Role::ReviewerArch) || self.has(Role::ReviewerUx))
+    /// A reviewer named on the item, or any reviewer when none is named. A
+    /// bot tasked through the item (a linked task) is named too, its
+    /// assignee aside (H-099).
+    fn reviews(&self, item: &Item, ctx: &Context) -> bool {
+        let tasked = matches!(self, Who::Bot { id, .. } if ctx.task_holders.contains(id))
+            && !self.is(item.assignee.as_deref());
+        tasked
+            || self
+                .named(item, PersonRole::Reviewer)
+                .unwrap_or_else(|| self.has(Role::ReviewerArch) || self.has(Role::ReviewerUx))
     }
 
     fn verifies(&self, item: &Item) -> bool {
@@ -92,6 +98,9 @@ pub struct Context {
     pub load: BTreeMap<String, ColumnLoad>,
     /// The version of the open release package the item is in, if any.
     pub open_package: Option<String>,
+    /// The bots holding an open task linked to the item, from the lead or
+    /// the owner.
+    pub task_holders: Vec<String>,
 }
 
 impl Context {
@@ -218,7 +227,7 @@ pub fn evaluate(item: &Item, mv: &Move<'_>, who: &Who, ctx: &Context) -> Vec<Unm
         )];
     }
     let mut out = Vec::new();
-    if let Some(who_may) = refused(rule, item, who) {
+    if let Some(who_may) = refused(rule, item, who, ctx) {
         out.push(unmet(
             "role.not_allowed",
             format!("Only {who_may} can move it to {}.", mv.to.name),
@@ -233,7 +242,7 @@ pub fn evaluate(item: &Item, mv: &Move<'_>, who: &Who, ctx: &Context) -> Vec<Unm
 }
 
 /// Who may make the move, when `who` may not.
-fn refused(rule: Rule, item: &Item, who: &Who) -> Option<&'static str> {
+fn refused(rule: Rule, item: &Item, who: &Who, ctx: &Context) -> Option<&'static str> {
     if *who == Who::Owner {
         return None;
     }
@@ -245,11 +254,17 @@ fn refused(rule: Rule, item: &Item, who: &Who) -> Option<&'static str> {
             "the lead, or the assignee the lead picked",
         ),
         Rule::Submit => (assignee, "the assignee"),
-        Rule::Approve => (who.reviews(item), "a reviewer"),
-        Rule::Rework => (who.leads() || who.reviews(item), "a reviewer or the lead"),
+        Rule::Approve => (who.reviews(item, ctx), "a reviewer"),
+        Rule::Rework => (
+            who.leads() || who.reviews(item, ctx),
+            "a reviewer or the lead",
+        ),
         Rule::Package => (who.has(Role::Devops), "DevOps"),
         Rule::Reject => (who.leads() || who.verifies(item), "a tester or the lead"),
-        Rule::Finish => (assignee || who.reviews(item), "the assignee or a reviewer"),
+        Rule::Finish => (
+            assignee || who.reviews(item, ctx),
+            "the assignee or a reviewer",
+        ),
         Rule::Release | Rule::Unlisted => (false, "the owner"),
     };
     (!ok).then_some(who_may)

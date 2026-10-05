@@ -73,7 +73,7 @@ async fn a_new_board_seeds_roles_from_bot_names() {
 }
 
 #[tokio::test]
-async fn a_bot_without_a_role_lists_only_the_reads() {
+async fn a_bot_without_a_role_lists_the_reads_and_its_own_items_tools() {
     let (pair, mut bots) = project_with_bots(&["Desktop Dev", "Writer"]).await;
     let db = &pair.d.app.db;
     let project_id = db.get_bot(&pair.ids[0]).unwrap().unwrap().project_id;
@@ -86,7 +86,20 @@ async fn a_bot_without_a_role_lists_only_the_reads() {
     let mut reads = tool_names(&writer.tools().await);
     reads.retain(|n| n.starts_with("board_") || n.starts_with("item_"));
     reads.sort();
-    assert_eq!(reads, ["board_get", "item_get", "item_query"]);
+    // The reads, and what it may do on an item it works on or was tasked
+    // through (H-099); every other tool needs a role.
+    assert_eq!(
+        reads,
+        [
+            "board_get",
+            "item_comment",
+            "item_get",
+            "item_link",
+            "item_move",
+            "item_move_check",
+            "item_query"
+        ]
+    );
     let board = writer.call("board_get", json!({})).await;
     assert!(board["columns"].is_array(), "{board}");
     let raw = writer

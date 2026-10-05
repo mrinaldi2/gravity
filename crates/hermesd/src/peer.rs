@@ -6,6 +6,9 @@
 //! the sender were one of its own. See `docs/peer-bots.md`.
 
 mod artifacts;
+pub mod board;
+mod board_home;
+mod board_ids;
 pub mod browser;
 pub mod chat;
 pub mod cli;
@@ -22,6 +25,7 @@ mod socket;
 pub mod term;
 mod term_mirror;
 
+pub use board_home::spawn_relay as spawn_board_relay;
 pub use forward::{forward, ForwardError};
 pub use hub::{PeerError, PeerHub};
 pub use socket::{peer_handler, spawn_dialer, spawn_dialers};

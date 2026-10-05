@@ -43,7 +43,8 @@ pub const COLUMNS: &[DefaultColumn] = &[
         "ready",
         "Ready",
         ColumnCategory::Ready,
-        Some(10),
+        // A queue, not work in progress (H-099).
+        None,
         WipScope::Column,
     ),
     column(
@@ -180,7 +181,8 @@ pub fn guess_role(bot_name: &str) -> Option<Role> {
         "team lead" => Some(Role::Lead),
         "scrum master" => Some(Role::Coach),
         "devops" => Some(Role::Devops),
-        "architect" => Some(Role::ReviewerArch),
+        // Context Engineer reviews security work (H-099).
+        "architect" | "context engineer" => Some(Role::ReviewerArch),
         "ux designer" => Some(Role::ReviewerUx),
         "desktop dev" | "ios dev" => Some(Role::Dev),
         _ if name.starts_with("tester") => Some(Role::Tester),
@@ -222,7 +224,8 @@ mod tests {
         assert_eq!(guess_role("Tester Win"), Some(Role::Tester));
         assert_eq!(guess_role("Desktop Dev"), Some(Role::Dev));
         assert_eq!(guess_role("iOS Dev"), Some(Role::Dev));
-        assert_eq!(guess_role("Context Engineer"), None);
+        // Context Engineer reviews security work (H-099).
+        assert_eq!(guess_role("Context Engineer"), Some(Role::ReviewerArch));
         assert_eq!(guess_role("Lead Writer"), None);
         assert_eq!(guess_role("Writer"), None);
         assert_eq!(seed_role("Writer", true), Some(Role::Lead));

@@ -42,6 +42,7 @@ mod board_tx;
 mod bot_runtime;
 mod bots;
 mod conversations;
+pub mod dashboard;
 mod decision_threads;
 mod decisions;
 mod decisions_edit;

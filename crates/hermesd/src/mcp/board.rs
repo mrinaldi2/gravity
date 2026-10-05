@@ -16,7 +16,7 @@ use crate::board::model::{Item, ItemType, Platform, Priority, Role, Unmet};
 use crate::board::moves::{item_move as move_item, item_move_check, MoveRequest, Moved};
 use crate::db::Write;
 
-use super::board_schema::{all_tools, decode, friendly};
+use super::board_schema::{all_tools, decode, friendly, OWN_ITEM_TOOLS};
 use super::caller;
 
 /// The calling bot, in a project that has a board.
@@ -87,8 +87,10 @@ pub(super) fn call(
         .find(|t| t.name == name)
         .expect("checked by is_board_tool");
     anyhow::ensure!(
-        tool.audience.admits(&roles),
-        "{name} needs a board role you don't have; ask the lead"
+        tool.audience.admits(&roles)
+            || (OWN_ITEM_TOOLS.contains(&name) && works_on(app, &bot, args)?),
+        "{name} needs a board role you don't have, or an item assigned to you or a \
+         task linked to it; ask the lead"
     );
     let me = Me { bot };
     let project = me.bot.project_id.as_str();
@@ -98,14 +100,40 @@ pub(super) fn call(
         "item_query" => item_query(app, &me, decode("ItemQuery", args, project)?),
         "item_move" => item_move(app, &me, decode("ItemMove", args, project)?),
         "item_move_check" => check(app, &me, decode("ItemMoveCheck", args, project)?),
-        "board_import" => {
-            super::board_import::call(app, &me, decode("BoardImport", args, project)?)
+        "role_set" => {
+            let req: c::RoleSet = decode("RoleSet", args, project)?;
+            crate::board::team::set_role(app, project, &req, false)?;
+            let roles = app.db.project_roles(project)?;
+            Ok(json!({ "roles": out(model_list_roles(roles))? }))
         }
         release if super::releases::handles(release) => {
             super::releases::call(app, &me.bot, roles, release, args)
         }
+        "board_import" => {
+            super::board_import::call(app, &me, decode("BoardImport", args, project)?)
+        }
         _ => super::board_edit::call(app, &me, name, args),
     }
+}
+
+/// The item named in `args` is the bot's to work on: assigned to it, or
+/// linked to a task it holds.
+fn works_on(app: &Arc<AppState>, bot: &bus::Bot, args: &Value) -> anyhow::Result<bool> {
+    let Some(id) = args.get("id").and_then(Value::as_str) else {
+        return Ok(false);
+    };
+    if app.db.item_project(id)?.as_deref() != Some(bot.project_id.as_str()) {
+        return Ok(false);
+    }
+    let assigned = app
+        .db
+        .get_item(id)?
+        .is_some_and(|item| item.assignee.as_deref() == Some(bot.id.as_str()));
+    Ok(assigned || app.db.board_read(|t| t.task_holders(id))?.contains(&bot.id))
+}
+
+fn model_list_roles(roles: Vec<crate::board::model::ProjectRole>) -> Vec<c::ProjectRole> {
+    roles.into_iter().map(Into::into).collect()
 }
 
 /// Contract output, with short enum names.
