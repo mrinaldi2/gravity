@@ -111,6 +111,10 @@ async fn main() -> anyhow::Result<()> {
             println!("restored into {}", cfg.home.display());
             return Ok(());
         }
+        Some("board") => {
+            hermesd::board::import::cli::run(&cfg, &args[1..]).await?;
+            return Ok(());
+        }
         Some("peer") => {
             hermesd::peer::cli::run(&cfg, &args[1..]).await?;
             return Ok(());

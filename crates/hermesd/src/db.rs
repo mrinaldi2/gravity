@@ -9,6 +9,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 pub use crate::actor::Actor;
 pub use board_edit::{ItemEdit, MoveTo};
+pub use board_import::{Created, ImportReport, Warned};
 pub use board_items::{NewItem, Write};
 pub use board_reads::BoardSnapshot;
 pub use board_tx::BoardTx;
@@ -25,6 +26,9 @@ pub use workers::NewWorker;
 pub mod agent_talk;
 mod board;
 mod board_edit;
+mod board_import;
+#[cfg(test)]
+mod board_import_tests;
 mod board_items;
 mod board_links;
 mod board_moves;

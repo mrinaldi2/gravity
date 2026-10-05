@@ -9,6 +9,10 @@ use crate::db::{BoardTx, Db, MoveTo, Write};
 use super::guards::{self, unmet, Move, Rule, Who};
 use super::model::{BoardColumn, Item, Unmet};
 
+/// The note on the move of an item the owner closed out of Verify with no
+/// release package.
+pub const CLOSED_WITHOUT_RELEASE: &str = "closed by the owner without a release";
+
 pub struct MoveRequest<'a> {
     pub id: &'a str,
     pub to: &'a str,
@@ -84,7 +88,8 @@ pub fn item_move(db: &Db, req: &MoveRequest<'_>, actor: &Actor<'_>) -> anyhow::R
         }
         let rule = guards::rule(item.category, to.category);
         let over = guards::over_limit(&item, to, &ctx).is_some() && who != Who::Daemon;
-        let note = note(rule, &mv, over);
+        let escape = guards::closes_without_release(&item, &mv, &who, &ctx);
+        let note = note(rule, &mv, over, escape);
         let first = guards::is_return(rule);
         Ok(
             match t.move_item(
@@ -105,10 +110,14 @@ pub fn item_move(db: &Db, req: &MoveRequest<'_>, actor: &Actor<'_>) -> anyhow::R
     })
 }
 
-/// What the move's history event says: the reason, the review verdict and
-/// any WIP override, automatic for returned work (H-017 rev 2.1 §1.3).
-fn note(rule: Rule, mv: &Move<'_>, over: bool) -> Option<String> {
+/// What the move's history event says: the reason, the review verdict, any
+/// WIP override (automatic for returned work, H-017 rev 2.1 §1.3) and an
+/// owner's close without a release (ARCH-R22 F1).
+fn note(rule: Rule, mv: &Move<'_>, over: bool, escape: bool) -> Option<String> {
     let mut parts = Vec::new();
+    if escape {
+        parts.push(CLOSED_WITHOUT_RELEASE.to_string());
+    }
     if let Some(reason) = mv.reason.map(str::trim).filter(|r| !r.is_empty()) {
         parts.push(reason.to_string());
     }

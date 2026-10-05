@@ -104,6 +104,7 @@ pub(super) const BOARD_TOOLS: &[BoardTool] = &[
     tool("item_rank", "ItemRank", Audience::Lead),
     tool("role_set", "RoleSet", Audience::Lead),
     tool("item_check_ac", "ItemCheckAc", Audience::Tester),
+    tool("board_import", "BoardImport", Audience::Lead),
 ];
 
 impl Audience {

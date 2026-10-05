@@ -281,6 +281,16 @@ message ItemCheckAc {
   optional string machine = 5;
 }
 
+// Lead: import the markdown backlog into the board once (B6). Rows keep
+// their H-ids; a re-run skips what is already there. Only on the home.
+message BoardImport {
+  string project_id = 1;
+  // In the project's artifacts; left out, backlog.md.
+  optional string path = 2;
+  // Report what it would create, and create nothing.
+  optional bool dry_run = 3;
+}
+
 // --- Responses --------------------------------------------------------------
 
 message BoardSnapshot {

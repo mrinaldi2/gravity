@@ -23,6 +23,7 @@ mod admin;
 mod binary;
 mod board;
 pub(crate) use board::{home_snapshot, peer_read};
+mod board_import;
 mod browser;
 mod chat;
 mod commands;

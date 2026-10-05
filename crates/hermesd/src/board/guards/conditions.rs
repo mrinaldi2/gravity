@@ -71,25 +71,39 @@ pub(super) fn conditions(
         Rule::Approve => independent_review(item, who, ctx, out),
         Rule::Package => ready_to_package(item, ctx, out),
         Rule::Finish => {
-            let chore_without_code =
-                item.item_type == ItemType::Chore && !ctx.has_link(&code_links);
-            if item.item_type != ItemType::Spike && !chore_without_code {
-                out.push(unmet(
-                    "done.flow",
-                    "Only spikes and chores without code skip the release.",
-                    Some("Send it on to Verify."),
-                ));
-            }
-            if !ctx.has_link(&[LinkKind::Artifact]) {
-                out.push(unmet(
-                    "done.outcome",
-                    "No outcome artifact is linked.",
-                    Some("Link the outcome."),
-                ));
+            // Until releases exist (B7), the owner closes released-by-hand
+            // work out of Verify with a reason (ARCH-R22 F1).
+            if super::closes_without_release(item, mv, who, ctx) {
+                need_reason("It skips the release; say why it is done.");
+            } else {
+                out.extend(finish(item, ctx));
             }
         }
         Rule::Release => {}
     }
+}
+
+/// Doing/Review/Verify → Done: a spike, or a chore without code, with its
+/// outcome linked.
+pub(super) fn finish(item: &Item, ctx: &Context) -> Vec<Unmet> {
+    let mut out = Vec::new();
+    let chore_without_code =
+        item.item_type == ItemType::Chore && !ctx.has_link(&[LinkKind::Branch, LinkKind::Pr]);
+    if item.item_type != ItemType::Spike && !chore_without_code {
+        out.push(unmet(
+            "done.flow",
+            "Only spikes and chores without code skip the release.",
+            Some("Send it on to Verify."),
+        ));
+    }
+    if !ctx.has_link(&[LinkKind::Artifact]) {
+        out.push(unmet(
+            "done.outcome",
+            "No outcome artifact is linked.",
+            Some("Link the outcome."),
+        ));
+    }
+    out
 }
 
 /// The Definition of Ready fields a template may require.

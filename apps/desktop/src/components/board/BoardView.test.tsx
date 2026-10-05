@@ -251,6 +251,39 @@ describe("BoardView", () => {
     });
   });
 
+  it("lets the owner close a Verify item without a release, with a reason", async () => {
+    const user = userEvent.setup();
+    const verify = card({ id: "H-058", title: "First desktop release", columnKey: "verify" });
+    const fake = new FakeDaemon()
+      .onBoard(
+        "itemMoveCheck",
+        checks({ done: [unmet("reason.required", "It skips the release; say why it is done.")] }),
+      )
+      .onBoard("itemMove", () => ({
+        case: "moved",
+        value: {
+          $typeName: "hermes.board.v1.MoveResult",
+          outcome: { case: "done", value: create(ItemSchema, { id: "H-058" }) },
+        },
+      }));
+    setup([verify], { fake });
+    await user.click(await screen.findByRole("button", { name: "Move H-058 to…" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Done" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Move H-058 to Done" });
+    expect(dialog).toHaveTextContent("It skips the release; say why it is done.");
+    const go = within(dialog).getByRole("button", { name: "Move" });
+    expect(go).toBeDisabled();
+    await user.type(within(dialog).getByRole("textbox", { name: /Reason/ }), "shipped in 0.14.0");
+    await user.click(go);
+    await vi.waitFor(() => {
+      expect(fake.boardCalls.at(-1)).toMatchObject({
+        case: "itemMove",
+        value: { id: "H-058", to: "done", reason: "shipped in 0.14.0", overrideReason: undefined },
+      });
+    });
+  });
+
   it("refreshes the board when a move finds it stale", async () => {
     const user = userEvent.setup();
     const fake = new FakeDaemon()

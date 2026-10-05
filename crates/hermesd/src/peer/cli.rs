@@ -120,13 +120,13 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
 type Socket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
-struct Daemon {
+pub(crate) struct Daemon {
     socket: Socket,
     next: u64,
 }
 
 impl Daemon {
-    async fn connect(cfg: &Config) -> anyhow::Result<Self> {
+    pub(crate) async fn connect(cfg: &Config) -> anyhow::Result<Self> {
         let port = crate::home::runtime_port(&cfg.home).unwrap_or(cfg.port);
         let token = std::fs::read_to_string(cfg.secrets_dir().join("client.token"))
             .map_err(|e| anyhow::anyhow!("cannot read the owner token: {e}"))?;
@@ -147,7 +147,7 @@ impl Daemon {
     }
 
     /// Sends a request and returns its reply, skipping pushes in between.
-    async fn request(&mut self, mut req: Value) -> anyhow::Result<Value> {
+    pub(crate) async fn request(&mut self, mut req: Value) -> anyhow::Result<Value> {
         let req_id = self.next;
         self.next += 1;
         req["req_id"] = json!(req_id);
