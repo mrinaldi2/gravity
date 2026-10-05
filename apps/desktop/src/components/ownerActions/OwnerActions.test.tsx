@@ -7,6 +7,7 @@ import { ownerAction } from "../../test/ownerActionFixtures";
 import { actionToastSpy } from "../../test/spies";
 import OwnerActionConfirm, { HOLD_MS } from "./OwnerActionConfirm";
 import OwnerActionList from "./OwnerActionList";
+import { resultLine } from "./ownerActionText";
 import type { OwnerActionScope } from "./useOwnerActions";
 
 function daemon(actions: readonly OwnerAction[], owner = true): FakeDaemon {
@@ -47,11 +48,18 @@ afterEach(() => {
 });
 
 describe("OwnerActionList", () => {
-  it("shows the command verbatim, who proposed it and its hash", async () => {
+  it("says who asks for what and where, why, and its fingerprint", async () => {
     renderList(daemon([ownerAction()]));
     expect(await screen.findByText("brew services stop colima")).toBeInTheDocument();
-    expect(screen.getByText("Waiting for you")).toBeInTheDocument();
-    expect(screen.getByText(/Proposed by DevOps · sha 9f86d081884c/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("article", {
+        name: "DevOps asks you to run a command on this computer: Colima holds the old Hermes service program open",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Why: Colima holds the old Hermes service program open"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Fingerprint 9f86d081")).toBeInTheDocument();
   });
 
   it("renders nothing outside its scope", async () => {
@@ -65,6 +73,9 @@ describe("OwnerActionList", () => {
     renderList(daemon([ownerAction()], false));
     await screen.findByText("brew services stop colima");
     expect(screen.queryByRole("button", { name: "Run…" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText("You can run this from a device with approve access."),
+    ).toBeInTheDocument();
   });
 
   it("runs only after the confirm sheet, sending the hash it showed", async () => {
@@ -82,7 +93,7 @@ describe("OwnerActionList", () => {
         sha256: ownerAction().sha256,
       }),
     );
-    expect(await screen.findByText("Running")).toBeInTheDocument();
+    expect(await screen.findByText("◑ Running on this computer…")).toBeInTheDocument();
   });
 
   it("rejects with a reason", async () => {
@@ -91,7 +102,7 @@ describe("OwnerActionList", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Reject…" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Why not (optional)" }), "not now");
     await userEvent.click(screen.getByRole("button", { name: "Reject" }));
-    expect(await screen.findByText("Rejected")).toBeInTheDocument();
+    expect(await screen.findByText("⊘ You rejected it: not now")).toBeInTheDocument();
     expect(client.requests.at(-1)?.body).toEqual({
       type: "owner_action_reject",
       id: "oa-1",
@@ -102,7 +113,7 @@ describe("OwnerActionList", () => {
   it("streams output while it runs and keeps up with pushes", async () => {
     const client = daemon([ownerAction()]);
     renderList(client);
-    await screen.findByText("Waiting for you");
+    await screen.findByText("brew services stop colima");
     act(() => {
       client.emit("owner_action_update", {
         type: "owner_action_update",
@@ -119,20 +130,32 @@ describe("OwnerActionList", () => {
         chunk: "done\n",
       });
     });
-    expect(screen.getByText("Running")).toBeInTheDocument();
+    expect(screen.getByText("◑ Running on this computer…")).toBeInTheDocument();
     expect(screen.getByText(/stopping\s+done/)).toBeInTheDocument();
   });
 
-  it("shows only waiting commands on the dashboard", async () => {
+  it("shows only waiting and running commands on the dashboard, running first", async () => {
     renderList(
       daemon([
+        ownerAction({ id: "oa-new", created_at: "2026-10-05T13:00:00Z", content: "echo newer" }),
         ownerAction(),
+        ownerAction({ id: "oa-run", state: "running", content: "echo running" }),
         ownerAction({ id: "oa-2", state: "succeeded", content: "echo old", exit_code: 0 }),
       ]),
       { projectId: "p1", waitingOnly: true },
     );
-    expect(await screen.findByText("brew services stop colima")).toBeInTheDocument();
+    await screen.findByText("brew services stop colima");
+    const order = screen.getAllByRole("article").map((a) => a.querySelector("pre")?.textContent);
+    expect(order).toEqual(["echo running", "brew services stop colima", "echo newer"]);
     expect(screen.queryByText("echo old")).not.toBeInTheDocument();
+  });
+
+  it("opens the output of a run that failed", async () => {
+    renderList(
+      daemon([ownerAction({ state: "failed", exit_code: 1, output_tail: "no such service" })]),
+    );
+    const summary = await screen.findByText("Output");
+    expect(summary.closest("details")).toHaveAttribute("open");
   });
 
   it("asks nothing of a daemon without owner actions", async () => {
@@ -152,16 +175,20 @@ describe("OwnerActionConfirm", () => {
     render(
       <OwnerActionConfirm
         action={ownerAction({ content: "echo 1\n".repeat(200) })}
+        proposer="DevOps"
         onRun={onRun}
         onCancel={vi.fn<() => void>()}
       />,
     );
     const pre = screen.getByText(/echo 1/);
     fireEvent.scroll(pre, { target: { scrollTop: 100 } });
-    expect(screen.getByText("Scroll to the end to run it.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run it" })).toBeDisabled();
+    const hint = "Scroll to the end of the script to run it.";
+    expect(screen.getByText(hint)).toBeInTheDocument();
+    const run = screen.getByRole("button", { name: "Run it" });
+    expect(run).toBeDisabled();
+    expect(run).toHaveAccessibleDescription(hint);
     fireEvent.scroll(pre, { target: { scrollTop: 1700 } });
-    expect(screen.queryByText("Scroll to the end to run it.")).not.toBeInTheDocument();
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Run it" }));
     expect(onRun).toHaveBeenCalledOnce();
   });
@@ -172,6 +199,7 @@ describe("OwnerActionConfirm", () => {
     render(
       <OwnerActionConfirm
         action={ownerAction()}
+        proposer="DevOps"
         onRun={onRun}
         onCancel={vi.fn<() => void>()}
         hold
@@ -186,5 +214,51 @@ describe("OwnerActionConfirm", () => {
     fireEvent.pointerDown(button);
     act(() => vi.advanceTimersByTime(HOLD_MS));
     expect(onRun).toHaveBeenCalledOnce();
+  });
+});
+
+describe("OwnerActionConfirm, before it runs", () => {
+  it("says why, as whom and that it's final, with Cancel focused and Esc closing it", () => {
+    const onCancel = vi.fn<() => void>();
+    render(
+      <OwnerActionConfirm
+        action={ownerAction({ target_name: "win-pc" })}
+        proposer="DevOps"
+        onRun={vi.fn<() => void>()}
+        onCancel={onCancel}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "DevOps asks for this because: Colima holds the old Hermes service program open. It runs as you, with your permissions on win-pc, and can't be undone.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole("dialog", { name: "Run on win-pc" }), { key: "Escape" });
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+});
+
+describe("result lines", () => {
+  const ran = { run_at: "2026-10-05T12:00:00Z", finished_at: "2026-10-05T12:00:02Z" };
+  it.each([
+    [
+      ownerAction({ ...ran, state: "succeeded", exit_code: 0 }),
+      "✓ Done · exit 0 · took 2 s. DevOps has the output.",
+    ],
+    [
+      ownerAction({ ...ran, state: "failed", exit_code: 1 }),
+      "✗ Failed · exit 1 · took 2 s. DevOps has been told.",
+    ],
+    [
+      ownerAction({ state: "timed_out" }),
+      "⏱ Stopped after 10 minutes, its time limit. DevOps has been told.",
+    ],
+    [ownerAction({ state: "rejected" }), "⊘ You rejected it."],
+    [ownerAction({ state: "withdrawn" }), "Withdrawn by DevOps."],
+    [ownerAction({ state: "expired" }), "Expired: nobody answered within 24 hours."],
+    [ownerAction({ state: "running", target_name: "win-pc" }), "◑ Running on win-pc…"],
+  ])("%#", (action, line) => {
+    expect(resultLine(action, "DevOps")).toBe(line);
   });
 });

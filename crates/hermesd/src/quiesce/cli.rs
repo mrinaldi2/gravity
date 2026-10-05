@@ -84,8 +84,8 @@ pub fn describe(answer: &Value) -> String {
     }
     if report["services_changed"] == true {
         out.push_str(
-            "\n  note: the services list in hermesd.toml changed since the daemon started; \
-             the earlier list was used",
+            "\n  note: the list of background services changed after the Hermes service \
+             started; this install used the earlier list",
         );
     }
     out

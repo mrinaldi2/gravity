@@ -158,6 +158,7 @@ mod tests {
                 label: "Keep it running".to_string(),
                 description: None,
                 grants: Vec::new(),
+                grants_sha: None,
             }],
             recommendation: Some("keep".to_string()),
             raised_by: RaisedBy {

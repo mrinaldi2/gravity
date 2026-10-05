@@ -283,7 +283,7 @@ export class DaemonClient implements DaemonApi {
         // prompt for it instead of leaving it to the terminal; and it renders
         // terminal cards for what they are, so it may see and answer them;
         // and it shows owner actions (H-117), so it may run them.
-        features: ["permission_cards", "terminal_card", OWNER_ACTIONS_FEATURE],
+        features: ["permission_cards", "terminal_card", OWNER_ACTIONS_FEATURE, "decision_grants"],
         contracts: CONTRACTS,
       });
       if (replyIs(reply, "error")) {

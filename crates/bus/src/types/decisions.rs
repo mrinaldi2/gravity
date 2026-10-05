@@ -23,6 +23,11 @@ pub struct DecisionOption {
     /// owner's own ruling picks it, with no second step.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub grants: Vec<OptionGrant>,
+    /// The sha256 of `grants`, set only in the views clients read: a ruling
+    /// on this option sends it back, pinning the grants the owner was shown
+    /// (ARCH-R51 M2). Never stored or trusted from input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grants_sha: Option<String>,
 }
 
 /// One permission extra for one bot of the decision's project.

@@ -15,6 +15,21 @@ export interface DecisionOption {
   readonly description?: string;
   /** Permission extras the owner's ruling grants by picking it (H-117). */
   readonly grants?: readonly { readonly bot: string; readonly extra: string }[];
+  /** The fingerprint of `grants` as shown; a ruling on this option sends
+   *  it back, so it can't apply grants the owner didn't see (ARCH-R51 M2). */
+  readonly grants_sha?: string;
+}
+
+/** The `grants_sha` a ruling on `option` (else the drafted one) sends. */
+export function grantsShaOf(
+  decision: {
+    readonly options: readonly DecisionOption[];
+    readonly ruling?: { readonly option?: string };
+  },
+  option?: string,
+): string | undefined {
+  const key = option ?? decision.ruling?.option;
+  return decision.options.find((o) => o.key === key)?.grants_sha;
 }
 
 interface DecisionRuling {

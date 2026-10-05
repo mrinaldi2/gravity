@@ -3,6 +3,7 @@ import { capture, captureException } from "../../analytics";
 import type { DaemonApi } from "../../protocol/api";
 import type { PublishItem } from "../../protocol/decisionRequests";
 import type { Decision, DecisionComment } from "../../protocol/decisions";
+import { grantsShaOf } from "../../protocol/decisions";
 import type { NotifyLevel } from "../../protocol/entities";
 import { errText } from "../../util";
 
@@ -35,6 +36,8 @@ interface MutationDeps {
   readonly forget: (decisionId: string) => void;
   readonly reload: () => Promise<void>;
   readonly reloadTags: () => Promise<void>;
+  /** The decisions as shown, for the grants a ruling pins (H-117). */
+  readonly byId: ReadonlyMap<string, Decision>;
 }
 
 /**
@@ -42,7 +45,16 @@ interface MutationDeps {
  * thing in this app that must never look like it landed when it did not.
  */
 export function useDecisionMutations(deps: MutationDeps): DecisionMutations {
-  const { client, onToast, replace, forget, reload, reloadTags } = deps;
+  const { client, onToast, replace, forget, reload, reloadTags, byId } = deps;
+  // `{grants_sha}` for a ruling on an option that grants, as it was shown.
+  const pin = useCallback(
+    (decisionId: string, option?: string): { grants_sha?: string } => {
+      const decision = byId.get(decisionId);
+      const sha = decision === undefined ? undefined : grantsShaOf(decision, option);
+      return sha === undefined ? {} : { grants_sha: sha };
+    },
+    [byId],
+  );
 
   const answer = useCallback(
     async (
@@ -59,6 +71,7 @@ export function useDecisionMutations(deps: MutationDeps): DecisionMutations {
             ruling_text: text,
             ...(option === undefined ? {} : { ruling_option: option }),
             ...(reason === undefined || reason.trim() === "" ? {} : { ruling_reason: reason }),
+            ...pin(decisionId, option),
           },
           "decision",
         );
@@ -71,7 +84,7 @@ export function useDecisionMutations(deps: MutationDeps): DecisionMutations {
         return false;
       }
     },
-    [client, onToast, replace],
+    [client, onToast, replace, pin],
   );
 
   const unanswer = useCallback(
@@ -123,14 +136,19 @@ export function useDecisionMutations(deps: MutationDeps): DecisionMutations {
       failure: string,
     ): Promise<void> => {
       try {
-        const reply = await client.request({ type, decision_id: decisionId }, "decision");
+        const reply = await client.request(
+          type === "confirm_decision"
+            ? { type, decision_id: decisionId, ...pin(decisionId) }
+            : { type, decision_id: decisionId },
+          "decision",
+        );
         replace(reply.decision);
       } catch (error) {
         captureException(error, "decision_update");
         onToast("error", failure, errText(error));
       }
     },
-    [client, onToast, replace],
+    [client, onToast, replace, pin],
   );
 
   const resume = useCallback(
@@ -163,7 +181,14 @@ export function useDecisionMutations(deps: MutationDeps): DecisionMutations {
   const publish = useCallback(
     async (items: readonly PublishItem[]): Promise<boolean> => {
       try {
-        const reply = await client.request({ type: "publish_decisions", items }, "publish_result");
+        const pinned = items.map((item) => ({
+          ...item,
+          ...pin(item.decision_id, item.ruling_option),
+        }));
+        const reply = await client.request(
+          { type: "publish_decisions", items: pinned },
+          "publish_result",
+        );
         const notified = reply.results.reduce((sum, item) => sum + item.notified.length, 0);
         capture("decision_published", { count: reply.results.length, notified });
         const skipped = reply.results.flatMap((item) => item.skipped);
@@ -184,7 +209,7 @@ export function useDecisionMutations(deps: MutationDeps): DecisionMutations {
         return false;
       }
     },
-    [client, onToast, reload],
+    [client, onToast, reload, pin],
   );
 
   const setTags = useCallback(

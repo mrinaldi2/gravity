@@ -96,14 +96,22 @@ async fn the_owner_runs_a_proposal_once_exactly_as_shown() {
     assert_eq!(reply["code"], "forbidden", "{reply}");
     let mut viewer = s.app(&["read", "control"]).await;
     assert_eq!(viewer.request(run.clone()).await["code"], "forbidden");
-    // The owner token from a process it can't tell (here: this test's own)
-    // is refused; the app's credential runs it.
+    // The owner token is refused from anywhere, even from a process that
+    // isn't a bot's (here: this test's own), and can't reject either
+    // (ARCH-R51 M1); the app's credential runs it.
     let mut token = WsClient::connect_with(&s.d, s.d.app.secrets.client_token(), FEATURES).await;
     let reply = token.request(run.clone()).await;
     assert!(
-        reply["message"].as_str().unwrap().contains("which process"),
+        reply["message"]
+            .as_str()
+            .unwrap()
+            .contains("not with the owner token"),
         "{reply}"
     );
+    let reject = token
+        .request(json!({"type": "owner_action_reject", "id": id}))
+        .await;
+    assert_eq!(reject["code"], "forbidden", "{reject}");
 
     let mut app = s.app(&["read", "control", "approve"]).await;
     // Something else than what was shown: refused, and audited.
@@ -214,4 +222,20 @@ async fn proposals_hide_nothing_and_the_owner_can_reject() {
         .iter()
         .any(|m| m["body"].as_str().unwrap().contains("not now")));
     tokio::time::sleep(Duration::from_millis(10)).await;
+}
+
+/// The app's one-time ticket runs one: the owner's own app, not the token
+/// file a bot could read (ARCH-R51 M1).
+#[tokio::test]
+async fn the_apps_ticket_runs_it() {
+    let mut s = setup().await;
+    let proposed = s.propose("echo by-ticket").await;
+    let id = proposed["id"].as_str().unwrap().to_string();
+    let ticket = s.d.app.owner.mint();
+    let mut app = WsClient::connect_with(&s.d, &ticket, FEATURES).await;
+    let started = app
+        .request(json!({"type": "owner_action_run", "id": id, "sha256": proposed["sha256"]}))
+        .await;
+    assert_eq!(started["action"]["state"], "running", "{started}");
+    s.wait_state(&id, "succeeded").await;
 }

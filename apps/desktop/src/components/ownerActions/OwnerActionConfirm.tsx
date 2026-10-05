@@ -4,9 +4,10 @@
 // the fold; on a touch screen it is press-and-hold, so a stray tap can't
 // fire it.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { PointerEvent, ReactElement, UIEvent } from "react";
 import type { OwnerAction } from "../../protocol/ownerActions";
+import { confirmBody, fingerprint, targetOf } from "./ownerActionText";
 
 /** How long a touch press must last to run. */
 export const HOLD_MS = 800;
@@ -19,6 +20,8 @@ function RunButton(props: {
   readonly enabled: boolean;
   readonly hold: boolean;
   readonly onRun: () => void;
+  /** The hint saying why it's off, while it is. */
+  readonly describedBy?: string;
 }): ReactElement {
   const timer = useRef<number | null>(null);
   const [holding, setHolding] = useState(false);
@@ -44,6 +47,7 @@ function RunButton(props: {
         type="button"
         className="btn btn-danger"
         disabled={!props.enabled}
+        aria-describedby={props.describedBy}
         onClick={props.onRun}
       >
         Run it
@@ -63,6 +67,7 @@ function RunButton(props: {
       type="button"
       className={holding ? "btn btn-danger owner-action-holding" : "btn btn-danger"}
       disabled={!props.enabled}
+      aria-describedby={props.describedBy}
       onPointerDown={start}
       onPointerUp={stop}
       onPointerLeave={stop}
@@ -75,6 +80,8 @@ function RunButton(props: {
 
 export default function OwnerActionConfirm(props: {
   readonly action: OwnerAction;
+  /** Who asks for it: a bot's name, or The Hermes. */
+  readonly proposer: string;
   readonly onRun: () => void;
   readonly onCancel: () => void;
   /** Tests force the touch form. */
@@ -83,12 +90,16 @@ export default function OwnerActionConfirm(props: {
   const { action } = props;
   const [seen, setSeen] = useState(false);
   const pre = useRef<HTMLPreElement | null>(null);
-  // A script that fits needs no scrolling to be seen whole.
+  const cancel = useRef<HTMLButtonElement | null>(null);
+  const hint = useId();
+  // A script that fits needs no scrolling to be seen whole. Cancel takes
+  // focus, so Enter never runs it (UX-022).
   useEffect(() => {
     const el = pre.current;
     if (el !== null && el.scrollHeight <= el.clientHeight + 1) {
       setSeen(true);
     }
+    cancel.current?.focus();
   }, []);
   const onScroll = (event: UIEvent<HTMLPreElement>): void => {
     const el = event.currentTarget;
@@ -96,7 +107,19 @@ export default function OwnerActionConfirm(props: {
       setSeen(true);
     }
   };
-  const target = action.target_name ?? "this computer";
+  // Esc closes the sheet; the drawer under it leaves Esc to an open dialog.
+  const { onCancel } = props;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        onCancel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+  const target = targetOf(action);
   return (
     <div
       className="owner-action-confirm"
@@ -105,8 +128,9 @@ export default function OwnerActionConfirm(props: {
       aria-label={`Run on ${target}`}
     >
       <h3>Run on {target}?</h3>
+      <p className="owner-action-reason-text">{confirmBody(action, props.proposer)}</p>
       <p className="owner-action-meta">
-        {action.shell} in <code>{action.cwd}</code> · sha {action.sha256.slice(0, 12)}
+        {action.shell} in <code>{action.cwd}</code> · Fingerprint {fingerprint(action)}
       </p>
       {/* The script scrolls, so the keyboard must be able to reach it. */}
       <pre
@@ -118,12 +142,21 @@ export default function OwnerActionConfirm(props: {
       >
         {action.content}
       </pre>
-      {seen ? null : <p className="owner-action-hint">Scroll to the end to run it.</p>}
       <div className="owner-action-buttons">
-        <button type="button" className="btn" onClick={props.onCancel}>
+        {seen ? null : (
+          <span id={hint} className="owner-action-hint">
+            Scroll to the end of the script to run it.
+          </span>
+        )}
+        <button ref={cancel} type="button" className="btn" onClick={props.onCancel}>
           Cancel
         </button>
-        <RunButton enabled={seen} hold={props.hold ?? coarsePointer()} onRun={props.onRun} />
+        <RunButton
+          enabled={seen}
+          hold={props.hold ?? coarsePointer()}
+          onRun={props.onRun}
+          describedBy={seen ? undefined : hint}
+        />
       </div>
     </div>
   );

@@ -67,15 +67,23 @@ fn word(w: &str) -> String {
     out
 }
 
-/// `/Users/alice/x` -> `/Users/~/x`, as the desktop does.
+/// `/Users/alice/x` -> `/Users/~/x`, as the desktop does; Linux's
+/// `/home/alice` and Windows' `C:\Users\alice` likewise (ARCH-R51 S4).
 fn home_dirs(line: &str) -> String {
+    let line = home_under(line, "\\Users\\");
+    let line = home_under(&line, "/home/");
+    home_under(&line, "/Users/")
+}
+
+/// The name after each `prefix` replaced with `~`.
+fn home_under(line: &str, prefix: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut rest = line;
-    while let Some(at) = rest.find("/Users/") {
-        out.push_str(&rest[..at + 7]);
-        rest = &rest[at + 7..];
+    while let Some(at) = rest.find(prefix) {
+        out.push_str(&rest[..at + prefix.len()]);
+        rest = &rest[at + prefix.len()..];
         let end = rest
-            .find(['/', ' ', ':', ';', ',', ')', '"', '\'', ']'])
+            .find(['/', '\\', ' ', ':', ';', ',', ')', '"', '\'', ']'])
             .unwrap_or(rest.len());
         if end > 0 {
             out.push('~');
@@ -197,6 +205,12 @@ mod tests {
         assert!(!out.contains("AAAA"), "{out}");
         assert!(out.contains("/Users/~/.thehermes/logs ready"), "{out}");
         assert!(out.contains(" ok"), "{out}");
+    }
+
+    #[test]
+    fn linux_and_windows_homes_are_masked_too() {
+        let out = redact("C:\\Users\\alice\\AppData x /home/bob/.cache y");
+        assert_eq!(out, "C:\\Users\\~\\AppData x /home/~/.cache y");
     }
 
     #[test]

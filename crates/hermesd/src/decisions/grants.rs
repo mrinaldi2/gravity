@@ -13,6 +13,21 @@ use crate::app::AppState;
 
 use super::invalid;
 
+/// The extras a linked computer's ruling may grant here.
+const REMOTE_GRANTABLE: [PermissionExtra; 3] = [
+    PermissionExtra::Install,
+    PermissionExtra::DaemonRestart,
+    PermissionExtra::Quiesce,
+];
+
+/// The sha256 over the canonical JSON of an option's grants: what a view
+/// shows as `grants_sha` and a ruling sends back (ARCH-R51 M2).
+pub fn sha(option: &DecisionOption) -> String {
+    use sha2::{Digest, Sha256};
+    let canonical = serde_json::to_string(&option.grants).unwrap_or_default();
+    hex::encode(Sha256::digest(canonical.as_bytes()))
+}
+
 /// Checks each option's grants against the project's bots, storing a bot
 /// named by name as its id.
 pub fn checked(
@@ -21,6 +36,8 @@ pub fn checked(
     mut options: Vec<DecisionOption>,
 ) -> anyhow::Result<Vec<DecisionOption>> {
     for option in &mut options {
+        // Only views carry it, computed: never what a caller sent.
+        option.grants_sha = None;
         for grant in &mut option.grants {
             if PermissionExtra::parse(grant.extra.trim()).is_none() {
                 return Err(invalid(format!(
@@ -158,9 +175,26 @@ pub fn serve_grant(app: &AppState, peer_id: &str, frame: &Value) -> anyhow::Resu
         .flatten()
         .filter_map(|v| v.as_str().and_then(PermissionExtra::parse))
         .collect();
-    tracing::info!(bot = %bot.name, peer_id, decision = %frame["decision"], ?extras,
-                   "extras granted by a ruling on a linked computer");
+    // A linked computer grants only what installs need (ARCH-R51 S1c).
+    if let Some(other) = extras.iter().find(|e| !REMOTE_GRANTABLE.contains(e)) {
+        return Err(crate::peer::refuse(
+            "forbidden",
+            format!(
+                "{} can't be granted from another computer; set it here",
+                other.as_str()
+            ),
+        ));
+    }
     let held = add_extras(app, &bot, &extras)?;
+    // On record where this computer's owner can read it (ARCH-R51 S1b).
+    let names: Vec<&str> = extras.iter().map(|e| e.as_str()).collect();
+    crate::owner_action::audit(
+        app,
+        &format!("grant:{}", bot.id),
+        &format!("peer:{peer_id}"),
+        "granted",
+        json!({ "bot": bot.name, "extras": names, "decision": frame["decision"] }),
+    );
     let held: Vec<&str> = held.iter().map(|e| e.as_str()).collect();
     Ok(json!({ "extras": held }))
 }

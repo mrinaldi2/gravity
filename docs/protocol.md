@@ -371,7 +371,11 @@ Decision { "id", "project_id", "kind": "question"|"decision", "title", "body",
   An option's `grants` (H-117) are permission extras the owner grants by picking it.
   - **At raise:** each one is checked. `bot` may be given as a name and is stored as the bot's id; `extra` must be a known extra.
   - **When they apply:** when the owner's own ruling is published, with no second step. A ruling a bot relayed applies on the owner's `confirm_decision`.
-  - **What they do:** they only add extras. A linked bot gets them on its own computer, through peer request `grant_extras {bot_id, extras, decision}`, which is accepted only for bots exposed to that peer.
+  - **Who may rule on one:** only a client whose hello lists `decision_grants`, which shows the grants. Views carry each such option's `grants_sha` (the sha256 of its `grants`, computed, never stored).
+    - `answer_decision`, `update_decision` with `ruling_option`, `publish_decisions` items and `confirm_decision` on a granting option must send back that `grants_sha`. A mismatch gets `conflict` (the grants changed since they were shown).
+    - Other clients get `forbidden`: "Answer this on the desktop — this choice changes bot permissions".
+    - `confirm_relayed` skips granting ones (listed as `failed`); confirm those one at a time.
+  - **What they do:** they only add extras. A linked bot gets them on its own computer, through peer request `grant_extras {bot_id, extras, decision}`. It is accepted only for bots exposed to that peer and only for `install`, `daemon_restart` and `quiesce`, and it is recorded in that computer's `owner_action_audit` (as `grant:<bot id>`, event `granted`).
   - **Record:** a comment on the decision lists what was applied.
 DecisionComment { "id", "decision_id", "author_kind": "bot"|"user", "author_bot_id?",
            "author_name", "body", "created_at" }
@@ -797,7 +801,9 @@ A refusal says which of these is missing. `start` pauses with the caller as `exe
   A boot before `install_started` (the old daemon restarting before the swap) keeps everything paused. Either way the outcome goes on the release, and leads and DevOps are told. A pause left open by a crash in between resumes at its deadline, and the owner gets a notice.
 
 **WebSocket.**
-- `quiesce_status` (read) answers `{type: "quiesce", quiesce: …|null}`.
+- `quiesce_status` (read) answers `{type: "quiesce", quiesce: …|null, ended: …|null}`.
+  - `ended` is the pause that ended in the past hour. Its `report.resumed` holds `{outcome: install_ok|rolled_back|deadline|aborted|resumed, running_version}`, so the app tells the owner how it went once, even across the install's restart.
+  - While blocked, `report.unresolved` lists each holder `{pid, command, project_id?, bot_id?, project_name?, bot_name?}`.
 - `quiesce_resume` (approve, the owner's **Resume now**) ends the pause.
 - Every change pushes `{type: "quiesce_update", quiesce: …|null}`.
 
@@ -821,7 +827,7 @@ A bot proposes an exact command for the owner to run; only the owner runs it.
 - `owner_action_get {id}` → `{type: "owner_action", action, audit}` (read; audited as viewed).
 - `owner_action_run {id, sha256}` (approve) runs it once:
   - The client must render owner actions, and the hash must be the stored one, which is what the client showed.
-  - A loopback connection is traced to its process (lsof). A process under a bot's session is refused, whatever credential it holds. When the process can't be told, only the app's ticket or a device credential may run it, never the owner token.
+  - Only the app's one-time ticket or a paired device's credential runs or rejects one, never the owner token, from anywhere (ARCH-R51 M1). On top of that, a loopback connection is traced to its process (lsof), and a process under a bot's session is refused whatever credential it holds.
   - `proposed → running` is a single guarded update, so a second tap gets `conflict`.
 - `owner_action_reject {id, reason?}` (approve).
 - Pushes: `{type: "owner_action_update", action}` on every change, and `{type: "owner_action_output", id, chunk}` (redacted) while it runs.
@@ -830,8 +836,8 @@ A bot proposes an exact command for the owner to run; only the owner runs it.
 - **Who and where:** it runs as the daemon's user, with stdin closed and no sudo, in its own process group (Unix) or Job Object (Windows), which the timeout kills whole.
 - **Environment:** on Unix it is clean apart from the owner's login `PATH`; on Windows it is inherited, without the daemon's tokens.
 - **Output:**
-  - the full output goes to `<home>/logs/owner-actions/<id>.log` (0600);
-  - `output_tail` is the redacted last 64 KB;
+  - the full output goes to `<home>/logs/owner-actions/<id>.log` (0600). It is unredacted and readable by bots of the same user, so only the redacted tail is ever pushed or commented;
+  - `output_tail` is the redacted last 64 KB (home folders under `/Users`, `/home` and `C:\Users` show as `~`);
   - the proposing bot gets a note with the exit code and the tail, and the item or decision gets the same as a comment.
 - **Audit:** append-only `owner_action_audit` (proposed, viewed, refused, run, finished, rejected, withdrawn), mirrored to `<home>/logs/owner-actions.log`.
 

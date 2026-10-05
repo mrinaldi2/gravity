@@ -80,7 +80,9 @@ pub fn template(windows: bool, found: &[Found], service_stops: &[String]) -> Str
         for f in found {
             lines.push(format!(
                 "t=$(/bin/ps -o lstart= -p {p} 2>/dev/null); \
-                 if [ \"$(echo $t)\" = '{s}' ]; then kill {p} && echo 'stopped {p}' || rc=1; \
+                 if [ \"$(echo $t)\" = '{s}' ]; then kill {p} || rc=1; \
+                 for i in 1 2 3 4 5 6 7 8 9 10; do /bin/ps -o stat= -p {p} 2>/dev/null | /usr/bin/grep -qv Z || break; sleep 0.5; done; \
+                 /bin/ps -o stat= -p {p} 2>/dev/null | /usr/bin/grep -qv Z && {{ echo '{p} is still running'; rc=1; }} || echo 'stopped {p}'; \
                  else echo '{p} is gone or was replaced; left alone'; fi",
                 p = f.pid,
                 s = f.start
@@ -122,21 +124,26 @@ pub fn file(
     }
     let mut found = Vec::new();
     let mut named = Vec::new();
+    // Ones whose start time can't be read (elevated, SYSTEM) are named too:
+    // the owner closes those (ARCH-R51 S3).
+    let mut elevated = Vec::new();
     for h in unresolved {
         let Some(pid) = h["pid"].as_u64().and_then(|p| u32::try_from(p).ok()) else {
             continue;
         };
-        let Some(start) = start_stamp(pid) else {
-            continue;
-        };
-        found.push(Found { pid, start });
         let project = h["project_id"]
             .as_str()
             .and_then(|p| app.db.get_project(p).ok().flatten())
             .map(|p| format!(", project {}", shown(&p.name)))
             .unwrap_or_default();
         let command = shown(h["command"].as_str().unwrap_or("?"));
-        named.push(format!("pid {pid} ({command}{project})"));
+        match start_stamp(pid) {
+            Some(start) => {
+                found.push(Found { pid, start });
+                named.push(format!("pid {pid} ({command}{project})"));
+            }
+            None => elevated.push(format!("pid {pid} ({command})")),
+        }
     }
     let stops: Vec<String> = services
         .iter()
@@ -171,6 +178,12 @@ pub fn file(
         reason.push_str(&format!(
             " Services that didn't stop: {}.",
             stops.join("; ")
+        ));
+    }
+    if !elevated.is_empty() {
+        reason.push_str(&format!(
+            " Close these yourself, they can't be stopped from here: {}.",
+            elevated.join("; ")
         ));
     }
     reason.push_str(" Run this, then the install retries.");
@@ -221,8 +234,10 @@ mod tests {
         assert!(lines[1].contains("then kill 41 "), "{script}");
         assert!(lines[2].contains("kill 42 ") && !lines[2].contains("41"));
         assert_eq!(lines[3], "brew services stop colima || rc=1");
-        // Every kill is behind its start-time check.
-        assert_eq!(script.matches("kill ").count(), 2);
+        // Every kill is behind its start-time check, and waits for the
+        // process to go before saying so.
+        assert_eq!(script.matches("then kill ").count(), 2);
+        assert_eq!(script.matches("-o stat= ").count(), 4);
         assert_eq!(script.matches("lstart=").count(), 2);
         let ps = template(true, &found[..1], &[]);
         assert!(

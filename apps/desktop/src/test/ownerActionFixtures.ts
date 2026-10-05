@@ -14,7 +14,7 @@ export function ownerAction(over: Partial<OwnerAction> = {}): OwnerAction {
     cwd: "/Users/~/Developer/gravity",
     content: "brew services stop colima",
     pinned_files: [],
-    reason: "Colima holds the old daemon binary open",
+    reason: "Colima holds the old Hermes service program open",
     timeout_s: 600,
     sha256: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
     flags: [],

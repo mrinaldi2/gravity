@@ -72,6 +72,18 @@ impl Db {
         Ok(self.lock().query_row(&sql, [], row).optional()?)
     }
 
+    /// The pause that ended last, if it ended after `since`.
+    pub fn last_ended_quiesce(&self, since: DateTime<Utc>) -> anyhow::Result<Option<Quiesce>> {
+        let sql = format!(
+            "SELECT {COLUMNS} FROM quiesce WHERE resumed_at IS NOT NULL AND resumed_at > ?1
+             ORDER BY resumed_at DESC LIMIT 1"
+        );
+        Ok(self
+            .lock()
+            .query_row(&sql, params![ts(since)], row)
+            .optional()?)
+    }
+
     pub fn get_quiesce(&self, id: &str) -> anyhow::Result<Option<Quiesce>> {
         let sql = format!("SELECT {COLUMNS} FROM quiesce WHERE id = ?1");
         Ok(self.lock().query_row(&sql, params![id], row).optional()?)

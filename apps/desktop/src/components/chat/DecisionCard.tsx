@@ -101,18 +101,26 @@ export default function DecisionCard(props: DecisionCardProps): ReactElement {
       )}
       {canAnswer && decision !== null ? (
         <div className="chat-decision-options">
-          {decision.options.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              className={`btn btn-small${option.key === decision.recommendation ? " btn-primary" : ""}`}
-              title={option.description}
-              disabled={busy}
-              onClick={() => void publish(option.key, option.label)}
-            >
-              {option.label}
-            </button>
-          ))}
+          {decision.options.map((option) => {
+            // A choice that grants permissions is made where its grants show.
+            const grants = (option.grants ?? []).length > 0;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                className={`btn btn-small${option.key === decision.recommendation ? " btn-primary" : ""}`}
+                title={
+                  grants
+                    ? "This choice changes bot permissions: open it in Decisions"
+                    : option.description
+                }
+                disabled={busy || grants}
+                onClick={() => void publish(option.key, option.label)}
+              >
+                {option.label}
+              </button>
+            );
+          })}
           <input
             className="chat-decision-other"
             aria-label="Another answer"

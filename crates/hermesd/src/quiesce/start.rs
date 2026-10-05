@@ -52,10 +52,18 @@ pub fn start(
         .filter(|h| !spared.contains(&h.pid))
         .map(|h| {
             let tie = known.iter().find(|e| e.pid == h.pid);
+            // Named for the owner's banner (UX on H-117).
+            let bot_name = tie
+                .and_then(|e| app.db.get_bot(&e.bot_id).ok().flatten())
+                .map(|b| b.name);
+            let project_name = tie
+                .and_then(|e| app.db.get_project(&e.project_id).ok().flatten())
+                .map(|p| crate::db::Db::display_project_name(&p));
             json!({
                 "pid": h.pid, "command": h.command, "cwd": h.cwd,
                 "path": h.path, "project_id": tie.map(|e| &e.project_id),
                 "bot_id": tie.map(|e| &e.bot_id),
+                "bot_name": bot_name, "project_name": project_name,
             })
         })
         .collect();

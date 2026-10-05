@@ -146,6 +146,8 @@ pub fn resume_all(
         "coalesced_runs": coalesced,
         "extended_tasks": extended,
         "services_started": restarted,
+        // After a rollback, the version this computer went back to.
+        "running_version": env!("CARGO_PKG_VERSION"),
     });
     if !app.db.close_quiesce(&q.id, outcome, &report, now)? {
         return Ok(None);
@@ -174,11 +176,7 @@ pub fn check_deadline(app: &Arc<AppState>, now: DateTime<Utc>) -> anyhow::Result
          its log before trying again.",
         what.trim_start_matches("Paused (").trim_end_matches(')')
     );
-    app.events.push(Push::notice(
-        "warn",
-        "Projects resumed after a stuck install",
-        &body,
-    ));
+    // The owner's app tells them from the ended pause (`status.ended`).
     tell_roles(app, &[Role::Devops, Role::Lead], &body);
     Ok(true)
 }
@@ -236,9 +234,19 @@ pub fn spawn_deadman(app: Arc<AppState>) {
     });
 }
 
-/// The open pause as clients read it: `{quiesce: …|null}`.
+/// How long an ended pause is still reported, so an app that reconnects
+/// after the install's restart still tells the owner how it went.
+const ENDED_SHOWN_MINUTES: i64 = 60;
+
+/// The open pause as clients read it: `{quiesce: …|null, ended: …|null}`,
+/// `ended` being the last one closed in the past hour (its outcome in
+/// `report.resumed`).
 pub fn status(app: &AppState) -> anyhow::Result<Value> {
-    Ok(json!({ "quiesce": app.db.open_quiesce()? }))
+    let since = Utc::now() - Duration::minutes(ENDED_SHOWN_MINUTES);
+    Ok(json!({
+        "quiesce": app.db.open_quiesce()?,
+        "ended": app.db.last_ended_quiesce(since)?,
+    }))
 }
 
 fn open(app: &AppState) -> anyhow::Result<Quiesce> {

@@ -25,6 +25,10 @@ use super::Conn;
 /// The feature a client sends at hello to receive owner actions.
 pub const FEATURE: &str = "owner_actions";
 
+/// The feature a client sends when it shows what a decision's option
+/// grants: only such a client may rule on one that grants (H-117).
+pub const GRANTS_FEATURE: &str = "decision_grants";
+
 /// How one connection may see and run owner actions.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Client {
@@ -36,6 +40,8 @@ pub(super) struct Client {
     /// It holds the app's one-time ticket (H-044 T4).
     via_ticket: bool,
     peer: Option<SocketAddr>,
+    /// It shows what a decision's option grants.
+    pub(super) shows_grants: bool,
 }
 
 impl Client {
@@ -52,6 +58,7 @@ impl Client {
             device,
             via_ticket,
             peer,
+            shows_grants: features.iter().any(|f| f == GRANTS_FEATURE),
         }
     }
 
@@ -94,22 +101,27 @@ impl Conn {
         if !c.approve {
             return Err(forbidden("running an owner action needs the approve grant"));
         }
-        let Some(peer) = c.peer.filter(|p| p.ip().is_loopback()) else {
-            // A device over the network: its credential is the owner's word.
-            return Ok(());
-        };
-        match crate::holders::procs::tcp_client(peer) {
-            Some(pid) => match bot_of(self, pid) {
-                Some(bot) => Err(forbidden(format!(
-                    "this connection comes from bot {bot}'s session; only the owner runs \
-                     owner actions"
-                ))),
-                None => Ok(()),
-            },
-            None if c.via_ticket || c.device => Ok(()),
-            None => Err(forbidden(
-                "can't tell which process this connection comes from; run it from the app",
-            )),
+        // The owner token is the one credential a bot of the same user can
+        // read, so it never runs or rejects one, from anywhere: only the
+        // app's one-time ticket or a paired device does (ARCH-R51 M1).
+        if !(c.device || c.via_ticket) {
+            return Err(forbidden(
+                "owner actions run only from the app or a paired device, not with the \
+                 owner token",
+            ));
+        }
+        // On top, a local connection from a bot's own session is refused.
+        let bot = c
+            .peer
+            .filter(|p| p.ip().is_loopback())
+            .and_then(crate::holders::procs::tcp_client)
+            .and_then(|pid| bot_of(self, pid));
+        match bot {
+            Some(bot) => Err(forbidden(format!(
+                "this connection comes from bot {bot}'s session; only the owner runs \
+                 owner actions"
+            ))),
+            None => Ok(()),
         }
     }
 
@@ -207,6 +219,8 @@ impl Conn {
     pub(super) fn owner_action_reject(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let id = Self::str_field(req, "id")?;
         let reason = req.get("reason").and_then(Value::as_str);
+        // The same gate as a run (ARCH-R51 M1).
+        self.owner_runs()?;
         let (app, by) = (self.app.clone(), self.actor().as_stored());
         let (id, reason) = (id.to_string(), reason.map(str::to_string));
         self.answer_action(req_id, async move {

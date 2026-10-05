@@ -2,7 +2,7 @@
 // owner runs, with one tap, from the app or the phone. The client must say
 // it renders them (hello feature `owner_actions`) to get them at all.
 
-export type OwnerActionState =
+type OwnerActionState =
   | "proposed"
   | "running"
   | "succeeded"
@@ -37,6 +37,8 @@ export interface OwnerAction {
   readonly state: OwnerActionState;
   readonly created_at: string;
   readonly expires_at: string;
+  readonly run_at?: string | null;
+  readonly finished_at?: string | null;
   readonly exit_code: number | null;
   /** The redacted end of its output. */
   readonly output_tail: string | null;

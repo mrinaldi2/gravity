@@ -101,19 +101,29 @@ fn check(p: &Proposal) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The action `frame.id`, when `peer` offered it; refused and audited
-/// otherwise.
+/// The action `frame.id`, when `peer` offered it and its project is still
+/// linked with that peer (ARCH-R51 S1a); refused and audited otherwise.
 fn offered(app: &AppState, peer: &Peer, frame: &Value, what: &str) -> anyhow::Result<OwnerAction> {
     let id = text(frame, "id")?;
+    let still_linked = |a: &OwnerAction| {
+        app.db
+            .project_link_by_remote(&peer.id, &a.proposal.project_id)
+            .ok()
+            .flatten()
+            .is_some()
+    };
     match app.db.get_owner_action(id)? {
-        Some(a) if a.offered_by() == Some(peer.id.as_str()) => Ok(a),
+        Some(a) if a.offered_by() == Some(peer.id.as_str()) && still_linked(&a) => Ok(a),
         _ => {
             audit(
                 app,
                 id,
                 &format!("peer:{}", peer.name),
                 "refused",
-                json!({ "why": format!("{what} for an action this computer never offered") }),
+                json!({ "why": format!(
+                    "{what} for an action this computer never offered, or whose project \
+                     is no longer linked"
+                ) }),
             );
             Err(refuse(
                 "not_found",

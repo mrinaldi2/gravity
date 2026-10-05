@@ -1,23 +1,14 @@
-// A command a bot proposes for the owner to run (H-117 R2): where it runs,
-// why, the content verbatim, its hash, any warnings, and once it ran, its
-// state and (redacted) output. Run opens the confirm sheet; without the
-// approve grant the card is read-only.
+// A command a bot proposes for the owner to run (H-117 R2, UX-022): who asks
+// for what and where, why, the content verbatim, its fingerprint, any
+// warnings, and once it ran, one line for how it went with the (redacted)
+// output. Run opens the confirm sheet; without the approve grant the card
+// says where it can be run.
 
 import { useState } from "react";
 import type { ReactElement } from "react";
-import type { OwnerAction, OwnerActionState } from "../../protocol/ownerActions";
+import type { OwnerAction } from "../../protocol/ownerActions";
 import OwnerActionConfirm from "./OwnerActionConfirm";
-
-const STATES: Readonly<Record<OwnerActionState, { glyph: string; word: string }>> = {
-  proposed: { glyph: "○", word: "Waiting for you" },
-  running: { glyph: "◐", word: "Running" },
-  succeeded: { glyph: "✓", word: "Done" },
-  failed: { glyph: "✕", word: "Failed" },
-  timed_out: { glyph: "⏱", word: "Timed out" },
-  rejected: { glyph: "⊘", word: "Rejected" },
-  withdrawn: { glyph: "⊘", word: "Withdrawn" },
-  expired: { glyph: "⊘", word: "Expired" },
-};
+import { fingerprint, resultLine, titleLine } from "./ownerActionText";
 
 export interface OwnerActionCardProps {
   readonly action: OwnerAction;
@@ -34,22 +25,24 @@ function Output(props: {
   readonly action: OwnerAction;
   readonly live?: string;
 }): ReactElement | null {
-  const text =
-    props.live && props.action.state === "running" ? props.live : props.action.output_tail;
+  const { state } = props.action;
+  const text = props.live && state === "running" ? props.live : props.action.output_tail;
   if (!text) {
     return null;
   }
+  // Open while it runs, and when it went wrong.
+  const open = state === "running" || state === "failed" || state === "timed_out";
   return (
-    <details className="owner-action-output" open={props.action.state === "running"}>
-      <summary>
-        Output{props.action.exit_code === null ? "" : ` · exit ${props.action.exit_code}`}
-      </summary>
+    <details className="owner-action-output" open={open}>
+      <summary>Output</summary>
       <pre>{text}</pre>
     </details>
   );
 }
 
-function Actions(props: Pick<OwnerActionCardProps, "action" | "onRun" | "onReject">): ReactElement {
+function Actions(
+  props: Pick<OwnerActionCardProps, "action" | "proposer" | "onRun" | "onReject">,
+): ReactElement {
   const [confirming, setConfirming] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
@@ -57,6 +50,7 @@ function Actions(props: Pick<OwnerActionCardProps, "action" | "onRun" | "onRejec
     return (
       <OwnerActionConfirm
         action={props.action}
+        proposer={props.proposer}
         onCancel={() => setConfirming(false)}
         onRun={() => {
           setConfirming(false);
@@ -98,17 +92,15 @@ function Actions(props: Pick<OwnerActionCardProps, "action" | "onRun" | "onRejec
 
 export default function OwnerActionCard(props: OwnerActionCardProps): ReactElement {
   const a = props.action;
-  const state = STATES[a.state] ?? { glyph: "?", word: a.state };
+  const title = titleLine(a, props.proposer);
+  const result = resultLine(a, props.proposer);
   return (
-    <article className="owner-action" aria-label={`Owner action: ${a.reason}`}>
-      <header className="owner-action-head">
-        <span className={`owner-action-state owner-action-${a.state}`}>
-          <span aria-hidden="true">{state.glyph} </span>
-          {state.word}
-        </span>
-        <span className="owner-action-target">on {a.target_name ?? "this computer"}</span>
-      </header>
-      <p className="owner-action-reason-text">{a.reason}</p>
+    <article className="owner-action" aria-label={`${title}: ${a.reason}`}>
+      <p className="owner-action-title">
+        <span aria-hidden="true">▶ </span>
+        {title}
+      </p>
+      <p className="owner-action-reason-text">Why: {a.reason}</p>
       <p className="owner-action-meta">
         {a.shell} in <code>{a.cwd}</code>
       </p>
@@ -123,13 +115,23 @@ export default function OwnerActionCard(props: OwnerActionCardProps): ReactEleme
           ))}
         </ul>
       ) : null}
-      <p className="owner-action-meta">
-        Proposed by {props.proposer} · sha {a.sha256.slice(0, 12)}
-        {a.reject_reason ? ` · ${a.reject_reason}` : ""}
-      </p>
+      <p className="owner-action-meta">Fingerprint {fingerprint(a)}</p>
+      {result === null ? null : (
+        <p className={`owner-action-result owner-action-${a.state}`} role="status">
+          {result}
+        </p>
+      )}
       <Output action={a} live={props.output} />
       {a.state === "proposed" && props.canRun ? (
-        <Actions action={a} onRun={props.onRun} onReject={props.onReject} />
+        <Actions
+          action={a}
+          proposer={props.proposer}
+          onRun={props.onRun}
+          onReject={props.onReject}
+        />
+      ) : null}
+      {a.state === "proposed" && !props.canRun ? (
+        <p className="owner-action-hint">You can run this from a device with approve access.</p>
       ) : null}
     </article>
   );

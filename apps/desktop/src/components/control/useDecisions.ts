@@ -186,7 +186,15 @@ export function useDecisions(client: DaemonApi, connected: boolean, onToast: Toa
     };
   }, [appendComment, client, forget, replace]);
 
-  const mutations = useDecisionMutations({ client, onToast, replace, forget, reload, reloadTags });
+  const mutations = useDecisionMutations({
+    client,
+    onToast,
+    replace,
+    forget,
+    reload,
+    reloadTags,
+    byId,
+  });
 
   const lists = useMemo(() => partition(byId), [byId]);
 

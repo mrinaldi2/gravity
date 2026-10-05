@@ -11,6 +11,8 @@ export interface PublishItem {
   readonly ruling_option?: string;
   readonly ruling_text?: string;
   readonly ruling_reason?: string;
+  /** The picked option's grants as shown, when it grants (H-117). */
+  readonly grants_sha?: string;
 }
 
 export type DecisionRequestBody =
@@ -34,6 +36,7 @@ export type DecisionRequestBody =
       readonly ruling_option?: string;
       readonly ruling_text: string;
       readonly ruling_reason?: string;
+      readonly grants_sha?: string;
     }
   | { readonly type: "unanswer_decision"; readonly decision_id: string }
   | {
@@ -43,7 +46,11 @@ export type DecisionRequestBody =
       readonly comment?: string;
     }
   | { readonly type: "resume_decision"; readonly decision_id: string }
-  | { readonly type: "confirm_decision"; readonly decision_id: string }
+  | {
+      readonly type: "confirm_decision";
+      readonly decision_id: string;
+      readonly grants_sha?: string;
+    }
   | {
       readonly type: "withdraw_decision";
       readonly decision_id: string;

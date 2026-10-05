@@ -103,5 +103,23 @@ export function useOwnerActions(
     [client, addToast],
   );
   const actions = all.filter((a) => inScope(a, scope));
+  // oxlint-disable-next-line unicorn/no-array-sort -- a fresh array from filter
+  actions.sort(byUrgency);
   return { actions, output, run, reject };
+}
+
+function rank(x: OwnerAction): number {
+  if (x.state === "running") {
+    return 0;
+  }
+  return x.state === "proposed" ? 1 : 2;
+}
+
+/** Running first, then waiting oldest first, then the rest newest first. */
+function byUrgency(a: OwnerAction, b: OwnerAction): number {
+  if (rank(a) !== rank(b)) {
+    return rank(a) - rank(b);
+  }
+  const order = a.created_at.localeCompare(b.created_at);
+  return rank(a) === 1 ? order : -order;
 }

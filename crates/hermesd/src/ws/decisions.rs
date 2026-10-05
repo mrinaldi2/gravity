@@ -15,7 +15,44 @@ use super::Conn;
 /// How far ahead a deadline counts as "due soon" for the badge.
 const DUE_SOON_HOURS: i64 = 24;
 
+/// Why a client that can't show grants may not rule on one that grants.
+const GRANTS_ELSEWHERE: &str = "Answer this on the desktop — this choice changes bot permissions";
+
 impl Conn {
+    /// A ruling on an option that grants permission extras comes only from a
+    /// client that shows grants (H-117), and pins the grants it showed by
+    /// their sha (ARCH-R51 M2). `option` is the one being picked, else the
+    /// drafted ruling's; `req.grants_sha` is the sha the client rendered.
+    pub(super) fn grants_shown(
+        &self,
+        decision_id: &str,
+        option: Option<&str>,
+        req: &Value,
+    ) -> anyhow::Result<()> {
+        let Some(d) = self.app.db.get_decision(decision_id)? else {
+            return Ok(());
+        };
+        let picked = option.or_else(|| d.ruling.as_ref().and_then(|r| r.option.as_deref()));
+        let Some(granting) = picked.and_then(|key| {
+            d.options
+                .iter()
+                .find(|o| o.key.eq_ignore_ascii_case(key) && !o.grants.is_empty())
+        }) else {
+            return Ok(());
+        };
+        if !self.owner.shows_grants {
+            return Err(crate::decisions::forbidden(GRANTS_ELSEWHERE));
+        }
+        if req.get("grants_sha").and_then(Value::as_str)
+            != Some(crate::decisions::grants::sha(granting).as_str())
+        {
+            return Err(crate::decisions::conflict(
+                "what this choice grants changed since you saw it; reload the decision",
+            ));
+        }
+        Ok(())
+    }
+
     /// The owner, named by the credential they authenticated with.
     pub(super) fn owner(&self) -> Actor<'_> {
         match &self.device_id {
@@ -62,11 +99,13 @@ impl Conn {
     }
 
     pub(super) fn answer_decision(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        let option = req.get("ruling_option").and_then(|v| v.as_str());
+        self.grants_shown(Self::str_field(req, "decision_id")?, option, req)?;
         let view = decisions::answer(
             &self.app,
             &self.owner(),
             Self::str_field(req, "decision_id")?,
-            req.get("ruling_option").and_then(|v| v.as_str()),
+            option,
             Self::str_field(req, "ruling_text")?,
             req.get("ruling_reason").and_then(|v| v.as_str()),
         )?;
@@ -103,6 +142,7 @@ impl Conn {
     }
 
     pub(super) fn confirm_decision(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        self.grants_shown(Self::str_field(req, "decision_id")?, None, req)?;
         let view = decisions::confirm(
             &self.app,
             &self.owner(),
@@ -136,7 +176,11 @@ impl Conn {
                 changed.push(id);
                 continue;
             }
-            match decisions::confirm(&self.app, &owner, id) {
+            // One that grants is confirmed on its own, where its grants show.
+            let confirm = self
+                .grants_shown(id, None, &Value::Null)
+                .and_then(|()| decisions::confirm(&self.app, &owner, id));
+            match confirm {
                 Ok(_) => confirmed.push(id),
                 Err(e) => failed.push(json!({ "id": id, "message": e.to_string() })),
             }
@@ -184,6 +228,9 @@ impl Conn {
 
     pub(super) fn update_decision(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let decision_id = Self::str_field(req, "decision_id")?;
+        if let Some(option) = req.get("ruling_option").and_then(|v| v.as_str()) {
+            self.grants_shown(decision_id, Some(option), req)?;
+        }
         let options: Option<Vec<bus::DecisionOption>> = match req.get("options") {
             Some(value) if !value.is_null() => Some(serde_json::from_value(value.clone())?),
             _ => None,

@@ -50,7 +50,14 @@ fn base_view(decision: &Decision, bots: &HashMap<String, Bot>) -> DecisionView {
         kind: decision.kind,
         title: decision.title.clone(),
         body: decision.body.clone(),
-        options: decision.options.clone(),
+        options: decision
+            .options
+            .iter()
+            .map(|o| bus::DecisionOption {
+                grants_sha: (!o.grants.is_empty()).then(|| super::grants::sha(o)),
+                ..o.clone()
+            })
+            .collect(),
         recommendation: decision.recommendation.clone(),
         raised_by: RaisedBy {
             bot_id: decision.raised_by_bot_id.clone(),

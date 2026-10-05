@@ -1,13 +1,30 @@
 //! A decision's option can grant permission extras (H-117): the owner's
 //! ruling picking it is the grant, applied at publish with no second step.
+//! Only a client that shows grants rules on one, pinning the grants it
+//! showed by their sha (ARCH-R51 M2).
 
 mod common;
 
 use bus::PermissionExtra;
 use common::peers::{team, wait_until};
 use common::tasks::project_with_bots;
-use common::WsClient;
-use serde_json::json;
+use common::{TestDaemon, WsClient};
+use serde_json::{json, Value};
+
+/// The owner's desktop: it says it shows what an option grants.
+async fn desktop(d: &TestDaemon) -> WsClient {
+    WsClient::connect_with(d, d.app.secrets.client_token(), &["decision_grants"]).await
+}
+
+/// The `grants_sha` of option `key` as the client was shown it.
+async fn shown_sha(owner: &mut WsClient, id: &str, key: &str) -> Value {
+    let got = owner
+        .request(json!({"type": "get_decision", "decision_id": id}))
+        .await;
+    let options = got["decision"]["options"].as_array().expect("options");
+    let option = options.iter().find(|o| o["key"] == key).expect("option");
+    option["grants_sha"].clone()
+}
 
 /// A bot linked from another computer gets its extras there.
 #[tokio::test]
@@ -23,12 +40,13 @@ async fn a_linked_bot_gets_its_grant_on_its_own_computer() {
         )
         .await;
     let id = raised["decision"]["id"].as_str().expect("id").to_string();
-    t.mac_client
-        .request(json!({"type": "answer_decision", "decision_id": id,
-                        "ruling_option": "yes", "ruling_text": "Yes."}))
-        .await;
-    t.mac_client
-        .request(json!({"type": "publish_decisions", "items": [{"decision_id": id}]}))
+    let mut owner = desktop(&t.mac).await;
+    let sha = shown_sha(&mut owner, &id, "yes").await;
+    owner
+        .request(
+            json!({"type": "publish_decisions", "items": [{"decision_id": id,
+                        "ruling_option": "yes", "ruling_text": "Yes.", "grants_sha": sha}]}),
+        )
         .await;
     let (win, windev) = (&t.win, t.windev_id.clone());
     wait_until("the PC grants it", || {
@@ -58,17 +76,39 @@ async fn the_owners_ruling_applies_the_extras_its_option_grants() {
     // Names are stored as ids, so a rename can't redirect a grant.
     let stored = db.get_decision(&id).unwrap().unwrap();
     assert_eq!(stored.options[0].grants[0].bot, devops);
+    assert!(stored.options[0].grants_sha.is_none(), "never stored");
     assert!(db.bot_permission_extras(&devops).unwrap().is_empty());
 
-    let mut owner = WsClient::connect(&pair.d).await;
-    owner
-        .request(json!({"type": "answer_decision", "decision_id": id,
-                        "ruling_option": "grant-all", "ruling_text": "Yes, all four."}))
-        .await;
+    let answer = |sha: Value| {
+        json!({"type": "answer_decision", "decision_id": id, "ruling_option": "grant-all",
+               "ruling_text": "Yes, all four.", "grants_sha": sha})
+    };
+    // A client that can't show grants may not pick it; the hold option is fine.
+    let mut phone = WsClient::connect(&pair.d).await;
+    let refused = phone.request(answer(Value::Null)).await;
+    assert_eq!(refused["code"], "forbidden", "{refused}");
+    assert!(refused["message"]
+        .as_str()
+        .unwrap()
+        .contains("Answer this on the desktop"));
+
+    let mut owner = desktop(&pair.d).await;
+    let sha = shown_sha(&mut owner, &id, "grant-all").await;
+    assert!(sha.is_string(), "{sha}");
+    // Grants other than the ones shown: refused.
+    let stale = owner.request(answer(json!("0".repeat(64)))).await;
+    assert_eq!(stale["code"], "conflict", "{stale}");
+    owner.request(answer(sha.clone())).await;
     // Drafted, not yet ruled: nothing granted.
     assert!(db.bot_permission_extras(&devops).unwrap().is_empty());
-    let published = owner
+    // Publishing the draft from a client that can't show it: refused too.
+    let from_phone = phone
         .request(json!({"type": "publish_decisions", "items": [{"decision_id": id}]}))
+        .await;
+    assert_eq!(from_phone["code"], "forbidden", "{from_phone}");
+    let published = owner
+        .request(json!({"type": "publish_decisions",
+                        "items": [{"decision_id": id, "grants_sha": sha}]}))
         .await;
     assert_eq!(published["type"], "publish_result", "{published}");
 

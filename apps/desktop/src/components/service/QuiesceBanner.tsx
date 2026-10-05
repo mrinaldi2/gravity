@@ -1,33 +1,48 @@
-// The pause for an install (H-117), shown across the whole app while the
-// daemon's computer holds every project still. The owner can end it early.
+// The pause for an install (H-117), shown across the whole app while every
+// project on this computer is held still. The owner can end it early, after
+// a confirm: resuming mid-install can break it. Copy per UX on H-117.
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import type { ReactElement } from "react";
 import type { AddToast } from "../../app/useToasts";
-import { useLoadOnConnect } from "../../hooks/useLoadOnConnect";
 import type { DaemonApi } from "../../protocol/api";
-import type { Quiesce } from "../../protocol/quiesce";
+import type { Quiesce, QuiesceHolder } from "../../protocol/quiesce";
 import { errText } from "../../util";
+import ConfirmDialog from "../overlay/ConfirmDialog";
+import { installing, useQuiesce } from "./useQuiesce";
 
 function time(at: string): string {
   return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-/** The open pause, read on connect and kept current by its pushes. */
-function useQuiesce(client: DaemonApi, connected: boolean): Quiesce | null {
-  const [quiesce, setQuiesce] = useState<Quiesce | null>(null);
-  const load = useCallback(async (): Promise<void> => {
-    try {
-      const reply = await client.request({ type: "quiesce_status" }, "quiesce");
-      setQuiesce(reply.quiesce);
-    } catch {
-      // An older daemon has no pause to show.
-      setQuiesce(null);
-    }
-  }, [client]);
-  useLoadOnConnect(connected, load);
-  useEffect(() => client.on("quiesce_update", (push) => setQuiesce(push.quiesce)), [client]);
-  return quiesce;
+/** "node (process 4120) · DevOps in Gravity". */
+function holderLine(h: QuiesceHolder): string {
+  let who = "";
+  if (h.bot_name && h.project_name) {
+    who = ` · ${h.bot_name} in ${h.project_name}`;
+  } else if (h.project_name) {
+    who = ` · in ${h.project_name}`;
+  }
+  return `${h.command} (process ${h.pid})${who}`;
+}
+
+/** What still holds the Hermes folder, while the install waits on it. */
+function Blocked({ quiesce }: { readonly quiesce: Quiesce }): ReactElement | null {
+  const holders = quiesce.report?.unresolved ?? [];
+  if (quiesce.phase !== "blocked" || holders.length === 0) {
+    return null;
+  }
+  return (
+    <div className="service-recovery-body">
+      The install is waiting for these programs to close the Hermes folder:
+      <ul className="quiesce-holders">
+        {holders.map((h) => (
+          <li key={h.pid}>{holderLine(h)}</li>
+        ))}
+      </ul>
+      Quit them to let the install go ahead.
+    </div>
+  );
 }
 
 interface QuiesceBannerProps {
@@ -38,33 +53,49 @@ interface QuiesceBannerProps {
 }
 
 export function QuiesceBanner({ quiesce, canResume, onResume }: QuiesceBannerProps): ReactElement {
+  const [confirming, setConfirming] = useState(false);
+  const what = installing(quiesce);
   return (
     <div className="service-recovery quiesce-banner" role="status">
       <div className="service-recovery-text">
         <div className="service-recovery-title">
-          <span aria-hidden="true">⏸ </span>Every project here is paused for the {quiesce.reason}
+          <span aria-hidden="true">⏸ </span>Every project on this computer is paused while The
+          Hermes {what} installs
         </div>
         <div className="service-recovery-body">
-          Bots, routines, workers and messages wait until the install finishes. Since{" "}
-          {time(quiesce.started_at)}; everything resumes by itself at {time(quiesce.deadline_at)} if
-          it doesn't.
+          Bots, routines, workers and messages are on hold. They pick up where they left off when
+          the install is done, or at {time(quiesce.deadline_at)} at the latest. Paused since{" "}
+          {time(quiesce.started_at)}.
         </div>
+        <Blocked quiesce={quiesce} />
         {quiesce.report?.services_changed === true ? (
           <div className="service-recovery-body">
             <strong>
-              <span aria-hidden="true">⚠ </span>The services list in hermesd.toml changed since the
-              daemon started.
+              <span aria-hidden="true">⚠ </span>The list of background services changed after the
+              Hermes service started.
             </strong>{" "}
-            The list it started with was used; check the new one before the next install.
+            This install uses the earlier list; restart the Hermes service to use the new one.
           </div>
         ) : null}
       </div>
       {canResume ? (
         <div className="service-recovery-actions">
-          <button type="button" className="btn btn-small btn-primary" onClick={onResume}>
+          <button type="button" className="btn btn-small" onClick={() => setConfirming(true)}>
             Resume now
           </button>
         </div>
+      ) : null}
+      {confirming ? (
+        <ConfirmDialog
+          title="Resume everything now?"
+          body={`The install of ${what} is still running. If bots start working now, it may fail and this computer may go back to the previous version.`}
+          confirmLabel="Resume now"
+          onCancel={() => setConfirming(false)}
+          onConfirm={() => {
+            setConfirming(false);
+            onResume();
+          }}
+        />
       ) : null}
     </div>
   );
@@ -77,7 +108,7 @@ export default function QuiesceLayer(props: {
   readonly addToast: AddToast;
 }): ReactElement | null {
   const { client, connected, addToast } = props;
-  const quiesce = useQuiesce(client, connected);
+  const quiesce = useQuiesce(client, connected, addToast);
   if (quiesce === null) {
     return null;
   }

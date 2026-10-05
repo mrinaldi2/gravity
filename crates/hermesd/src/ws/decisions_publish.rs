@@ -20,6 +20,8 @@ impl Conn {
         let mut results = Vec::with_capacity(items.len());
         for item in items {
             let decision_id = Self::str_field(item, "decision_id")?;
+            let option = item.get("ruling_option").and_then(|v| v.as_str());
+            self.grants_shown(decision_id, option, item)?;
             // An inline ruling is the one-step path: answer and publish in the
             // same action, for an owner who did not draft first.
             if let Some(text) = item.get("ruling_text").and_then(|v| v.as_str()) {

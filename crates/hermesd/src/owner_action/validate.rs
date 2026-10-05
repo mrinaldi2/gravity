@@ -80,13 +80,40 @@ pub fn unpinned_writable(content: &str, writable: &[PathBuf], pinned: &[String])
         let under = writable.iter().any(|root| path.starts_with(root));
         let is_pinned = pinned.iter().any(|p| Path::new(p) == path);
         if under && !is_pinned {
-            let flag = format!("names {token}, which a bot can change, without pinning it");
+            let flag = unpinned_flag(path);
             if !flags.contains(&flag) {
                 flags.push(flag);
             }
         }
     }
     flags
+}
+
+/// "stop.sh (in ~/Developer/gravity/scripts) can be changed by a bot after
+/// you approve, and The Hermes can't check it." (UX-022).
+fn unpinned_flag(path: &Path) -> String {
+    let name = path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    let folder = path.parent().map(tilde).unwrap_or_default();
+    format!(
+        "{name} (in {folder}) can be changed by a bot after you approve, and The Hermes \
+         can't check it."
+    )
+}
+
+/// `/Users/alice/x` as `~/x`, for the owner's own home.
+fn tilde(dir: &Path) -> String {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+    match home.map(PathBuf::from) {
+        Some(home) if dir.starts_with(&home) => match dir.strip_prefix(&home) {
+            Ok(rest) if rest.as_os_str().is_empty() => "~".to_string(),
+            Ok(rest) => format!("~/{}", rest.display()),
+            Err(_) => dir.display().to_string(),
+        },
+        _ => dir.display().to_string(),
+    }
 }
 
 #[cfg(test)]
@@ -127,7 +154,11 @@ mod tests {
         let script = "sh /home/u/.thehermes/projects/p/bots/dev/run.sh && ls /tmp";
         let flags = unpinned_writable(script, &roots, &[]);
         assert_eq!(flags.len(), 1, "{flags:?}");
-        assert!(flags[0].contains("run.sh"));
+        assert!(
+            flags[0]
+                .starts_with("run.sh (in /home/u/.thehermes/projects/p/bots/dev) can be changed"),
+            "{flags:?}"
+        );
         let pinned = ["/home/u/.thehermes/projects/p/bots/dev/run.sh".to_string()];
         assert!(unpinned_writable(script, &roots, &pinned).is_empty());
     }
