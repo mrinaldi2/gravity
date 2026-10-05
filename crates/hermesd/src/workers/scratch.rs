@@ -68,18 +68,86 @@ pub fn has_leftovers(workspace: &Path) -> bool {
     leftovers(workspace).iter().any(|dir| dir.exists())
 }
 
-/// Removes a retired worker's clone and scratch folder. Errors (a file still
-/// held by a process that hasn't exited) leave the rest for a later pass.
-pub fn clean_worker(workspace: &Path) -> anyhow::Result<()> {
+/// What cleaning up a retired worker kept of its work.
+#[derive(Debug, Default)]
+pub struct Cleaned {
+    /// Bundles of commits no remote had, written this time.
+    pub bundles: Vec<PathBuf>,
+    /// Repositories left in place because they couldn't be bundled, and why.
+    pub kept: Vec<(PathBuf, String)>,
+}
+
+/// Removes a retired worker's clone and scratch folder, once whatever their
+/// repositories hold that no remote has is bundled (ARCH-R40). A repository
+/// that can't be bundled stays. Errors (a file still held by a process that
+/// hasn't exited) leave the rest for a later pass.
+pub fn clean_worker(workspace: &Path) -> anyhow::Result<Cleaned> {
     let scratch = workspace.join(SCRATCH_DIR);
     let worktrees = linked_worktrees(&scratch);
+    let mut cleaned = Cleaned::default();
     for dir in leftovers(workspace) {
-        remove_tree(&dir)?;
+        let mut keep = Vec::new();
+        for repo in super::bundle::repos_in(&dir) {
+            match super::bundle::save(workspace, &repo) {
+                Ok(bundle) => cleaned.bundles.extend(bundle),
+                Err(error) => {
+                    cleaned.kept.push((repo.clone(), format!("{error:#}")));
+                    keep.push(repo);
+                }
+            }
+        }
+        remove_except(&dir, &keep)?;
     }
     for common in worktrees {
         prune_worktrees(&common);
     }
+    Ok(cleaned)
+}
+
+/// Removes `dir`, or, when some folders in it must stay, everything else.
+fn remove_except(dir: &Path, keep: &[PathBuf]) -> anyhow::Result<()> {
+    if keep.is_empty() {
+        return remove_tree(dir);
+    }
+    if keep.iter().any(|k| k == dir) {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(dir)?.flatten() {
+        let path = entry.path();
+        if keep.contains(&path) {
+            continue;
+        }
+        if entry.file_type()?.is_dir() {
+            remove_tree(&path)?;
+        } else {
+            std::fs::remove_file(&path)?;
+        }
+    }
     Ok(())
+}
+
+/// Why the daemon must not delete inside `workspace`, if it mustn't: only a
+/// retired worker's own workspace under `<home>/projects` is cleaned up.
+pub fn refuse_cleaning(projects: &Path, bot: &bus::Bot) -> Option<String> {
+    let retired = bot.temporary && bot.deleted_at.is_some();
+    refuse_cleaning_at(projects, Path::new(&bot.workspace_path), retired)
+}
+
+fn refuse_cleaning_at(projects: &Path, workspace: &Path, retired: bool) -> Option<String> {
+    if !retired {
+        return Some("not a retired worker".to_string());
+    }
+    let (Ok(projects), Ok(workspace)) = (projects.canonicalize(), workspace.canonicalize()) else {
+        return Some("its workspace can't be resolved".to_string());
+    };
+    if workspace == projects || !workspace.starts_with(&projects) {
+        return Some(format!(
+            "{} is outside {}",
+            workspace.display(),
+            projects.display()
+        ));
+    }
+    None
 }
 
 /// Removes the shared target once no worker is left to build in it.
@@ -102,6 +170,10 @@ pub fn remove_idle_target(app: &Arc<AppState>) -> anyhow::Result<()> {
 /// `remove_dir_all`, after clearing read-only flags if the first try fails:
 /// git writes its packs read-only, which Windows refuses to delete.
 pub fn remove_tree(dir: &Path) -> anyhow::Result<()> {
+    if std::fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_symlink()) {
+        // Windows removes a link to a folder as a folder.
+        return Ok(std::fs::remove_file(dir).or_else(|_| std::fs::remove_dir(dir))?);
+    }
     match std::fs::remove_dir_all(dir) {
         Ok(()) => return Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
@@ -116,24 +188,45 @@ pub fn remove_tree(dir: &Path) -> anyhow::Result<()> {
     }
 }
 
+/// Gives the owner write access to everything in `dir`, so it can be
+/// deleted. Links are skipped, never followed: what they point to may be
+/// outside the tree.
 fn make_writable(dir: &Path) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for entry in entries.flatten() {
-        let path = entry.path();
-        // Never follow a link out of the tree.
-        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+        let Ok(kind) = entry.file_type() else {
             continue;
         };
-        if meta.is_dir() {
-            make_writable(&path);
-        } else if meta.permissions().readonly() {
-            let mut permissions = meta.permissions();
-            #[allow(clippy::permissions_set_readonly_false)]
-            permissions.set_readonly(false);
-            let _ = std::fs::set_permissions(&path, permissions);
+        if kind.is_symlink() {
+            continue;
         }
+        let path = entry.path();
+        if let Ok(meta) = entry.metadata() {
+            set_writable(&path, meta.permissions());
+        }
+        if kind.is_dir() {
+            make_writable(&path);
+        }
+    }
+}
+
+#[cfg(unix)]
+fn set_writable(path: &Path, mut permissions: std::fs::Permissions) {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = permissions.mode();
+    if mode & 0o200 == 0 {
+        permissions.set_mode(mode | 0o200);
+        let _ = std::fs::set_permissions(path, permissions);
+    }
+}
+
+#[cfg(windows)]
+fn set_writable(path: &Path, mut permissions: std::fs::Permissions) {
+    if permissions.readonly() {
+        permissions.set_readonly(false);
+        let _ = std::fs::set_permissions(path, permissions);
     }
 }
 
