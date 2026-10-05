@@ -117,6 +117,8 @@ struct Conn {
     bin: mpsc::UnboundedSender<Vec<u8>>,
     /// The boards this connection watches.
     watch: board::Watch,
+    /// The client renders terminal cards and may see and answer them.
+    terminal_cards: bool,
 }
 
 async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
@@ -138,11 +140,11 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
     // Handshake: first frame must be a valid hello.
     let session = match tokio::time::timeout(IDLE_TIMEOUT, stream.next()).await {
         Ok(Some(Ok(WsMessage::Text(text)))) => {
-            handshake(&app, &out_tx, &text).map(|session| (session, shows_permission_cards(&text)))
+            handshake(&app, &out_tx, &text).map(|session| (session, hello_features(&text)))
         }
         _ => None,
     };
-    let Some(((caps, device_id), cards)) = session else {
+    let Some(((caps, device_id), features)) = session else {
         drop((out_tx, viewer));
         finish(writer).await;
         return;
@@ -150,8 +152,13 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
 
     // A client that renders permission cards and may answer them is what lets
     // the daemon hold a prompt for the app instead of the terminal.
-    let _answerer =
-        (cards && caps.contains(&Capability::Control)).then(|| crate::approval::answerer(&app));
+    let cards = features.iter().any(|f| f == "permission_cards");
+    // Terminal cards (an owner command waiting on the owner) go only to a
+    // client that says it renders them: an older one would show them as a
+    // bot's prompt and could grant owner power without saying so (H-044 T4).
+    let terminal_cards = cards && features.iter().any(|f| f == TERMINAL_CARD);
+    let _answerer = (cards && caps.contains(&Capability::Control))
+        .then(|| crate::approval::answerer(&app, terminal_cards));
 
     // Forward server pushes to this client.
     let push_tx = out_tx.clone();
@@ -171,6 +178,9 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             };
+            if !terminal_cards && is_terminal_card(&push) {
+                continue;
+            }
             // `BotUpdated` carries a database row, whose `state` and
             // `unread_count` are placeholders the supervisor normally overlays.
             // Serialising it raw would tell clients every changed bot is
@@ -205,6 +215,7 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
         device_id,
         bin: bin_tx,
         watch: board::Watch::default(),
+        terminal_cards,
     };
 
     // Any frame counts as a sign of life, a ping or pong as much as a request.
@@ -265,13 +276,32 @@ async fn finish(mut writer: JoinHandle<()>) {
     }
 }
 
-/// Whether the client's hello says it shows permission cards.
-fn shows_permission_cards(hello: &str) -> bool {
-    serde_json::from_str::<Value>(hello).is_ok_and(|hello| {
-        hello["features"]
-            .as_array()
-            .is_some_and(|features| features.iter().any(|f| f == "permission_cards"))
-    })
+/// The hello feature a client sends when it renders terminal cards.
+const TERMINAL_CARD: &str = "terminal_card";
+
+/// The optional behaviours the client's hello says it supports.
+fn hello_features(hello: &str) -> Vec<String> {
+    serde_json::from_str::<Value>(hello)
+        .ok()
+        .and_then(|hello| {
+            hello["features"].as_array().map(|features| {
+                features
+                    .iter()
+                    .filter_map(|f| f.as_str().map(str::to_string))
+                    .collect()
+            })
+        })
+        .unwrap_or_default()
+}
+
+/// Whether a push is about a terminal card.
+fn is_terminal_card(push: &crate::events::Push) -> bool {
+    use crate::events::Push;
+    match push {
+        Push::PermissionRequest { request } => request.bot_id == crate::approval::TERMINAL,
+        Push::PermissionResolved { bot_id, .. } => bot_id == crate::approval::TERMINAL,
+        _ => false,
+    }
 }
 
 /// Returns the authenticated connection's capability grants and issuing

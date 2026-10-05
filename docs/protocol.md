@@ -95,6 +95,13 @@ permission prompts and can answer them (`answer_permission`). The daemon only ho
 a Claude Code prompt for the app while at least one such client with the `control`
 grant is connected; otherwise the prompt stays in the bot's terminal.
 
+Terminal cards (an owner command waiting on the owner, bot id `terminal`) need a second
+feature, `"terminal_card"`, which the desktop app sends from 0.16. A client without it
+never sees one: not in `permission_request` / `permission_resolved` pushes, not in
+`list_permissions`, and `answer_permission` on one is refused with `forbidden`. With no
+connected client that sends both features, `owner_request` is refused as if no app were
+open.
+
 Two credential kinds are accepted as `token`:
 
 - **Owner token** (`~/.thehermes/secrets/client.token`) — full grants, same machine.

@@ -86,22 +86,36 @@ pub struct Approvals {
     pending: Mutex<HashMap<String, Pending>>,
     /// Connected clients that show permission cards and may answer them.
     answerers: AtomicUsize,
+    /// Those of them that also render terminal cards (`terminal_card`).
+    terminal_answerers: AtomicUsize,
 }
 
 /// Held by a connection that can answer permission cards; dropping it, when
 /// the connection closes, takes that client out of the count.
-pub struct Answerer(Arc<AppState>);
+pub struct Answerer(Arc<AppState>, bool);
 
 impl Drop for Answerer {
     fn drop(&mut self) {
         self.0.approvals.answerers.fetch_sub(1, Ordering::SeqCst);
+        if self.1 {
+            self.0
+                .approvals
+                .terminal_answerers
+                .fetch_sub(1, Ordering::SeqCst);
+        }
     }
 }
 
-/// Counts a connection in as able to answer permission cards.
-pub fn answerer(app: &Arc<AppState>) -> Answerer {
+/// Counts a connection in as able to answer permission cards, and terminal
+/// cards too when it said it renders them.
+pub fn answerer(app: &Arc<AppState>, terminal_cards: bool) -> Answerer {
     app.approvals.answerers.fetch_add(1, Ordering::SeqCst);
-    Answerer(app.clone())
+    if terminal_cards {
+        app.approvals
+            .terminal_answerers
+            .fetch_add(1, Ordering::SeqCst);
+    }
+    Answerer(app.clone(), terminal_cards)
 }
 
 impl Approvals {
@@ -118,6 +132,13 @@ impl Approvals {
             .collect();
         out.sort_by_key(|r| r.created_at);
         out
+    }
+
+    /// Whether a pending prompt is a terminal card (filed under `TERMINAL`).
+    pub fn is_terminal(&self, request_id: &str) -> bool {
+        self.lock()
+            .get(request_id)
+            .is_some_and(|p| p.request.bot_id == TERMINAL)
     }
 
     /// Answers a pending prompt. Errors when it is no longer pending.
@@ -189,8 +210,13 @@ async fn decide(
     runtime_key: Option<u64>,
 ) -> Option<Decision> {
     // No app that could answer is open: the prompt belongs in the terminal,
-    // exactly as it was before cards existed.
-    if app.approvals.answerers.load(Ordering::SeqCst) == 0 {
+    // exactly as it was before cards existed. A terminal card needs a client
+    // that renders it: one that doesn't never sees it (H-044 T4).
+    let answerers = match bot_id {
+        TERMINAL => &app.approvals.terminal_answerers,
+        _ => &app.approvals.answerers,
+    };
+    if answerers.load(Ordering::SeqCst) == 0 {
         return None;
     }
     let window = Duration::from_secs(app.cfg.permission_timeout_seconds.clamp(1, MAX_WINDOW_SECS));

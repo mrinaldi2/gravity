@@ -97,7 +97,13 @@ pub struct WsClient {
 }
 
 impl WsClient {
+    /// Connects as the desktop app: it shows permission and terminal cards.
     pub async fn connect(d: &TestDaemon) -> Self {
+        Self::connect_with_features(d, &["permission_cards", "terminal_card"]).await
+    }
+
+    /// Connects as the owner, saying it supports these hello features only.
+    pub async fn connect_with_features(d: &TestDaemon, features: &[&str]) -> Self {
         let url = format!("ws://{}/ws", d.addr);
         let (socket, _) = tokio_tungstenite::connect_async(&url)
             .await
@@ -114,7 +120,7 @@ impl WsClient {
                 "protocol_version": 2,
                 "token": d.app.secrets.client_token(),
                 "client": "test/0",
-                "features": ["permission_cards"]
+                "features": features
             }))
             .await;
         assert_eq!(reply["type"], "hello_ok", "handshake failed: {reply}");
