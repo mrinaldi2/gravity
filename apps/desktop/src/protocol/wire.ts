@@ -88,6 +88,7 @@ const REPLY_TYPES: ReadonlySet<string> = new Set(
     releases: true,
     release: true,
     dashboard: true,
+    metrics: true,
     relayed_confirmed: true,
   } satisfies Record<ServerReplyType, true>),
 );

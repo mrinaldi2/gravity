@@ -14,9 +14,11 @@ import type { Release } from "../../protocol/releases";
 import ReleaseReview from "../releases/ReleaseReview";
 import { botNamer, useItemTitles } from "../releases/ReleasesView";
 import { useReleaseActions } from "../releases/useReleases";
+import FlowWidget from "./FlowWidget";
 import NeedsYou from "./NeedsYou";
 import { useConfirmRelayed } from "./useConfirmRelayed";
 import { useDashboard } from "./useDashboard";
+import { useMetrics } from "./useMetrics";
 import { BoardWidget, MeetingsWidgets, ReleasesWidget, TeamWidget } from "./Widgets";
 
 export interface DashboardViewProps {
@@ -93,6 +95,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const { client, project, bots, connected } = props;
   const { dashboard, error, refresh } = useDashboard(client, project.id, connected);
   const relayed = useConfirmRelayed(client, project.id, props.addToast, refresh);
+  const metrics = useMetrics(client, project.id, connected);
   const [reviewing, setReviewing] = useState<Release | null>(null);
   // The Review button that opened the drawer gets focus back when it closes.
   const opener = useRef<HTMLElement | null>(null);
@@ -167,6 +170,11 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
           />
           <TeamWidget team={dashboard.team} bots={bots} onOpenBot={props.onOpenBot} />
           <MeetingsWidgets />
+          <FlowWidget
+            state={metrics}
+            columnName={(key) => columns.get(key) ?? key}
+            onBoard={openBoard}
+          />
         </div>
       </div>
       {reviewing ? (

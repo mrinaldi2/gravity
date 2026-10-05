@@ -28,6 +28,7 @@
 @import "./styles/board-cards.css";
 @import "./styles/releases.css";
 @import "./styles/dashboard.css";
+@import "./styles/flow.css";
 @import "./styles/commands.css";
 @import "./styles/overlays.css";
 @import "./styles/settings.css";

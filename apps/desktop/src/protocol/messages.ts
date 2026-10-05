@@ -19,6 +19,7 @@ import type {
   BrowserTabsPush,
 } from "./agents";
 import type { DashboardReply } from "./dashboard";
+import type { MetricsReply } from "./metrics";
 import type { ReleaseReply } from "./releases";
 import type { BotTask } from "./tasks";
 import type { WorkerView } from "./workers";
@@ -59,6 +60,7 @@ interface ReplyBase {
 export type ServerReply =
   | (ReplyBase & ReleaseReply)
   | (ReplyBase & DashboardReply)
+  | (ReplyBase & MetricsReply)
   | (ReplyBase & {
       readonly type: "hello_ok";
       readonly protocol_version: number;
