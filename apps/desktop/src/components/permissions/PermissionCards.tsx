@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { KeyboardEvent, ReactElement } from "react";
 import type { PermissionAnswer, PermissionRequest } from "../../protocol/chat";
-import { toolDisplayName } from "../../toolNames";
+import { isTerminal, permissionTitle } from "./permissionTitle";
 import { errText, fmtTimestamp } from "../../util";
 import CodeBlock from "../chat/CodeBlock";
 import type { Permissions } from "./usePermissions";
@@ -62,10 +62,8 @@ function PermissionHead({
 }): ReactElement {
   return (
     <div className="permission-head">
-      <span className="permission-label">
-        {`${botName ?? "A bot"} wants to run ${toolDisplayName(request.tool)}`}
-      </span>
-      {botName === undefined || onOpenBot === undefined ? null : (
+      <span className="permission-label">{permissionTitle(request, botName)}</span>
+      {botName === undefined || onOpenBot === undefined || isTerminal(request) ? null : (
         <button
           type="button"
           className="permission-toggle permission-open"
@@ -171,39 +169,64 @@ function PermissionCard({
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
-        <button
-          type="button"
-          className="btn btn-good"
+        <AnswerButtons
+          terminal={isTerminal(request)}
           disabled={!canAnswer || busy}
-          onClick={() => void answer("allow_once")}
-        >
-          Allow once <kbd>A</kbd>
-        </button>
-        <button
-          type="button"
-          className="btn"
-          disabled={!canAnswer || busy}
-          title="For the rest of this bot's session"
-          onClick={() => void answer("allow_session")}
-        >
-          Allow for session <kbd>S</kbd>
-        </button>
-        <button
-          type="button"
-          className="btn btn-danger"
-          disabled={!canAnswer || busy}
-          onClick={() => {
-            if (denying) {
-              void answer("deny");
-            } else {
-              setDenying(true);
-            }
+          denying={denying}
+          onAnswer={(decision) => void answer(decision)}
+          onDeny={() => {
+            setDenying(true);
           }}
-        >
-          {denying ? "Deny" : "Deny…"} <kbd>D</kbd>
-        </button>
+        />
         {canAnswer ? null : <span className="permission-readonly">Read-only connection</span>}
       </div>
     </div>
+  );
+}
+
+/** Allow once, Allow for session (bots only: a terminal command asks each time), Deny. */
+function AnswerButtons({
+  terminal,
+  disabled,
+  denying,
+  onAnswer,
+  onDeny,
+}: {
+  readonly terminal: boolean;
+  readonly disabled: boolean;
+  readonly denying: boolean;
+  readonly onAnswer: (decision: PermissionAnswer) => void;
+  readonly onDeny: () => void;
+}): ReactElement {
+  return (
+    <>
+      <button
+        type="button"
+        className="btn btn-good"
+        disabled={disabled}
+        onClick={() => onAnswer("allow_once")}
+      >
+        Allow once <kbd>A</kbd>
+      </button>
+      {terminal ? null : (
+        <button
+          type="button"
+          className="btn"
+          disabled={disabled}
+          title="For the rest of this bot's session"
+          onClick={() => onAnswer("allow_session")}
+        >
+          Allow for session <kbd>S</kbd>
+        </button>
+      )}
+      <button
+        type="button"
+        className="btn btn-danger"
+        disabled={disabled}
+        onClick={() => (denying ? onAnswer("deny") : onDeny())}
+      >
+        {denying ? "Deny" : "Deny…"} <kbd>D</kbd>
+      </button>
+    </>
   );
 }
