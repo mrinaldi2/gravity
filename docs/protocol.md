@@ -727,6 +727,13 @@ Meetings live with the board, on its home (H-017 §1.5, H-020 §4, H-102). A **s
 
 **MCP tools.** Every bot: `meeting_list {type?, upcoming?}`, `meeting_get {meeting_id}`, `meeting_start {series_id}` (its facilitator or the lead; ad-hoc with `name`, `attendees` for the lead), `meeting_contribute {meeting_id, section, body, item_refs}` (attendees and the facilitator), `meeting_close {meeting_id, outputs, summary?, skip_reason?}` and `action_add {meeting_id, text, owner, due_at?}` (facilitator or lead), `action_update {action_id, status?, text?, due_at?}` (the action's owner, the facilitator or the lead). Lead: `meeting_series_upsert {series_id?, type, name, cron, tz, facilitator, attendees, input_scope?, enabled?}` and `action_promote {action_id, title?}`. The service checks who may act, so a facilitator needs no board role.
 
+**Series limits (ARCH-R48).**
+- **Name:** at most 80 characters, with no line breaks or quotes, because it is quoted in the routine's prompt. Upsert refuses anything else.
+- **Prompt:** it quotes the name, cleaned and cut to 80 characters again however it was stored, and says who set the series up ("set up by Team Lead", or "the owner").
+- **Cron:** it may fire at most once an hour. One that fires more often (every minute, every 30 minutes, 9:00 and 9:30) is refused.
+
+**From a linked computer.** The meeting tools are board tools. A bot whose board lives on a peer reaches them through `board_call` (B9) and acts on the home as its stand-in. The home's roles and attendee lists decide what it may do. While the home is unreachable, they're refused as other board writes are.
+
 **WebSocket (owner).** Fields as the MCP tools, plus `project_id`, except a meeting's type, sent as `meeting_type` because `type` names the request:
 - read: `meeting_list` → `{type: "meetings", series, meetings}`; `meeting_get` → `{type: "meeting", meeting}`.
 - control: `meeting_series_upsert` → `{type: "meeting_series", series}`; `meeting_contribute` (the owner as an attendee) → `{type: "meeting", meeting}`; `action_update` and `action_promote` → `{type: "meeting_action", action}`.
