@@ -1,11 +1,41 @@
 //! Claude Code hook settings on Unix: lifecycle events and permission prompts
-//! posted to the daemon with curl.
+//! sent to the daemon by `hermesd hook` over the local endpoint (H-044), or
+//! posted with curl and the bearer token when `bot_transport = "http"`.
 
-/// Cooperative permission rules and lifecycle hooks. Hooks POST lifecycle
-/// events to the daemon; failures are swallowed (`|| true`) so a daemon
-/// hiccup never blocks the session, and hook failure is never interpreted as
-/// approval or denial.
-pub fn settings(daemon_port: u16, bot_token_env: &str) -> serde_json::Value {
+use crate::bus_auth::HookTransport;
+
+/// Cooperative permission rules and lifecycle hooks. Hooks report lifecycle
+/// events to the daemon; failures are swallowed so a daemon hiccup never
+/// blocks the session, and hook failure is never interpreted as approval or
+/// denial.
+pub fn settings(transport: &HookTransport) -> serde_json::Value {
+    let hooks = match transport {
+        HookTransport::Ipc { command, endpoint } => super::ipc_hooks(command, endpoint),
+        HookTransport::Http { port, token_env } => curl_hooks(*port, token_env),
+    };
+    serde_json::json!({
+        // Bus deliveries arrive over the cross-session inbox socket; accept
+        // them unattended so bot-to-bot traffic flows without approval stops.
+        "crossSessionInbound": "accept",
+        // Artifacts access is granted at spawn time (`artifacts_allow_rules`
+        // in the generated `--settings` file), never here: allow rules in a folder's
+        // settings.json make Claude Code's trust dialog warn about
+        // pre-approved permissions.
+        "permissions": {
+            "allow": [],
+            "deny": [
+                "Read(../**)",
+                crate::paths::secrets_deny_rule(),
+                crate::paths::legacy_secrets_deny_rule(),
+                "Bash(rm -rf /*)"
+            ]
+        },
+        "hooks": hooks
+    })
+}
+
+/// The pre-H-044 hooks: curl with the bearer token from the environment.
+fn curl_hooks(daemon_port: u16, bot_token_env: &str) -> serde_json::Value {
     let hook_cmd = |event: &str| {
         serde_json::json!([{
             "hooks": [{
@@ -73,33 +103,12 @@ pub fn settings(daemon_port: u16, bot_token_env: &str) -> serde_json::Value {
         }]
     }]);
     serde_json::json!({
-        // Bus deliveries arrive over the cross-session inbox socket; accept
-        // them unattended so bot-to-bot traffic flows without approval stops.
-        "crossSessionInbound": "accept",
-        // Artifacts access is granted at spawn time (`artifacts_allow_rules`
-        // in the generated `--settings` file), never here: allow rules in a folder's
-        // settings.json make Claude Code's trust dialog warn about
-        // pre-approved permissions.
-        "permissions": {
-            "allow": [],
-            "deny": [
-                "Read(../**)",
-                crate::paths::secrets_deny_rule(),
-                crate::paths::legacy_secrets_deny_rule(),
-                "Bash(rm -rf /*)"
-            ]
-        },
-        "hooks": {
-            "SessionStart": session_start,
-            "UserPromptSubmit": hook_cmd("UserPromptSubmit"),
-            // A tool that has finished running is proof the session is
-            // executing again: nothing else reports that a pending permission
-            // prompt was answered.
-            "PostToolUse": hook_cmd("PostToolUse"),
-            "Stop": forwarding("Stop"),
-            "Notification": forwarding("Notification"),
-            "PermissionRequest": permission,
-            "SessionEnd": hook_cmd("SessionEnd")
-        }
+        "SessionStart": session_start,
+        "UserPromptSubmit": hook_cmd("UserPromptSubmit"),
+        "PostToolUse": hook_cmd("PostToolUse"),
+        "Stop": forwarding("Stop"),
+        "Notification": forwarding("Notification"),
+        "PermissionRequest": permission,
+        "SessionEnd": hook_cmd("SessionEnd")
     })
 }

@@ -53,6 +53,12 @@ impl RuntimeAdapter for DoubleAdapter {
         let _ = tx.send(SessionEvent::Output(
             format!("double runtime ready for {} [{flags}]\r\n", spec.bot_name).into_bytes(),
         ));
+        // The names, never the values, of the variables it was given: what
+        // a session's environment would hold (H-044 test 10).
+        let names: Vec<&str> = spec.env.iter().map(|(name, _)| name.as_str()).collect();
+        let _ = tx.send(SessionEvent::Output(
+            format!("double runtime env [{}]\r\n", names.join(" ")).into_bytes(),
+        ));
 
         // Real inbox socket speaking the cross-session wire protocol. Unix
         // socket paths are capped at ~104 bytes on macOS, so keep it short:

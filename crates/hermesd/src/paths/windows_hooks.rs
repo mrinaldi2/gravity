@@ -1,7 +1,29 @@
-//! Serialize hook payloads with PowerShell so Windows pipe paths remain valid JSON.
+//! Claude Code hook settings on Windows: `hermesd hook` over the named pipe
+//! (H-044), or, when `bot_transport = "http"`, a PowerShell script posting
+//! with the bearer token, which serializes payloads so Windows pipe paths
+//! remain valid JSON.
 use std::path::Path;
 
-pub fn settings(workspace: &Path, port: u16, token_env: &str) -> anyhow::Result<serde_json::Value> {
+use crate::bus_auth::HookTransport;
+
+pub fn settings(workspace: &Path, transport: &HookTransport) -> anyhow::Result<serde_json::Value> {
+    let hooks = match transport {
+        HookTransport::Ipc { command, endpoint } => super::ipc_hooks(command, endpoint),
+        HookTransport::Http { port, token_env } => powershell_hooks(workspace, *port, token_env)?,
+    };
+    Ok(serde_json::json!({
+        "crossSessionInbound": "accept",
+        "permissions": { "allow": [], "deny": ["Read(../**)", crate::paths::secrets_deny_rule(), crate::paths::legacy_secrets_deny_rule(), "Bash(rm -rf /*)"] },
+        "hooks": hooks
+    }))
+}
+
+/// The pre-H-044 hooks: a PowerShell script beside the settings.
+fn powershell_hooks(
+    workspace: &Path,
+    port: u16,
+    token_env: &str,
+) -> anyhow::Result<serde_json::Value> {
     let script = workspace.join(format!(".claude/{}-hook.ps1", crate::brand::ON_DISK_SLUG));
     let body = format!(
         r#"param([string]$Event)
@@ -53,9 +75,5 @@ exit 0
         }
         hooks.insert(event.to_string(), serde_json::json!([{ "hooks": [hook] }]));
     }
-    Ok(serde_json::json!({
-        "crossSessionInbound": "accept",
-        "permissions": { "allow": [], "deny": ["Read(../**)", crate::paths::secrets_deny_rule(), crate::paths::legacy_secrets_deny_rule(), "Bash(rm -rf /*)"] },
-        "hooks": hooks
-    }))
+    Ok(serde_json::Value::Object(hooks))
 }

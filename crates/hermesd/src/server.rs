@@ -75,6 +75,16 @@ pub fn spawn_workers(app: &Arc<AppState>) {
         });
     }
 
+    // Sessions reach the bus here, identified by process (H-044).
+    {
+        let app = app.clone();
+        tokio::spawn(async move {
+            if let Err(e) = crate::bus_auth::ipc::serve(app).await {
+                tracing::error!(error = %e, "bus endpoint stopped");
+            }
+        });
+    }
+
     crate::peer::mirror::spawn(app.clone());
     crate::peer::spawn_board_relay(app.clone());
     crate::peer::spawn_dialers(app);

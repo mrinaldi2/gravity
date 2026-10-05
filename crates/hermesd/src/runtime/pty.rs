@@ -76,6 +76,7 @@ impl RuntimeAdapter for PtyAdapter {
             .spawn_command(cmd)
             .context("spawn terminal CLI")?;
         drop(pair.slave);
+        let root_pid = child.process_id();
         // The child leads its own session and group; recorded so `service
         // install` can stop what it leaves running after the daemon is gone.
         #[cfg(unix)]
@@ -138,6 +139,7 @@ impl RuntimeAdapter for PtyAdapter {
                 master: pair.master,
                 writer,
                 killer,
+                root_pid,
             }),
             events: rx,
             // The SessionStart hook reports the inbox socket once the session
@@ -255,9 +257,14 @@ struct PtySession {
     killer: Box<dyn ChildKiller + Send + Sync>,
     #[cfg(windows)]
     killer: windows::ProcessKiller,
+    root_pid: Option<u32>,
 }
 
 impl RuntimeSession for PtySession {
+    fn root_pid(&self) -> Option<u32> {
+        self.root_pid
+    }
+
     fn send_input(&mut self, bytes: &[u8]) -> anyhow::Result<()> {
         self.writer.write_all(bytes)?;
         self.writer.flush()?;

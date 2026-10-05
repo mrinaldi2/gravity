@@ -23,6 +23,10 @@ fn spec(root: &Path) -> BotSpec {
                 .display()
                 .to_string()],
             port: 49777,
+            bus: serde_json::json!({
+                "url": "http://127.0.0.1:49777/mcp",
+                "bearer_token_env_var": "THEHERMES_TOKEN",
+            }),
             artifacts: Some(root.join("artifacts")),
             browser: None,
         }),

@@ -186,16 +186,38 @@ async fn only_a_bot_token_can_ask() {
 #[test]
 fn the_hook_is_installed_with_a_timeout_longer_than_the_window() {
     let dir = tempfile::tempdir().expect("tmp");
-    hermesd::paths::write_hook_settings(dir.path(), 49777, "GRAVITY_TOKEN").expect("write");
-    let settings: Value = serde_json::from_str(
-        &std::fs::read_to_string(dir.path().join(".claude/settings.json")).expect("read"),
-    )
-    .expect("json");
+    let read = || -> Value {
+        serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join(".claude/settings.json")).expect("read"),
+        )
+        .expect("json")
+    };
+    // `hermesd hook` over the local endpoint (H-044).
+    let ipc = hermesd::bus_auth::HookTransport::Ipc {
+        command: "/bin/hermesd".to_string(),
+        endpoint: "/home/run/bus.sock".to_string(),
+    };
+    hermesd::paths::write_hook_settings(dir.path(), &ipc).expect("write");
+    let settings = read();
     let hook = &settings["hooks"]["PermissionRequest"][0]["hooks"][0];
     assert_eq!(hook["timeout"], hermesd::approval::HOOK_TIMEOUT_SECS);
     let command = hook["command"].as_str().expect("command");
-    // Unix inlines the request in the command; Windows runs a PowerShell
-    // script beside the settings that makes it.
+    assert!(
+        command.contains(" hook PermissionRequest --endpoint "),
+        "{command}"
+    );
+
+    // The rollback: Unix inlines the request in the command; Windows runs a
+    // PowerShell script beside the settings that makes it.
+    let http = hermesd::bus_auth::HookTransport::Http {
+        port: 49777,
+        token_env: "GRAVITY_TOKEN".to_string(),
+    };
+    hermesd::paths::write_hook_settings(dir.path(), &http).expect("write");
+    let settings = read();
+    let hook = &settings["hooks"]["PermissionRequest"][0]["hooks"][0];
+    assert_eq!(hook["timeout"], hermesd::approval::HOOK_TIMEOUT_SECS);
+    let command = hook["command"].as_str().expect("command");
     #[cfg(unix)]
     assert!(command.contains("/hook/permission"), "{command}");
     #[cfg(windows)]

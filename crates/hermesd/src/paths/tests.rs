@@ -123,14 +123,43 @@ fn system_md_speaks_of_hermes_and_the_registered_bus() {
 }
 
 /// SessionStart is the only report of a session's inbox socket, so it must
-/// survive a daemon that is not serving yet (H-038).
+/// survive a daemon that is not serving yet (H-038). With
+/// `bot_transport = "http"` the curl hooks come back, retry and all.
 #[cfg(unix)]
 #[test]
 fn the_session_start_hook_retries_a_daemon_that_is_still_booting() {
-    let settings = super::unix_hooks::settings(49777, "TOKEN");
+    let settings = super::unix_hooks::settings(&crate::bus_auth::HookTransport::Http {
+        port: 49777,
+        token_env: "TOKEN".to_string(),
+    });
     let command = settings["hooks"]["SessionStart"][0]["hooks"][0]["command"]
         .as_str()
         .expect("command");
     assert!(command.contains("--retry 5"), "{command}");
     assert!(command.contains("--retry-connrefused"), "{command}");
+}
+
+/// H-044: every hook is `hermesd hook <event>` over the local endpoint, and
+/// nothing in the settings names a token.
+#[test]
+fn hooks_go_over_the_local_endpoint_without_a_token() {
+    let dir = tempfile::tempdir().expect("tmp");
+    let cfg = cfg_in(dir.path());
+    let transport = crate::bus_auth::hook_transport(&cfg);
+    super::write_hook_settings(dir.path(), &transport).expect("write");
+    let raw = std::fs::read_to_string(dir.path().join(".claude/settings.json")).expect("read");
+    let settings: serde_json::Value = serde_json::from_str(&raw).expect("json");
+    let endpoint = crate::bus_auth::ipc::hook_endpoint(&cfg);
+    for event in ["SessionStart", "Stop", "Notification", "PermissionRequest"] {
+        let command = settings["hooks"][event][0]["hooks"][0]["command"]
+            .as_str()
+            .expect("command");
+        assert!(
+            command.contains(&format!(" hook {event} --endpoint ")),
+            "{command}"
+        );
+        assert!(command.contains(&endpoint), "{command}");
+    }
+    assert!(!raw.contains("TOKEN") && !raw.contains("curl"), "{raw}");
+    assert!(!dir.path().join(".claude/gravity-hook.ps1").exists());
 }

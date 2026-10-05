@@ -424,6 +424,19 @@ Timestamps are RFC 3339 UTC strings. IDs are UUIDv4 strings.
   `config` reply are read-only: they describe how the daemon was launched and
   change only via `hermesd.toml` plus a restart.
 
+## Bot identity on the bus (H-044)
+
+Bots run as the owner's user, so any secret a bot holds can be read by every other bot. A bot is therefore known by its process, not by a token:
+
+- **Endpoint:** the daemon listens on a local endpoint. On macOS and Linux it's `<home>/run/bus.sock` (its directory is 0700). On Windows it's the named pipe `\\.\pipe\thehermes-<user SID>-<home hash>-bus`, which only that user may open. The path carries no authority.
+- **Session config:** each session's `mcp.json` (and Codex's `mcp_servers`) declares the bus as a stdio server, `hermesd bus-proxy --endpoint <endpoint>`. The session starts the proxy as its own child, and the proxy relays newline-delimited JSON-RPC both ways.
+- **Who is calling:** the daemon asks the OS for the process on the other end, then walks its parents, at most eight levels and each parent no younger than its child, to a session root. The supervisor records a session root at every start: the terminal CLI, or the Codex app server.
+  - The caller is that root's bot, served by the same dispatcher as `POST /mcp`.
+  - A caller under no root (a terminal, a process that detached) gets JSON-RPC error `-32001 not a bot session` and is disconnected.
+  - The root is checked again on every request, so a restarted session's old processes are cut off.
+- **`[auth] bot_bearer`:** `accept` (the default, phase 1) still takes a bot's bearer token on `POST /mcp` and the hook endpoints; `refuse` (phase 2) answers 401. Every bearer use is recorded per bot, so a machine moves to `refuse` once no bot has used one for a day.
+- **`[auth] bot_transport`:** `stdio` (the default); `http` writes the old HTTP entry back into each bot's config on its next start, as a rollback.
+
 ## Bot self-management
 
 Advertised as the `bot_self_management` capability in `hello_ok`. Every change

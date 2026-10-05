@@ -108,6 +108,14 @@ impl Sessions {
 
 struct NativeSession(Arc<Mutex<Sessions>>);
 impl RuntimeSession for NativeSession {
+    /// The app server starts the MCP servers, so its tree is the bot's.
+    fn root_pid(&self) -> Option<u32> {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .backend
+            .root_pid()
+    }
     fn send_input(&mut self, bytes: &[u8]) -> anyhow::Result<()> {
         self.0
             .lock()

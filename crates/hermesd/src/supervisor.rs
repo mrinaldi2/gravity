@@ -200,6 +200,8 @@ struct SupervisorInner {
     /// Called just before each session starts, while the transcript still
     /// ends where the last session stopped; see [`Supervisor::on_start`].
     before_start: std::sync::OnceLock<StartHook>,
+    /// Each live session's root process, by bot (H-044).
+    roots: crate::bus_auth::session::SessionRoots,
 }
 
 /// What runs before a bot's session starts: the bot id, and whether the
@@ -225,8 +227,32 @@ impl Supervisor {
                 auto_compact,
                 bots: Mutex::new(HashMap::new()),
                 before_start: std::sync::OnceLock::new(),
+                roots: crate::bus_auth::session::SessionRoots::default(),
             }),
         }
+    }
+
+    /// The root process of every live session, for bus identity (H-044).
+    pub fn session_roots(&self) -> crate::bus_auth::session::SessionRoots {
+        self.inner.roots.clone()
+    }
+
+    /// Starts a session and records its root process as the bot's, replacing
+    /// the last session's, so the old session's processes are cut off.
+    fn start_session(
+        &self,
+        bot_id: &str,
+        spec: &crate::runtime::BotSpec,
+    ) -> anyhow::Result<crate::runtime::StartedSession> {
+        let started = self.inner.adapter.start(spec)?;
+        match started.session.root_pid() {
+            Some(pid) => {
+                let table = crate::bus_auth::os::OsProcessTable;
+                self.inner.roots.record_pid(&table, pid, bot_id);
+            }
+            None => self.inner.roots.forget(bot_id),
+        }
+        Ok(started)
     }
 
     /// Runs `hook` before every session start: at boot, after a crash, after
@@ -299,6 +325,15 @@ impl Supervisor {
             self.set_state(bot_id, BotState::Stopped, "not running");
         }
         Ok(())
+    }
+
+    /// The session's inbox socket, as last reported.
+    pub fn msg_socket_path(&self, bot_id: &str) -> Option<std::path::PathBuf> {
+        let bots = self.lock_bots();
+        bots.get(bot_id)?
+            .msg_socket
+            .as_ref()
+            .map(|s| s.path.clone())
     }
 
     /// Record the session's inbox socket, reported by the SessionStart hook.

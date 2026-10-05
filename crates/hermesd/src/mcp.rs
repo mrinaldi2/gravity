@@ -70,7 +70,7 @@ pub async fn hook_handler(
     let Some(token) = bearer(&headers) else {
         return StatusCode::UNAUTHORIZED;
     };
-    let Some(bot_id) = app.secrets.bot_for_token(&token) else {
+    let Some(bot_id) = crate::bus_auth::bearer_bot(&app, &token) else {
         return StatusCode::UNAUTHORIZED;
     };
     let event = if query.event.is_empty() {
@@ -81,19 +81,29 @@ pub async fn hook_handler(
     } else {
         query.event.as_str()
     };
+    if on_hook(&app, &bot_id, event, &body) {
+        StatusCode::OK
+    } else {
+        StatusCode::BAD_REQUEST
+    }
+}
+
+/// A lifecycle hook from `bot_id`'s session, over HTTP or the local endpoint
+/// (`hermesd hook`, H-044). False when it names no event.
+pub(crate) fn on_hook(app: &AppState, bot_id: &str, event: &str, body: &Value) -> bool {
     if event.is_empty() {
-        return StatusCode::BAD_REQUEST;
+        return false;
     }
     // SessionStart reports the session's inbox socket for channel delivery.
     if let Some(socket) = body.get("socket").and_then(|v| v.as_str()) {
         let msg_token = body.get("msg_token").and_then(|v| v.as_str());
-        app.supervisor.set_msg_socket(&bot_id, socket, msg_token);
+        app.supervisor.set_msg_socket(bot_id, socket, msg_token);
     }
     let message = body.get("message").and_then(|v| v.as_str());
     let transcript_path = body.get("transcript_path").and_then(|v| v.as_str());
     app.supervisor
-        .on_hook_with_transcript(&bot_id, event, message, transcript_path);
-    StatusCode::OK
+        .on_hook_with_transcript(bot_id, event, message, transcript_path);
+    true
 }
 
 /// POST /mcp — JSON-RPC 2.0 (MCP Streamable HTTP, request/response subset).
@@ -105,21 +115,27 @@ pub async fn mcp_handler(
     let Some(token) = bearer(&headers) else {
         return (StatusCode::UNAUTHORIZED, Json(json!({}))).into_response();
     };
-    let Some(bot_id) = app.secrets.bot_for_token(&token) else {
+    let Some(bot_id) = crate::bus_auth::bearer_bot(&app, &token) else {
         return (StatusCode::UNAUTHORIZED, Json(json!({}))).into_response();
     };
+    match rpc_response(&app, &bot_id, &req).await {
+        Some(body) => (StatusCode::OK, Json(body)).into_response(),
+        // Notifications get no response body.
+        None => StatusCode::ACCEPTED.into_response(),
+    }
+}
 
-    let id = req.get("id").cloned();
+/// One JSON-RPC request from `bot_id`, over HTTP or the local endpoint
+/// (H-044): the response, or `None` for a notification.
+pub(crate) async fn rpc_response(app: &Arc<AppState>, bot_id: &str, req: &Value) -> Option<Value> {
+    let id = req.get("id").cloned()?;
     let method = req
         .get("method")
         .and_then(|m| m.as_str())
         .unwrap_or_default()
         .to_string();
-    // Notifications get no response body.
-    if id.is_none() {
-        return StatusCode::ACCEPTED.into_response();
-    }
     let params = req.get("params").cloned().unwrap_or(json!({}));
+    let (app, bot_id) = (app.clone(), bot_id.to_string());
 
     let result = match method.as_str() {
         "initialize" => Ok(json!({
@@ -138,14 +154,13 @@ pub async fn mcp_handler(
         _ => Err((-32601, format!("method not found: {method}"))),
     };
 
-    let body = match result {
+    Some(match result {
         Ok(res) => json!({ "jsonrpc": "2.0", "id": id, "result": res }),
         Err((code, msg)) => json!({
             "jsonrpc": "2.0", "id": id,
             "error": { "code": code, "message": msg }
         }),
-    };
-    (StatusCode::OK, Json(body)).into_response()
+    })
 }
 
 fn text_result(v: &Value) -> Value {

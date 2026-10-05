@@ -24,23 +24,35 @@ pub async fn permission_hook(
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
-        .and_then(|token| app.secrets.bot_for_token(token));
+        .and_then(|token| crate::bus_auth::bearer_bot(&app, token));
     let Some(bot_id) = bot else {
         return (StatusCode::UNAUTHORIZED, Json(Value::Null)).into_response();
     };
+    match permission_output(&app, &bot_id, &body).await {
+        Some(output) => (StatusCode::OK, Json(output)).into_response(),
+        None => StatusCode::OK.into_response(),
+    }
+}
+
+/// The hook output deciding `bot_id`'s prompt, once the owner has answered;
+/// `None` leaves the prompt to the terminal. Shared by HTTP and the local
+/// endpoint (`hermesd hook PermissionRequest`, H-044).
+pub(crate) async fn permission_output(
+    app: &Arc<AppState>,
+    bot_id: &str,
+    body: &Value,
+) -> Option<Value> {
     let tool = body["tool_name"].as_str().unwrap_or("a tool").to_string();
-    let output = match decide(&app, &bot_id, &tool, &body["tool_input"], None).await {
-        Some(Decision::Answered(Answer::AllowOnce, _)) => allow(None),
-        Some(Decision::Answered(Answer::AllowSession, _)) => {
-            allow(Some(session_rules(&tool, &body)))
-        }
-        Some(Decision::Answered(Answer::Deny, reason)) => {
-            deny(reason.as_deref().unwrap_or("The owner denied this."))
-        }
-        Some(Decision::Expired) => deny("The owner did not answer this permission prompt in time."),
-        None => return StatusCode::OK.into_response(),
-    };
-    (StatusCode::OK, Json(output)).into_response()
+    Some(
+        match decide(app, bot_id, &tool, &body["tool_input"], None).await? {
+            Decision::Answered(Answer::AllowOnce, _) => allow(None),
+            Decision::Answered(Answer::AllowSession, _) => allow(Some(session_rules(&tool, body))),
+            Decision::Answered(Answer::Deny, reason) => {
+                deny(reason.as_deref().unwrap_or("The owner denied this."))
+            }
+            Decision::Expired => deny("The owner did not answer this permission prompt in time."),
+        },
+    )
 }
 
 fn allow(updated_permissions: Option<Vec<Value>>) -> Value {

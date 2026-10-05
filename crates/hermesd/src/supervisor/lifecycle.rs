@@ -30,9 +30,8 @@ impl Supervisor {
         // Refresh the cooperative settings so existing bots pick up current
         // hooks (inbox-socket reporting, crossSessionInbound) on every start.
         if workspace.exists() {
-            if let Err(e) =
-                crate::paths::write_hook_settings(&workspace, self.inner.cfg.port, BOT_TOKEN_ENV)
-            {
+            let hooks = crate::bus_auth::hook_transport(&self.inner.cfg);
+            if let Err(e) = crate::paths::write_hook_settings(&workspace, &hooks) {
                 tracing::warn!(bot_id, error = %e, "failed to refresh hook settings");
             }
             // Re-assert trust on every start, not just at creation: bots
@@ -60,12 +59,8 @@ impl Supervisor {
             .as_deref()
             .and_then(|root| crate::browser::setup::server(&self.inner.cfg, root));
         if let Some(root) = &bot_root {
-            if let Err(e) = crate::paths::write_mcp_config(
-                root,
-                self.inner.cfg.port,
-                BOT_TOKEN_ENV,
-                browser.as_ref(),
-            ) {
+            let bus = crate::bus_auth::server_entry(&self.inner.cfg);
+            if let Err(e) = crate::paths::write_mcp_config(root, &bus, browser.as_ref()) {
                 tracing::warn!(bot_id, error = %e, "failed to refresh mcp config");
             }
         }
@@ -127,7 +122,13 @@ impl Supervisor {
             }
         }
 
-        let mut env = crate::brand::bot_token_vars(token);
+        // The bearer token only while it is still accepted (H-044 phase 1):
+        // once refused, a session's environment holds nothing to steal.
+        let mut env = if crate::bus_auth::bearer_in_env(&self.inner.cfg) {
+            crate::brand::bot_token_vars(token)
+        } else {
+            Vec::new()
+        };
         if let Some(window) = self.inner.auto_compact.effective(&self.inner.cfg) {
             env.push((AUTO_COMPACT_WINDOW_ENV.to_string(), window.to_string()));
         }
@@ -152,6 +153,7 @@ impl Supervisor {
                     bin: self.inner.cfg.codex_bin.clone(),
                     args: self.inner.cfg.codex_args.clone(),
                     port: self.inner.cfg.port,
+                    bus: crate::bus_auth::codex_entry(&self.inner.cfg),
                     artifacts,
                     browser,
                     profile: stored.profile,
@@ -180,7 +182,7 @@ impl Supervisor {
             };
             hook(bot_id, continues);
         }
-        let started = self.inner.adapter.start(&spec)?;
+        let started = self.start_session(bot_id, &spec)?;
         // From here on the workspace has a conversation to come back to.
         if let Err(e) = self.inner.db.mark_bot_session(bot_id) {
             tracing::warn!(bot_id, error = %e, "could not record the bot's session");

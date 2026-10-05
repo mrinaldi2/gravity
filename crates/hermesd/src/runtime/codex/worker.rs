@@ -156,10 +156,7 @@ impl Worker {
         if network {
             config["sandbox_workspace_write.network_access"] = json!(true);
         }
-        config[format!("mcp_servers.{}", crate::brand::ACTIVE_MCP_SERVER)] = json!({
-            "url": format!("http://127.0.0.1:{}/mcp", codex.port),
-            "bearer_token_env_var": crate::brand::BOT_TOKEN_ENV,
-        });
+        config[format!("mcp_servers.{}", crate::brand::ACTIVE_MCP_SERVER)] = codex.bus.clone();
         if let Some(browser) = &codex.browser {
             config[format!("mcp_servers.{}", crate::browser::setup::SERVER)] = browser.clone();
         }
