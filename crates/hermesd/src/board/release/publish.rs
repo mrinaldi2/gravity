@@ -76,13 +76,21 @@ pub fn publish(
     let given = |v: Option<&str>| v.map(str::trim).filter(|v| !v.is_empty()).map(String::from);
     let platform = given(req.platform)
         .or_else(|| serve::platform_for(&name).map(String::from))
-        .ok_or_else(|| invalid(format!("can't tell the platform of {name}; pass 'platform'")))?;
+        .ok_or_else(|| {
+            invalid(format!(
+                "can't tell the platform of {name}; pass 'platform'"
+            ))
+        })?;
     let version = given(req.version)
         .or_else(|| {
             let attached = release.builds.iter().find(|b| b.platform == platform);
             attached.map(|b| b.version.clone())
         })
-        .ok_or_else(|| invalid(format!("'version' is required: {platform} has no build yet")))?;
+        .ok_or_else(|| {
+            invalid(format!(
+                "'version' is required: {platform} has no build yet"
+            ))
+        })?;
     let ios = name.to_ascii_lowercase().ends_with(".ipa");
     let bundle_id = given(req.bundle_id).or_else(|| given(cfg.releases.ios_bundle_id.as_deref()));
     if ios && bundle_id.is_none() {
@@ -171,7 +179,7 @@ fn flag(app: &Arc<AppState>, release: &Release, why: &str) -> anyhow::Result<()>
         }
         t.set_release_paused(&release.id, Some(&reason))?;
         t.set_release_status(&release.id, ReleaseStatus::Paused)?;
-        Ok(t.release(&release.id)?)
+        t.release(&release.id)
     })?;
     let sender = daemon_sender();
     if let Some(paused) = &paused {
@@ -185,7 +193,11 @@ fn flag(app: &Arc<AppState>, release: &Release, why: &str) -> anyhow::Result<()>
         "Release {} (release_id {}): an install was refused because {why}.{}",
         release.name,
         release.id,
-        if paused.is_some() { " Its rollout is paused." } else { "" }
+        if paused.is_some() {
+            " Its rollout is paused."
+        } else {
+            ""
+        }
     );
     let told = messaging::send_dm(
         &app.db,

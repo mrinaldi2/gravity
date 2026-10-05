@@ -21,6 +21,7 @@ use crate::decisions::{conflict, forbidden, not_found};
 use model::Release;
 
 pub mod assemble;
+pub mod cli;
 pub mod deploy;
 pub mod lifecycle;
 pub mod model;

@@ -267,6 +267,8 @@ fn extra_allow(extra: PermissionExtra, workspace: &Path) -> Vec<String> {
             }
             rules.push("Bash(serve/publish.sh *)".to_string());
             rules.push(format!("Bash({serve}/publish.sh *)"));
+            // The daemon checks the role and this extra again (H-020 §6.6).
+            rules.push("Bash(hermesd release publish *)".to_string());
             rules
         }
         PermissionExtra::DaemonRestart => daemon_restart_allow(),

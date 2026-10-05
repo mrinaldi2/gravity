@@ -107,6 +107,7 @@ fn trusted_adds_routine_work_and_extras_add_their_powers() {
     assert!(allow.contains(
         &"Bash(/Users/me/.gravity/projects/p/bots/devops/workspace/serve/publish.sh *)".to_string()
     ));
+    assert!(allow.contains(&"Bash(hermesd release publish *)".to_string()));
     let deny = rules(&devops, "deny");
     assert!(deny.contains(
         &"Edit(//Users/me/.gravity/projects/p/bots/devops/workspace/serve/publish.sh)".to_string()
