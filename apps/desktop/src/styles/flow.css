@@ -125,15 +125,19 @@
   list-style: none;
 }
 
+/* Name and value on one line, the bar full width beneath. */
 .flow-columns li {
   display: grid;
-  grid-template-columns: 80px minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
+  grid-template-areas:
+    "name value"
+    "bar bar";
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
   font-size: 12px;
 }
 
 .flow-column-name {
+  grid-area: name;
   overflow: hidden;
   color: var(--text);
   text-overflow: ellipsis;
@@ -141,12 +145,14 @@
 }
 
 .flow-column-value {
+  grid-area: value;
   color: var(--text-dim);
 }
 
 /* Horizontal bars: cycle time by column, p50 against the longest p85. */
 .flow-hbar {
-  height: 8px;
+  grid-area: bar;
+  height: 6px;
 }
 
 .flow-hbar .flow-bar {
