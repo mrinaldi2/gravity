@@ -140,6 +140,63 @@ export async function isManagedLocalDaemon(endpoint: Endpoint): Promise<boolean>
   }
 }
 
+/** What `hermesd service status --json` adds up to; see `daemon/status.rs`. */
+export type ServiceState =
+  | "healthy"
+  | "not_installed"
+  | "legacy_only"
+  | "unmanaged"
+  | "migration_pending"
+  | "migrated_service_missing"
+  | "broken";
+
+const SERVICE_STATES: readonly string[] = [
+  "healthy",
+  "not_installed",
+  "legacy_only",
+  "unmanaged",
+  "migration_pending",
+  "migrated_service_missing",
+  "broken",
+] satisfies readonly ServiceState[];
+
+function isServiceState(value: unknown): value is ServiceState {
+  return typeof value === "string" && SERVICE_STATES.includes(value);
+}
+
+export interface ServiceStatus {
+  readonly state: ServiceState;
+  readonly port: number;
+  /** What answers `/health` on `port`, if anything. */
+  readonly version: string | null;
+}
+
+/**
+ * The state of the Hermes service on this machine, from the bundled daemon's
+ * own `service status`. `null` outside the Tauri shell, for a home set by
+ * environment, and when the check itself fails: no answer is never a reason
+ * to offer an install.
+ */
+export async function localServiceStatus(): Promise<ServiceStatus | null> {
+  if (!isTauri()) {
+    return null;
+  }
+  try {
+    const result: unknown = await invoke("local_service_status");
+    if (isRecord(result) && isServiceState(result["state"]) && typeof result["port"] === "number") {
+      const version = result["version"];
+      return {
+        state: result["state"],
+        port: result["port"],
+        version: typeof version === "string" ? version : null,
+      };
+    }
+  } catch {
+    // fall through to null
+  }
+  return null;
+}
+
 /**
  * Bounces the launchd agent running the daemon on this machine, stopping every
  * bot session it is running. Throws with a human-readable message on failure.

@@ -12,17 +12,20 @@ import type { OverlaysApi } from "./app/useOverlays";
 import { usePaletteActions } from "./app/usePaletteActions";
 import { useToasts } from "./app/useToasts";
 import type { AddToast } from "./app/useToasts";
+import { useServiceRecovery } from "./app/useServiceRecovery";
 import { useUpdates } from "./app/useUpdates";
 import CommandPalette from "./components/CommandPalette";
 import HomeMigrationConfirm from "./components/overlay/HomeMigrationConfirm";
 import MainPane from "./components/MainPane";
 import SearchOverlay from "./components/SearchOverlay";
+import ServiceRecoveryBanner from "./components/service/ServiceRecoveryBanner";
 import SettingsOverlay from "./components/settings/SettingsOverlay";
 import SetupScreen from "./components/setup/SetupScreen";
 import Sidebar from "./components/Sidebar";
 import Toasts from "./components/Toasts";
 import type { Toast } from "./components/Toasts";
 import type { DaemonApi } from "./protocol/api";
+import type { Endpoint } from "./protocol/connection";
 import { DaemonClient } from "./protocol/client";
 import { loadEndpoint } from "./settings";
 import { readClientToken } from "./token";
@@ -62,6 +65,31 @@ function SettingsLayer({
       addToast={addToast}
       onSelectCategory={overlays.selectSettingsCategory}
       onClose={overlays.closeSettings}
+    />
+  );
+}
+
+interface ServiceRecoveryLayerProps {
+  readonly endpoint: Endpoint;
+  readonly addToast: AddToast;
+}
+
+/** The launch-time service check and, when it found something, its one fix. */
+function ServiceRecoveryLayer({
+  endpoint,
+  addToast,
+}: ServiceRecoveryLayerProps): ReactElement | null {
+  const recovery = useServiceRecovery(endpoint, addToast);
+  if (recovery.offer === null) {
+    return null;
+  }
+  return (
+    <ServiceRecoveryBanner
+      offer={recovery.offer}
+      installing={recovery.installing}
+      error={recovery.error}
+      onInstall={recovery.install}
+      onDismiss={recovery.dismiss}
     />
   );
 }
@@ -169,6 +197,7 @@ export default function App(): ReactElement {
           onOpenSettings={overlays.openSettings}
         />
         <main className="main">
+          <ServiceRecoveryLayer endpoint={daemon.endpoint} addToast={addToast} />
           <MainPane
             client={client}
             daemon={daemon}
