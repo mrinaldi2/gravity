@@ -154,6 +154,8 @@ pub fn confirm(
         return Err(conflict("that ruling is already the owner's own"));
     }
     let refreshed = load(app, decision_id)?;
+    // Now the owner's own word: what it grants applies.
+    super::grants::apply(app, &refreshed);
     let view = decision_view(&app.db, &refreshed, Detail::Summary)?;
     for bot in app.db.list_notifications(decision_id)? {
         notify_phase(app, &bot.bot_id, &view, DecisionPhase::Settled, None)?;
@@ -263,7 +265,8 @@ pub fn update(
         edit.body = checked_body(body)?;
     }
     if let Some(options) = patch.options {
-        edit.options = checked_options(options)?;
+        edit.options =
+            super::grants::checked(app, &decision.project_id, checked_options(options)?)?;
     }
     if let Some(recommendation) = patch.recommendation {
         edit.recommendation = checked_recommendation(Some(recommendation), &edit.options)?;

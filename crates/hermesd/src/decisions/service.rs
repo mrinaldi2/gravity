@@ -42,7 +42,7 @@ pub struct Raised {
 pub fn raise(app: &Arc<AppState>, me: &Bot, req: &RaiseRequest<'_>) -> anyhow::Result<Raised> {
     let title = checked_title(req.title)?;
     let body = checked_body(req.body)?;
-    let options = checked_options(req.options)?;
+    let options = super::grants::checked(app, &me.project_id, checked_options(req.options)?)?;
     let recommendation = checked_recommendation(req.recommendation, &options)?;
     let tags = checked_tags(req.tags)?;
     let deadline_at = checked_deadline(req.deadline_at)?;

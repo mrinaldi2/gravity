@@ -106,6 +106,13 @@
   line-height: 1.45;
 }
 
+/* What picking it grants: the owner reads it before ruling (H-117). */
+.cc-option-grants {
+  font-size: 12px;
+  color: var(--amber);
+  margin-top: 2px;
+}
+
 .cc-option-num {
   font: 11px var(--mono);
   color: var(--cc-faint-border);

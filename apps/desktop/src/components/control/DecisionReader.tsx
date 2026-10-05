@@ -200,7 +200,12 @@ export default function DecisionReader(props: DecisionReaderProps): ReactElement
           <div className="cc-body">
             <Markdown>{decision.body}</Markdown>
           </div>
-          <OptionList decision={decision} picked={props.picked} onPick={props.onPick} />
+          <OptionList
+            decision={decision}
+            picked={props.picked}
+            onPick={props.onPick}
+            botName={props.botName}
+          />
         </>
       ) : undefined}
 

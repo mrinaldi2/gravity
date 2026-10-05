@@ -7,6 +7,19 @@ interface OptionListProps {
   readonly picked?: string;
   readonly onPick?: (key: string) => void;
   readonly now?: number;
+  /** Names the bots an option grants extras to. */
+  readonly botName?: (botId: string) => string | undefined;
+}
+
+/** "Grants DevOps: install, daemon restart · Tester: install". */
+function grantLine(option: DecisionOption, botName?: (id: string) => string | undefined): string {
+  const byBot = new Map<string, string[]>();
+  for (const g of option.grants ?? []) {
+    const name = botName?.(g.bot) ?? "a bot";
+    byBot.set(name, [...(byBot.get(name) ?? []), g.extra.replaceAll("_", " ")]);
+  }
+  const parts = [...byBot].map(([name, extras]) => `${name}: ${extras.join(", ")}`);
+  return `Grants ${parts.join(" · ")}`;
 }
 
 /** "3 options · auction recommends start" while it is still the owner's to answer. */
@@ -47,6 +60,7 @@ export default function OptionList({
   decision,
   picked,
   onPick,
+  botName,
 }: OptionListProps): ReactElement | null {
   if (decision.options.length === 0) {
     return null;
@@ -72,6 +86,9 @@ export default function OptionList({
                 </div>
                 {option.description === undefined ? undefined : (
                   <div className="cc-option-desc">{option.description}</div>
+                )}
+                {option.grants === undefined || option.grants.length === 0 ? undefined : (
+                  <div className="cc-option-grants">{grantLine(option, botName)}</div>
                 )}
               </div>
               {open ? <span className="cc-option-num">{index + 1}</span> : undefined}

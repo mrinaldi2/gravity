@@ -19,6 +19,19 @@ pub struct DecisionOption {
     /// words. Optional, but a recommendation without one is hard to trust.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Permission extras this option grants (H-117): they apply when the
+    /// owner's own ruling picks it, with no second step.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grants: Vec<OptionGrant>,
+}
+
+/// One permission extra for one bot of the decision's project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OptionGrant {
+    /// The bot's id (a name given at raise is stored as the id).
+    pub bot: String,
+    /// A permission extra's name, e.g. `install`.
+    pub extra: String,
 }
 
 /// The owner's answer, once there is one.

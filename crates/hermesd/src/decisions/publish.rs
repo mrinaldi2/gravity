@@ -50,7 +50,8 @@ pub(crate) fn publish_settled(
         .db
         .get_decision(decision_id)?
         .ok_or_else(|| super::not_found("no decision with that id"))?;
-    if decision.state == DecisionState::Settled {
+    let newly = decision.state != DecisionState::Settled;
+    if !newly {
         // Already settled: fall through to notifying, so a publish that
         // half-succeeded can be retried without losing the rest.
     } else if !app.db.try_publish(decision_id)? {
@@ -63,6 +64,11 @@ pub(crate) fn publish_settled(
         .db
         .get_decision(decision_id)?
         .ok_or_else(|| super::not_found("no decision with that id"))?;
+    // The owner's own ruling grants what its option grants; a relayed one
+    // waits for the owner to confirm it.
+    if newly && !super::authority::is_relayed(&decision) {
+        super::grants::apply(app, &decision);
+    }
     let view = decision_view(&app.db, &decision, Detail::Summary)?;
     let targets = match notify {
         Some(ids) => ids.to_vec(),

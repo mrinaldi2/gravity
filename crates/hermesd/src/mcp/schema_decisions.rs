@@ -35,7 +35,10 @@ pub(super) fn decision_tools() -> Vec<Value> {
                     "items": {"type": "object", "required": ["key", "label"], "properties": {
                         "key": {"type": "string", "description": "Short identifier the ruling names later"},
                         "label": {"type": "string"},
-                        "description": {"type": "string", "description": "What happens if this is picked"}
+                        "description": {"type": "string", "description": "What happens if this is picked"},
+                        "grants": {"type": "array", "description": "Permission extras this option grants, applied as soon as the owner's ruling picks it (no second step): bot (name or id in this project) and extra (publish, daemon_restart, app_restart, install, release_main, quiesce)", "items": {"type": "object", "required": ["bot", "extra"], "properties": {
+                            "bot": {"type": "string"}, "extra": {"type": "string"}
+                        }}}
                     }}
                 },
                 "recommendation": {"type": "string", "description": "The option key you recommend"},

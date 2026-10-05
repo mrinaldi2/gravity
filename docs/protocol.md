@@ -359,7 +359,7 @@ Worker   { "id", "project_id", "name", "state": "queued"|"running"|"done"|"cance
 Device   { "id", "name", "capabilities": ["read"|"control"|"approve"], "created_at",
            "revoked_at?", "last_seen_at?" }
 Decision { "id", "project_id", "kind": "question"|"decision", "title", "body",
-           "options": [{"key","label","description?"}], "recommendation?",
+           "options": [{"key","label","description?","grants?": [{"bot","extra"}]}], "recommendation?",
            "raised_by": {"bot_id","name","avatar"}, "on_behalf_of_bot_id?",
            "origin_chain", "source_message_id?", "source_task_id?",
            "priority": "normal"|"urgent", "deadline_at?",
@@ -368,6 +368,11 @@ Decision { "id", "project_id", "kind": "question"|"decision", "title", "body",
            "published_at?", "supersedes_id?", "superseded_by_id?", "withdrawn_reason?",
            "tags": ["..."], "comment_count", "last_comment_at?",
            "comments": [...], "notifications": [...], "edited_at?", "created_at" }
+  An option's `grants` (H-117) are permission extras the owner grants by picking it.
+  - **At raise:** each one is checked. `bot` may be given as a name and is stored as the bot's id; `extra` must be a known extra.
+  - **When they apply:** when the owner's own ruling is published, with no second step. A ruling a bot relayed applies on the owner's `confirm_decision`.
+  - **What they do:** they only add extras. A linked bot gets them on its own computer, through peer request `grant_extras {bot_id, extras, decision}`, which is accepted only for bots exposed to that peer.
+  - **Record:** a comment on the decision lists what was applied.
 DecisionComment { "id", "decision_id", "author_kind": "bot"|"user", "author_bot_id?",
            "author_name", "body", "created_at" }
 Tag      { "id", "name", "description", "color", "created_by", "retired_at?",

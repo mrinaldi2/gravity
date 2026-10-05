@@ -48,6 +48,30 @@ describe("OptionList", () => {
     expect(container.querySelectorAll(".cc-option-passed")).toHaveLength(1);
   });
 
+  it("says what an option grants before the owner picks it", () => {
+    render(
+      <OptionList
+        decision={decision({
+          options: [
+            {
+              key: "grant",
+              label: "Grant",
+              grants: [
+                { bot: "b1", extra: "install" },
+                { bot: "b1", extra: "daemon_restart" },
+                { bot: "b2", extra: "install" },
+              ],
+            },
+          ],
+        })}
+        botName={(id) => (id === "b1" ? "DevOps" : "Tester Win")}
+      />,
+    );
+    expect(
+      screen.getByText("Grants DevOps: install, daemon restart · Tester Win: install"),
+    ).toBeInTheDocument();
+  });
+
   it("renders nothing when the bot offered no options", () => {
     const { container } = render(<OptionList decision={decision({ options: [] })} />);
     expect(container).toBeEmptyDOMElement();

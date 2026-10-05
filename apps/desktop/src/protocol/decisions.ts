@@ -13,6 +13,8 @@ export interface DecisionOption {
   readonly label: string;
   /** What happens if this one is picked, in the raising bot's words. */
   readonly description?: string;
+  /** Permission extras the owner's ruling grants by picking it (H-117). */
+  readonly grants?: readonly { readonly bot: string; readonly extra: string }[];
 }
 
 interface DecisionRuling {

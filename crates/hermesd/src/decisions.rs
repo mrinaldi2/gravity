@@ -8,6 +8,7 @@
 //! two handlers is a rule that will eventually disagree with itself.
 
 pub(crate) mod authority;
+pub mod grants;
 mod owner;
 pub(crate) mod publish;
 mod record;
