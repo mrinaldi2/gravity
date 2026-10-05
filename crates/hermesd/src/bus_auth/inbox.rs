@@ -10,7 +10,9 @@
 
 use std::path::Path;
 
-use super::session::{session_of, ProcessTable, SessionRoots};
+#[cfg(unix)]
+use super::session::session_of;
+use super::session::{ProcessTable, SessionRoots};
 
 /// Why a registration was refused.
 #[derive(Debug, Clone, PartialEq, Eq)]
