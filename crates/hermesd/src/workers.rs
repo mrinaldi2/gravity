@@ -28,6 +28,7 @@ use crate::messaging::daemon_sender;
 mod git;
 mod place;
 pub mod repo;
+pub mod scratch;
 mod spawn;
 
 pub use place::place_queued;
@@ -53,6 +54,10 @@ pub struct Workers {
     offering: StdMutex<HashSet<String>>,
     /// Retiring workers whose unpushed work is being saved.
     salvaging: StdMutex<HashSet<String>>,
+    /// Whether retired workers' leftovers were swept since the daemon started.
+    swept: std::sync::atomic::AtomicBool,
+    /// Retired workers' workspaces whose clone couldn't be removed yet.
+    unclean: StdMutex<HashSet<String>>,
 }
 
 impl Workers {
@@ -214,12 +219,54 @@ pub async fn reconcile(app: &Arc<AppState>) -> anyhow::Result<()> {
         };
         if let Err(error) = botmgmt::archive_bot(app, &bot, &actor, Some("worker finished")) {
             tracing::warn!(bot_id = %bot.id, %error, "retiring a worker failed");
+            continue;
         }
+        Workers::set(&app.workers.unclean).insert(bot.workspace_path.clone());
     }
+    clean_retired(app).await;
     for project_id in app.db.projects_with_queued_workers()? {
         place_queued(app, &project_id).await;
     }
     Ok(())
+}
+
+/// Removes what retired workers left on disk (H-109): every retired worker
+/// on the first pass after start, then the newly retired and any that
+/// failed before. Then the shared Cargo target, once no worker is left.
+/// Awaited, so a worker placed in the same pass never builds into a target
+/// being deleted.
+async fn clean_retired(app: &Arc<AppState>) {
+    let mut workspaces: Vec<String> = Workers::set(&app.workers.unclean).drain().collect();
+    if !app
+        .workers
+        .swept
+        .swap(true, std::sync::atomic::Ordering::SeqCst)
+    {
+        match app.db.retired_worker_workspaces() {
+            Ok(all) => workspaces.extend(all.into_iter().map(|(_, path)| path)),
+            Err(error) => tracing::warn!(%error, "listing retired workers failed"),
+        }
+    }
+    let app = app.clone();
+    let cleaned = tokio::task::spawn_blocking(move || {
+        for workspace in workspaces {
+            let dir = std::path::Path::new(&workspace);
+            if !scratch::has_leftovers(dir) {
+                continue;
+            }
+            if let Err(error) = scratch::clean_worker(dir) {
+                tracing::warn!(%workspace, %error, "removing a retired worker's clone failed; retrying later");
+                Workers::set(&app.workers.unclean).insert(workspace);
+            }
+        }
+        if let Err(error) = scratch::clean_shared_target(&app) {
+            tracing::warn!(%error, "removing the workers' shared target failed");
+        }
+    })
+    .await;
+    if let Err(error) = cleaned {
+        tracing::warn!(%error, "cleaning up after workers failed");
+    }
 }
 
 /// Whether a retiring worker's work is safe: it has no checkout, or saving

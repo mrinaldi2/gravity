@@ -48,6 +48,29 @@ pub fn key(path: &Path) -> String {
     text
 }
 
+/// Git Bash's `/c/Users/…` in its drive form, `C:/Users/…`, so it resolves
+/// to the drive and not to `C:\c\Users\…` under the current folder, which
+/// made a bot's own folder look like someone else's (H-109, CE-007).
+pub(super) fn git_bash_drive(word: &str) -> Option<String> {
+    if cfg!(windows) {
+        drive_form(word)
+    } else {
+        None
+    }
+}
+
+fn drive_form(word: &str) -> Option<String> {
+    let bytes = word.as_bytes();
+    let is_drive = bytes.len() >= 2
+        && bytes[0] == b'/'
+        && bytes[1].is_ascii_alphabetic()
+        && matches!(bytes.get(2), None | Some(b'/'));
+    is_drive.then(|| {
+        let drive = char::from(bytes[1]).to_ascii_uppercase();
+        format!("{drive}:/{}", word.get(3..).unwrap_or(""))
+    })
+}
+
 /// Whether `path` is `root` or inside it, compared by [`key`].
 pub fn within(path: &Path, root: &Path) -> bool {
     let (path, root) = (key(path), key(root));
@@ -72,5 +95,20 @@ pub(super) fn last_separator(text: &str) -> Option<usize> {
         text.rfind(['/', '\\'])
     } else {
         text.rfind('/')
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn git_bash_drive_paths_take_their_drive() {
+        let form = super::drive_form;
+        assert_eq!(form("/c/Users/me/x").as_deref(), Some("C:/Users/me/x"));
+        assert_eq!(form("/d").as_deref(), Some("D:/"));
+        assert_eq!(form("/c/").as_deref(), Some("C:/"));
+        assert_eq!(form("/cc/x"), None);
+        assert_eq!(form("/Users/me"), None);
+        assert_eq!(form("c/x"), None);
+        assert_eq!(form("/1/x"), None);
     }
 }
