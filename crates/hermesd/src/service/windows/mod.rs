@@ -231,7 +231,7 @@ pub fn report(
         migrated: home.migrated,
         port,
         version: crate::server::probe_health(port, Duration::from_secs(2)),
-        identity: crate::bus_auth::app_identity::identity_line(),
+        identity: crate::bus_auth::app_identity::identity(),
     }
 }
 

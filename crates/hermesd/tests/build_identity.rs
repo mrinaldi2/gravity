@@ -30,5 +30,9 @@ async fn health_reports_the_identity() {
         .json()
         .await
         .expect("json");
-    assert_eq!(health["identity"], identity_line(), "{health}");
+    assert_eq!(health["identity"]["line"], identity_line(), "{health}");
+    assert_eq!(
+        health["identity"]["dev_build"],
+        hermesd::bus_auth::app_identity::DEV_BUILD
+    );
 }

@@ -33,8 +33,10 @@ pub fn daemon_health(host: String, port: u16) -> Option<DaemonHealth> {
     Some(DaemonHealth {
         status: body.get("status")?.as_str()?.to_string(),
         version: body.get("version")?.as_str()?.to_string(),
+        // `{line, dev_build, team_id_known, …}`; the About box shows the line.
         identity: body
             .get("identity")
+            .and_then(|v| v.get("line"))
             .and_then(|v| v.as_str())
             .map(str::to_string),
     })

@@ -78,6 +78,29 @@ pub fn identity_line() -> String {
     describe(DEV_BUILD, cfg!(target_os = "macos"), cfg!(windows), TEAM_ID)
 }
 
+/// The same, as facts a release gate can assert on the binary itself
+/// (`service status --json`, `/health`): the build-time settings DevOps
+/// otherwise could only read in a build log.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Identity {
+    pub line: String,
+    pub dev_build: bool,
+    /// A real Team ID was compiled in, not the placeholder.
+    pub team_id_known: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<String>,
+}
+
+pub fn identity() -> Identity {
+    let known = is_team_id(TEAM_ID);
+    Identity {
+        line: identity_line(),
+        dev_build: DEV_BUILD,
+        team_id_known: known,
+        team_id: known.then(|| TEAM_ID.to_string()),
+    }
+}
+
 fn describe(dev: bool, macos: bool, windows: bool, team: &str) -> String {
     if dev {
         "dev build (phase 2 disabled)".into()
