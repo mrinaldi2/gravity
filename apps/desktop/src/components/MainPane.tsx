@@ -13,6 +13,7 @@ import ControlCenterView from "./control/ControlCenterView";
 import type { Permissions } from "./permissions/usePermissions";
 import BoardView from "./board/BoardView";
 import ConversationsView from "./conversations/ConversationsView";
+import DashboardView from "./dashboard/DashboardView";
 import ComingSoon, { isUpcomingTab } from "./project/ComingSoon";
 import ProjectWindow from "./project/ProjectWindow";
 import ProjectView from "./ProjectView";
@@ -96,6 +97,20 @@ function ProjectPane(props: ProjectPaneProps): ReactElement {
   let content: ReactElement;
   if (isUpcomingTab(tab)) {
     content = <ComingSoon tab={tab} />;
+  } else if (tab === "dashboard") {
+    content = (
+      <DashboardView
+        client={client}
+        project={project}
+        bots={bots}
+        connected={connected}
+        canControl={canControl}
+        addToast={props.addToast}
+        onOpenTab={onSelectTab}
+        onOpenBot={(botId) => select({ kind: "bot", botId })}
+        onOpenDecision={(decisionId) => select({ kind: "control", decisionId })}
+      />
+    );
   } else if (tab === "releases") {
     content = (
       <ReleasesView

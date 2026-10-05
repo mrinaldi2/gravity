@@ -5,7 +5,7 @@
 import type { Bot } from "./entities";
 import type { Release } from "./releases";
 
-type NeedsYou =
+export type NeedsYou =
   | { readonly kind: "release"; readonly release: Release }
   | {
       readonly kind: "decision";
@@ -42,7 +42,7 @@ interface ColumnSummary {
   readonly wip_scope: "column" | "per_assignee";
 }
 
-interface BoardSummary {
+export interface BoardSummary {
   readonly columns: readonly ColumnSummary[];
   readonly blocked: number;
   readonly stale: number;
@@ -51,14 +51,14 @@ interface BoardSummary {
   readonly rework_this_week: number | null;
 }
 
-interface TeamRow {
+export interface TeamRow {
   readonly bot: Bot;
   /** Its items in Doing, in board order. */
   readonly items: readonly { readonly id: string; readonly title: string }[];
   readonly open_tasks: number;
 }
 
-interface Dashboard {
+export interface Dashboard {
   readonly project_id: string;
   readonly as_of: string;
   /** Where "this week" starts: seven days before `as_of`. */

@@ -1,19 +1,15 @@
-import { CalendarClock, LayoutDashboard } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
 import { PROJECT_TAB_LABEL } from "./ProjectTabs";
 
 /** The tabs that are placeholders until their views land. */
-export type UpcomingTab = Extract<ProjectTab, "dashboard" | "meetings">;
+export type UpcomingTab = Extract<ProjectTab, "meetings">;
 
 const UPCOMING: Readonly<
   Record<UpcomingTab, { readonly icon: LucideIcon; readonly text: string }>
 > = {
-  dashboard: {
-    icon: LayoutDashboard,
-    text: "What needs you, the board at a glance, releases, the team and how work is flowing, in one place.",
-  },
   meetings: {
     icon: CalendarClock,
     text: "Stand-ups, demos and retros the bots hold, with their notes and action items.",

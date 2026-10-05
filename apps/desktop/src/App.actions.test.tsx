@@ -67,7 +67,9 @@ describe("App actions", () => {
 
     await user.click(screen.getByRole("button", { name: "Acme" }));
     expect(screen.getByRole("tab", { name: "Dashboard", selected: true })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Dashboard is coming soon" })).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Loading the dashboard…|Couldn't load the dashboard|Needs you/),
+    ).toBeInTheDocument();
 
     act(() => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "6", metaKey: true }));
