@@ -663,3 +663,18 @@ runs through the tester the same way.
 - **`releases`:** the current package and the last two, newest first.
 - **`team`:** each bot of the project (`bot`, as in `list_bots`), its items in Doing, and its open task count.
 - **`meetings` and `action_items`:** empty until meetings land.
+
+### Flow metrics (B11)
+
+`metrics_get {project_id, range}` (read). `range` is `week` (7 days, the default) or `4w` (28 days). It answers `{type: "metrics", metrics, note}`, computed from the board's history. Items brought in by the backlog import never count.
+
+`metrics` holds:
+- **`throughput`:** items that reached Done in the range. `weekly` is the count per week for the last 8 weeks, oldest first.
+- **`cycle`:** `{p50, p85, count}` in seconds, from an item's first entry into Doing to Done, for the items done in the range (nearest-rank percentiles).
+- **`by_column`:** each in-progress column (Doing through Deploying), with `p50`/`p85`/`count` of the time items spent in it, for stints that ended in the range.
+- **`daily`:** one point per day, `{at, wip, columns: {key: count}}`: where every item stood at the end of the day. `wip` counts Doing through Deploying. This is the cumulative-flow series.
+- **`reworked`, `past_doing`, `rework_rate`:** items sent back to Doing in the range, over the items that went past Doing in it.
+- **`aging`:** the five open in-progress items longest in their current column, `{id, title, column_key, age}`.
+- **`expired_tasks`**, **`days`**, and **`since`**.
+
+Without a board, `metrics` is null. Off the board's home, the daemon asks the home (peer request `metrics_get {project_id, days}`) and answers once it has. If the home can't be reached, `metrics` is null and `note` names it.

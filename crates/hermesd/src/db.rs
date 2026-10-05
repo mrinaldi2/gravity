@@ -51,6 +51,7 @@ mod decisions_list;
 mod decisions_tests;
 mod deliveries;
 mod devices;
+pub mod metrics;
 mod peers;
 mod permissions;
 mod project_links;

@@ -51,6 +51,7 @@ const READ_ONLY: &[&str] = &[
     "list_releases",
     "get_release",
     "dashboard_get",
+    "metrics_get",
 ];
 
 /// Requests that exercise the owner's ruling authority.
@@ -168,6 +169,7 @@ impl Conn {
             "list_releases" => self.list_releases(&req_id, req),
             "get_release" => self.get_release(&req_id, req),
             "dashboard_get" => self.dashboard_get(&req_id, req),
+            "metrics_get" => self.metrics_get(&req_id, req),
             "release_rule" => self.release_rule(&req_id, req),
             "release_hold" => self.release_hold(&req_id, req),
             "release_unhold" => self.release_unhold(&req_id, req),

@@ -33,6 +33,7 @@ pub(super) fn handle(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> anyho
         "board_snapshot" => super::board_home::serve_snapshot(app, &peer, frame),
         "board_read" => super::board_home::serve_read(app, &peer, frame),
         "dashboard_needs_you" => super::board_home::serve_needs_you(app, &peer, frame),
+        "metrics_get" => super::board_home::serve_metrics(app, &peer, frame),
         "create_bot" => super::remote_bots::serve_create(app, &peer, frame),
         "update_bot" => super::remote_bots::serve_update(app, &peer, frame),
         "delete_bot" => super::remote_bots::serve_delete(app, &peer, frame),
