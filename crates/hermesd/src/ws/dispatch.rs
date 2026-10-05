@@ -68,6 +68,8 @@ const APPROVE_ONLY: &[&str] = &[
     // How much bots may do without asking is the owner's call (H-031).
     "set_project_permission_profile",
     "set_bot_permission_extras",
+    // The one-shot backlog import is the owner's (H-020 §1.5, B6).
+    "board_import",
 ];
 
 /// Capability required for each request type.
@@ -185,6 +187,7 @@ impl Conn {
             "get_task" => self.get_task(&req_id, req),
             "write_artifact" => self.write_artifact(&req_id, req),
             "answer_permission" => self.answer_permission(&req_id, req),
+            "board_import" => self.board_import(&req_id, req),
             other => {
                 self.reply_err(
                     &req_id,

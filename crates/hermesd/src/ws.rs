@@ -22,6 +22,7 @@ use crate::browser::view::Viewer;
 mod admin;
 mod binary;
 mod board;
+mod board_import;
 mod browser;
 mod chat;
 mod commands;

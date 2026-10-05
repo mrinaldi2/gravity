@@ -99,6 +99,9 @@ pub(super) fn call(
         "item_query" => item_query(app, &me, decode("ItemQuery", args, project)?),
         "item_move" => item_move(app, &me, decode("ItemMove", args, project)?),
         "item_move_check" => check(app, &me, decode("ItemMoveCheck", args, project)?),
+        "board_import" => {
+            super::board_import::call(app, &me, decode("BoardImport", args, project)?)
+        }
         _ => super::board_edit::call(app, &me, name, args),
     }
 }

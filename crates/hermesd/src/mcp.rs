@@ -15,6 +15,7 @@ use crate::app::AppState;
 
 mod board;
 mod board_edit;
+mod board_import;
 mod board_schema;
 mod decisions;
 mod remote;
