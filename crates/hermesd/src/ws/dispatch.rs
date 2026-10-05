@@ -52,6 +52,8 @@ const READ_ONLY: &[&str] = &[
     "get_release",
     "dashboard_get",
     "quiesce_status",
+    "owner_action_list",
+    "owner_action_get",
     "meeting_list",
     "meeting_get",
 ];
@@ -83,6 +85,9 @@ const APPROVE_ONLY: &[&str] = &[
     "board_import",
     // Ending a pause for an install early is the owner's call (H-117).
     "quiesce_resume",
+    // Running or rejecting a command proposed for the owner (H-117 R1).
+    "owner_action_run",
+    "owner_action_reject",
 ];
 
 /// Capability required for each request type.
@@ -175,6 +180,10 @@ impl Conn {
             "dashboard_get" => self.dashboard_get(&req_id, req),
             "quiesce_status" => self.quiesce_status(&req_id),
             "quiesce_resume" => self.quiesce_resume(&req_id),
+            "owner_action_list" => self.owner_action_list(&req_id, req),
+            "owner_action_get" => self.owner_action_get(&req_id, req),
+            "owner_action_run" => self.owner_action_run(&req_id, req),
+            "owner_action_reject" => self.owner_action_reject(&req_id, req),
             "meeting_list" => self.meeting_list(&req_id, req),
             "meeting_get" => self.meeting_get(&req_id, req),
             "meeting_series_upsert" => self.meeting_series_upsert(&req_id, req),

@@ -15,6 +15,7 @@ mod board_links;
 mod decisions;
 mod history;
 mod meetings;
+mod owner_actions;
 mod peers;
 mod permissions;
 mod quiesce;
@@ -30,6 +31,7 @@ use history::{
     MIGRATION_7, MIGRATION_8, MIGRATION_9,
 };
 use meetings::MIGRATION_MEETINGS;
+use owner_actions::MIGRATION_OWNER_ACTIONS;
 use peers::{MIGRATION_14, MIGRATION_15, MIGRATION_16};
 use permissions::{
     MIGRATION_PERMISSIONS, MIGRATION_PERMISSION_EXTRAS_QUIESCE,
@@ -70,6 +72,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_MEETINGS,
     MIGRATION_QUIESCE,
     MIGRATION_PERMISSION_EXTRAS_QUIESCE,
+    MIGRATION_OWNER_ACTIONS,
 ];
 
 #[cfg(test)]

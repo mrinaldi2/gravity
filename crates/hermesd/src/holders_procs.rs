@@ -213,3 +213,43 @@ pub fn parse_procargs_env(buf: &[u8]) -> Vec<(String, String)> {
     }
     env
 }
+
+/// The local process at the other end of a loopback connection from
+/// `peer`, when the OS says (lsof on Unix).
+#[cfg(unix)]
+pub fn tcp_client(peer: std::net::SocketAddr) -> Option<u32> {
+    let lsof = ["/usr/sbin/lsof", "/usr/bin/lsof"]
+        .into_iter()
+        .find(|p| std::path::Path::new(p).is_file())?;
+    let out = std::process::Command::new(lsof)
+        .args([
+            "-nP",
+            "-w",
+            &format!("-iTCP:{}", peer.port()),
+            "-sTCP:ESTABLISHED",
+            "-Fpn",
+        ])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let own = std::process::id();
+    let local_side = format!(":{}->", peer.port());
+    let mut pid = None;
+    for line in text.lines() {
+        match line.split_at(line.len().min(1)) {
+            ("p", rest) => pid = rest.parse::<u32>().ok(),
+            ("n", name) if name.contains(&local_side) => {
+                if let Some(p) = pid.filter(|p| *p != own) {
+                    return Some(p);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+pub fn tcp_client(_peer: std::net::SocketAddr) -> Option<u32> {
+    None
+}

@@ -21,6 +21,7 @@ mod board_remote;
 mod board_schema;
 mod decisions;
 pub(crate) mod meetings;
+mod owner_actions;
 mod releases;
 mod remote;
 mod routines;
@@ -210,6 +211,7 @@ fn tool_call(app: &Arc<AppState>, bot_id: &str, params: &Value) -> Result<Value,
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
     let out = match name {
         "send_message" => send_message(app, bot_id, &args),
+        owner if owner_actions::handles(owner) => owner_actions::call(app, bot_id, owner, &args),
         "complete_task" => complete_task(app, bot_id, &args),
         "cancel_task" => cancel_task(app, bot_id, &args),
         "list_bots" => list_bots(app, bot_id),

@@ -40,6 +40,8 @@ pub const CAPABILITIES: &[&str] = &[
     "bot_commands",
     "restart_bot",
     "workers",
+    // Commands a bot proposes for the owner to run (H-117 R1).
+    "owner_actions",
     "permission_profiles",
 ];
 

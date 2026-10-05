@@ -72,7 +72,8 @@ pub async fn spawn_daemon_on(
     hermesd::server::spawn_workers(&app);
     let router = hermesd::server::router(app.clone());
     tokio::spawn(async move {
-        let _ = axum::serve(listener, router).await;
+        let service = router.into_make_service_with_connect_info::<std::net::SocketAddr>();
+        let _ = axum::serve(listener, service).await;
     });
     TestDaemon {
         app,

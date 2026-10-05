@@ -38,6 +38,16 @@ pub enum Push {
     QuiesceUpdate {
         quiesce: Option<Box<crate::db::Quiesce>>,
     },
+    /// An owner action was proposed, run, finished or closed (H-117 R1).
+    /// Only clients that render owner actions get it.
+    OwnerActionUpdate {
+        action: Box<serde_json::Value>,
+    },
+    /// Redacted output of a running owner action, as it comes.
+    OwnerActionOutput {
+        id: String,
+        chunk: String,
+    },
     /// A project's meetings or action items changed (H-102). Clients
     /// refetch `meeting_list`, `meeting_get` or `dashboard_get`.
     MeetingEvent {

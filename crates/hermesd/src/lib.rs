@@ -26,6 +26,7 @@ pub mod messaging;
 pub mod migrate_home;
 pub mod model;
 pub mod overrides;
+pub mod owner_action;
 pub mod paths;
 pub mod peer;
 mod permissions;

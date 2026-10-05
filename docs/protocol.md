@@ -796,6 +796,40 @@ A refusal says which of these is missing. `start` pauses with the caller as `exe
 - `quiesce_resume` (approve, the owner's **Resume now**) ends the pause.
 - Every change pushes `{type: "quiesce_update", quiesce: …|null}`.
 
+## Owner actions (H-117 R1)
+
+A bot proposes an exact command for the owner to run; only the owner runs it.
+
+**Proposing (MCP).** `propose_owner_action {content, reason, cwd, shell?, target_machine?, item?, decision_id?, pinned_files?, timeout_s?}` answers `{owner_action}`. The bot also has `withdraw_owner_action {id}` and `get_owner_action {id}`. There is no tool that runs one.
+- **Defaults and limits:** the shell is zsh on macOS and powershell on Windows; `cmd` takes one line. `timeout_s` defaults to 600 and is at most 3600. `content` is at most 16 KB.
+- **Refused:** NUL and control characters (other than newline and tab), C1 controls, bidirectional overrides and zero-width characters, in the content, cwd or reason. A cwd that isn't a folder on this computer is refused too.
+- **Pinning:** each pinned file is hashed at proposal. A path the content names that a bot can write (workspaces, trusted folders) and isn't pinned becomes a `flags` warning on the card.
+
+**What the action holds.** It stores `{id, project_id, proposed_by, item_id?, decision_id?, target_machine, shell, cwd, content, pinned_files, reason, timeout_s, sha256, flags, origin, state, created_at, expires_at, run_by?, run_at?, finished_at?, exit_code?, output_tail?, reject_reason?}`.
+- `target_machine` is the target daemon's id.
+- `sha256` is taken over the canonical JSON of the proposal's fields.
+- A trigger refuses any change to what was proposed.
+- `state` is one of `proposed`, `running`, `succeeded`, `failed`, `timed_out`, `rejected`, `withdrawn` or `expired` (after 24 h).
+
+**Running it (WebSocket).** The server advertises `owner_actions`, and only a client whose hello lists the feature `owner_actions` gets the cards and pushes.
+- `owner_action_list {project_id?}` → `{type: "owner_actions", actions}` (read).
+- `owner_action_get {id}` → `{type: "owner_action", action, audit}` (read; audited as viewed).
+- `owner_action_run {id, sha256}` (approve) runs it once:
+  - The client must render owner actions, and the hash must be the stored one, which is what the client showed.
+  - A loopback connection is traced to its process (lsof). A process under a bot's session is refused, whatever credential it holds. When the process can't be told, only the app's ticket or a device credential may run it, never the owner token.
+  - `proposed → running` is a single guarded update, so a second tap gets `conflict`.
+- `owner_action_reject {id, reason?}` (approve).
+- Pushes: `{type: "owner_action_update", action}` on every change, and `{type: "owner_action_output", id, chunk}` (redacted) while it runs.
+
+**How it runs.** Pinned files are hashed again; a change fails the run before anything runs, listing the old and new hashes. The stored content then runs as one argument, never from a file (ARCH-R49 M2): `zsh -f -c`, `bash --noprofile --norc -c`, `powershell -NoProfile -NonInteractive -EncodedCommand` (UTF-16LE, base64) or `cmd /d /c`.
+- **Who and where:** it runs as the daemon's user, with stdin closed and no sudo, in its own process group (Unix) or Job Object (Windows), which the timeout kills whole.
+- **Environment:** on Unix it is clean apart from the owner's login `PATH`; on Windows it is inherited, without the daemon's tokens.
+- **Output:**
+  - the full output goes to `<home>/logs/owner-actions/<id>.log` (0600);
+  - `output_tail` is the redacted last 64 KB;
+  - the proposing bot gets a note with the exit code and the tail, and the item or decision gets the same as a comment.
+- **Audit:** append-only `owner_action_audit` (proposed, viewed, refused, run, finished, rejected, withdrawn), mirrored to `<home>/logs/owner-actions.log`.
+
 ## The project dashboard
 
 `dashboard_get {project_id}` (read) answers with `{type: "dashboard", dashboard}`, which holds what the dashboard's widgets show (H-018 §2.1, H-076, H-102):

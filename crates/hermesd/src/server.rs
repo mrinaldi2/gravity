@@ -220,7 +220,9 @@ pub async fn serve(
         let router = router(app.clone());
         let mut stop = stop_tx.subscribe();
         handles.push(tokio::spawn(async move {
-            let served = axum::serve(listener, router).with_graceful_shutdown(async move {
+            // The peer's address lets an owner action refuse a bot's own process.
+            let service = router.into_make_service_with_connect_info::<std::net::SocketAddr>();
+            let served = axum::serve(listener, service).with_graceful_shutdown(async move {
                 let _ = stop.recv().await;
             });
             if let Err(e) = served.await {

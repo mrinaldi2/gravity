@@ -18,6 +18,7 @@ mod hub;
 mod inbound;
 pub mod links;
 pub mod mirror;
+pub mod owner_actions;
 mod receive;
 pub mod remote_bots;
 mod roster;

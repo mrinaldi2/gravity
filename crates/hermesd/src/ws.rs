@@ -38,6 +38,8 @@ mod entities;
 mod links;
 mod meetings;
 mod messaging;
+mod origin;
+mod owner_actions;
 mod peers;
 mod permissions;
 mod profiles;
@@ -72,9 +74,10 @@ const WRITER_GRACE: Duration = Duration::from_secs(5);
 pub async fn ws_handler(
     State(app): State<Arc<AppState>>,
     headers: HeaderMap,
+    peer: Option<axum::extract::ConnectInfo<std::net::SocketAddr>>,
     upgrade: WebSocketUpgrade,
 ) -> axum::response::Response {
-    if !origin_allowed(&app, &headers) {
+    if !origin::origin_allowed(&app, &headers) {
         return (
             axum::http::StatusCode::FORBIDDEN,
             "origin not allowed".to_string(),
@@ -83,25 +86,8 @@ pub async fn ws_handler(
     }
     upgrade
         .max_frame_size(MAX_FRAME_BYTES)
-        .on_upgrade(move |socket| handle_socket(app, socket))
+        .on_upgrade(move |socket| handle_socket(app, socket, peer.map(|c| c.0)))
         .into_response()
-}
-
-/// Native clients send no Origin header; browser contexts must match the
-/// localhost/tauri defaults or the configured allowlist.
-fn origin_allowed(app: &Arc<AppState>, headers: &HeaderMap) -> bool {
-    let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) else {
-        return true;
-    };
-    if origin == "null"
-        || origin.starts_with("tauri://")
-        || origin.starts_with("http://tauri.")
-        || origin.starts_with("http://localhost")
-        || origin.starts_with("http://127.0.0.1")
-    {
-        return true;
-    }
-    app.cfg.allowed_origins.iter().any(|o| o == origin)
 }
 
 struct Conn {
@@ -123,9 +109,11 @@ struct Conn {
     watch: board::Watch,
     /// The client renders terminal cards and may see and answer them.
     terminal_cards: bool,
+    /// How this client may see and run owner actions (H-117 R1).
+    owner: owner_actions::Client,
 }
 
-async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
+async fn handle_socket(app: Arc<AppState>, socket: WebSocket, peer: Option<std::net::SocketAddr>) {
     let (sink, mut stream) = socket.split();
     let (out_tx, out_rx) = mpsc::unbounded_channel::<Value>();
     let (viewer, frames) = Viewer::new(out_tx.clone());
@@ -148,7 +136,7 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
         }
         _ => None,
     };
-    let Some(((caps, device_id), features)) = session else {
+    let Some(((caps, device_id, via_ticket), features)) = session else {
         drop((out_tx, viewer));
         finish(writer).await;
         return;
@@ -168,6 +156,8 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
     let _answerer = (cards && caps.contains(&Capability::Control))
         .then(|| crate::approval::answerer(&app, terminal_answerer));
 
+    // Owner actions go only to a client that renders them (H-117 R1).
+    let owner = owner_actions::Client::new(&features, &caps, device_id.is_some(), via_ticket, peer);
     // Forward server pushes to this client.
     let push_tx = out_tx.clone();
     let mut push_rx = app.events.subscribe_push();
@@ -186,7 +176,7 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             };
-            if !terminal_cards && is_terminal_card(&push) {
+            if (!terminal_cards && is_terminal_card(&push)) || !owner.sees(&push) {
                 continue;
             }
             // `BotUpdated` carries a database row, whose `state` and
@@ -224,6 +214,7 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket) {
         bin: bin_tx,
         watch: board::Watch::default(),
         terminal_cards,
+        owner,
     };
 
     // Any frame counts as a sign of life, a ping or pong as much as a request.
@@ -318,7 +309,7 @@ fn handshake(
     app: &Arc<AppState>,
     out: &mpsc::UnboundedSender<Value>,
     text: &str,
-) -> Option<(Vec<Capability>, Option<String>)> {
+) -> Option<(Vec<Capability>, Option<String>, bool)> {
     let Ok(req) = serde_json::from_str::<Value>(text) else {
         return None;
     };
@@ -349,7 +340,9 @@ fn handshake(
     // tokens carry explicit scoped capabilities and can be revoked.
     // A one-time ticket from the local endpoint is the owner too (H-044 T4):
     // the desktop app by its signature, a CLI command by the owner's card.
-    let (caps, device_id) = if app.secrets.verify_client(token) || app.owner.redeem(token) {
+    let owner_token = app.secrets.verify_client(token);
+    let via_ticket = !owner_token && app.owner.redeem(token);
+    let (caps, device_id) = if owner_token || via_ticket {
         (
             vec![Capability::Read, Capability::Control, Capability::Approve],
             None,
@@ -395,5 +388,5 @@ fn handshake(
         // which peer row is which daemon.
         "daemon_id": app.db.daemon_id().ok()
     }));
-    Some((caps, device_id))
+    Some((caps, device_id, via_ticket))
 }
