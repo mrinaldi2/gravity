@@ -22,6 +22,11 @@ pub struct Proxy {
 
 impl Proxy {
     pub fn spawn(d: &TestDaemon) -> Self {
+        Self::spawn_in(d, &std::env::current_dir().expect("cwd"))
+    }
+
+    /// A proxy whose working directory is `dir`: a command run from there.
+    pub fn spawn_in(d: &TestDaemon, dir: &std::path::Path) -> Self {
         let endpoint = hermesd::bus_auth::ipc::endpoint(&d.app.cfg);
         let script = format!(
             "read go; exec '{}' bus-proxy --endpoint '{}'",
@@ -30,6 +35,7 @@ impl Proxy {
         );
         let mut child = Command::new("sh")
             .args(["-c", &script])
+            .current_dir(dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .kill_on_drop(true)

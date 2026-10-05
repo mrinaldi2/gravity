@@ -16,6 +16,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub mod ipc;
+pub mod origin;
 pub mod os;
 pub mod owner;
 pub mod owner_client;

@@ -156,6 +156,21 @@ export interface PermissionRequest {
   readonly input: string;
   readonly created_at: string;
   readonly expires_at: string;
+  /** Set on a terminal card (UX-014): where the command came from. */
+  readonly origin?: TerminalOrigin;
+}
+
+/** A CLI owner command's facts, field by field; any the OS wouldn't tell is absent. */
+export interface TerminalOrigin {
+  readonly command: string;
+  readonly pid: number;
+  /** The asker's executable, e.g. `hermesd`. */
+  readonly process?: string;
+  /** The nearest app or terminal it ran under: Terminal, iTerm2, Code, claude… */
+  readonly launched_from?: string;
+  readonly cwd?: string;
+  /** The bot whose workspace `cwd` is inside: a bot is probably asking. */
+  readonly bot?: string;
 }
 
 export type PermissionAnswer = "allow_once" | "allow_session" | "deny";

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import type { KeyboardEvent, ReactElement } from "react";
 import type { PermissionAnswer, PermissionRequest } from "../../protocol/chat";
-import { isTerminal, permissionTitle } from "./permissionTitle";
+import { TERMINAL_TITLE, isTerminal, permissionTitle } from "./permissionTitle";
 import { errText, fmtTimestamp } from "../../util";
 import CodeBlock from "../chat/CodeBlock";
+import TerminalCard from "./TerminalCard";
 import type { Permissions } from "./usePermissions";
 
 interface PermissionCardsProps {
@@ -16,7 +17,10 @@ interface PermissionCardsProps {
   readonly onOpenBot?: (botId: string) => void;
 }
 
-/** Tools waiting on the owner, one card each, oldest first. */
+/**
+ * Tools waiting on the owner, one card each, oldest first. A terminal
+ * command asking to act as the owner goes above every bot's card.
+ */
 export default function PermissionCards({
   permissions,
   canAnswer,
@@ -26,18 +30,33 @@ export default function PermissionCards({
   if (permissions.pending.length === 0) {
     return null;
   }
+  const terminals = permissions.pending.filter(isTerminal);
+  const newest = terminals.at(-1);
   return (
     <div className="permission-cards" aria-label="Permission requests">
-      {permissions.pending.map((request) => (
-        <PermissionCard
+      <div className="visually-hidden" aria-live="polite">
+        {newest === undefined ? "" : `${TERMINAL_TITLE}: ${newest.origin?.command ?? ""}`}
+      </div>
+      {terminals.map((request) => (
+        <TerminalCard
           key={request.id}
           request={request}
           canAnswer={canAnswer}
           onAnswer={permissions.answer}
-          botName={botName?.(request.bot_id) ?? (botName === undefined ? undefined : "A bot")}
-          onOpenBot={onOpenBot}
         />
       ))}
+      {permissions.pending
+        .filter((request) => !isTerminal(request))
+        .map((request) => (
+          <PermissionCard
+            key={request.id}
+            request={request}
+            canAnswer={canAnswer}
+            onAnswer={permissions.answer}
+            botName={botName?.(request.bot_id) ?? (botName === undefined ? undefined : "A bot")}
+            onOpenBot={onOpenBot}
+          />
+        ))}
     </div>
   );
 }
@@ -63,7 +82,7 @@ function PermissionHead({
   return (
     <div className="permission-head">
       <span className="permission-label">{permissionTitle(request, botName)}</span>
-      {botName === undefined || onOpenBot === undefined || isTerminal(request) ? null : (
+      {botName === undefined || onOpenBot === undefined ? null : (
         <button
           type="button"
           className="permission-toggle permission-open"
@@ -87,6 +106,7 @@ const KEYS: Readonly<Record<string, PermissionAnswer>> = {
   d: "deny",
 };
 
+/** A bot's tool waiting on the owner. */
 function PermissionCard({
   request,
   canAnswer,
@@ -169,64 +189,39 @@ function PermissionCard({
         tabIndex={-1}
         onKeyDown={onKeyDown}
       >
-        <AnswerButtons
-          terminal={isTerminal(request)}
+        <button
+          type="button"
+          className="btn btn-good"
           disabled={!canAnswer || busy}
-          denying={denying}
-          onAnswer={(decision) => void answer(decision)}
-          onDeny={() => {
-            setDenying(true);
-          }}
-        />
-        {canAnswer ? null : <span className="permission-readonly">Read-only connection</span>}
-      </div>
-    </div>
-  );
-}
-
-/** Allow once, Allow for session (bots only: a terminal command asks each time), Deny. */
-function AnswerButtons({
-  terminal,
-  disabled,
-  denying,
-  onAnswer,
-  onDeny,
-}: {
-  readonly terminal: boolean;
-  readonly disabled: boolean;
-  readonly denying: boolean;
-  readonly onAnswer: (decision: PermissionAnswer) => void;
-  readonly onDeny: () => void;
-}): ReactElement {
-  return (
-    <>
-      <button
-        type="button"
-        className="btn btn-good"
-        disabled={disabled}
-        onClick={() => onAnswer("allow_once")}
-      >
-        Allow once <kbd>A</kbd>
-      </button>
-      {terminal ? null : (
+          onClick={() => void answer("allow_once")}
+        >
+          Allow once <kbd>A</kbd>
+        </button>
         <button
           type="button"
           className="btn"
-          disabled={disabled}
+          disabled={!canAnswer || busy}
           title="For the rest of this bot's session"
-          onClick={() => onAnswer("allow_session")}
+          onClick={() => void answer("allow_session")}
         >
           Allow for session <kbd>S</kbd>
         </button>
-      )}
-      <button
-        type="button"
-        className="btn btn-danger"
-        disabled={disabled}
-        onClick={() => (denying ? onAnswer("deny") : onDeny())}
-      >
-        {denying ? "Deny" : "Deny…"} <kbd>D</kbd>
-      </button>
-    </>
+        <button
+          type="button"
+          className="btn btn-danger"
+          disabled={!canAnswer || busy}
+          onClick={() => {
+            if (denying) {
+              void answer("deny");
+            } else {
+              setDenying(true);
+            }
+          }}
+        >
+          {denying ? "Deny" : "Deny…"} <kbd>D</kbd>
+        </button>
+        {canAnswer ? null : <span className="permission-readonly">Read-only connection</span>}
+      </div>
+    </div>
   );
 }

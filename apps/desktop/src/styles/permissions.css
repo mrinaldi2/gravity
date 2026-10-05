@@ -81,3 +81,43 @@
   font-size: 10px;
   opacity: 0.6;
 }
+
+/* A terminal command asking to act as the owner (UX-014): its own look. */
+.permission-terminal {
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-raised));
+}
+
+.permission-terminal-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.permission-terminal-title svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.permission-origin {
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.permission-bot-warning {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--red);
+}
+
+.permission-terminal-body {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}

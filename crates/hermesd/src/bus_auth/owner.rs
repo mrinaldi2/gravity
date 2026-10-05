@@ -20,11 +20,17 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::app::AppState;
+use crate::approval::OwnerAnswer;
 
 /// How long a ticket waits for its hello.
 const TICKET_TTL: Duration = Duration::from_secs(60);
 /// JSON-RPC error: the caller may not act as the owner.
 pub const NOT_THE_OWNER: i64 = -32002;
+/// What the CLI prints when the owner command doesn't run (UX-014).
+pub const DENIED: &str = "You denied this command in The Hermes. It did not run.";
+pub const EXPIRED: &str = "No answer in The Hermes, so the command did not run.";
+pub const NO_APP: &str =
+    "Open The Hermes on this computer to allow this command, then run it again.";
 
 /// The process on the other end of a local connection.
 #[derive(Debug, Clone, Copy, Default)]
@@ -147,7 +153,14 @@ pub async fn handle(
         return Some(refused(&id, "can't tell which process is asking"));
     };
     if in_session {
-        return Some(refused(&id, "a bot can't act as the owner"));
+        return Some(refused(
+            &id,
+            if method == "hermes/owner_request" {
+                "Commands that act as the owner can't run from a bot's session."
+            } else {
+                "a bot can't act as the owner"
+            },
+        ));
     }
     if method == "hermes/owner_ticket" {
         return Some(if app.owner.is_owner_app(&peer) {
@@ -156,12 +169,13 @@ pub async fn handle(
             refused(&id, "not the owner's app")
         });
     }
-    let command = request["params"]["command"].as_str().unwrap_or("a command");
-    Some(
-        match crate::approval::ask_owner(app, command, peer.pid).await {
-            Some(true) => ticket(&id, &app.owner),
-            Some(false) => refused(&id, "the owner didn't allow it"),
-            None => refused(&id, "open The Hermes to allow this command"),
-        },
-    )
+    let params = &request["params"];
+    let command = params["command"].as_str().unwrap_or("a command");
+    let origin = super::origin::of(app, command, peer.pid, params["cwd"].as_str());
+    Some(match crate::approval::ask_owner(app, &origin).await {
+        OwnerAnswer::Allowed => ticket(&id, &app.owner),
+        OwnerAnswer::Denied => refused(&id, DENIED),
+        OwnerAnswer::Expired => refused(&id, EXPIRED),
+        OwnerAnswer::NoApp => refused(&id, NO_APP),
+    })
 }

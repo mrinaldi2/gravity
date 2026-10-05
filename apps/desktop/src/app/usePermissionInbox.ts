@@ -4,7 +4,7 @@ import type { Permissions } from "../components/permissions/usePermissions";
 import type { DaemonApi } from "../protocol/api";
 import type { PendingCounts } from "../protocol/decisions";
 import type { Bot } from "../protocol/entities";
-import { permissionTitle } from "../components/permissions/permissionTitle";
+import { permissionDetail, permissionTitle } from "../components/permissions/permissionTitle";
 import type { Selection } from "./selection";
 import { usePendingDecisions } from "./usePendingDecisions";
 import type { AddToast } from "./useToasts";
@@ -51,7 +51,7 @@ export function usePermissionInbox({
           return;
         }
         const name = bots.find((bot) => bot.id === request.bot_id)?.name;
-        addToast("warn", permissionTitle(request, name), request.summary, {
+        addToast("warn", permissionTitle(request, name), permissionDetail(request), {
           action: { label: "Answer", run: () => select({ kind: "control" }) },
         });
       }),

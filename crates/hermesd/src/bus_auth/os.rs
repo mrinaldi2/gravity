@@ -61,6 +61,12 @@ impl ProcessTable for OsProcessTable {
     }
 }
 
+/// A process's executable name, from Toolhelp (UX-014's origin line).
+#[cfg(windows)]
+pub fn exe_name(pid: u32) -> Option<String> {
+    windows::exe_of(pid)
+}
+
 #[cfg(windows)]
 mod windows {
     use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
@@ -100,6 +106,21 @@ mod windows {
 
     /// The parent pid Toolhelp records for `pid`.
     pub(super) fn parent_of(pid: u32) -> Option<u32> {
+        entry_of(pid).map(|entry| entry.parent)
+    }
+
+    /// The executable name Toolhelp records for `pid`, e.g. `Code.exe`.
+    pub(super) fn exe_of(pid: u32) -> Option<String> {
+        let entry = entry_of(pid)?;
+        let len = entry
+            .exe
+            .iter()
+            .position(|&c| c == 0)
+            .unwrap_or(entry.exe.len());
+        Some(String::from_utf16_lossy(&entry.exe[..len])).filter(|n| !n.is_empty())
+    }
+
+    fn entry_of(pid: u32) -> Option<ProcessEntry> {
         // SAFETY: no pointers; a valid result is ours to close.
         let raw = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
         if raw.is_null() || raw as isize == INVALID_HANDLE_VALUE {
@@ -114,7 +135,7 @@ mod windows {
         let mut more = unsafe { Process32FirstW(snapshot.as_raw_handle(), &mut entry) } != 0;
         while more {
             if entry.pid == pid {
-                return Some(entry.parent);
+                return Some(entry);
             }
             // SAFETY: as above.
             more = unsafe { Process32NextW(snapshot.as_raw_handle(), &mut entry) } != 0;

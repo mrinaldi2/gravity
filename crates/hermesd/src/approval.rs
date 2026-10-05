@@ -43,6 +43,10 @@ pub struct PermissionRequest {
     pub input: String,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    /// A terminal card's facts, field by field (UX-014): the client composes
+    /// its lines from these and never shows `summary`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Value>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -202,6 +206,7 @@ async fn decide(
         ),
         created_at,
         expires_at: created_at + chrono::Duration::from_std(window).ok()?,
+        origin: (bot_id == TERMINAL).then(|| input.clone()),
     };
     let (tx, rx) = oneshot::channel();
     app.approvals.lock().insert(
@@ -241,14 +246,28 @@ async fn decide(
 /// What an owner-command card is filed under: a terminal, not a bot (H-044).
 pub const TERMINAL: &str = "terminal";
 
+/// How the owner answered a terminal card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnerAnswer {
+    Allowed,
+    Denied,
+    /// The card closed unanswered.
+    Expired,
+    /// No app is open to ask.
+    NoApp,
+}
+
 /// Asks the owner, on a card, whether a command run in a terminal may act as
-/// them (H-044 T4). `Some(true)` when allowed, `Some(false)` when denied or
-/// left unanswered, `None` when no app is open to ask.
-pub async fn ask_owner(app: &AppState, command: &str, pid: u32) -> Option<bool> {
-    let input = serde_json::json!({ "command": format!("{command} (pid {pid})") });
-    match decide(app, TERMINAL, "Allow from Terminal", &input, None).await? {
-        Decision::Answered(Answer::AllowOnce | Answer::AllowSession, _) => Some(true),
-        Decision::Answered(Answer::Deny, _) | Decision::Expired => Some(false),
+/// them (H-044 T4). The card shows where it came from (UX-014).
+pub async fn ask_owner(app: &AppState, origin: &crate::bus_auth::origin::Origin) -> OwnerAnswer {
+    let input = serde_json::to_value(origin).unwrap_or_default();
+    match decide(app, TERMINAL, "Terminal command", &input, None).await {
+        Some(Decision::Answered(Answer::AllowOnce | Answer::AllowSession, _)) => {
+            OwnerAnswer::Allowed
+        }
+        Some(Decision::Answered(Answer::Deny, _)) => OwnerAnswer::Denied,
+        Some(Decision::Expired) => OwnerAnswer::Expired,
+        None => OwnerAnswer::NoApp,
     }
 }
 

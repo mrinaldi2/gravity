@@ -62,10 +62,15 @@ pub async fn cli_credential(home: &Path, secrets: &Path) -> anyhow::Result<Strin
         .map(|a| a.rsplit(['/', '\\']).next().unwrap_or(&a).to_string())
         .collect::<Vec<_>>()
         .join(" ");
-    eprintln!("Asking for your OK in The Hermes app…");
-    match ask(home, "hermes/owner_request", json!({ "command": command })).await? {
+    let cwd = std::env::current_dir()
+        .map(|dir| dir.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    eprintln!("Waiting for you to allow this in The Hermes on this computer…");
+    let params = json!({ "command": command, "cwd": cwd });
+    match ask(home, "hermes/owner_request", params).await? {
         Asked::Ticket(ticket) => Ok(ticket),
-        Asked::Refused(reason) => anyhow::bail!("not allowed: {reason}"),
+        // The daemon's reason is the owner-facing sentence (UX-014).
+        Asked::Refused(reason) => anyhow::bail!("{reason}"),
         Asked::NoEndpoint => {
             let token = std::fs::read_to_string(secrets.join("client.token"))
                 .map_err(|e| anyhow::anyhow!("cannot read the owner token: {e}"))?;

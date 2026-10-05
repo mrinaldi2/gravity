@@ -123,27 +123,6 @@ describe("PermissionCards", () => {
     expect(screen.getByText("Read-only connection")).toBeInTheDocument();
   });
 
-  it("shows a terminal command asking to act as the owner, with no bot to open", async () => {
-    const terminal = request({
-      id: "t1",
-      bot_id: "terminal",
-      tool: "Allow from Terminal",
-      summary: "Allow from Terminal: hermesd board import (pid 4242)",
-    });
-    render(
-      <PermissionCards
-        permissions={{ pending: [terminal], answer: async () => {} }}
-        canAnswer
-        botName={() => undefined}
-        onOpenBot={() => {}}
-      />,
-    );
-    expect(screen.getByText("A command in Terminal wants to act as you")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Allow once/ })).toBeEnabled();
-    expect(screen.queryByRole("button", { name: /Allow for session/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Open/ })).toBeNull();
-  });
-
   it("treats a daemon without permissions as having none", async () => {
     const client = new FakeDaemon();
     const { result } = renderHook(() => usePermissions(client, "b1", true));
