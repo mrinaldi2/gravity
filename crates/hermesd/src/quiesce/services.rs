@@ -349,7 +349,11 @@ mod tests {
     fn the_defaults_ship_colima_and_lima_looked_up_in_fixed_places() {
         let cfg = QuiesceConfig::default();
         let names: Vec<&str> = cfg.services.iter().map(|s| s.name.as_str()).collect();
-        let expected: &[&str] = if cfg!(windows) { &[] } else { &["colima", "lima"] };
+        let expected: &[&str] = if cfg!(windows) {
+            &[]
+        } else {
+            &["colima", "lima"]
+        };
         assert_eq!(names, expected);
         assert!(cfg.search_path.iter().all(|p| p.is_absolute()));
         assert_eq!(cfg.deadline_minutes, 30);
