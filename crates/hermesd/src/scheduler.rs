@@ -101,6 +101,11 @@ impl Scheduler {
     }
 
     pub fn step(&self) -> anyhow::Result<()> {
+        // Paused for an install (H-117): slots are recorded, nothing runs and
+        // nothing expires; resuming keeps each routine's latest slot.
+        if self.db.open_quiesce()?.is_some() {
+            return self.schedule_due_occurrences();
+        }
         self.expire_overdue_runs()?;
         self.expire_overdue_tasks()?;
         self.schedule_due_occurrences()?;

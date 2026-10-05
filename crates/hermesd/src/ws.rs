@@ -42,6 +42,7 @@ mod peers;
 mod permissions;
 mod profiles;
 mod project_repo;
+mod quiesce;
 mod releases;
 mod routines;
 mod runtime;

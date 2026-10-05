@@ -20,6 +20,7 @@ import type {
 } from "./agents";
 import type { DashboardReply } from "./dashboard";
 import type { MeetingReply } from "./meetings";
+import type { Quiesce, QuiesceReply } from "./quiesce";
 import type { ReleaseReply } from "./releases";
 import type { BotTask } from "./tasks";
 import type { WorkerView } from "./workers";
@@ -61,6 +62,7 @@ export type ServerReply =
   | (ReplyBase & ReleaseReply)
   | (ReplyBase & DashboardReply)
   | (ReplyBase & MeetingReply)
+  | (ReplyBase & QuiesceReply)
   | (ReplyBase & {
       readonly type: "hello_ok";
       readonly protocol_version: number;
@@ -263,6 +265,8 @@ export type ServerPush =
   | { readonly type: "bot_updated"; readonly bot: Bot }
   | { readonly type: "project_updated"; readonly project: Project }
   | { readonly type: "workers_updated"; readonly project_id: string }
+  /** Every project here paused for an install, or resumed (H-117). */
+  | { readonly type: "quiesce_update"; readonly quiesce: Quiesce | null }
   /** A project's meetings or action items changed (H-102). */
   | { readonly type: "meeting_event"; readonly project_id: string; readonly meeting_id?: string }
   | { readonly type: "activity_update"; readonly activity: BotActivity }

@@ -30,6 +30,7 @@ pub mod paths;
 pub mod peer;
 mod permissions;
 pub mod projectmgmt;
+pub mod quiesce;
 pub mod resume;
 pub mod routine_validation;
 pub mod runtime;

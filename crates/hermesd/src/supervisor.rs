@@ -32,6 +32,7 @@ use crate::terminal::TermBuffer;
 mod claim;
 mod hooks;
 mod lifecycle;
+mod quiesce;
 mod restart;
 mod session_events;
 mod start;

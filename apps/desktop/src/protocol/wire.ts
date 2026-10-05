@@ -23,6 +23,7 @@ const PUSH_TYPES: Readonly<Record<ServerPushType, true>> = {
   project_updated: true,
   workers_updated: true,
   meeting_event: true,
+  quiesce_update: true,
   activity_update: true,
   delivery_update: true,
   routine_run_update: true,
@@ -91,6 +92,7 @@ const REPLY_TYPES: ReadonlySet<string> = new Set(
     dashboard: true,
     relayed_confirmed: true,
     meeting_action: true,
+    quiesce: true,
   } satisfies Record<ServerReplyType, true>),
 );
 

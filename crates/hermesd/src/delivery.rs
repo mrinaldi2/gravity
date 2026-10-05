@@ -43,6 +43,10 @@ impl DeliveryWorker {
     }
 
     pub async fn step(&self) -> anyhow::Result<()> {
+        // Paused for an install (H-117): messages wait, in order, in the queue.
+        if self.db.open_quiesce()?.is_some() {
+            return Ok(());
+        }
         self.db.recover_expired_leases()?;
         let due = self.db.lease_due_deliveries(self.cfg.lease_seconds, 20)?;
         for delivery in due {

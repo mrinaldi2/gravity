@@ -33,6 +33,11 @@ pub enum Push {
     WorkersUpdated {
         project_id: String,
     },
+    /// This computer paused or resumed every project for an install
+    /// (H-117): the open pause, or none.
+    QuiesceUpdate {
+        quiesce: Option<Box<crate::db::Quiesce>>,
+    },
     /// A project's meetings or action items changed (H-102). Clients
     /// refetch `meeting_list`, `meeting_get` or `dashboard_get`.
     MeetingEvent {

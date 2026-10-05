@@ -18,6 +18,7 @@ import CommandPalette from "./components/CommandPalette";
 import HomeMigrationConfirm from "./components/overlay/HomeMigrationConfirm";
 import MainPane from "./components/MainPane";
 import SearchOverlay from "./components/SearchOverlay";
+import QuiesceLayer from "./components/service/QuiesceBanner";
 import ServiceRecoveryBanner from "./components/service/ServiceRecoveryBanner";
 import SettingsOverlay from "./components/settings/SettingsOverlay";
 import SetupScreen from "./components/setup/SetupScreen";
@@ -198,6 +199,7 @@ export default function App(): ReactElement {
         />
         <main className="main">
           <ServiceRecoveryLayer endpoint={daemon.endpoint} addToast={addToast} />
+          <QuiesceLayer client={client} connected={connected} addToast={addToast} />
           <MainPane
             client={client}
             daemon={daemon}

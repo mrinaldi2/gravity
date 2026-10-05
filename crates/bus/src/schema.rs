@@ -17,6 +17,7 @@ mod history;
 mod meetings;
 mod peers;
 mod permissions;
+mod quiesce;
 mod releases;
 mod workers;
 
@@ -31,6 +32,7 @@ use history::{
 use meetings::MIGRATION_MEETINGS;
 use peers::{MIGRATION_14, MIGRATION_15, MIGRATION_16};
 use permissions::{MIGRATION_PERMISSIONS, MIGRATION_PERMISSION_EXTRAS_RELEASE_MAIN};
+use quiesce::MIGRATION_QUIESCE;
 use releases::{MIGRATION_RELEASES, MIGRATION_RELEASE_EVENTS};
 use workers::{MIGRATION_18, MIGRATION_19};
 
@@ -63,6 +65,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_RELEASE_EVENTS,
     MIGRATION_BOARD_WORKFLOW,
     MIGRATION_MEETINGS,
+    MIGRATION_QUIESCE,
 ];
 
 #[cfg(test)]

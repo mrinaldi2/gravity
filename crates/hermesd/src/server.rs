@@ -71,7 +71,10 @@ pub fn spawn_workers(app: &Arc<AppState>) {
             tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 tick.tick().await;
-                app.supervisor.reconcile();
+                // A pause for an install holds every bot still (H-117).
+                if !crate::quiesce::hold(&app) {
+                    app.supervisor.reconcile();
+                }
             }
         });
     }
@@ -86,6 +89,7 @@ pub fn spawn_workers(app: &Arc<AppState>) {
         });
     }
 
+    crate::quiesce::spawn_deadman(app.clone());
     crate::peer::mirror::spawn(app.clone());
     crate::peer::spawn_board_relay(app.clone());
     crate::peer::spawn_dialers(app);

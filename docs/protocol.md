@@ -720,6 +720,35 @@ runs through the tester the same way.
   - It attaches the build with its sha256, its `url` under `[releases] base_url`, and its `install_url`. For an `.ipa`, that is the `itms-services://` link to a generated `manifest.plist`; for other builds, it is the `url`.
   - `install_release` re-hashes every served build against the frozen sha256 and returns `verified` per build. On a mismatch, it refuses the install, pauses a rollout in progress and tells DevOps.
 
+## Pausing every project for an install (H-117)
+
+An install replaces the daemon. While it runs, **quiesce** holds every project on that computer still, and resumes them after.
+
+**The pause.** A pause is one open row in `quiesce`. It is in the database, so it outlasts the install's daemon restart. While it is open:
+- **Bots:** the supervision tick stops every session and starts none. A stopped bot shows `Stopped` with the reason `Paused (install of <release>)`.
+- **The installing bot** (`exempt_bot`) is the one exception: it keeps running until its install is handed to the system, which then stops everything with the daemon (ARCH-R49 M1).
+- **Routines:** the scheduler records due routine slots but runs nothing, and expires nothing.
+- **Messages:** deliveries wait in the queue, local and peer alike.
+- **Workers:** the worker queue places nothing. A running worker is a bot, so it is held and comes back with its task still open.
+
+**Resume.** Resuming:
+- skips all but each routine's latest recorded slot, so a routine fires at most once for everything it missed;
+- extends open tasks' deadlines by the time paused;
+- restarts the services the pause stopped;
+- lets everything run again.
+
+If the pause stays open past `deadline_at` (30 minutes by default), the daemon resumes by itself, tells the owner, and notes each project's DevOps and lead.
+
+**What a pause records.** The `quiesce` object: `{id, reason, release_id, started_by, started_at, deadline_at, phase, report, services_stopped, resumed_at, outcome}`.
+- `report.paused` counts what was held: `{bots, routines, workers, queued}`.
+- `report.resumed` records how it ended: `{at, outcome, paused_seconds, coalesced_runs, extended_tasks, services_started}`.
+- `outcome` is one of `resumed`, `install_ok`, `rolled_back` or `deadline`.
+
+**WebSocket.**
+- `quiesce_status` (read) answers `{type: "quiesce", quiesce: …|null}`.
+- `quiesce_resume` (approve, the owner's **Resume now**) ends the pause.
+- Every change pushes `{type: "quiesce_update", quiesce: …|null}`.
+
 ## The project dashboard
 
 `dashboard_get {project_id}` (read) answers with `{type: "dashboard", dashboard}`, which holds what the dashboard's widgets show (H-018 §2.1, H-076, H-102):

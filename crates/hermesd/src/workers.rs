@@ -203,6 +203,10 @@ pub async fn run(app: Arc<AppState>) {
 /// One pass: settle spawns whose task closed, retire finished workers, and
 /// hand freed slots to the queue.
 pub async fn reconcile(app: &Arc<AppState>) -> anyhow::Result<()> {
+    // Paused for an install (H-117): nothing placed, settled or retired.
+    if app.db.open_quiesce()?.is_some() {
+        return Ok(());
+    }
     for worker in app.db.orphaned_workers()? {
         release_orphan(app, &worker)?;
     }

@@ -51,6 +51,7 @@ const READ_ONLY: &[&str] = &[
     "list_releases",
     "get_release",
     "dashboard_get",
+    "quiesce_status",
     "meeting_list",
     "meeting_get",
 ];
@@ -80,6 +81,8 @@ const APPROVE_ONLY: &[&str] = &[
     "release_unhold",
     // The one-shot backlog import is the owner's (H-020 §1.5, B6).
     "board_import",
+    // Ending a pause for an install early is the owner's call (H-117).
+    "quiesce_resume",
 ];
 
 /// Capability required for each request type.
@@ -170,6 +173,8 @@ impl Conn {
             "list_releases" => self.list_releases(&req_id, req),
             "get_release" => self.get_release(&req_id, req),
             "dashboard_get" => self.dashboard_get(&req_id, req),
+            "quiesce_status" => self.quiesce_status(&req_id),
+            "quiesce_resume" => self.quiesce_resume(&req_id),
             "meeting_list" => self.meeting_list(&req_id, req),
             "meeting_get" => self.meeting_get(&req_id, req),
             "meeting_series_upsert" => self.meeting_series_upsert(&req_id, req),

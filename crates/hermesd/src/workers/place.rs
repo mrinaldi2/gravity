@@ -30,6 +30,10 @@ const DEFAULT_INSTRUCTIONS: &str =
 /// under a lock so two passes never give out one slot, and what is left is
 /// offered to linked machines in parallel, outside it.
 pub async fn place_queued(app: &Arc<AppState>, project_id: &str) {
+    // Paused for an install (H-117): spawns wait in the queue.
+    if app.db.open_quiesce().ok().flatten().is_some() {
+        return;
+    }
     let offers = {
         let _placing = app.workers.placing.lock().await;
         match place_here(app, project_id) {
