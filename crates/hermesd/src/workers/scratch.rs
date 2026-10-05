@@ -222,7 +222,10 @@ fn set_writable(path: &Path, mut permissions: std::fs::Permissions) {
     }
 }
 
+// On Windows this only clears the read-only attribute; there is no
+// world-writable mode. Unix uses mode | 0o200 (ARCH-R40 M2).
 #[cfg(windows)]
+#[allow(clippy::permissions_set_readonly_false)]
 fn set_writable(path: &Path, mut permissions: std::fs::Permissions) {
     if permissions.readonly() {
         permissions.set_readonly(false);
