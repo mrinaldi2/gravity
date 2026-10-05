@@ -111,6 +111,30 @@ impl Conn {
         self.reply_decision(req_id, &view)
     }
 
+    /// Confirms every ruling bots recorded for the owner in a project, from
+    /// the dashboard's one row (H-112). Each goes through the same checks as
+    /// a single confirm; one that fails is reported and the rest still go.
+    pub(super) fn confirm_relayed(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        let project_id = Self::str_field(req, "project_id")?;
+        let owner = self.owner();
+        let mut confirmed = Vec::new();
+        let mut failed = Vec::new();
+        for d in super::project_decisions(&self.app, project_id)?
+            .iter()
+            .filter(|d| crate::decisions::authority::is_relayed(d))
+        {
+            match decisions::confirm(&self.app, &owner, &d.id) {
+                Ok(_) => confirmed.push(d.id.clone()),
+                Err(e) => failed.push(json!({ "id": d.id, "message": e.to_string() })),
+            }
+        }
+        self.send(json!({
+            "type": "relayed_confirmed", "req_id": req_id,
+            "confirmed": confirmed, "failed": failed,
+        }));
+        Ok(())
+    }
+
     pub(super) fn withdraw_decision(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let view = decisions::withdraw(
             &self.app,

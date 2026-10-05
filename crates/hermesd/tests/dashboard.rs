@@ -122,7 +122,9 @@ async fn the_dashboard_counts_this_weeks_flow_without_the_import() {
     assert!(doing["count"].as_u64().unwrap() >= 2, "{doing}");
 
     assert_eq!(kinds(&d, "p0")[0]["id"], json!(urgent));
-    let overrides = kinds(&d, "wip_override");
+    // The lead's overrides are listed beside Needs you, not in it (H-112).
+    assert!(kinds(&d, "wip_override").is_empty(), "{d}");
+    let overrides = d["wip_overrides"].as_array().unwrap();
     assert_eq!(overrides.len(), 1, "{overrides:?}");
     assert_eq!(overrides[0]["note"], "WIP override: hotfix");
     assert_eq!(kinds(&d, "decision")[0]["title"], "Budget for push");
@@ -172,4 +174,56 @@ async fn a_project_without_a_board_still_lists_its_team() {
     let d = dashboard(&mut owner, &project).await;
     assert_eq!(d["board"], Value::Null);
     assert_eq!(d["team"].as_array().unwrap().len(), 1);
+}
+
+/// Rulings a bot recorded for the owner are one row, confirmed together,
+/// and only by the owner (H-112).
+#[tokio::test]
+async fn relayed_rulings_are_one_row_the_owner_confirms_at_once() {
+    let (pair, mut bots) = project_with_bots(&["Team Lead"]).await;
+    let project = pair
+        .d
+        .app
+        .db
+        .get_bot(&pair.ids[0])
+        .unwrap()
+        .unwrap()
+        .project_id;
+    for title in ["Ship on Fridays", "Keep the old icon"] {
+        bots[0]
+            .call(
+                "record_decision",
+                json!({"title": title, "body": "Said at the terminal.", "ruling_text": "yes"}),
+            )
+            .await;
+    }
+    let mut owner = WsClient::connect(&pair.d).await;
+    let d = dashboard(&mut owner, &project).await;
+    assert!(kinds(&d, "decision").is_empty(), "{d}");
+    let relayed = kinds(&d, "relayed");
+    assert_eq!(relayed.len(), 1, "{d}");
+    assert_eq!(relayed[0]["count"], 2);
+    assert_eq!(
+        relayed[0]["by"],
+        json!([{"bot_id": pair.ids[0], "count": 2}])
+    );
+
+    let created = owner
+        .request(json!({"type": "create_device", "name": "tablet",
+                        "capabilities": ["read", "control"]}))
+        .await;
+    let mut tablet = common::board::connect_with(&pair.d, token_str(&created)).await;
+    let refused = tablet
+        .request(json!({"type": "confirm_relayed", "project_id": project}))
+        .await;
+    assert_eq!(refused["code"], "forbidden", "{refused}");
+
+    let confirmed = owner
+        .request(json!({"type": "confirm_relayed", "project_id": project}))
+        .await;
+    assert_eq!(confirmed["type"], "relayed_confirmed", "{confirmed}");
+    assert_eq!(confirmed["confirmed"].as_array().unwrap().len(), 2);
+    assert_eq!(confirmed["failed"], json!([]));
+    let d = dashboard(&mut owner, &project).await;
+    assert!(kinds(&d, "relayed").is_empty(), "{d}");
 }

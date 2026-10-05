@@ -58,8 +58,9 @@ pub(super) fn card(card: &mut c::ItemCard, map: impl Fn(&str) -> String) {
 
 /// The fields of a result that name a bot, bare or as `bot:<id>`: a tool's
 /// (snake_case) and a forwarded read's (proto JSON, camelCase).
-const BOT_FIELDS: [&str; 9] = [
+const BOT_FIELDS: [&str; 10] = [
     "assignee",
+    "raised_by",
     "bot_id",
     "botId",
     "executor",
