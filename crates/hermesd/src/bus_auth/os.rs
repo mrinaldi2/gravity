@@ -94,6 +94,12 @@ pub fn exe_name(pid: u32) -> Option<String> {
     windows::exe_of(pid)
 }
 
+/// Every process this user can open, as `(pid, ppid, start)` (H-117).
+#[cfg(windows)]
+pub fn all_processes() -> Vec<(u32, u32, u64)> {
+    windows::all()
+}
+
 #[cfg(windows)]
 mod windows {
     use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
@@ -153,6 +159,32 @@ mod windows {
             .position(|&c| c == 0)
             .unwrap_or(entry.exe.len());
         Some(String::from_utf16_lossy(&entry.exe[..len])).filter(|n| !n.is_empty())
+    }
+
+    /// `(pid, ppid, creation time)` of every process this user can open,
+    /// from one snapshot (H-117 ledger).
+    pub(super) fn all() -> Vec<(u32, u32, u64)> {
+        let mut out = Vec::new();
+        // SAFETY: no pointers; a valid result is ours to close.
+        let raw = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
+        if raw.is_null() || raw as isize == INVALID_HANDLE_VALUE {
+            return out;
+        }
+        // SAFETY: raw is a live snapshot handle nothing else owns.
+        let snapshot = unsafe { OwnedHandle::from_raw_handle(raw) };
+        // SAFETY: ProcessEntry is plain old data; zeroed is a valid value.
+        let mut entry: ProcessEntry = unsafe { std::mem::zeroed() };
+        entry.size = std::mem::size_of::<ProcessEntry>() as u32;
+        // SAFETY: the snapshot is live and `entry` is sized for the call.
+        let mut more = unsafe { Process32FirstW(snapshot.as_raw_handle(), &mut entry) } != 0;
+        while more {
+            if let Some(start) = created(entry.pid) {
+                out.push((entry.pid, entry.parent, start));
+            }
+            // SAFETY: as above.
+            more = unsafe { Process32NextW(snapshot.as_raw_handle(), &mut entry) } != 0;
+        }
+        out
     }
 
     fn entry_of(pid: u32) -> Option<ProcessEntry> {

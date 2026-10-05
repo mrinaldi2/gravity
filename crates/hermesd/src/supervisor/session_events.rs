@@ -32,6 +32,7 @@ pub(super) async fn consume(
                 }
             }
             SessionEvent::Exited { code } => {
+                crate::holders::ledger::bot_session_ended(&bot_id);
                 sup.on_exit(&bot_id, code);
                 break;
             }

@@ -5,7 +5,7 @@
 use std::io;
 use std::os::windows::io::{AsRawHandle, BorrowedHandle, OwnedHandle, RawHandle};
 
-use super::job::Job;
+use crate::holders::job::Job;
 
 #[link(name = "kernel32")]
 extern "system" {
@@ -16,11 +16,12 @@ extern "system" {
 pub(super) struct ProcessKiller {
     process: OwnedHandle,
     /// Dropped with the session: `KILL_ON_JOB_CLOSE` then ends what's left.
-    job: Option<Job>,
+    job: Option<std::sync::Arc<Job>>,
 }
 
 impl ProcessKiller {
-    pub fn new(child: &dyn portable_pty::Child) -> anyhow::Result<Self> {
+    /// `session` is the tag quiesce finds the job by (H-117).
+    pub fn new(child: &dyn portable_pty::Child, session: Option<&str>) -> anyhow::Result<Self> {
         let raw = child
             .as_raw_handle()
             .ok_or_else(|| anyhow::anyhow!("PTY child has no process handle"))?;
@@ -31,11 +32,15 @@ impl ProcessKiller {
         // Without a job the session still runs; only its leftovers aren't
         // reaped with it.
         let job = Job::new()
-            .and_then(|job| job.assign(process.as_raw_handle()).map(|()| job))
+            .and_then(|job| job.assign(&process).map(|()| job))
             .inspect_err(|error| {
                 tracing::warn!(%error, "could not put the bot session in a job object");
             })
-            .ok();
+            .ok()
+            .map(std::sync::Arc::new);
+        if let (Some(job), Some(session)) = (&job, session) {
+            crate::holders::job::register(session, job);
+        }
         Ok(Self { process, job })
     }
 

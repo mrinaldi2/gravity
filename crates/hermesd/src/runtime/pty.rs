@@ -13,8 +13,6 @@ use anyhow::Context;
 use portable_pty::ChildKiller;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 #[cfg(windows)]
-mod job;
-#[cfg(windows)]
 mod windows;
 use tokio::sync::mpsc;
 
@@ -97,7 +95,7 @@ impl RuntimeAdapter for PtyAdapter {
         #[cfg(unix)]
         let killer = child.clone_killer();
         #[cfg(windows)]
-        let killer = windows::ProcessKiller::new(child.as_ref())?;
+        let killer = windows::ProcessKiller::new(child.as_ref(), session_of(spec))?;
 
         // ConPTY keeps its read pipe open until the master is dropped. Waiting
         // for reader EOF first would hide exits forever, preventing restarts.
@@ -291,3 +289,12 @@ impl RuntimeSession for PtySession {
 
 #[cfg(test)]
 mod tests;
+
+/// The session tag the supervisor put in the spec's environment (H-117).
+#[cfg(windows)]
+fn session_of(spec: &BotSpec) -> Option<&str> {
+    spec.env
+        .iter()
+        .find(|(k, _)| k == crate::holders::procs::SESSION_ENV)
+        .map(|(_, v)| v.as_str())
+}

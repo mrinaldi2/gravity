@@ -232,6 +232,9 @@ async fn main() -> anyhow::Result<()> {
     let _home_lock = hermesd::home::lock(&cfg.home)?;
     #[cfg(unix)]
     hermesd::holders::track_sessions_in(&cfg.home);
+    // What bot sessions start, for quiesce to reap (H-117 Q1).
+    hermesd::holders::ledger::track_in(&cfg.home);
+    hermesd::holders::ledger::spawn_sweeper();
     let policy = hermesd::server::port_policy(&cfg, negotiate_port);
     let bound = hermesd::server::bind(&cfg.bind, cfg.port, policy).await?;
     cfg.port = bound.port();

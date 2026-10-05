@@ -111,6 +111,16 @@ pub fn list(roots: &[PathBuf]) -> anyhow::Result<Vec<Holder>> {
 #[path = "holders_rm.rs"]
 pub mod rm;
 
+#[path = "holders_procs.rs"]
+pub mod procs;
+
+#[path = "holders_ledger.rs"]
+pub mod ledger;
+
+#[cfg(windows)]
+#[path = "holders_job.rs"]
+pub mod job;
+
 /// An access-denied or sharing-violation error anywhere in `error`'s chain:
 /// what a file held open under the home makes a move, rename or delete
 /// fail with on Windows (os error 5 or 32).

@@ -53,10 +53,35 @@ extern "system" {
     fn SetInformationJobObject(job: RawHandle, class: u32, info: *const c_void, len: u32) -> i32;
     fn AssignProcessToJobObject(job: RawHandle, process: RawHandle) -> i32;
     fn TerminateJobObject(job: RawHandle, code: u32) -> i32;
+    fn IsProcessInJob(process: RawHandle, job: RawHandle, result: *mut i32) -> i32;
+    fn OpenProcess(access: u32, inherit: i32, pid: u32) -> RawHandle;
 }
 
+const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
+
 /// A job whose processes all end when it is terminated or dropped.
-pub(crate) struct Job(OwnedHandle);
+pub struct Job(OwnedHandle);
+
+/// Each live session's job, by session id (H-117 Q1). Weak: the session's
+/// `ProcessKiller` holds the job, so it still closes, and kills what's
+/// left, when the session goes.
+static JOBS: std::sync::Mutex<Vec<(String, std::sync::Weak<Job>)>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// Remembers `job` as `session`'s.
+pub fn register(session: &str, job: &std::sync::Arc<Job>) {
+    let mut jobs = JOBS.lock().unwrap_or_else(|e| e.into_inner());
+    jobs.retain(|(_, weak)| weak.strong_count() > 0);
+    jobs.push((session.to_string(), std::sync::Arc::downgrade(job)));
+}
+
+/// The live sessions' jobs.
+pub fn live() -> Vec<(String, std::sync::Arc<Job>)> {
+    let jobs = JOBS.lock().unwrap_or_else(|e| e.into_inner());
+    jobs.iter()
+        .filter_map(|(session, weak)| Some((session.clone(), weak.upgrade()?)))
+        .collect()
+}
 
 impl Job {
     pub fn new() -> io::Result<Self> {
@@ -87,13 +112,30 @@ impl Job {
     }
 
     /// Puts `process` (and whatever it starts from now on) in the job.
-    pub fn assign(&self, process: RawHandle) -> io::Result<()> {
+    pub fn assign(&self, process: &impl AsRawHandle) -> io::Result<()> {
         // SAFETY: both handles are live; the process handle has the
         // PROCESS_SET_QUOTA and PROCESS_TERMINATE rights CreateProcess gives.
-        if unsafe { AssignProcessToJobObject(self.0.as_raw_handle(), process) } == 0 {
+        if unsafe { AssignProcessToJobObject(self.0.as_raw_handle(), process.as_raw_handle()) } == 0
+        {
             return Err(io::Error::last_os_error());
         }
         Ok(())
+    }
+
+    /// Whether `pid` runs in this job (or a job nested in it).
+    pub fn contains(&self, pid: u32) -> bool {
+        // SAFETY: OpenProcess takes no pointers; a non-null result is ours.
+        let raw = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+        if raw.is_null() {
+            return false;
+        }
+        // SAFETY: raw is a valid process handle nothing else owns.
+        let process = unsafe { OwnedHandle::from_raw_handle(raw) };
+        let mut inside = 0i32;
+        // SAFETY: both handles are live and `inside` is a BOOL output.
+        let ok =
+            unsafe { IsProcessInJob(process.as_raw_handle(), self.0.as_raw_handle(), &mut inside) };
+        ok != 0 && inside != 0
     }
 
     /// Ends every process in the job now.
@@ -109,7 +151,6 @@ impl Job {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::windows::io::AsRawHandle;
     use std::path::Path;
     use std::process::{Child, Command};
     use std::time::{Duration, Instant};
@@ -152,7 +193,7 @@ mod tests {
         let held = dir.path().join("held.txt");
         let mut child = tree_holding(&held);
         let job = Job::new().unwrap();
-        job.assign(child.as_raw_handle()).unwrap();
+        job.assign(&child).unwrap();
         wait_for("ping to hold the file", || {
             held.exists() && ping_holds(&held)
         });
@@ -172,12 +213,49 @@ mod tests {
         let held = dir.path().join("held.txt");
         let mut child = tree_holding(&held);
         let job = Job::new().unwrap();
-        job.assign(child.as_raw_handle()).unwrap();
+        job.assign(&child).unwrap();
         wait_for("ping to hold the file", || {
             held.exists() && ping_holds(&held)
         });
         job.terminate().unwrap();
         child.wait().unwrap();
         wait_for("the tree to end", || holders(&held).is_empty());
+    }
+
+    /// H-117 Q1: a `start /b` child, whose parent then exits, is still the
+    /// session's: its job says so, and the ledger lists it by that.
+    #[test]
+    fn a_start_b_child_is_found_through_the_session_job() {
+        use crate::holders::ledger::{Ledger, SessionTag};
+        use crate::holders::procs;
+        let dir = tempfile::tempdir().unwrap();
+        let held = dir.path().join("held.txt");
+        let mut child = tree_holding(&held);
+        let job = std::sync::Arc::new(Job::new().unwrap());
+        job.assign(&child).unwrap();
+        register("win-session", &job);
+        wait_for("ping to hold the file", || {
+            held.exists() && ping_holds(&held)
+        });
+        child.kill().unwrap();
+        child.wait().unwrap();
+        let ping = holders(&held)
+            .into_iter()
+            .find(|h| h.exe.eq_ignore_ascii_case("PING.EXE"))
+            .expect("the orphaned ping");
+        let mut ledger = Ledger::default();
+        let tag = SessionTag {
+            project_id: "phd".into(),
+            bot_id: "unity".into(),
+        };
+        ledger.started("win-session", tag, None);
+        let jobs = live();
+        let found = ledger.find(&procs::all(), Some("phd"), |pid| {
+            jobs.iter()
+                .find(|(_, j)| j.contains(pid))
+                .map(|(s, _)| s.clone())
+        });
+        assert!(found.iter().any(|e| e.pid == ping.pid), "{found:?}");
+        job.terminate().unwrap();
     }
 }

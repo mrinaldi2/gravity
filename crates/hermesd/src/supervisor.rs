@@ -34,6 +34,7 @@ mod hooks;
 mod lifecycle;
 mod restart;
 mod session_events;
+mod start;
 mod termio;
 mod watchdog;
 
@@ -235,24 +236,6 @@ impl Supervisor {
     /// The root process of every live session, for bus identity (H-044).
     pub fn session_roots(&self) -> crate::bus_auth::session::SessionRoots {
         self.inner.roots.clone()
-    }
-
-    /// Starts a session and records its root process as the bot's, replacing
-    /// the last session's, so the old session's processes are cut off.
-    fn start_session(
-        &self,
-        bot_id: &str,
-        spec: &crate::runtime::BotSpec,
-    ) -> anyhow::Result<crate::runtime::StartedSession> {
-        let started = self.inner.adapter.start(spec)?;
-        match started.session.root_pid() {
-            Some(pid) => {
-                let table = crate::bus_auth::os::OsProcessTable;
-                self.inner.roots.record_pid(&table, pid, bot_id);
-            }
-            None => self.inner.roots.forget(bot_id),
-        }
-        Ok(started)
     }
 
     /// Runs `hook` before every session start: at boot, after a crash, after
