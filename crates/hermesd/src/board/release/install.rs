@@ -1,24 +1,37 @@
-//! `hermesd release install <release> [--dry-run]` (B8, H-020 §2.6 a): the
-//! supported way a tester installs a release on their computer.
+//! `hermesd release install <release> [--dry-run | --status]` (B8, H-020
+//! §2.6 a): the supported way a tester installs a release on their computer.
 //!
 //! Run from the tester's session, it asks the daemon over the local endpoint
 //! (which knows the bot by its process, H-044) for `install_release`, so the
 //! gate is checked before anything is touched: the owner's settled approval,
-//! an open deploy task for this tester, the frozen hash. Then it takes each
-//! build for this computer, from the home's disk or its HTTPS url, checks it
-//! against the frozen sha256, and runs the platform's installer. A mismatch
-//! stops it. The tester smoke-tests and reports with `deploy_confirm`.
+//! an open deploy task for this tester, the frozen hash. For each build for
+//! this computer it then (ARCH-R43):
+//! 1. copies or downloads it into a fresh private stage and checks its
+//!    sha256 there (`stage`);
+//! 2. unpacks it and checks its code signature against the identity
+//!    compiled into hermesd, saying so when it can't (`signature`);
+//! 3. swaps the app into place and hands `service install` to the operating
+//!    system (`handoff`), because that restarts this very session.
+//!
+//! The tester reads the outcome from its next session with `--status`,
+//! smoke-tests, and reports with `deploy_confirm`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 
 use crate::config::Config;
 
-const USAGE: &str = "usage: hermesd release install <release> [--dry-run]";
+mod handoff;
+mod signature;
+mod stage;
+
+#[cfg(test)]
+use stage::verify;
+
+const USAGE: &str = "usage: hermesd release install <release> [--dry-run | --status]";
 
 /// How long the gate check may take: forwarded to the home when the board
 /// lives on another computer.
@@ -48,9 +61,22 @@ pub(crate) enum Kind {
     Daemon,
 }
 
+/// What the command was asked to do.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Args {
+    pub release: String,
+    pub dry_run: bool,
+    pub status: bool,
+    /// The daemon's own `--config`, passed on to `service install`.
+    pub config: Option<String>,
+}
+
 pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
-    let (release, dry_run) = parse(args)?;
-    let release = release.as_str();
+    let args = parse(args)?;
+    let release = args.release.as_str();
+    if args.status {
+        return status(cfg, release);
+    }
     let answer = gate(cfg, release).await?;
     let builds = builds(&answer);
     for phone in builds.iter().filter(|b| b.platform == "ios") {
@@ -63,58 +89,113 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
         !mine.is_empty(),
         "release {release} has no build for this computer"
     );
-    let work =
-        std::env::temp_dir().join(format!("hermes-install-{release}-{}", std::process::id()));
-    std::fs::create_dir_all(&work)?;
     for build in mine {
-        let file = fetch(build, &work)?;
-        verify(&file, &build.sha256).inspect_err(|_| {
-            eprintln!("Report it: deploy_confirm with result \"failed\" and this message.");
-        })?;
-        let name = file
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned();
-        let kind = kind_of(&name, cfg!(target_os = "macos"), cfg!(windows))?;
-        println!(
-            "{} {}: {name} matches its sha256",
-            build.platform, build.version
-        );
-        if dry_run {
-            println!("dry run: would install it as {kind:?}");
-            continue;
+        let stage = stage::Stage::new(release)?;
+        let installed = install_one(cfg, &args, build, &stage);
+        if args.dry_run || installed.is_err() {
+            stage.remove();
         }
-        install(kind, &file, &work)?;
-        println!("{} {} installed", build.platform, build.version);
+        installed?;
     }
-    let _ = std::fs::remove_dir_all(&work);
-    if !dry_run {
+    if !args.dry_run {
         println!(
-            "Smoke-test it, then report with deploy_confirm (release {release}, machine {}).",
+            "The service install runs on its own now and restarts the Hermes service, and this \
+             session with it. When you're back: `hermesd release install {release} --status`, \
+             smoke-test, then report with deploy_confirm (release {release}, machine {}).",
             answer["machine"].as_str().unwrap_or("this computer")
         );
     }
     Ok(())
 }
 
-/// The release and `--dry-run`; the daemon's own `--config <path>` is
-/// passed through main and skipped here.
-pub(crate) fn parse(args: &[String]) -> anyhow::Result<(String, bool)> {
+/// Stage, check, swap in, hand off: one build.
+fn install_one(
+    cfg: &Config,
+    args: &Args,
+    build: &Build,
+    stage: &stage::Stage,
+) -> anyhow::Result<()> {
+    let file = stage.fetch(build)?;
+    stage::verify(&file, &build.sha256).inspect_err(|_| {
+        eprintln!("Report it: deploy_confirm with result \"failed\" and this message.");
+    })?;
+    let name = file
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let kind = kind_of(&name, cfg!(target_os = "macos"), cfg!(windows))?;
+    println!(
+        "{} {}: {name} matches its sha256",
+        build.platform, build.version
+    );
+    let unpacked = unpack(kind, &file, &stage.dir)?;
+    println!(
+        "{}",
+        signature::run(&signature::plan_here(kind), &unpacked)?
+    );
+    if args.dry_run {
+        println!("dry run: would install it as {kind:?}");
+        return Ok(());
+    }
+    let (program, mut service_args) = match kind {
+        Kind::AppZip | Kind::AppDmg => (
+            swap_app(&unpacked, &signature::plan_here(kind))?.join("Contents/MacOS/hermesd"),
+            vec!["service".to_string(), "install".to_string()],
+        ),
+        // The setup's own hook runs `service install` (installer-hooks.nsh).
+        Kind::WindowsSetup => (unpacked, vec!["/S".to_string()]),
+        Kind::Daemon => (unpacked, vec!["service".to_string(), "install".to_string()]),
+    };
+    if kind != Kind::WindowsSetup {
+        if let Some(config) = &args.config {
+            service_args.extend(["--config".to_string(), config.clone()]);
+        }
+    }
+    let job = handoff::Job::new(&cfg.home, &args.release, program, service_args, &stage.dir);
+    handoff::hand_off(&job)?;
+    println!(
+        "{} {}: handed to the system to install (log: {})",
+        build.platform,
+        build.version,
+        job.log.display()
+    );
+    Ok(())
+}
+
+/// `--status`: how the handed-off install ended.
+fn status(cfg: &Config, release: &str) -> anyhow::Result<()> {
+    let (code, tail) = handoff::outcome(&cfg.home, release)?;
+    match code {
+        Some(0) => println!("release {release}: installed\n{tail}"),
+        Some(code) => anyhow::bail!("release {release}: the install failed ({code})\n{tail}"),
+        None => println!("release {release}: still installing\n{tail}"),
+    }
+    Ok(())
+}
+
+/// The release and its flags; the daemon's own `--config <path>` comes
+/// through main and is passed on.
+pub(crate) fn parse(args: &[String]) -> anyhow::Result<Args> {
     let mut release = None;
-    let mut dry_run = false;
+    let (mut dry_run, mut status, mut config) = (false, false, None);
     let mut it = args.iter();
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--dry-run" => dry_run = true,
-            "--config" => {
-                it.next();
-            }
+            "--status" => status = true,
+            "--config" => config = it.next().cloned(),
             a if a.starts_with("--") || release.is_some() => anyhow::bail!("{USAGE}"),
             a => release = Some(a.to_string()),
         }
     }
-    Ok((release.ok_or_else(|| anyhow::anyhow!("{USAGE}"))?, dry_run))
+    anyhow::ensure!(!(dry_run && status), "{USAGE}");
+    Ok(Args {
+        release: release.ok_or_else(|| anyhow::anyhow!("{USAGE}"))?,
+        dry_run,
+        status,
+        config,
+    })
 }
 
 /// `install_release` as the bot whose session this runs in: the gate.
@@ -174,46 +255,6 @@ pub(crate) fn for_this_computer(builds: &[Build], macos: bool, windows: bool) ->
     }
 }
 
-/// The build's file here: the home's own copy when this is the home, else
-/// downloaded from its HTTPS url.
-fn fetch(build: &Build, work: &Path) -> anyhow::Result<PathBuf> {
-    if let Some(local) = build.artifact.as_deref().map(PathBuf::from) {
-        if local.is_file() {
-            return Ok(local);
-        }
-    }
-    let url = build
-        .url
-        .as_deref()
-        .ok_or_else(|| anyhow::anyhow!("{} has no file here and no url", build.platform))?;
-    let name = url
-        .rsplit('/')
-        .next()
-        .filter(|n| !n.is_empty())
-        .unwrap_or("build");
-    let file = work.join(name);
-    run_ok(
-        Command::new("curl")
-            .args(["-fsSL", "--retry", "2", "-o"])
-            .arg(&file)
-            .arg(url),
-    )?;
-    Ok(file)
-}
-
-/// The file is the build the owner approved: its sha256 is the frozen one.
-pub(crate) fn verify(file: &Path, sha256: &str) -> anyhow::Result<()> {
-    let mut hasher = Sha256::new();
-    std::io::copy(&mut std::fs::File::open(file)?, &mut hasher)?;
-    let got = hex::encode(hasher.finalize());
-    anyhow::ensure!(
-        !sha256.is_empty() && got == sha256,
-        "{} doesn't match the release: sha256 {got}, expected {sha256}; not installing it",
-        file.display()
-    );
-    Ok(())
-}
-
 pub(crate) fn kind_of(name: &str, macos: bool, windows: bool) -> anyhow::Result<Kind> {
     let lower = name.to_ascii_lowercase();
     if lower.starts_with("hermesd") {
@@ -231,39 +272,46 @@ pub(crate) fn kind_of(name: &str, macos: bool, windows: bool) -> anyhow::Result<
     Ok(kind)
 }
 
-fn install(kind: Kind, file: &Path, work: &Path) -> anyhow::Result<()> {
+/// What gets checked and installed, inside the stage: the app bundle out
+/// of a zip or a disk image, or the file itself.
+fn unpack(kind: Kind, file: &Path, stage: &Path) -> anyhow::Result<PathBuf> {
     match kind {
         Kind::AppZip => {
-            let unpacked = work.join("unpacked");
+            let unpacked = stage.join("unpacked");
             run_ok(
                 Command::new("ditto")
                     .args(["-x", "-k"])
                     .arg(file)
                     .arg(&unpacked),
             )?;
-            install_app(&find_app(&unpacked)?)
+            find_app(&unpacked)
         }
         Kind::AppDmg => {
-            let mount = work.join("mount");
+            let mount = stage.join("mount");
             run_ok(
                 Command::new("hdiutil")
                     .args(["attach", "-nobrowse", "-readonly", "-mountpoint"])
                     .arg(&mount)
                     .arg(file),
             )?;
-            let installed = find_app(&mount).and_then(|app| install_app(&app));
+            // A copy in the stage, so the image can go before the swap.
+            let copied = find_app(&mount).and_then(|app| {
+                let to = stage
+                    .join("unpacked")
+                    .join(app.file_name().unwrap_or_default());
+                run_ok(Command::new("ditto").arg(&app).arg(&to)).map(|()| to)
+            });
             let _ = Command::new("hdiutil").arg("detach").arg(&mount).status();
-            installed
+            copied
         }
-        // The setup's own hook runs `service install` (installer-hooks.nsh).
-        Kind::WindowsSetup => run_ok(Command::new(file).arg("/S")),
+        Kind::WindowsSetup => Ok(file.to_path_buf()),
         Kind::Daemon => {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o755))?;
+                std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o700))?;
             }
-            run_ok(Command::new(file).args(["service", "install"]))
+            Ok(file.to_path_buf())
         }
     }
 }
@@ -277,21 +325,26 @@ fn find_app(dir: &Path) -> anyhow::Result<PathBuf> {
 }
 
 /// Replaces `/Applications/<name>.app` (staged beside it, so the swap is a
-/// rename on one volume), then installs the service from the new app.
-fn install_app(app: &Path) -> anyhow::Result<()> {
+/// rename on one volume) and returns where it now is. The copy beside it
+/// is checked again: it, not the stage's, is what runs.
+fn swap_app(app: &Path, check: &signature::Check) -> anyhow::Result<PathBuf> {
     let name = app.file_name().unwrap_or_default();
     let dest = Path::new("/Applications").join(name);
     let staged = dest.with_extension("app.new");
     let old = dest.with_extension("app.old");
     let _ = std::fs::remove_dir_all(&staged);
     run_ok(Command::new("ditto").arg(app).arg(&staged))?;
+    if let Err(e) = signature::run(check, &staged) {
+        let _ = std::fs::remove_dir_all(&staged);
+        return Err(e);
+    }
     let _ = std::fs::remove_dir_all(&old);
     if dest.exists() {
         std::fs::rename(&dest, &old)?;
     }
     std::fs::rename(&staged, &dest)?;
     let _ = std::fs::remove_dir_all(&old);
-    run_ok(Command::new(dest.join("Contents/MacOS/hermesd")).args(["service", "install"]))
+    Ok(dest)
 }
 
 fn run_ok(command: &mut Command) -> anyhow::Result<()> {

@@ -221,7 +221,9 @@ fn hard_deny(input: &SettingsInput<'_>) -> Vec<String> {
 
 /// Direct installer and service commands, denied to every bot but DevOps
 /// (H-020 §2.6 b): a release goes on a computer through
-/// `hermesd release install`, which checks the gate first.
+/// `hermesd release install`, which checks the gate first. Advisory only
+/// (ARCH-R43 M3): they match command text, so a script or a renamed binary
+/// gets past them; the daemon's gate is the boundary.
 const INSTALL_DENY: &[&str] = &[
     "Bash(*hermesd* service install*)",
     "Bash(*hermesd* service uninstall*)",

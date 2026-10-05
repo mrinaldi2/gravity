@@ -694,15 +694,25 @@ runs through the tester the same way.
 - **Hold:** `release_hold` keeps the decision open and holds it (`remind_at` becomes its `held_until`). When the reminder comes due, the decision sweep resumes it and the package goes back to `awaiting_owner`. `release_unhold` does the same on request.
 - **Pause:** `release_pause` (owner, or DevOps over MCP) pauses a rollout in progress. Deploys and installs are refused with the reason, and every tester holding an open deploy task gets a note. `release_resume` returns it to `deploying`.
 - **Who may rule:** `can_rule` says whether this connection may rule (the approve grant, on the board's home). When it can't, `rule_on` names the home computer. `BoardSnapshot.can_rule` carries the same flag.
-- **Installing a release (B8, H-020 §2.6):** a tester runs `hermesd release install <release> [--dry-run]` from their own session.
-  - It calls `install_release` over the local endpoint, so the daemon knows the bot by its process and checks the gate: the owner's settled approval, an open deploy task for this tester, and the frozen hash. Off the board's home, the call is forwarded there.
-  - It takes this computer's builds: `desktop` on macOS and Windows, else `daemon`. For iOS it only prints the `install_url`. Each build comes from the home's own file or is downloaded from its `url` with `curl`. A sha256 that doesn't match the frozen one stops the install.
-  - Then it runs the platform's installer:
-    - a `.zip` or `.dmg` app replaces `/Applications/<app>` and runs that app's `hermesd service install`;
-    - a Windows setup `.exe` runs with `/S`, and its own hook installs the service;
-    - a bare `hermesd*` runs `service install`.
-  - `--dry-run` stops after the checksum. The tester then smoke-tests and reports with `deploy_confirm`.
-  - Every bot but the project's DevOps gets deny rules in its generated settings for direct installer and service commands: `hermesd service install/uninstall`, `installer -pkg`, `msiexec`, `xcrun devicectl device install`, `ios-deploy`, and a silent `*-setup.exe /S`.
+- **Installing a release (B8, H-020 §2.6, ARCH-R43):** a tester runs `hermesd release install <release> [--dry-run | --status]` from their own session.
+  - **Gate.** It calls `install_release` over the local endpoint, so the daemon knows the bot by its process and checks the gate: the owner's settled approval, an open deploy task for this tester, and the frozen hash. Off the board's home, the call is forwarded there.
+  - **Builds.** It takes this computer's builds: `desktop` on macOS and Windows, else `daemon`. For iOS it only prints the `install_url`.
+  - **Stage.** Each build is copied from the home's own file, or downloaded from its HTTPS `url` with `curl`, into a fresh private folder (`hermes-install-<release>-<random>` under the system temp dir, mode 0700, never reused). Its sha256 is checked there; a mismatch stops the install.
+  - **Signature.** Before anything is swapped in, the unpacked build is checked against the identity compiled into hermesd (H-110):
+    - **macOS:** `codesign --verify --strict --deep` against the app's code requirement, or against the owner's team for a bare hermesd. The copy staged in `/Applications` is checked again before the rename.
+    - **Windows:** Authenticode (`Get-AuthenticodeSignature`, which is WinVerifyTrust) must be valid and signed by the `HERMES_WINDOWS_SIGNER` compiled in.
+    - **When it can't check:** a dev build, a build without a Team ID, or Windows releases while they're unsigned. It prints `signature check skipped: <why>` and never skips silently. A failed check stops the install.
+  - **Install.** The app goes into `/Applications/<app>` by a rename on one volume.
+  - **Hand-off.** `service install` restarts the daemon and every bot, this session included, so it's handed to the system:
+    - a one-shot launchd job on macOS (`com.thehermes.release-install.<release>`, `RunAtLoad`, not kept alive);
+    - a one-time scheduled task on Windows, which runs the setup with `/S`; the setup's own hook installs the service;
+    - a detached process group elsewhere.
+
+    The job writes `<home>/logs/release-install-<release>.log` and its exit code to `<home>/run/release-install-<release>.status`, then removes the stage and itself. The command exits at once.
+  - **After the restart.** From the next session, `--status` prints how it ended and the end of the log. The open deploy task in the session's resume note is the reminder. The tester smoke-tests and reports with `deploy_confirm`. `--dry-run` stops after the checksum and signature checks.
+  - **Deny rules, advisory only.** Every bot but the project's DevOps gets deny rules in its generated Claude Code settings for direct installer and service commands: `hermesd service install/uninstall`, `installer -pkg`, `msiexec`, `xcrun devicectl device install`, `ios-deploy`, and a silent `*-setup.exe /S`.
+    - They are **advisory, not a boundary**. They match command text, so a script, an alias, a renamed binary or a Codex-runtime bot gets past them.
+    - What enforces the gate is the daemon: `install_release`, the approval, the frozen hash and the signature check. Every deploy carries its task and decision ids for the audit trail.
 - **Serving builds (H-020 §6.6):** `release_publish {release_id, file, platform?, version?, bundle_id?}` (DevOps with the Publish extra; `hermesd release publish <release> <file>` calls it with the bot's token) copies a build into the served directory, `[releases] dir` (default `<home>/releases`), at `<release_id>/<platform>/<file>`.
   - The file must be an `.ipa`, `.zip`, `.dmg`, `.exe` or `.msi`, and must resolve, symlinks and all, inside `[releases] source_roots` (default: the `<repo>-rel-*` release worktrees in the trusted paths) or the project's artifacts. A hard-linked file is refused, and the file is hashed and copied from one open handle. Inside the served directory, symlinks are refused; copies are staged beside it, never in it.
   - The served directory must be a real folder of its own: a symlink, or a folder that is or contains the daemon home, its secrets or `bus.sqlite`, is refused at config load and at every publish. Only the daemon writes there: every bot's guard and settings deny writes to it (CE-010).
