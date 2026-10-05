@@ -22,6 +22,12 @@ struct SecurityAttributes {
     inherit: i32,
 }
 
+// SAFETY: the descriptor is allocated once, never written after creation and
+// never freed (it lives as long as the daemon), and the OS only reads it when
+// a pipe instance is created. Moving it to another thread, as the accept loop
+// does across `connect().await`, can't race anything.
+unsafe impl Send for SecurityAttributes {}
+
 #[link(name = "kernel32")]
 extern "system" {
     fn GetCurrentProcess() -> RawHandle;
