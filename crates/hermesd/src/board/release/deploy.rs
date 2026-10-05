@@ -16,6 +16,7 @@ use crate::decisions::{conflict, forbidden, invalid};
 use crate::messaging::{self, Dm};
 
 use super::model::{DeployAction, DeployResult, Release, ReleaseStatus, Smoke, Verdict};
+use super::package::required_machines;
 use super::{check_frozen, daemon_move, load, publish_moves, testers_on, Caller};
 
 /// The gate, checked at call time (H-020 §2.4): a settled, unrelayed owner
@@ -27,6 +28,13 @@ pub fn gate_open(app: &Arc<AppState>, release: &Release) -> anyhow::Result<()> {
             release.name
         )))
     };
+    if let Some(reason) = release
+        .paused_reason
+        .as_deref()
+        .filter(|_| release.status == ReleaseStatus::Paused)
+    {
+        return shut(format!("the rollout is paused: {reason}"));
+    }
     if !matches!(
         release.status,
         ReleaseStatus::Approved | ReleaseStatus::Deploying | ReleaseStatus::PartiallyDeployed
@@ -268,6 +276,11 @@ pub fn confirm(
             for ri in &release.items {
                 let from = daemon_move(t, project, &ri.item_id, to, &note, false, &actor)?;
                 moved.extend(from.map(|f| (ri.item_id.clone(), f)));
+                // Back in Verify, an item is free to go into a fixed package
+                // (ARCH-R23 F3).
+                if to == ColumnCategory::Verify {
+                    t.set_item_release(&ri.item_id, None, &actor)?;
+                }
             }
         }
         if status != release.status {
@@ -295,23 +308,9 @@ fn all_done(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<bool> {
             d.machine == m && d.action == DeployAction::Deploy && d.result == Some(DeployResult::Ok)
         })
     };
-    let settings = t.settings(&release.project_id)?;
-    let mut platforms = Vec::new();
-    for ri in &release.items {
-        platforms.extend(
-            t.item(&ri.item_id)?
-                .map(|item| item.platforms)
-                .unwrap_or_default(),
-        );
-    }
-    let mut required: Vec<&String> = settings
-        .iter()
-        .flat_map(|s| platforms.iter().filter_map(|p| s.required_machines.get(p)))
-        .flatten()
-        .collect();
-    required.sort();
-    required.dedup();
+    let required = required_machines(t, release)?;
     if required.is_empty() {
+        // No machine is configured or has a tester: every machine it went to.
         let deploys: Vec<_> = release
             .deployments
             .iter()
@@ -321,7 +320,7 @@ fn all_done(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<bool> {
             !deploys.is_empty() && deploys.iter().all(|d| d.result == Some(DeployResult::Ok))
         );
     }
-    Ok(required.into_iter().all(|m| ok(m)))
+    Ok(required.iter().all(|m| ok(m)))
 }
 
 fn all_rolled_back(release: &Release) -> bool {

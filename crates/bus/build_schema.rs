@@ -91,8 +91,9 @@ fn field_schema(
                     items["x-list"] = json!(true);
                     return items;
                 }
-                // Only tool arguments are read, and those are flat.
-                _ => json!({"type": "object"}),
+                // A nested message (a how-to-test step): its own fields,
+                // with the same required rule.
+                _ => object_schema(message, messages),
             }
         }
         _ => json!({"type": "integer"}),
@@ -102,4 +103,30 @@ fn field_schema(
     } else {
         one
     }
+}
+
+fn object_schema(
+    message: &DescriptorProto,
+    messages: &BTreeMap<String, &DescriptorProto>,
+) -> Value {
+    let mut properties = Map::new();
+    let mut required = Vec::new();
+    for field in &message.field {
+        let optional = field.proto3_optional()
+            || field.label() == Label::Repeated
+            || field.r#type() == Type::Message;
+        if !optional {
+            required.push(field.name().to_string());
+        }
+        // Entities nest Timestamps and each other; arguments stay shallow.
+        let schema = if field.type_name().starts_with(&format!(".{PACKAGE}."))
+            && field.r#type() == Type::Message
+        {
+            json!({"type": "object"})
+        } else {
+            field_schema(field, messages)
+        };
+        properties.insert(field.name().to_string(), schema);
+    }
+    json!({"type": "object", "properties": properties, "required": required})
 }

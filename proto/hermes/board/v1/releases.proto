@@ -30,6 +30,59 @@ message ReleaseCreate {
   repeated string items = 4;
   // Markdown, compiled from the items' change notes.
   optional string changelog = 5;
+  // The package this one succeeds after a mixed ruling or a failed deploy
+  // (H-020 §6.1): its shipped items may come along, and it is superseded.
+  optional string from = 6;
+}
+
+// One platform's steps for trying a package, shown to the owner.
+message HowToTest {
+  // The item the steps are for, when they are for one.
+  optional string item_id = 1;
+  // e.g. "desktop-mac", "ios".
+  string platform = 2;
+  repeated string steps = 3;
+}
+
+// The whole how-to-test list, where "unset" and "none" must differ.
+message HowToTestList {
+  repeated HowToTest values = 1;
+}
+
+// DevOps: fill in what the owner reads, while the package is assembling.
+message ReleaseUpdate {
+  string release_id = 1;
+  optional string display_version = 2;
+  // Markdown, compiled from the items' change notes.
+  optional string changelog = 3;
+  // Replaces the list.
+  HowToTestList how_to_test = 4;
+}
+
+// Tester: your machine's result for a package, against one of its builds.
+// Submit needs a pass from every required machine on the current builds.
+message ReleaseTest {
+  string release_id = 1;
+  string machine = 2;
+  // The sha256 of the build you tested.
+  string build_sha256 = 3;
+  // "pass", "fail" or "blocked".
+  string result = 4;
+  optional uint32 checks_passed = 5;
+  optional uint32 checks_total = 6;
+  optional string log_artifact = 7;
+}
+
+// DevOps: pause a rollout; testers holding its deploy tasks are told not to install.
+message ReleasePause {
+  string release_id = 1;
+  // Why; the testers read it.
+  string reason = 2;
+}
+
+// DevOps: resume a paused rollout.
+message ReleaseResume {
+  string release_id = 1;
 }
 
 // DevOps: add or replace one platform's build while the package is assembling.

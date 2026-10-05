@@ -42,6 +42,9 @@ fn release() -> Release {
         created_at: now,
         updated_at: now,
         version: 1,
+        paused_reason: None,
+        held_note: None,
+        remind_at: None,
         items: ["H-2", "H-1"]
             .iter()
             .map(|id| ReleaseItem {

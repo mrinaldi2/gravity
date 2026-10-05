@@ -42,6 +42,13 @@ async fn a_package_goes_from_devops_through_the_owner_to_the_machine() {
                "artifact": "/builds/hermesd", "sha256": "a".repeat(64)}),
     )
     .await;
+    // Every tester machine must pass the frozen build first (H-020 §6.4).
+    let raw = ops
+        .call_raw("release_submit", json!({"release_id": id}))
+        .await;
+    assert!(error_text(&raw).contains("isn't tested on mac"), "{raw}");
+    r.passed(&id).await;
+    let ops = &mut r.bots[1];
     let release = ops.call("release_submit", json!({"release_id": id})).await["release"].clone();
     assert_eq!(release["status"], "awaiting_owner");
     assert_eq!(r.column(&item), "approval");

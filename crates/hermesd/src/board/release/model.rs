@@ -99,6 +99,11 @@ pub struct Release {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub version: u64,
+    /// Why the rollout is paused, while it is.
+    pub paused_reason: Option<String>,
+    /// The owner's note and reminder on a held package (H-020 §6.2).
+    pub held_note: Option<String>,
+    pub remind_at: Option<DateTime<Utc>>,
     pub items: Vec<ReleaseItem>,
     pub builds: Vec<ReleaseBuild>,
     pub tests: Vec<ReleaseTest>,
@@ -124,6 +129,13 @@ impl Release {
             "frozen_hash": self.frozen_hash,
             "created_by": self.created_by,
             "version": self.version,
+            "paused_reason": self.paused_reason,
+            "held_note": self.held_note,
+            "remind_at": self.remind_at,
+            "tests": self.tests.iter().map(|t| json!({
+                "machine": t.machine, "tester": t.tester, "build_sha256": t.build_sha256,
+                "result": t.result,
+            })).collect::<Vec<_>>(),
             "items": self.items.iter().map(|i| json!({
                 "item_id": i.item_id, "verdict": i.verdict.as_str(), "owner_note": i.owner_note,
             })).collect::<Vec<_>>(),

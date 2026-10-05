@@ -5,7 +5,11 @@
 
 use serde_json::{json, Value};
 
-use crate::board::release::model::{parse_arg, Verdict};
+use bus::Capability;
+use chrono::{DateTime, Utc};
+
+use crate::board::release::lifecycle::{self, can_rule};
+use crate::board::release::model::{parse_arg, Release, Verdict};
 use crate::board::release::rule::{rule, ItemVerdict};
 use crate::decisions::{invalid, not_found};
 
@@ -17,7 +21,7 @@ impl Conn {
         let releases = self.app.db.board_read(|t| t.releases(project_id))?;
         self.send(json!({
             "type": "releases", "req_id": req_id,
-            "releases": releases.iter().map(|r| r.to_json()).collect::<Vec<_>>(),
+            "releases": releases.iter().map(|r| self.release_json(r)).collect::<Result<Vec<_>, _>>()?,
         }));
         Ok(())
     }
@@ -29,8 +33,7 @@ impl Conn {
             .db
             .board_read(|t| t.release(id))?
             .ok_or_else(|| not_found(format!("no release {id}")))?;
-        self.send(json!({ "type": "release", "req_id": req_id, "release": release.to_json() }));
-        Ok(())
+        self.reply_release(req_id, &release)
     }
 
     /// `{release_id, verdicts: [{item_id, verdict, note?}], expected_version}`.
@@ -56,7 +59,59 @@ impl Conn {
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
         let release = rule(&self.app, &self.owner(), id, &verdicts, expected)?;
-        self.send(json!({ "type": "release", "req_id": req_id, "release": release.to_json() }));
+        self.reply_release(req_id, &release)
+    }
+
+    /// `{release_id, note?, remind_at?}`: hold a package without rejecting it.
+    pub(super) fn release_hold(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        let remind_at = req
+            .get("remind_at")
+            .and_then(Value::as_str)
+            .map(|t| {
+                t.parse::<DateTime<Utc>>()
+                    .map_err(|_| invalid("'remind_at' is RFC 3339"))
+            })
+            .transpose()?;
+        let note = req.get("note").and_then(Value::as_str);
+        let id = Self::str_field(req, "release_id")?;
+        let release = lifecycle::hold(&self.app, &self.owner(), id, note, remind_at)?;
+        self.reply_release(req_id, &release)
+    }
+
+    pub(super) fn release_unhold(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        let id = Self::str_field(req, "release_id")?;
+        let release = lifecycle::unhold(&self.app, &self.owner(), id)?;
+        self.reply_release(req_id, &release)
+    }
+
+    /// `{release_id, reason}`.
+    pub(super) fn release_pause(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        let id = Self::str_field(req, "release_id")?;
+        let reason = Self::str_field(req, "reason")?;
+        let release = lifecycle::pause(&self.app, &self.owner(), &[], id, reason)?;
+        self.reply_release(req_id, &release)
+    }
+
+    pub(super) fn release_resume(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        let id = Self::str_field(req, "release_id")?;
+        let release = lifecycle::resume(&self.app, &self.owner(), &[], id)?;
+        self.reply_release(req_id, &release)
+    }
+
+    /// A package as this connection sees it: with `can_rule`, and when it
+    /// can't, `rule_on`, the computer where it can (H-020 §6.5).
+    fn release_json(&self, release: &Release) -> anyhow::Result<Value> {
+        let approve = self.caps.contains(&Capability::Approve);
+        let (can, on) = can_rule(&self.app, &self.owner(), approve, &release.project_id)?;
+        let mut v = release.to_json();
+        v["can_rule"] = json!(can);
+        v["rule_on"] = json!(on);
+        Ok(v)
+    }
+
+    fn reply_release(&self, req_id: &Value, release: &Release) -> anyhow::Result<()> {
+        let v = self.release_json(release)?;
+        self.send(json!({ "type": "release", "req_id": req_id, "release": v }));
         Ok(())
     }
 }

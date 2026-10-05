@@ -71,18 +71,39 @@ impl Releases {
     /// DevOps creates, builds and submits a package of every item; returns
     /// the submitted release's JSON.
     pub async fn submitted(&mut self, name: &str) -> Value {
-        let ops = &mut self.bots[1];
-        let created = ops
-            .call("release_create", json!({"name": name, "items": self.items}))
-            .await;
+        let items = self.items.clone();
+        self.package(name, json!({"name": name, "items": items}))
+            .await
+    }
+
+    /// DevOps creates a package from `create`'s arguments, attaches its
+    /// build, the tester passes it on "mac", and DevOps submits it.
+    pub async fn package(&mut self, name: &str, create: Value) -> Value {
+        let created = self.bots[1].call("release_create", create).await;
         let id = created["release"]["id"].as_str().unwrap().to_string();
-        ops.call(
-            "release_attach_build",
-            json!({"release_id": id, "platform": "daemon", "version": name,
-                   "artifact": format!("/builds/{name}"), "sha256": "a".repeat(64)}),
-        )
-        .await;
-        ops.call("release_submit", json!({"release_id": id})).await["release"].clone()
+        self.bots[1]
+            .call(
+                "release_attach_build",
+                json!({"release_id": id, "platform": "daemon", "version": name,
+                       "artifact": format!("/builds/{name}"), "sha256": "a".repeat(64)}),
+            )
+            .await;
+        self.passed(&id).await;
+        self.bots[1]
+            .call("release_submit", json!({"release_id": id}))
+            .await["release"]
+            .clone()
+    }
+
+    /// The tester's pass on "mac" against the package's build.
+    pub async fn passed(&mut self, id: &str) {
+        self.bots[2]
+            .call(
+                "release_test",
+                json!({"release_id": id, "machine": "mac", "build_sha256": "a".repeat(64),
+                       "result": "pass"}),
+            )
+            .await;
     }
 
     pub fn column(&self, item: &str) -> String {

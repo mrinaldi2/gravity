@@ -72,6 +72,8 @@ const APPROVE_ONLY: &[&str] = &[
     "set_bot_permission_extras",
     // The only way a release decision is settled (H-020 §2.2).
     "release_rule",
+    "release_hold",
+    "release_unhold",
 ];
 
 /// Capability required for each request type.
@@ -161,6 +163,10 @@ impl Conn {
             "list_releases" => self.list_releases(&req_id, req),
             "get_release" => self.get_release(&req_id, req),
             "release_rule" => self.release_rule(&req_id, req),
+            "release_hold" => self.release_hold(&req_id, req),
+            "release_unhold" => self.release_unhold(&req_id, req),
+            "release_pause" => self.release_pause(&req_id, req),
+            "release_resume" => self.release_resume(&req_id, req),
             "set_decision_tags" => self.set_decision_tags(&req_id, req),
             "list_tags" => self.list_tags(&req_id),
             "upsert_tag" => self.upsert_tag(&req_id, req),

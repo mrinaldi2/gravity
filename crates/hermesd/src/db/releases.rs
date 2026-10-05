@@ -28,7 +28,7 @@ pub struct NewRelease<'a> {
 
 const RELEASE_COLUMNS: &str = "id, project_id, name, display_version, status, decision_id, \
      supersedes, install_mode, rollback_to, changelog, how_to_test, frozen_at, frozen_hash, \
-     created_by, created_at, updated_at, version";
+     created_by, created_at, updated_at, version, paused_reason, held_note, remind_at";
 
 fn release_row(r: &Row<'_>) -> rusqlite::Result<Release> {
     Ok(Release {
@@ -49,6 +49,9 @@ fn release_row(r: &Row<'_>) -> rusqlite::Result<Release> {
         created_at: parse_at(r.get(14)?),
         updated_at: parse_at(r.get(15)?),
         version: r.get(16)?,
+        paused_reason: r.get(17)?,
+        held_note: r.get(18)?,
+        remind_at: r.get::<_, Option<String>>(19)?.map(parse_at),
         items: Vec::new(),
         builds: Vec::new(),
         tests: Vec::new(),
@@ -358,38 +361,5 @@ impl BoardTx<'_> {
         project_id: &str,
     ) -> anyhow::Result<Option<crate::board::model::BoardSettings>> {
         Ok(super::board::settings_in(self.conn, project_id)?)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::db::Db;
-
-    /// A downgrade and reinstall can rewind `schema_version`: the releases
-    /// migration then runs again over its own tables, and keeps their rows.
-    #[test]
-    fn the_releases_migration_runs_again_without_losing_packages() {
-        let db = Db::open_in_memory().unwrap();
-        let p = db.create_project("The Hermes", "the-hermes").unwrap();
-        db.ensure_board(&p.id, "d-mac", Some("H")).unwrap();
-        let release = db
-            .board_tx(|t| {
-                t.insert_release(&NewRelease {
-                    project_id: &p.id,
-                    name: "0.16.0",
-                    display_version: None,
-                    changelog: "",
-                    how_to_test: &serde_json::json!([]),
-                    created_by: "ops",
-                    items: &[],
-                })
-            })
-            .unwrap();
-        let last = bus::schema::MIGRATIONS.last().unwrap();
-        assert!(last.contains("CREATE TABLE IF NOT EXISTS release ("));
-        db.lock().execute_batch(last).unwrap();
-        let again = db.board_read(|t| t.release(&release.id)).unwrap();
-        assert_eq!(again.map(|r| r.name), Some("0.16.0".to_string()));
     }
 }

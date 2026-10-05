@@ -15,6 +15,7 @@ pub use board_tx::BoardTx;
 pub use decisions::NewDecision;
 pub use decisions_edit::DecisionEdit;
 pub use decisions_list::DecisionFilter;
+pub use release_life::NewReleaseTest;
 pub use releases::NewRelease;
 pub use routines::RoutineLimits;
 pub use runs::NewRun;
@@ -50,7 +51,10 @@ mod permissions;
 mod project_links;
 mod project_repos;
 mod projects;
+mod release_life;
 mod releases;
+#[cfg(test)]
+mod releases_tests;
 mod revisions;
 mod routines;
 mod runs;

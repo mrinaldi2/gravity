@@ -14,7 +14,8 @@ use crate::db::NewRelease;
 use crate::decisions::service::{raise, RaiseRequest};
 use crate::decisions::{conflict, invalid};
 
-use super::model::{Release, ReleaseBuild, ReleaseStatus};
+use super::model::{Release, ReleaseBuild, ReleaseStatus, Verdict};
+use super::package::{check_tested, decision_body};
 use super::{daemon_move, frozen_hash, load, publish_moves, Caller};
 
 pub struct NewPackage<'a> {
@@ -23,6 +24,9 @@ pub struct NewPackage<'a> {
     pub items: &'a [String],
     pub changelog: &'a str,
     pub how_to_test: serde_json::Value,
+    /// The package this one succeeds (H-020 §6.1): its shipped items, still
+    /// in Owner testing, may come along, and it becomes `superseded`.
+    pub from: Option<&'a str>,
 }
 
 pub fn create(
@@ -43,6 +47,20 @@ pub fn create(
     }
     let project = &me.bot.project_id;
     app.db.board_tx(|t| {
+        let from = req.from.map(|id| load(t, project, id)).transpose()?;
+        if let Some(old) = from.as_ref().filter(|r| {
+            !matches!(
+                r.status,
+                ReleaseStatus::Repackaging | ReleaseStatus::PartiallyDeployed
+            )
+        }) {
+            return Err(conflict(format!(
+                "release {} is {}; only a package being repackaged or one that failed to deploy \
+                 has a successor",
+                old.name,
+                old.status.as_str()
+            )));
+        }
         if t.releases(project)?.iter().any(|r| r.name == name) {
             return Err(conflict(format!(
                 "this project already has a release named {name}"
@@ -53,17 +71,31 @@ pub fn create(
                 (Some(p), Some(item)) if p == *project => item,
                 _ => return Err(invalid(format!("no item {id} in this project"))),
             };
-            if item.category != ColumnCategory::Verify {
+            // A predecessor's shipped items wait in Owner testing for it.
+            let shipped = from.as_ref().is_some_and(|old| {
+                old.items
+                    .iter()
+                    .any(|i| i.item_id == *id && i.verdict == Verdict::Ship)
+            });
+            let in_place = item.category == ColumnCategory::Verify
+                || (shipped && item.category == ColumnCategory::Approval);
+            if !in_place {
                 return Err(conflict(format!(
-                    "{id} is in {}; only items in Verify go into a release",
+                    "{id} is in {}; only items in Verify (or shipped in the package this one \
+                     succeeds) go into a release",
                     item.column_key
                 )));
             }
             if let Some(other) = t.open_release_of_item(id)? {
-                return Err(conflict(format!("{id} is already in release {other}")));
+                if from.as_ref().map(|r| r.id.as_str()) != Some(other.as_str()) {
+                    return Err(conflict(format!("{id} is already in release {other}")));
+                }
             }
         }
-        t.insert_release(&NewRelease {
+        if let Some(old) = &from {
+            t.set_release_status(&old.id, ReleaseStatus::Superseded)?;
+        }
+        let created = t.insert_release(&NewRelease {
             project_id: project,
             name,
             display_version: req.display_version.map(str::trim).filter(|v| !v.is_empty()),
@@ -71,7 +103,11 @@ pub fn create(
             how_to_test: &req.how_to_test,
             created_by: &me.bot.id,
             items: &items,
-        })
+        })?;
+        if let Some(old) = &from {
+            t.set_release_supersedes(&created.id, &old.id)?;
+        }
+        Ok(t.release(&created.id)?.expect("just created"))
     })
 }
 
@@ -119,7 +155,7 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
         roles: me.roles.clone(),
     };
     let mut feed = app.board.writer();
-    let (release, moved) = app.db.board_tx(|t| {
+    let (release, before, moved) = app.db.board_tx(|t| {
         let release = load(t, project, release_id)?;
         if release.status != ReleaseStatus::Built {
             return Err(conflict(format!(
@@ -128,6 +164,7 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
                 release.status.as_str()
             )));
         }
+        check_tested(t, &release)?;
         let approval = t
             .columns(project)?
             .into_iter()
@@ -145,9 +182,10 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
             };
             // The package, not the column's WIP, decides what goes to the
             // owner; a held package shows up as a full column instead.
+            // A successor's shipped items are already there.
             let unmet: Vec<Unmet> = guards::evaluate(&item, &mv, &who, &ctx)
                 .into_iter()
-                .filter(|u| u.code != "wip.full")
+                .filter(|u| u.code != "wip.full" && u.code != "move.same_column")
                 .collect();
             refused.extend(
                 unmet
@@ -179,12 +217,18 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
         let release = t.release(&release.id)?.expect("loaded");
         t.freeze_release(&release.id, Some(&frozen_hash(&release)), None)?;
         t.set_release_status(&release.id, ReleaseStatus::AwaitingOwner)?;
-        Ok((t.release(&release.id)?.expect("loaded"), moved))
+        let before = release
+            .supersedes
+            .as_deref()
+            .map(|id| t.release(id))
+            .transpose()?
+            .flatten();
+        Ok((t.release(&release.id)?.expect("loaded"), before, moved))
     })?;
     publish_moves(app, &mut feed, project, &moved);
     drop(feed);
 
-    let body = decision_body(&release);
+    let body = decision_body(&release, before.as_ref());
     let title = format!("Release {}: ready for your ruling", release.name);
     let asked = raise(
         app,
@@ -246,29 +290,4 @@ fn unsubmit(app: &Arc<AppState>, me: &Caller<'_>, release: &Release) -> anyhow::
     })?;
     publish_moves(app, &mut feed, project, &moved);
     Ok(())
-}
-
-/// What the owner reads in the decision: the release review shows the same.
-fn decision_body(release: &Release) -> String {
-    let mut body = format!(
-        "{} item(s) for your verdict: ship, hold or rework each one in the release review \
-         (dashboard or phone). This decision is answered there, not here.\n\nItems: {}\n",
-        release.items.len(),
-        release
-            .items
-            .iter()
-            .map(|i| i.item_id.as_str())
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-    for b in &release.builds {
-        body.push_str(&format!(
-            "Build {}: {} (sha256 {})\n",
-            b.platform, b.version, b.sha256
-        ));
-    }
-    if !release.changelog.trim().is_empty() {
-        body.push_str(&format!("\n{}\n", release.changelog.trim()));
-    }
-    body
 }

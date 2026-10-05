@@ -22,7 +22,9 @@ use model::Release;
 
 pub mod assemble;
 pub mod deploy;
+pub mod lifecycle;
 pub mod model;
+pub mod package;
 pub mod rule;
 #[cfg(test)]
 mod tests;

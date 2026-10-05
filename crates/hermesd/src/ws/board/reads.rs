@@ -19,12 +19,17 @@ impl Conn {
     /// The whole board, current with the project's push `seq`, enabling it
     /// first when `board_get` may (see `enable_board`).
     pub(super) fn snapshot(&self, project_id: &str) -> Result<c::BoardSnapshot, Refusal> {
-        if let Some(snapshot) = snapshot(&self.app, project_id)? {
-            return Ok(snapshot);
-        }
-        self.enable_board(project_id, Enable::Auto)?;
-        snapshot(&self.app, project_id)?
-            .ok_or_else(|| refuse("internal", "the board was enabled but is missing"))
+        let mut board = match snapshot(&self.app, project_id)? {
+            Some(board) => board,
+            None => {
+                self.enable_board(project_id, Enable::Auto)?;
+                snapshot(&self.app, project_id)?
+                    .ok_or_else(|| refuse("internal", "the board was enabled but is missing"))?
+            }
+        };
+        // A WS connection is the owner's (token or device): the grant decides.
+        board.can_rule = self.caps.contains(&Capability::Approve);
+        Ok(board)
     }
 
     /// Enables a project's board here with the B2 defaults, recording this
@@ -166,6 +171,8 @@ pub(super) fn snapshot(
         cards: snapshot.cards.into_iter().map(Into::into).collect(),
         roles: snapshot.roles.into_iter().map(Into::into).collect(),
         seq,
+        // Set by the connection, which knows its grants.
+        can_rule: false,
     }))
 }
 

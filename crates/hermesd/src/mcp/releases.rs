@@ -11,7 +11,8 @@ use crate::app::AppState;
 use crate::board::model::Role;
 use crate::board::release::assemble::{self, NewPackage};
 use crate::board::release::model::{DeployResult, ReleaseBuild, Smoke};
-use crate::board::release::{deploy, load, model::parse_arg, Caller};
+use crate::board::release::{deploy, lifecycle, load, model::parse_arg, package, Caller};
+use crate::db::NewReleaseTest;
 
 use super::board_schema::{decode, shared, tool, Audience, BoardTool};
 
@@ -24,6 +25,8 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
         "ReleaseAttachBuild",
         Audience::Devops,
     ),
+    tool("release_update", "ReleaseUpdate", Audience::Devops),
+    tool("release_test", "ReleaseTest", Audience::Tester),
     shared(
         "release_submit",
         "ReleaseSubmit",
@@ -33,6 +36,8 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
     ),
     tool("release_deploy", "ReleaseDeploy", Audience::Devops),
     tool("release_rollback", "ReleaseRollback", Audience::Devops),
+    tool("release_pause", "ReleasePause", Audience::Devops),
+    tool("release_resume", "ReleaseResume", Audience::Devops),
     tool("install_release", "InstallRelease", Audience::Tester),
     tool("deploy_confirm", "DeployConfirm", Audience::TesterOrDevops),
 ];
@@ -72,6 +77,7 @@ pub(super) fn call(
                     items: &req.items,
                     changelog: req.changelog.as_deref().unwrap_or_default(),
                     how_to_test: json!([]),
+                    from: req.from.as_deref(),
                 },
             )?)
         }
@@ -87,6 +93,47 @@ pub(super) fn call(
                 built_at: bus::now(),
             };
             released(assemble::attach_build(app, &me, &req.release_id, &build)?)
+        }
+        "release_update" => {
+            let req: c::ReleaseUpdate = decode("ReleaseUpdate", args, project)?;
+            let steps = req.how_to_test.map(|l| how_to_test(&l.values));
+            released(package::update(
+                app,
+                &me,
+                &req.release_id,
+                req.display_version.as_deref(),
+                req.changelog.as_deref(),
+                steps.as_ref(),
+            )?)
+        }
+        "release_test" => {
+            let req: c::ReleaseTest = decode("ReleaseTest", args, project)?;
+            let test = NewReleaseTest {
+                machine: req.machine.trim(),
+                tester: &me.bot.id,
+                build_sha256: req.build_sha256.trim(),
+                result: req.result.trim(),
+                checks_passed: req.checks_passed.unwrap_or(0),
+                checks_total: req.checks_total.unwrap_or(0),
+                log_artifact: req.log_artifact.as_deref(),
+            };
+            released(package::record_test(app, &me, &req.release_id, &test)?)
+        }
+        "release_pause" => {
+            let req: c::ReleasePause = decode("ReleasePause", args, project)?;
+            let release = app.db.board_read(|t| load(t, project, &req.release_id))?;
+            released(lifecycle::pause(
+                app,
+                &me.actor(),
+                &me.roles,
+                &release.id,
+                &req.reason,
+            )?)
+        }
+        "release_resume" => {
+            let req: c::ReleaseResume = decode("ReleaseResume", args, project)?;
+            let release = app.db.board_read(|t| load(t, project, &req.release_id))?;
+            released(lifecycle::resume(app, &me.actor(), &me.roles, &release.id)?)
         }
         "release_submit" => {
             let req: c::ReleaseSubmit = decode("ReleaseSubmit", args, project)?;
@@ -134,4 +181,12 @@ pub(super) fn call(
         }
         other => anyhow::bail!("unknown tool: {other}"),
     }
+}
+
+/// The contract's how-to-test steps as stored: `[{item_id?, platform, steps}]`.
+fn how_to_test(steps: &[c::HowToTest]) -> Value {
+    json!(steps
+        .iter()
+        .map(|s| json!({"item_id": s.item_id, "platform": s.platform, "steps": s.steps}))
+        .collect::<Vec<_>>())
 }
