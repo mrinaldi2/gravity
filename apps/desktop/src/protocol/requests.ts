@@ -3,6 +3,7 @@
 import type { BrowserInputEvent } from "./agents";
 import type { PermissionAnswer } from "./chat";
 import type { DecisionRequestBody } from "./decisionRequests";
+import type { ReleaseRequestBody } from "./releases";
 import type {
   BotRuntime,
   DeliveryState,
@@ -15,6 +16,7 @@ import type {
 
 export type ClientRequestBody =
   | DecisionRequestBody
+  | ReleaseRequestBody
   | {
       readonly type: "hello";
       readonly protocol_version: number;
