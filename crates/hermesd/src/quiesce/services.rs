@@ -53,6 +53,18 @@ pub struct QuiesceConfig {
 }
 
 impl Default for QuiesceConfig {
+    /// Colima and Lima are Mac-only, so Windows ships no services and no
+    /// search path; the owner adds their own in `[quiesce]`.
+    #[cfg(windows)]
+    fn default() -> Self {
+        Self {
+            deadline_minutes: super::DEFAULT_DEADLINE_MINUTES,
+            search_path: Vec::new(),
+            services: Vec::new(),
+        }
+    }
+
+    #[cfg(not(windows))]
     fn default() -> Self {
         let spec =
             |name: &str, detect: &str, running: &str, holders: &[&str], stop: &str, start: &str| {
@@ -337,7 +349,12 @@ mod tests {
     fn the_defaults_ship_colima_and_lima_looked_up_in_fixed_places() {
         let cfg = QuiesceConfig::default();
         let names: Vec<&str> = cfg.services.iter().map(|s| s.name.as_str()).collect();
-        assert_eq!(names, ["colima", "lima"]);
+        let expected: &[&str] = if cfg!(windows) {
+            &[]
+        } else {
+            &["colima", "lima"]
+        };
+        assert_eq!(names, expected);
         assert!(cfg.search_path.iter().all(|p| p.is_absolute()));
         assert_eq!(cfg.deadline_minutes, 30);
     }

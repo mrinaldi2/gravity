@@ -170,6 +170,7 @@ pub fn session_tag(_pid: u32) -> Option<String> {
     None
 }
 
+#[cfg(not(windows))]
 fn tag_in(env: Vec<(String, String)>) -> Option<String> {
     env.into_iter()
         .find(|(k, _)| k == SESSION_ENV)
