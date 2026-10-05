@@ -452,6 +452,22 @@ The owner is known by their app's code identity or by an OK from them in the app
   - A caller inside a bot session is always refused ("a bot can't act as the owner").
   - Other refusals: "not the owner's app", "the owner didn't allow it", and "open The Hermes to allow this command" (no app is connected to show the card).
 - **Clients:** the desktop app asks for a ticket on every connect. `hermesd` CLI owner commands ask the owner to allow them, printing "Asking for your OK in The Hermes app…". Both fall back to `client.token` only when the daemon has no endpoint (a daemon older than T4). The daemon accepts `client.token` until T6.
+- **Approve:** only a connection with the `approve` grant can answer a `terminal` card. Other connections get `forbidden`. Bot cards still need only `control`.
+
+### Secrets at rest (T5)
+
+- **Device tokens:** a newly paired device is stored as `secrets/device-<id>.sha256`, the sha256 of its token. The phone holds the only plaintext. Older `device-<id>.token` files still work.
+- **Phase 2:** this is `[auth] bot_bearer = "refuse"`, set per machine. At start, the daemon:
+  - hashes each old device file and deletes the plaintext;
+  - deletes `client.token` and every `bot-*.token`;
+  - never writes those files again.
+
+  The owner then connects only with a ticket (T4).
+- **Rolling back from phase 2:** the owner has to re-pair phones and run `hermesd service install` again, which writes a new `client.token`.
+- **Peer tokens:** `[auth] peer_tokens = "file"` (the default) or `"keychain"`.
+  - With `keychain` on macOS, `peer-*.token` files move into the login Keychain at start. The Keychain item's ACL trusts only the hermesd binary that created it.
+  - hermesd is ad-hoc signed, so after each update macOS asks once per link before the daemon may read it. Turn `keychain` on once hermesd is code-signed.
+  - On Windows and Linux the setting falls back to files. This is a known residual.
 
 ## Bot self-management
 
