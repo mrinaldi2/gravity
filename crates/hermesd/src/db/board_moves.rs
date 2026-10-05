@@ -88,6 +88,19 @@ impl BoardTx<'_> {
         Ok(rows)
     }
 
+    /// The bots delegated a task linked to the item, open or done.
+    pub fn task_holders(&self, item_id: &str) -> anyhow::Result<Vec<String>> {
+        let rows = self
+            .conn
+            .prepare(
+                "SELECT DISTINCT t.to_bot_id FROM item_link l JOIN task t ON t.id = l.ref
+                 WHERE l.item_id = ?1 AND l.kind = 'task' AND t.state IN ('open', 'done')",
+            )?
+            .query_map(params![item_id], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        Ok(rows)
+    }
+
     /// Everything the guards need about `item` besides the item.
     pub fn move_context(&self, project_id: &str, item: &Item) -> anyhow::Result<Context> {
         let settings = settings_in(self.conn, project_id)?
@@ -109,6 +122,7 @@ impl BoardTx<'_> {
             ready,
             required_machines: settings.required_machines,
             load: self.column_loads(project_id, item)?,
+            task_holders: self.task_holders(&item.id)?,
         })
     }
 

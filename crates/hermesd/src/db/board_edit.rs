@@ -4,7 +4,9 @@
 //! the guards that decide whether a move is allowed belong to the service
 //! layer above (B3), which calls these once they pass.
 
-use crate::board::model::{ColumnCategory, Item, ItemEventKind, Platform, Priority, Size};
+use crate::board::model::{
+    ColumnCategory, Item, ItemEventKind, ItemType, Platform, Priority, Size,
+};
 use bus::now;
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -26,6 +28,7 @@ pub struct ItemEdit<'a> {
     pub priority: Option<Priority>,
     pub labels: Option<&'a [String]>,
     pub parent_id: Option<Option<&'a str>>,
+    pub item_type: Option<ItemType>,
     /// The whole list; a criterion whose text stays keeps its check.
     pub acceptance_criteria: Option<&'a [String]>,
 }
@@ -145,6 +148,20 @@ impl BoardTx<'_> {
                     "priority",
                     to_text(&before.priority),
                     to_text(&priority),
+                )?;
+            }
+            if let Some(item_type) = edit.item_type.filter(|t| *t != before.item_type) {
+                tx.execute(
+                    "UPDATE item SET type = ?2 WHERE id = ?1",
+                    params![id, item_type.as_str()],
+                )?;
+                edited(
+                    tx,
+                    id,
+                    actor,
+                    "type",
+                    before.item_type.as_str(),
+                    item_type.as_str(),
                 )?;
             }
             if let Some(labels) = edit.labels.filter(|l| *l != before.labels.as_slice()) {

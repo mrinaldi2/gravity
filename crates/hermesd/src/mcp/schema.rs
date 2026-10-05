@@ -171,7 +171,8 @@ fn core_tools() -> Vec<Value> {
                  "description": {"type": "string", "description": "Optional. Short summary other bots see in list_bots."},
                  "runtime": {"type": "string", "enum": ["claude_code", "codex_cli"], "description": "Optional. Defaults to your runtime here, or the other machine's default there."},
                  "machine": {"type": "string", "description": "Optional. 'here', or a linked machine's name, to pin the worker; omitted runs it on whichever machine has a free slot first."},
-                 "deadline_hours": {"type": "integer", "description": "Optional. Hours before the task expires (default 24, max 168)."}
+                 "deadline_hours": {"type": "integer", "description": "Optional. Hours before the task expires (default 24, max 168)."},
+                 "item": {"type": "string", "description": "Optional. Board item the worker works on (e.g. H-017): its task is linked there once it starts, as send_message's item does."}
              }),
              vec!["task"]),
         tool("list_workers",

@@ -48,6 +48,10 @@ pub fn archive_bot(
     app.supervisor.stop_bot(&bot.id)?;
 
     release_open_tasks(app, bot)?;
+    // Its board items go to the lead, who moves them on (H-099).
+    if let Err(e) = crate::board::handback::items_to_lead(app, bot, actor) {
+        tracing::warn!(bot_id = %bot.id, error = %e, "items not handed back to the lead");
+    }
 
     // Without this the token stays valid in memory and on disk.
     app.secrets.remove_bot_token(&bot.id)?;

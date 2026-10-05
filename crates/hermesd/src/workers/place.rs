@@ -342,6 +342,15 @@ fn hand_over(
         &chain,
     )?;
     let started = app.db.start_worker(&worker.id, &bot.id, &task.id)?;
+    if started {
+        let running = Worker {
+            task_id: Some(task.id.clone()),
+            ..worker.clone()
+        };
+        if let Err(e) = super::link_item(app, &running, parent) {
+            tracing::warn!(worker = %worker.name, error = %e, "task not linked to its item");
+        }
+    }
     super::changed(app, &worker.project_id);
     if !started {
         // Cancelled while it was being placed; the worker retires with it.

@@ -30,3 +30,21 @@ ALTER TABLE item_event_next RENAME TO item_event;
 CREATE INDEX idx_item_event_item ON item_event(item_id, id);
 CREATE INDEX idx_item_event_project ON item_event(project_id, at);
 "#;
+
+/// Day-one workflow fixes (H-099). Ready is a queue: a board still on the
+/// seeded limit of 10 loses it (a limit the owner chose stays). Context
+/// Engineer reviews security work, so on a board it gets the reviewer role
+/// the seeding now gives it. `worker_item` holds the item a spawn was given
+/// until its task exists to link. Safe to run again.
+pub(super) const MIGRATION_BOARD_WORKFLOW: &str = r#"
+UPDATE board_column SET wip_limit = NULL
+ WHERE key = 'ready' AND category = 'ready' AND wip_limit = 10;
+INSERT OR IGNORE INTO project_role(project_id, role, bot_id)
+SELECT b.project_id, 'reviewer.arch', b.id FROM bot b
+  JOIN board_settings s ON s.project_id = b.project_id
+ WHERE lower(trim(b.name)) = 'context engineer' AND b.deleted_at IS NULL;
+CREATE TABLE IF NOT EXISTS worker_item (
+    worker_id TEXT PRIMARY KEY REFERENCES worker(id),
+    item_id   TEXT NOT NULL REFERENCES item(id)
+);
+"#;

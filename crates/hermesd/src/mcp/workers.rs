@@ -33,6 +33,7 @@ async fn spawn_worker(app: &Arc<AppState>, bot_id: &str, args: &Value) -> anyhow
     let me = caller(app, bot_id)?;
     super::selfmgmt::edit_from_args(args, false)?;
     let brief = text(args, "task").ok_or_else(|| anyhow::anyhow!("'task' is required"))?;
+    let item = super::board::item_arg(app, &me, args)?;
     let worker = workers::spawn(
         app,
         &me,
@@ -47,6 +48,15 @@ async fn spawn_worker(app: &Arc<AppState>, bot_id: &str, args: &Value) -> anyhow
         },
     )
     .await?;
+    // Linked when its task exists: now if it started, else when it does.
+    if let Some(item) = &item {
+        app.db.set_worker_item(&worker.id, item)?;
+        let now = app
+            .db
+            .get_worker(&worker.id)?
+            .unwrap_or_else(|| worker.clone());
+        workers::link_item(app, &now, &me)?;
+    }
     let mut out = workers::describe(app, &worker)?;
     out["result"] = json!(match worker.state {
         bus::WorkerState::Running =>

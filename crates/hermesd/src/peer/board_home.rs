@@ -59,8 +59,38 @@ pub(super) fn serve_call(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> any
         })?;
     let args = frame.get("args").cloned().unwrap_or_else(|| json!({}));
     let mut result = crate::mcp::board_call_as(app, &stand_in.id, tool, &args)?;
+    if tool == "install_release" {
+        published_builds(&mut result)?;
+    }
     board_ids::json(&mut result, &|id| board_ids::to_peer(&app.db, &peer.id, id));
     Ok(result)
+}
+
+/// A tester on another computer can't read the home's disk: it installs
+/// from each build's HTTPS `url` (ARCH-R28 d), never the local `artifact`.
+fn published_builds(result: &mut Value) -> anyhow::Result<()> {
+    for build in result["builds"].as_array_mut().into_iter().flatten() {
+        if build["url"].as_str().is_none_or(str::is_empty) {
+            anyhow::bail!("build not published over HTTPS; DevOps runs release_publish");
+        }
+        if let Some(fields) = build.as_object_mut() {
+            fields.remove("artifact");
+        }
+    }
+    Ok(())
+}
+
+/// `board_read {project_id, request}`: an item's details, history or move
+/// check for the owner's drawer on the peer (ARCH-R28 c), in its ids.
+pub(super) fn serve_read(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow::Result<Value> {
+    let link = home_link(app, peer, frame)?;
+    let request: c::BoardRequest = serde_json::from_value(frame["request"].clone())?;
+    let response = crate::ws::peer_read(app, &link.project_id, request)?;
+    let mut response = serde_json::to_value(response)?;
+    board_ids::json(&mut response, &|id| {
+        board_ids::to_peer(&app.db, &peer.id, id)
+    });
+    Ok(json!({ "response": response }))
 }
 
 /// `board_snapshot {project_id}`: the whole board, in the peer's ids.
@@ -170,4 +200,22 @@ pub(super) fn kind_from(name: &str) -> Option<ChangeKind> {
     ]
     .into_iter()
     .find(|kind| kind_name(*kind) == name)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    #[test]
+    fn a_remote_install_gets_urls_never_the_homes_paths() {
+        let mut ok = json!({"builds": [{"artifact": "/b/x", "url": "https://d/x"}]});
+        super::published_builds(&mut ok).expect("published");
+        assert_eq!(ok, json!({"builds": [{"url": "https://d/x"}]}));
+        let mut local = json!({"builds": [{"artifact": "/b/x", "url": null}]});
+        let refused = super::published_builds(&mut local).unwrap_err();
+        assert_eq!(
+            refused.to_string(),
+            "build not published over HTTPS; DevOps runs release_publish"
+        );
+    }
 }

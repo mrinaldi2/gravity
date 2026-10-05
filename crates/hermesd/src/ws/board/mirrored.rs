@@ -1,7 +1,7 @@
 //! A board whose home is a peer, over this daemon's WebSocket (B9, H-020
 //! §1.3): the board and its cards come from the mirror, kept current by the
-//! home's relay, so a client attached here watches it move. Item details and
-//! every change stay on the home, as do rulings.
+//! home's relay, so a client attached here watches it move. Item details
+//! are forwarded (`forward`); every change stays on the home, as do rulings.
 
 use bus::contract::board::{self as c, board_request::Request};
 
@@ -54,32 +54,38 @@ impl Conn {
         Some(query_cards(r, cards))
     }
 
-    /// Refuses a request about one item of a board mirrored here: its
-    /// details, its history and every change live on the board's home.
-    pub(super) fn on_home(&self, request: &Request) -> Result<(), Refusal> {
+    /// The project and home of the mirrored board a request about one item
+    /// is for, or `None` when the item is not on a mirrored board.
+    pub(super) fn mirrored_item(
+        &self,
+        request: &Request,
+    ) -> Result<Option<(String, String)>, Refusal> {
         let id = match request {
             Request::ItemGet(r) => &r.id,
             Request::ItemHistory(r) => &r.id,
             Request::ItemMoveCheck(r) => &r.id,
             Request::ItemMove(r) => &r.id,
-            _ => return Ok(()),
+            _ => return Ok(None),
         };
         let mirror = &self.app.board_mirror;
-        let Some(home) = mirror
-            .project_of(id)
-            .and_then(|project| mirror.home_peer(&project))
-        else {
-            return Ok(());
+        let Some(project) = mirror.project_of(id) else {
+            return Ok(None);
+        };
+        let Some(home) = mirror.home_peer(&project) else {
+            return Ok(None);
         };
         if self.app.db.board_read(|t| t.item_project(id))?.is_some() {
-            return Ok(());
+            return Ok(None);
         }
-        Err(refuse(
-            "no_board",
-            format!(
-                "{id} is on the board {} holds; open it there to see its details or change it.",
-                home_name(&self.app, &home)
-            ),
-        ))
+        if matches!(request, Request::ItemMove(_)) {
+            return Err(refuse(
+                "no_board",
+                format!(
+                    "{id} is on the board {} holds; move it there.",
+                    home_name(&self.app, &home)
+                ),
+            ));
+        }
+        Ok(Some((project, home)))
     }
 }

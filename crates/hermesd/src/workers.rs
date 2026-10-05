@@ -90,6 +90,42 @@ pub(crate) fn changed(app: &AppState, project_id: &str) {
     });
 }
 
+/// Links the spawn's task to the board item it was given (H-099), once the
+/// task exists, as `send_message(item:)` links a task. Twice is once.
+pub(crate) fn link_item(
+    app: &Arc<AppState>,
+    worker: &Worker,
+    parent: &bus::Bot,
+) -> anyhow::Result<()> {
+    let (Some(task_id), Some(item_id)) =
+        (worker.task_id.as_deref(), app.db.worker_item(&worker.id)?)
+    else {
+        return Ok(());
+    };
+    let linked = app
+        .db
+        .item_links(&item_id)?
+        .iter()
+        .any(|l| l.kind == crate::board::model::LinkKind::Task && l.target == task_id);
+    if linked {
+        return Ok(());
+    }
+    let actor = crate::actor::Actor::Bot {
+        id: &parent.id,
+        project_id: &parent.project_id,
+    };
+    let mut feed = app.board.writer();
+    app.db.link_task_item(task_id, &item_id, &actor)?;
+    feed.publish(crate::board::feed::Change {
+        project_id: &worker.project_id,
+        kind: crate::board::feed::ChangeKind::ItemUpserted,
+        item_id: &item_id,
+        card: crate::board::feed::card_after_commit(&app.db, &item_id),
+        from_column: None,
+    });
+    Ok(())
+}
+
 /// A spawn as the app lists it: what a parent reads, plus who asked, the
 /// brief's opening, and when it moved.
 pub fn view(app: &AppState, worker: &Worker) -> anyhow::Result<Value> {

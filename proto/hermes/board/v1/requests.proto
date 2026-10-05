@@ -5,7 +5,8 @@
 // (no grant, unknown item, bad arguments) is the envelope's `Error` instead.
 //
 // Grants: reads and watching need `read`; `item_move` and the edits need
-// `control`; `board_enable` needs `approve`.
+// `control`; `board_enable`, `column_set_limit` and `role_set` need
+// `approve`.
 //
 // Bots send the same requests as MCP tool arguments in proto3 JSON, and the
 // MCP tool schemas are generated from these messages: a field marked
@@ -42,12 +43,17 @@ message BoardRequest {
     ItemCheckAc item_check_ac = 18;
     // The owner choosing this computer as the board's home.
     BoardEnable board_enable = 19;
+    // The team's setup (H-099): a column's WIP limit (the owner's) and a
+    // bot's board role (the owner's here, the lead's over MCP).
+    ColumnSetLimit column_set_limit = 20;
+    RoleSet role_set = 21;
   }
 }
 
 message BoardResponse {
   oneof response {
-    // To `board_get`, `board_watch` and `board_enable`.
+    // To `board_get`, `board_watch`, `board_enable`, `column_set_limit` and
+    // `role_set`.
     BoardSnapshot board = 1;
     // To `item_get`.
     ItemDetail item = 2;
@@ -185,6 +191,29 @@ message ItemUpdate {
   // The whole list, replacing the old one. A criterion whose text stays the
   // same keeps its check. Fixed once the item reaches Verify.
   StringList acceptance_criteria = 10;
+  // A feature that turns out to be an umbrella becomes an epic. The lead's
+  // or the owner's call.
+  optional ItemType type = 11;
+}
+
+// A column's WIP limit, set by the owner. Left out, the column has none:
+// Ready is a queue and has none by default.
+message ColumnSetLimit {
+  string project_id = 1;
+  string column_key = 2;
+  optional uint32 wip_limit = 3;
+}
+
+// Gives a bot of the project a board role, or takes it away.
+message RoleSet {
+  string project_id = 1;
+  // The bot, by id or name.
+  string bot = 2;
+  Role role = 3;
+  // The machine a tester verifies on.
+  optional string machine = 4;
+  // Take the role away instead.
+  optional bool remove = 5;
 }
 
 message ItemAddComment {

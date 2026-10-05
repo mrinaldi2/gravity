@@ -56,14 +56,18 @@ pub(super) fn card(card: &mut c::ItemCard, map: impl Fn(&str) -> String) {
     }
 }
 
-/// The fields of a tool's result that name a bot, bare or as `bot:<id>`.
-const BOT_FIELDS: [&str; 6] = [
+/// The fields of a result that name a bot, bare or as `bot:<id>`: a tool's
+/// (snake_case) and a forwarded read's (proto JSON, camelCase).
+const BOT_FIELDS: [&str; 9] = [
     "assignee",
     "bot_id",
+    "botId",
     "executor",
     "tester",
     "created_by",
+    "createdBy",
     "actor",
+    "author",
 ];
 
 /// Rewrites the bot ids in a tool's JSON result, at any depth.

@@ -6,7 +6,7 @@
 
 mod common;
 
-use bus::contract::board::{self as c, board_request::Request};
+use bus::contract::board::{self as c, board_request::Request, board_response::Response};
 use common::board::*;
 use common::peers::{bot_named, paired, project, wait_until, Paired};
 use common::*;
@@ -173,9 +173,41 @@ async fn the_home_relays_its_changes_to_a_linked_computers_clients() {
         Some(b.tester_id.as_str())
     );
 
+    // The item drawer: details come from the home, in the PC's ids; moves
+    // stay there (ARCH-R28 c).
     let body = call(
         &mut b.p.win_client,
         Request::ItemGet(c::ItemGet { id: b.item.clone() }),
+    )
+    .await;
+    let Response::Item(detail) = response(body) else {
+        panic!("expected the item");
+    };
+    let item = detail.item.expect("item");
+    assert_eq!(item.assignee.as_deref(), Some(b.tester_id.as_str()));
+    assert!(
+        detail
+            .comments
+            .iter()
+            .any(|c| c.author == format!("bot:{}", b.tester_id) || c.author == b.tester_id),
+        "{:?}",
+        detail.comments
+    );
+    let body = call(
+        &mut b.p.win_client,
+        Request::ItemMoveCheck(c::ItemMoveCheck { id: b.item.clone() }),
+    )
+    .await;
+    let Response::MoveCheck(check) = response(body) else {
+        panic!("expected a move check");
+    };
+    assert!(check
+        .columns
+        .iter()
+        .all(|col| col.unmet.iter().any(|u| u.code == "board.elsewhere")));
+    let body = call(
+        &mut b.p.win_client,
+        move_to(&b.item, "doing", item.version, None),
     )
     .await;
     assert_eq!(error_code(body), "no_board");
@@ -232,6 +264,12 @@ async fn the_board_is_read_only_while_its_home_is_down() {
         text,
         "The board lives on mac, which is unreachable. Try again when it's back."
     );
+    let body = call(
+        &mut b.p.win_client,
+        Request::ItemGet(c::ItemGet { id: b.item.clone() }),
+    )
+    .await;
+    assert_eq!(error_code(body), "unavailable");
     // And the PC's own clients still see it.
     let board = snapshot(call(&mut b.p.win_client, watch(&b.win_app)).await);
     assert_eq!(board.cards.len(), 1);
@@ -272,7 +310,8 @@ async fn a_remote_tester_tests_installs_and_confirms_a_release() {
     ops.call(
         "release_attach_build",
         json!({"release_id": id, "platform": "daemon", "version": "0.16.0",
-               "artifact": "/builds/0.16.0", "sha256": "a".repeat(64)}),
+               "artifact": "/builds/0.16.0", "url": "https://dl.example/0.16.0.tar.gz",
+               "sha256": "a".repeat(64)}),
     )
     .await;
     b.tester
@@ -304,6 +343,12 @@ async fn a_remote_tester_tests_installs_and_confirms_a_release() {
         .await;
     assert_eq!(builds["machine"], "win", "{builds}");
     assert_eq!(builds["builds"][0]["sha256"], "a".repeat(64));
+    // Never the home's local path (ARCH-R28 d).
+    assert_eq!(
+        builds["builds"][0]["url"],
+        "https://dl.example/0.16.0.tar.gz"
+    );
+    assert!(builds["builds"][0].get("artifact").is_none(), "{builds}");
     let done = b
         .tester
         .call(
