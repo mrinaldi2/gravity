@@ -115,6 +115,12 @@ pub trait RuntimeSession: Send {
     fn send_input(&mut self, bytes: &[u8]) -> anyhow::Result<()>;
     fn resize(&mut self, cols: u16, rows: u16) -> anyhow::Result<()>;
     fn kill(&mut self) -> anyhow::Result<()>;
+    /// The process the session's tree hangs from: the terminal CLI, or the
+    /// Codex app server. Its descendants are this bot on the bus (H-044).
+    /// `None` for a session with no process of its own.
+    fn root_pid(&self) -> Option<u32> {
+        None
+    }
 }
 
 pub trait RuntimeAdapter: Send + Sync {

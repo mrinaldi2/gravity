@@ -27,6 +27,8 @@ pub struct CodexSpec {
     pub bin: String,
     pub args: Vec<String>,
     pub port: u16,
+    /// The bus server in Codex's `mcp_servers` form (H-044).
+    pub bus: Value,
     pub artifacts: Option<PathBuf>,
     /// The bot's own browser server, `{command, args, env}`, when it has one.
     pub browser: Option<Value>,
@@ -251,6 +253,9 @@ struct CodexSession {
 }
 
 impl RuntimeSession for CodexSession {
+    fn root_pid(&self) -> Option<u32> {
+        Some(self.child.lock().unwrap_or_else(|e| e.into_inner()).id())
+    }
     fn send_input(&mut self, bytes: &[u8]) -> anyhow::Result<()> {
         self.tx
             .send(Wire::Input(bytes.to_vec()))
@@ -309,6 +314,7 @@ mod tests {
                 bin: "codex".into(),
                 args: Vec::new(),
                 port: 1,
+                bus: serde_json::Value::Null,
                 artifacts: None,
                 browser: None,
                 profile: bus::PermissionProfile::Standard,

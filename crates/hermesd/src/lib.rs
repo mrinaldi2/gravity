@@ -11,6 +11,7 @@ pub mod bot_permissions;
 pub mod botmgmt;
 pub mod brand;
 pub mod browser;
+pub mod bus_auth;
 pub mod channel;
 pub mod chat;
 pub mod config;

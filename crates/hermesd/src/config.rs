@@ -109,6 +109,8 @@ pub struct Config {
     pub browser: crate::browser::BrowserConfig,
     /// Serving release builds on the tailnet (H-020 §6.6).
     pub releases: crate::board::release::serve::ServeConfig,
+    /// How bots prove who they are on the bus (H-044).
+    pub auth: crate::bus_auth::AuthConfig,
     /// The *user's* home, where Claude Code keeps its `~/.claude/projects`
     /// transcripts. Distinct from `home`, which is the daemon's own state
     /// directory; separate so tests can point it at a fixture tree.
@@ -224,6 +226,7 @@ impl Default for Config {
             delivery: DeliveryConfig::default(),
             browser: crate::browser::BrowserConfig::default(),
             releases: Default::default(),
+            auth: Default::default(),
             scheduler: SchedulerConfig::default(),
             supervision_interval_ms: 5_000,
             startup: Default::default(),

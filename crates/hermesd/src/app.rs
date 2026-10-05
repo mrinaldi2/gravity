@@ -67,6 +67,8 @@ pub struct AppState {
     pub board: crate::board::feed::BoardFeed,
     /// Boards whose home is a peer, as last seen (B9).
     pub board_mirror: crate::board::mirror::BoardMirror,
+    /// Bots that used a bearer token, and when (H-044 phase 1).
+    pub bearers: crate::bus_auth::BearerLog,
     pub started_at: Instant,
     /// Wall-clock start, kept alongside the monotonic `started_at` purely so
     /// [`AppState::stale_build`] can compare it against a file mtime.
@@ -120,6 +122,7 @@ impl AppState {
             workers: crate::workers::Workers::default(),
             board: crate::board::feed::BoardFeed::default(),
             board_mirror: crate::board::mirror::BoardMirror::default(),
+            bearers: crate::bus_auth::BearerLog::default(),
             started_at: Instant::now(),
             started_wall: SystemTime::now(),
         });

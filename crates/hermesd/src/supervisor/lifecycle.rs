@@ -60,12 +60,8 @@ impl Supervisor {
             .as_deref()
             .and_then(|root| crate::browser::setup::server(&self.inner.cfg, root));
         if let Some(root) = &bot_root {
-            if let Err(e) = crate::paths::write_mcp_config(
-                root,
-                self.inner.cfg.port,
-                BOT_TOKEN_ENV,
-                browser.as_ref(),
-            ) {
+            let bus = crate::bus_auth::server_entry(&self.inner.cfg);
+            if let Err(e) = crate::paths::write_mcp_config(root, &bus, browser.as_ref()) {
                 tracing::warn!(bot_id, error = %e, "failed to refresh mcp config");
             }
         }
@@ -152,6 +148,7 @@ impl Supervisor {
                     bin: self.inner.cfg.codex_bin.clone(),
                     args: self.inner.cfg.codex_args.clone(),
                     port: self.inner.cfg.port,
+                    bus: crate::bus_auth::codex_entry(&self.inner.cfg),
                     artifacts,
                     browser,
                     profile: stored.profile,
@@ -180,7 +177,7 @@ impl Supervisor {
             };
             hook(bot_id, continues);
         }
-        let started = self.inner.adapter.start(&spec)?;
+        let started = self.start_session(bot_id, &spec)?;
         // From here on the workspace has a conversation to come back to.
         if let Err(e) = self.inner.db.mark_bot_session(bot_id) {
             tracing::warn!(bot_id, error = %e, "could not record the bot's session");

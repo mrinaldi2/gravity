@@ -180,7 +180,8 @@ pub fn provision_bot(cfg: &Config, spec: &BotProvision<'_>) -> anyhow::Result<Bo
 
     // The browser entry is added at spawn, when the session's config is
     // refreshed with whatever Node and Chrome the machine has then.
-    write_mcp_config(&root, spec.daemon_port, spec.bot_token_env, None)?;
+    let bus = crate::bus_auth::http_entry(spec.daemon_port, spec.bot_token_env);
+    write_mcp_config(&root, &bus, None)?;
 
     seed_memory_files(&workspace, spec.name)?;
 
@@ -200,24 +201,17 @@ pub(crate) fn legacy_secrets_deny_rule() -> String {
 }
 
 /// (Re)write the bot's `mcp.json`. Called at creation and again on every start,
-/// so a change to the daemon's port reaches existing bots without
-/// re-provisioning — the same reason `write_hook_settings` runs each start. The
-/// token is referenced through an environment variable the daemon injects when
-/// it starts the runtime.
+/// so a change to the daemon's port, or to how bots reach the bus (H-044),
+/// reaches existing bots without re-provisioning — the same reason
+/// `write_hook_settings` runs each start. `bus` is the bus server's entry,
+/// from `bus_auth::server_entry`.
 pub fn write_mcp_config(
     root: &Path,
-    daemon_port: u16,
-    bot_token_env: &str,
+    bus: &serde_json::Value,
     browser: Option<&serde_json::Value>,
 ) -> anyhow::Result<()> {
     let mut mcp = serde_json::json!({ "mcpServers": {} });
-    mcp["mcpServers"][crate::brand::ACTIVE_MCP_SERVER] = serde_json::json!({
-        "type": "http",
-        "url": format!("http://127.0.0.1:{daemon_port}/mcp"),
-        "headers": {
-            "Authorization": format!("Bearer ${{{bot_token_env}}}")
-        }
-    });
+    mcp["mcpServers"][crate::brand::ACTIVE_MCP_SERVER] = bus.clone();
     // The bot's own browser, when one can be started; see `crate::browser`.
     if let Some(browser) = browser {
         let mut server = browser.clone();

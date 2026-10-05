@@ -24,7 +24,7 @@ pub async fn permission_hook(
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.strip_prefix("Bearer "))
-        .and_then(|token| app.secrets.bot_for_token(token));
+        .and_then(|token| crate::bus_auth::bearer_bot(&app, token));
     let Some(bot_id) = bot else {
         return (StatusCode::UNAUTHORIZED, Json(Value::Null)).into_response();
     };

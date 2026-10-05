@@ -56,6 +56,10 @@ async fn main() -> anyhow::Result<()> {
     if args.first().map(String::as_str) == Some("guard") {
         std::process::exit(hermesd::bot_permissions::guard::run(&args[1..]));
     }
+    // A session's stdio bus server (H-044): stdout is MCP's alone.
+    if args.first().map(String::as_str) == Some("bus-proxy") {
+        std::process::exit(hermesd::bus_auth::proxy::run(&args[1..]).await);
+    }
     // `service install` runs a staged binary with this to check it starts.
     if args.first().map(String::as_str) == Some("--version") {
         println!("hermesd {}", hermesd::app::DAEMON_VERSION);

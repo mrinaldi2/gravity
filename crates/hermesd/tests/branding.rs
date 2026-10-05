@@ -1,10 +1,15 @@
 use hermesd::brand;
 use hermesd::paths::{write_hook_settings, write_mcp_config};
 
+/// The HTTP entry with the bearer token, as before H-044's stdio proxy.
+fn http() -> serde_json::Value {
+    hermesd::bus_auth::http_entry(7777, brand::BOT_TOKEN_ENV)
+}
+
 #[test]
 fn mcp_config_registers_the_active_bus_name_with_the_new_token_variable() {
     let tmp = tempfile::tempdir().expect("tmp");
-    write_mcp_config(tmp.path(), 7777, brand::BOT_TOKEN_ENV, None).expect("write mcp config");
+    write_mcp_config(tmp.path(), &http(), None).expect("write mcp config");
     let raw = std::fs::read_to_string(tmp.path().join("mcp.json")).expect("read mcp config");
     let mcp: serde_json::Value = serde_json::from_str(&raw).expect("parse mcp config");
 
@@ -20,7 +25,7 @@ fn mcp_config_carries_the_bots_own_browser() {
         "command": "/opt/node/bin/npx", "args": ["-y", "@playwright/mcp@0.0.83"],
         "env": { "PATH": "/opt/node/bin" }
     });
-    write_mcp_config(tmp.path(), 7777, brand::BOT_TOKEN_ENV, Some(&browser)).expect("write");
+    write_mcp_config(tmp.path(), &http(), Some(&browser)).expect("write");
     let raw = std::fs::read_to_string(tmp.path().join("mcp.json")).expect("read mcp config");
     let mcp: serde_json::Value = serde_json::from_str(&raw).expect("parse mcp config");
     let server = &mcp["mcpServers"]["playwright"];
@@ -65,7 +70,7 @@ fn regenerating_a_pre_rename_mcp_config_drops_the_old_name() {
         "headers": {"Authorization": "Bearer ${GRAVITY_TOKEN}"}
     }}});
     std::fs::write(tmp.path().join("mcp.json"), stale.to_string()).expect("stale");
-    write_mcp_config(tmp.path(), 7777, brand::BOT_TOKEN_ENV, None).expect("rewrite");
+    write_mcp_config(tmp.path(), &http(), None).expect("rewrite");
     let raw = std::fs::read_to_string(tmp.path().join("mcp.json")).expect("read");
     let mcp: serde_json::Value = serde_json::from_str(&raw).expect("parse");
     let servers = mcp["mcpServers"].as_object().expect("servers");
