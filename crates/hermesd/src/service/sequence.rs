@@ -18,7 +18,9 @@
 //! one running before), the kept files restored, the migration rolled back
 //! (if it started), and the services that ran before started again. Each of
 //! those is attempted whatever an earlier one did, so the old service is
-//! always started again; their errors are reported together.
+//! started again — unless the migration's own rollback failed, which leaves
+//! the legacy service stopped rather than started on a half-moved home;
+//! their errors are reported together.
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -240,10 +242,16 @@ fn install(
     host.wait_healthy(version)
 }
 
+/// Why the legacy service was left stopped after a failed migration rollback.
+pub(crate) const HOME_MID_MIGRATION: &str = "rolling the home migration back failed, \
+     so the legacy daemon was not started; home left mid-migration: \
+     run `hermesd migrate-home --rollback`, then `service install`";
+
 /// The one way back from a failed install: stop the new identity, restore
 /// the kept files, roll the migration back, start what ran before. Every
 /// step is attempted even when an earlier one failed, so what ran before is
-/// always started again; the errors are reported together.
+/// started again — except the legacy service when the home could not be
+/// moved back; the errors are reported together.
 fn rollback(
     host: &impl Host,
     old: &[Identity],
@@ -260,14 +268,16 @@ fn rollback(
         }
     }
     errors.note(progress.backup.restore());
+    let mut restart = old.to_vec();
     if let (true, Some(migration)) = (progress.migrating, migration) {
-        errors.note(
-            migration
-                .rollback()
-                .context("rolling the home migration back"),
-        );
+        if let Err(error) = migration.rollback() {
+            // The legacy daemon cannot refuse an unmigrated home: started on
+            // a half-moved one it would create a fresh, empty home instead.
+            restart.retain(|id| *id != Identity::Legacy);
+            errors.note(Err(error.context(HOME_MID_MIGRATION)));
+        }
     }
-    errors.note(start_all(host, old));
+    errors.note(start_all(host, &restart));
     errors.into_result()
 }
 
