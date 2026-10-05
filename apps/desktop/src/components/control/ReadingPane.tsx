@@ -24,6 +24,8 @@ interface ReadingPaneProps {
   readonly botAvatar: (botId: string) => { avatar: string; name: string } | undefined;
   readonly textareaRef: RefObject<HTMLTextAreaElement>;
   readonly onDelete: (decision: Decision) => void;
+  /** A release decision's review, which replaces the ruling UI (H-018 §1). */
+  readonly release?: ReactElement;
 }
 
 /** The article plus, for an open decision, the composer docked under it. */
@@ -34,6 +36,20 @@ export default function ReadingPane(props: ReadingPaneProps): ReactElement {
     return (
       <section className="cc-reader">
         <div className="cc-reader-none">Select a decision</div>
+      </section>
+    );
+  }
+  if (props.release !== undefined) {
+    return (
+      <section className="cc-reader">
+        <div className="cc-reader-scroll" ref={scrollRef}>
+          {props.showBack ? (
+            <button type="button" className="cc-link" onClick={state.back}>
+              ← Back
+            </button>
+          ) : null}
+          {props.release}
+        </div>
       </section>
     );
   }

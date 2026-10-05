@@ -3,6 +3,9 @@ import PermissionCards from "../permissions/PermissionCards";
 import ControlBody from "./ControlBody";
 import ControlTop from "./ControlTop";
 import DeleteDecisionDialog from "./DeleteDecisionDialog";
+import ReleaseReview from "../releases/ReleaseReview";
+import { botNamer, useItemTitles } from "../releases/ReleasesView";
+import { useDecisionRelease } from "../releases/useDecisionRelease";
 import ReadingPane from "./ReadingPane";
 import { useControlCenter } from "./useControlCenter";
 import type { ControlCenterOptions } from "./useControlCenter";
@@ -11,6 +14,23 @@ import type { ControlCenterOptions } from "./useControlCenter";
 export default function ControlCenterView(props: ControlCenterOptions): ReactElement {
   const cc = useControlCenter(props);
   const { api, state, actions, notify, canControl } = { ...cc, canControl: props.canControl };
+  const linked = useDecisionRelease(props.client, props.connected, state.reading, props.onToast);
+  const titles = useItemTitles(
+    props.client,
+    linked.release?.project_id ?? "",
+    linked.release !== undefined,
+  );
+  const release =
+    linked.release === undefined ? undefined : (
+      <ReleaseReview
+        key={linked.release.id}
+        release={linked.release}
+        titles={titles}
+        botName={botNamer(props.bots)}
+        actions={linked.actions}
+        canControl={canControl}
+      />
+    );
 
   const pane = (showBack: boolean): ReactElement => (
     <ReadingPane
@@ -27,6 +47,7 @@ export default function ControlCenterView(props: ControlCenterOptions): ReactEle
       botAvatar={cc.botAvatar}
       textareaRef={cc.textareaRef}
       onDelete={cc.setDeleting}
+      release={release}
     />
   );
 
