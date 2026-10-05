@@ -34,6 +34,7 @@ objc2-foundation = "0.3"
 objc2-speech = "0.3"
 objc2-avf-audio = "0.3"
 
-# On-device dictation on Windows (SAPI's in-process recognizer).
+# On-device dictation on Windows (SAPI's in-process recognizer), and the DLL
+# search order set at start (hardening.rs).
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Media_Speech", "Win32_System_Com"] }
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_Media_Speech", "Win32_System_Com", "Win32_System_LibraryLoader"] }

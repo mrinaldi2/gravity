@@ -13,10 +13,19 @@ case "$TRIPLE" in
   *-windows-*) EXT=".exe" ;;
 esac
 
-# hermesd recognises the owner's app by the Team ID compiled in (H-110).
-if [ -z "${HERMES_TEAM_ID:-}" ]; then
-  echo "prepare-sidecar: HERMES_TEAM_ID is not set; hermesd gets the placeholder and won't recognise a signed app" >&2
-fi
+# hermesd recognises the owner's Mac app by the Team ID compiled in (H-110).
+# A release with the placeholder would never recognise the signed app, so
+# anything but a real Team ID stops here unless this is an explicit dev
+# build (HERMES_DEV_BUILD=1, as scripts/dev.sh sets). Windows recognises the
+# app by its Program Files folder and needs no Team ID (ARCH-R38).
+case "$TRIPLE" in
+  *-apple-darwin)
+    if [ -z "${HERMES_DEV_BUILD:-}" ] && ! [[ "${HERMES_TEAM_ID:-}" =~ ^[A-Z0-9]{10}$ && "$HERMES_TEAM_ID" != 0000000000 ]]; then
+      echo "prepare-sidecar: HERMES_TEAM_ID must be the owner's 10-character Apple Team ID for a release build (got '${HERMES_TEAM_ID:-}'); set HERMES_DEV_BUILD=1 for a dev build" >&2
+      exit 1
+    fi
+    ;;
+esac
 cargo build --release -p hermesd --manifest-path "$ROOT/Cargo.toml"
 
 DEST="$ROOT/apps/desktop/src-tauri/binaries"

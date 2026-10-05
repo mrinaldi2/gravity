@@ -92,7 +92,7 @@ export VITE_GRAVITY_DEV_TOKEN="$TOKEN"
 if [ "$MODE" = "app" ]; then
   TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
   if [ ! -x "$ROOT/apps/desktop/src-tauri/binaries/hermesd-$TRIPLE" ]; then
-    "$ROOT/scripts/prepare-sidecar.sh"
+    HERMES_DEV_BUILD=1 "$ROOT/scripts/prepare-sidecar.sh"
   fi
   cd "$ROOT/apps/desktop"
   pnpm tauri dev --config "{\"build\":{\"devUrl\":\"http://localhost:$WEB_PORT\"}}" &

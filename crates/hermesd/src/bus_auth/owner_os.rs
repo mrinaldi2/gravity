@@ -10,7 +10,7 @@ use super::owner::Peer;
 pub use super::owner_macos::{is_owner_app, peer_audit_token};
 
 #[cfg(windows)]
-pub use windows::is_owner_app;
+pub use windows::{app_dir, is_owner_app};
 
 /// Linux has no desktop app: no process is the owner's.
 #[cfg(not(any(target_os = "macos", windows)))]
@@ -85,6 +85,12 @@ mod windows {
         (status == 0).then(|| PathBuf::from(path))
     }
 
+    /// `Program Files\The Hermes`, where the perMachine installer puts the
+    /// app and its daemon.
+    pub fn app_dir() -> Option<PathBuf> {
+        program_files().map(|root| root.join(WINDOWS_APP_FOLDER))
+    }
+
     fn image_path(pid: u32) -> Option<PathBuf> {
         // SAFETY: no pointers; a non-null result is ours to close.
         let raw = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
@@ -105,10 +111,10 @@ mod windows {
     /// The peer runs an executable from `Program Files\The Hermes`, which
     /// only an administrator can write, other than the daemon itself.
     pub fn is_owner_app(peer: &Peer) -> bool {
-        let (Some(root), Some(image)) = (program_files(), image_path(peer.pid)) else {
+        let (Some(dir), Some(image)) = (app_dir(), image_path(peer.pid)) else {
             return false;
         };
-        is_app_image(&image, &root.join(WINDOWS_APP_FOLDER))
+        is_app_image(&image, &dir)
     }
 
     #[cfg(test)]
