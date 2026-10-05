@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
 import type { Dashboard } from "../../protocol/dashboard";
-import { MIRRORED_BOARD, dashboard, quietDashboard } from "../../test/dashboardFixtures";
+import { MIRRORED_BOARD, dashboard, offHome, quietDashboard } from "../../test/dashboardFixtures";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { project } from "../../test/fixtures";
 import ProjectWindow from "../project/ProjectWindow";
@@ -41,8 +41,24 @@ function Window({ data }: { readonly data: Dashboard }): ReactElement {
   );
 }
 
-/** A working week: a release to test, a decision, a P0 and an override. */
+/** A working week: a release to test, a decision, relayed rulings, a P0, and
+ *  an override folded below. */
 export const Busy: Story = () => <Window data={dashboard()} />;
+/** On imac or win-pc: the home's rows to act on there. */
+export const OffHome: Story = () => <Window data={offHome({ releases: [] })} />;
+/** Off-home with the home away: where to look. */
+export const HomeAway: Story = () => (
+  <Window
+    data={dashboard({
+      home: "mac",
+      board: MIRRORED_BOARD,
+      releases: [],
+      needs_you: [],
+      wip_overrides: [],
+      needs_you_note: "Needs you is kept on mac, which can't be reached right now.",
+    })}
+  />
+);
 /** A new project: every widget's empty state. */
 export const Quiet: Story = () => <Window data={quietDashboard()} />;
 /** On imac or win-pc: the board as mirrored from its home. */

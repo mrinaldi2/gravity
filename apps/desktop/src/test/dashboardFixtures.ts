@@ -1,6 +1,6 @@
 // The project dashboard for tests and stories (H-076, H-018 §2.1).
 
-import type { BoardSummary, Dashboard } from "../protocol/dashboard";
+import type { BoardSummary, Dashboard, NeedsYou } from "../protocol/dashboard";
 import type { Bot } from "../protocol/entities";
 import { bot } from "./fixtures";
 import { deployment, release } from "./releaseFixtures";
@@ -73,7 +73,14 @@ export function dashboard(over: Partial<Dashboard> = {}): Dashboard {
         assignee: "ios",
       },
       {
-        kind: "wip_override",
+        kind: "relayed",
+        count: 2,
+        decision_ids: ["dec-7", "dec-8"],
+        by: [{ bot_id: "arch", count: 2 }],
+      },
+    ],
+    wip_overrides: [
+      {
         id: "H-030",
         title: "Hotfix the installer",
         column_key: "review",
@@ -82,6 +89,7 @@ export function dashboard(over: Partial<Dashboard> = {}): Dashboard {
         at: "2026-10-04T09:00:00Z",
       },
     ],
+    needs_you_note: null,
     board: BOARD,
     releases: [
       waiting,
@@ -116,7 +124,17 @@ export const MIRRORED_BOARD: BoardSummary = {
   rework_this_week: null,
 };
 
+/** The busy dashboard as a linked computer sees it: the home's rows (all but
+ *  the P0, which the mirror holds) to act on there. */
+export function offHome(over: Partial<Dashboard> = {}): Dashboard {
+  const rows: NeedsYou[] = [];
+  for (const row of dashboard().needs_you) {
+    rows.push(row.kind === "p0" ? row : { ...row, elsewhere: "mac" });
+  }
+  return dashboard({ home: "mac", board: MIRRORED_BOARD, needs_you: rows, ...over });
+}
+
 /** A fresh project: nothing waits, no board, no release. */
 export function quietDashboard(): Dashboard {
-  return dashboard({ needs_you: [], board: null, releases: [], team: [] });
+  return dashboard({ needs_you: [], wip_overrides: [], board: null, releases: [], team: [] });
 }

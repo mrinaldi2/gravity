@@ -166,6 +166,35 @@
   color: var(--text-dim);
 }
 
+/* Off the board's home: where a row is acted on, in place of its button. */
+.dash-elsewhere {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.dash-note {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+/* The lead's WIP overrides, folded under Needs you (H-112). */
+.dash-info {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.dash-info summary {
+  cursor: pointer;
+}
+
+.dash-info ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
 .dash-state {
   display: inline-flex;
   align-items: center;
