@@ -40,6 +40,7 @@ pub mod service;
 #[cfg(windows)]
 #[path = "service/windows/mod.rs"]
 pub mod service;
+pub mod service_report;
 pub mod supervisor;
 pub mod terminal;
 pub mod workers;

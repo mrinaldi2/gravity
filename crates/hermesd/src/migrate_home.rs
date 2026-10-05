@@ -178,6 +178,16 @@ pub fn pending(cfg: &Config) -> anyhow::Result<Option<Plan>> {
     pending_unless(cfg, crate::config::home_is_overridden())
 }
 
+/// Whether the default migration for `cfg` ran to the end, so the home now
+/// lives where it moved to.
+pub fn completed(cfg: &Config) -> bool {
+    Plan::default_for(cfg)
+        .state()
+        .ok()
+        .flatten()
+        .is_some_and(|state| state.is_complete())
+}
+
 /// [`pending`] with the override already decided.
 pub(crate) fn pending_unless(cfg: &Config, overridden: bool) -> anyhow::Result<Option<Plan>> {
     if overridden {

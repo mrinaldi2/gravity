@@ -247,6 +247,40 @@ pub fn uninstall(paths: &ServicePaths) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// `service status --json`: what is installed, what runs and what answers.
+pub fn report(
+    paths: &ServicePaths,
+    configured_port: u16,
+    home: crate::service_report::HomeState,
+) -> crate::service_report::Report {
+    let port = crate::home::runtime_port(&paths.home).unwrap_or(configured_port);
+    let version = crate::server::probe_health(port, std::time::Duration::from_secs(2));
+    report_with(paths, port, version, home, &System)
+}
+
+fn report_with<L: Launchctl>(
+    paths: &ServicePaths,
+    port: u16,
+    version: Option<String>,
+    home: crate::service_report::HomeState,
+    launchctl: &L,
+) -> crate::service_report::Report {
+    let legacy_service = paths.legacy_agent_home().is_some() && paths.legacy_plist_path().is_file();
+    crate::service_report::Report {
+        binary: paths.bin_path().is_file() || paths.legacy_bin_path().is_file(),
+        service: paths.plist_path().is_file(),
+        service_running: Some(launchctl.pid(LAUNCHD_LABEL).is_some()),
+        legacy_service,
+        legacy_running: Some(
+            legacy_service && launchctl.pid(crate::brand::LEGACY_LAUNCHD_LABEL).is_some(),
+        ),
+        migration_pending: home.migration_pending,
+        migrated: home.migrated,
+        port,
+        version,
+    }
+}
+
 /// Prints a human-readable status line per component and returns whether the
 /// daemon looks fully installed and reachable.
 pub fn status(paths: &ServicePaths, configured_port: u16) -> bool {
