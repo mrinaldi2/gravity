@@ -52,9 +52,34 @@ fn random_token() -> String {
     hex::encode(bytes)
 }
 
+/// Writes `value` so that `path` holds either the old secret or the whole new
+/// one, even across a crash: a private temp file beside it, fsynced, renamed
+/// over it, then the directory fsynced where the OS allows. Callers delete a
+/// plaintext only after this returns, so the hash is on disk first.
 fn write_secret(path: &Path, value: &str) -> anyhow::Result<()> {
-    fs::write(path, value)?;
-    crate::permissions::private(path, false)?;
+    use std::io::Write;
+    let dir = path.parent().context("a secret needs a directory")?;
+    let name = path.file_name().context("a secret needs a name")?;
+    let tmp = dir.join(format!(
+        ".{}.tmp-{}",
+        name.to_string_lossy(),
+        &random_token()[..8]
+    ));
+    let written = (|| -> anyhow::Result<()> {
+        let mut file = fs::File::create(&tmp)?;
+        crate::permissions::private(&tmp, false)?;
+        file.write_all(value.as_bytes())?;
+        file.sync_all()?;
+        fs::rename(&tmp, path)?;
+        Ok(())
+    })();
+    if written.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    written?;
+    // Windows can't open a directory as a file; NTFS journals the rename.
+    #[cfg(unix)]
+    fs::File::open(dir)?.sync_all()?;
     Ok(())
 }
 

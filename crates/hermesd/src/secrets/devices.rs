@@ -2,9 +2,10 @@
 //! tokens"). The phone holds the only plaintext, so copying the secrets
 //! folder no longer gives a bot an approve-grant device.
 //!
-//! A newly paired device is stored as `device-<id>.sha256`. Older plaintext
-//! `device-<id>.token` files still work; phase 2 hashes them and deletes the
-//! plaintext at start.
+//! A newly paired device is stored as `device-<id>.sha256`. In phase 1 it
+//! also gets the plaintext `device-<id>.token` an older daemon reads, so a
+//! downgrade never strands a phone; phase 2 hashes any plaintext and deletes
+//! it at start, and writes only the hash.
 
 use std::collections::HashMap;
 use std::fs;
@@ -55,14 +56,18 @@ pub(super) fn load(dir: &Path, enforce: bool) -> anyhow::Result<HashMap<String, 
 
 impl Secrets {
     /// Issue (or replace) the credential for a device. The token is returned
-    /// once; only its hash persists.
+    /// once; in phase 2 only its hash persists.
     pub fn issue_device_token(&self, device_id: &str) -> anyhow::Result<String> {
         let mut map = self.device_hashes.lock().unwrap_or_else(|e| e.into_inner());
         map.retain(|_, id| id.as_str() != device_id);
         let token = random_token();
         let h = hash(&token);
         write_secret(&hash_file(&self.dir, device_id), &h)?;
-        remove_if_present(&token_file(&self.dir, device_id))?;
+        if self.enforce {
+            remove_if_present(&token_file(&self.dir, device_id))?;
+        } else {
+            write_secret(&token_file(&self.dir, device_id), &token)?;
+        }
         map.insert(h, device_id.to_string());
         Ok(token)
     }
@@ -103,7 +108,11 @@ mod tests {
         let token = secrets.issue_device_token("d1").expect("issue");
         let stored = fs::read_to_string(hash_file(dir.path(), "d1")).expect("hash file");
         assert_ne!(stored, token);
-        assert!(!token_file(dir.path(), "d1").exists());
+        assert_eq!(
+            fs::read_to_string(token_file(dir.path(), "d1")).expect("plaintext"),
+            token,
+            "phase 1 keeps what an older daemon reads"
+        );
         assert_eq!(secrets.device_for_token(&token).as_deref(), Some("d1"));
         assert_eq!(
             secrets.device_for_token(&stored),
@@ -116,6 +125,33 @@ mod tests {
         reopened.remove_device_token("d1").expect("remove");
         assert_eq!(reopened.device_for_token(&token), None);
         assert!(!hash_file(dir.path(), "d1").exists());
+        assert!(!token_file(dir.path(), "d1").exists());
+    }
+
+    #[test]
+    fn phase_two_pairs_devices_by_hash_only_and_drops_phase_one_plaintext() {
+        let dir = tempfile::tempdir().expect("dir");
+        let phase1 = Secrets::open(dir.path()).expect("phase 1");
+        let early = phase1.issue_device_token("d1").expect("issue");
+        assert!(token_file(dir.path(), "d1").exists());
+
+        let phase2 = Secrets::open_for(dir.path(), enforced()).expect("phase 2");
+        assert!(!token_file(dir.path(), "d1").exists(), "deleted at start");
+        assert_eq!(phase2.device_for_token(&early).as_deref(), Some("d1"));
+        let late = phase2.issue_device_token("d2").expect("issue");
+        assert!(hash_file(dir.path(), "d2").exists());
+        assert!(!token_file(dir.path(), "d2").exists(), "never written");
+        assert_eq!(phase2.device_for_token(&late).as_deref(), Some("d2"));
+        let leftovers: Vec<_> = fs::read_dir(dir.path())
+            .expect("list")
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.contains(".tmp-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "temp files renamed away: {leftovers:?}"
+        );
     }
 
     #[test]

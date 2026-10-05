@@ -80,6 +80,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let mut cfg = Config::load(config_path.as_deref())?;
+    if let Some(e) = cfg.auth.hold_phase_two(hermesd::bus_auth::HOOKS_OVER_IPC) {
+        tracing::error!("{e}");
+    }
 
     // Everything but the service and the migration itself would otherwise
     // start a fresh, empty home next to the one holding the data.
