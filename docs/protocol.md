@@ -441,10 +441,13 @@ Bots run as the owner's user, so any secret a bot holds can be read by every oth
 
 The owner is known by their app's code identity or by an OK from them in the app, not by `client.token`, which any bot can read.
 
-- **Pin:** `hermesd service install` run from inside the app writes `<home>/secrets/owner-app.json`. On macOS this holds the app bundle's designated requirement. On Windows it holds the folder the app is installed in. The daemon reads the pin again on every check.
+- **The app's identity (H-110)** is compiled into hermesd; nothing is pinned in a file a bot could rewrite. A T4 `secrets/owner-app.json` is deleted at start.
+  - macOS: the code requirement `anchor apple generic and identifier "com.manuelrinaldi.thehermes" and certificate leaf[subject.OU] = "<Team ID>"`. The Team ID comes from `HERMES_TEAM_ID` at build time; without it a placeholder no app matches, so the app falls back to `client.token` in phase 1.
+  - Windows: an executable directly in `<Program Files>\The Hermes` (from `SHGetKnownFolderPath`, not the environment), other than `hermesd`. The setup installs per machine, so only an administrator can change that folder.
+  - A build with `HERMES_DEV_BUILD=1` (`scripts/dev.sh`) never enforces phase 2 storage, so an unsigned dev app keeps its `client.token`.
 - **Where to connect:** the daemon writes its endpoint address to `<home>/run/endpoint`.
 - **Methods.** A client sends one JSON-RPC request on the endpoint, before any bot traffic, and the connection closes after the answer.
-  - `hermes/owner_ticket`: the daemon checks the caller against the pin. On macOS that's the peer's audit token checked against the requirement. On Windows the peer's executable must be inside the pinned folder and must not be `hermesd`. A caller that passes gets `{"ticket": "…"}`.
+  - `hermes/owner_ticket`: the daemon checks the caller against the app's identity: on macOS the peer's audit token against the requirement, on Windows the peer's executable path. A caller that passes gets `{"ticket": "…"}`.
   - `hermes/owner_request {"command": "…"}`: the daemon raises a permission card filed under bot id `terminal` (tool `Allow from Terminal`, input `{"command": "<command> (pid N)"}`) and waits for the owner's answer. If the owner allows it, the caller gets a ticket.
   - The app answers these cards with `allow_once` or `deny`; it offers no "Allow for session" for a terminal command.
 - **Tickets:** single use, valid for 60 s. A ticket is passed as the `token` in WS `hello` and grants the same capabilities as the client token.

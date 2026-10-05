@@ -1,6 +1,7 @@
 //! A one-time owner ticket from the daemon's local endpoint (H-044 T4). The
-//! daemon grants it because this process is the app it pinned at `service
-//! install`; nothing secret is stored or passed in the environment.
+//! daemon grants it because this process is the owner's app as hermesd was
+//! built to know it (its signature on macOS, its Program Files folder on
+//! Windows); nothing secret is stored or passed in the environment.
 
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
