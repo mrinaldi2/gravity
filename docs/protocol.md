@@ -782,12 +782,14 @@ A refusal says which of these is missing. `start` pauses with the caller as `exe
 
 `hermesd release install <release>` runs `start` itself before it stages anything:
 - **Something still holds the home** (`proceed` false): it prints the holders and stops.
+- **Before each build it stages, and again at `install_started`,** it calls `extend`, which moves `deadline_at` a full window on, so the dead-man switch can't resume projects mid-install (ARCH-R50 S2).
 - **The install fails before the handoff:** it resumes the pause (`aborted`).
-- **The install is handed off:** the system's install job stops the daemon and every session. A daemon that boots with an install's pause open ends it:
-  - running the version being installed, it resumes as `install_ok`;
-  - any other version means the install was rolled back, and it resumes as `rolled_back`.
+- **Right before the handoff** it calls `install_started` with the sha256 of the daemon binary it installs (none for a Windows setup, which seals its binary). The pause enters the phase `install_started`.
+- **The install is handed off:** the system's install job stops the daemon and every session. A daemon that boots with the pause open ends it only in that phase (ARCH-R50 S1):
+  - its own binary's sha256 equals the recorded one (or, with no hash, its version equals the one being installed): it resumes as `install_ok`;
+  - otherwise the install was rolled back, and it resumes as `rolled_back`.
 
-  Either way the outcome goes on the release, and leads and DevOps are told. A pause left open by a crash in between resumes at its deadline.
+  A boot before `install_started` (the old daemon restarting before the swap) keeps everything paused. Either way the outcome goes on the release, and leads and DevOps are told. A pause left open by a crash in between resumes at its deadline, and the owner gets a notice.
 
 **WebSocket.**
 - `quiesce_status` (read) answers `{type: "quiesce", quiesce: …|null}`.

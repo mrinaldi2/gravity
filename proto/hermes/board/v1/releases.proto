@@ -156,10 +156,14 @@ message InstallRelease {
 // install_release. `hermesd release install` calls it for you.
 message InstallQuiesce {
   string release_id = 1;
-  // start, status or resume.
+  // start, status, extend (push the deadline on during an install),
+  // install_started (right before the handoff) or resume.
   string action = 2;
   // The version this computer will run; defaults to its build's.
   optional string version = 3;
+  // install_started: the sha256 of the daemon binary being installed, which
+  // a booting daemon compares with its own to tell install from rollback.
+  optional string binary_sha256 = 4;
 }
 
 // Tester (or DevOps): how a deploy or rollback on a machine went.

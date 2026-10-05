@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 
 use crate::config::Config;
 
-const USAGE: &str = "usage: hermesd quiesce <start|status|resume> <release> [--version <v>]";
+const USAGE: &str = "usage: hermesd quiesce <start|status|extend|resume> <release> [--version <v>]";
 
 /// A pause stops sessions and reaps for a few seconds before answering.
 const WAIT: Duration = Duration::from_secs(180);
@@ -20,11 +20,38 @@ pub async fn call(
     release: &str,
     version: Option<&str>,
 ) -> anyhow::Result<Value> {
-    let endpoint = crate::bus_auth::ipc::endpoint(cfg).display().to_string();
     let mut arguments = json!({ "action": action, "release_id": release });
     if let Some(version) = version {
         arguments["version"] = json!(version);
     }
+    call_with(cfg, arguments).await
+}
+
+/// After each install step: the pause's deadline moves forward, so the
+/// dead-man switch can't resume projects mid-install (ARCH-R50 S2). Only
+/// warns when it can't.
+pub async fn extend(cfg: &Config, release: &str) {
+    if let Err(e) = call(cfg, "extend", release, None).await {
+        eprintln!("warning: couldn't extend the pause's deadline: {e:#}");
+    }
+}
+
+/// Right before the handoff: the pause is in `install_started`, with the
+/// hash of the daemon binary being installed when there is one (ARCH-R50 S1).
+pub async fn install_started(
+    cfg: &Config,
+    release: &str,
+    binary: Option<&std::path::Path>,
+) -> anyhow::Result<()> {
+    let mut arguments = json!({ "action": "install_started", "release_id": release });
+    if let Some(binary) = binary {
+        arguments["binary_sha256"] = json!(super::outcome::file_sha256(binary)?);
+    }
+    call_with(cfg, arguments).await.map(drop)
+}
+
+async fn call_with(cfg: &Config, arguments: Value) -> anyhow::Result<Value> {
+    let endpoint = crate::bus_auth::ipc::endpoint(cfg).display().to_string();
     let request = json!({
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
         "params": { "name": "install_quiesce", "arguments": arguments },
@@ -72,7 +99,9 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
         .position(|a| a == "--version")
         .and_then(|i| args.get(i + 1))
         .map(String::as_str);
-    let (Some(action @ ("start" | "status" | "resume")), Some(release)) = (action, release) else {
+    let (Some(action @ ("start" | "status" | "extend" | "resume")), Some(release)) =
+        (action, release)
+    else {
         anyhow::bail!("{USAGE}");
     };
     let answer = call(cfg, action, release, version).await?;

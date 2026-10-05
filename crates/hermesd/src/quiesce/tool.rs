@@ -54,16 +54,43 @@ fn version_here(answer: &Value) -> Option<String> {
     .map(|b| b.version.clone())
 }
 
-/// `action`: `start`, `status` or `resume`.
+/// The open pause, when it is this bot's install of `release_id`.
+fn mine(app: &AppState, me: &Caller<'_>, release_id: &str) -> anyhow::Result<()> {
+    match app.db.open_quiesce()? {
+        Some(q)
+            if q.release_id.as_deref() == Some(release_id)
+                && q.exempt_bot.as_deref() == Some(me.bot.id.as_str()) =>
+        {
+            Ok(())
+        }
+        _ => Err(invalid(format!(
+            "no pause is open for your install of {release_id}; start one first"
+        ))),
+    }
+}
+
+/// `action`: `start`, `status`, `extend`, `install_started` or `resume`.
 pub fn call(
     app: &Arc<AppState>,
     me: &Caller<'_>,
     action: &str,
     release_id: &str,
     version: Option<&str>,
+    binary_sha256: Option<&str>,
 ) -> anyhow::Result<Value> {
     match action {
         "status" => super::status(app),
+        "extend" => {
+            gate(app, me, release_id)?;
+            mine(app, me, release_id)?;
+            Ok(json!({ "quiesce": super::extend(app, Utc::now())? }))
+        }
+        "install_started" => {
+            gate(app, me, release_id)?;
+            mine(app, me, release_id)?;
+            let q = super::install_started(app, binary_sha256, Utc::now())?;
+            Ok(json!({ "quiesce": q }))
+        }
         "resume" => {
             gate(app, me, release_id)?;
             let closed = super::resume_all(app, "aborted", Utc::now())?;
@@ -90,7 +117,7 @@ pub fn call(
             Ok(json!({ "quiesce": q, "report": report, "proceed": q.phase == "ready" }))
         }
         other => Err(invalid(format!(
-            "unknown action {other}; start, status or resume"
+            "unknown action {other}; start, status, extend, install_started or resume"
         ))),
     }
 }

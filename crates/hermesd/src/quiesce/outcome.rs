@@ -82,15 +82,40 @@ fn record(app: &AppState, release_id: &str, kind: &str, actor: &str, note: &str,
 }
 
 /// How an install's pause ends when a daemon boots with it open: by this
-/// daemon's version against the one being installed. `None` for a pause
-/// that isn't an install's.
-pub fn boot_outcome(q: &Quiesce, running: &str) -> Option<&'static str> {
+/// daemon against the one being installed (ARCH-R50 S1):
+/// - only once the install has started, so a crash or KeepAlive restart
+///   of the old daemon before the swap keeps the pause open;
+/// - by the installed binary's sha256 when the install recorded it, so a
+///   same-version reinstall that rolled back reads as rolled back;
+/// - by version otherwise (a Windows setup seals its binary).
+///
+/// `None` keeps the pause open.
+pub fn boot_outcome(
+    q: &Quiesce,
+    running_version: &str,
+    running_sha256: Option<&str>,
+) -> Option<&'static str> {
+    if q.phase != INSTALL_STARTED {
+        return None;
+    }
     let installing = q.version.as_deref()?;
-    Some(if installing.trim_start_matches('v') == running {
-        "install_ok"
-    } else {
-        "rolled_back"
-    })
+    let ok = match q.report["install"]["binary_sha256"].as_str() {
+        Some(want) => running_sha256 == Some(want),
+        None => installing.trim_start_matches('v') == running_version,
+    };
+    Some(if ok { "install_ok" } else { "rolled_back" })
+}
+
+/// The phase a pause is in once the install has been handed to the system.
+pub const INSTALL_STARTED: &str = "install_started";
+
+/// The sha256 of a file, read in full.
+pub fn file_sha256(path: &std::path::Path) -> anyhow::Result<String> {
+    use sha2::{Digest, Sha256};
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut file, &mut hasher)?;
+    Ok(hex::encode(hasher.finalize()))
 }
 
 /// At daemon start: ends an install's open pause (see the module docs).
@@ -98,7 +123,10 @@ pub fn on_boot(app: &Arc<AppState>) {
     let Ok(Some(q)) = app.db.open_quiesce() else {
         return;
     };
-    let Some(outcome) = boot_outcome(&q, env!("CARGO_PKG_VERSION")) else {
+    let running_sha = std::env::current_exe()
+        .ok()
+        .and_then(|exe| file_sha256(&exe).ok());
+    let Some(outcome) = boot_outcome(&q, env!("CARGO_PKG_VERSION"), running_sha.as_deref()) else {
         return;
     };
     match super::resume_all(app, outcome, Utc::now()) {
@@ -140,22 +168,33 @@ mod tests {
         }
     }
 
+    fn started(version: Option<&str>, sha: Option<&str>) -> Quiesce {
+        let mut q = pause(version);
+        q.phase = INSTALL_STARTED.into();
+        q.report = json!({ "install": { "binary_sha256": sha } });
+        q
+    }
+
     #[test]
-    fn a_booting_daemon_reads_how_the_install_ended_from_its_own_version() {
-        assert_eq!(
-            boot_outcome(&pause(Some("0.17.0")), "0.17.0"),
-            Some("install_ok")
-        );
-        assert_eq!(
-            boot_outcome(&pause(Some("v0.17.0")), "0.17.0"),
-            Some("install_ok")
-        );
-        assert_eq!(
-            boot_outcome(&pause(Some("0.17.0")), "0.16.3"),
-            Some("rolled_back")
-        );
+    fn a_boot_before_the_install_started_keeps_the_pause() {
+        // ARCH-R50 S1 / F2: the old daemon restarting before the swap.
+        assert_eq!(boot_outcome(&pause(Some("0.17.0")), "0.16.3", None), None);
+        assert_eq!(boot_outcome(&pause(Some("0.17.0")), "0.17.0", None), None);
+    }
+
+    #[test]
+    fn once_started_the_binary_hash_decides_and_version_is_the_fallback() {
+        // The installed binary's hash: same version or not, it decides.
+        let q = started(Some("0.17.0"), Some("aaa"));
+        assert_eq!(boot_outcome(&q, "0.17.0", Some("aaa")), Some("install_ok"));
+        assert_eq!(boot_outcome(&q, "0.17.0", Some("bbb")), Some("rolled_back"));
+        assert_eq!(boot_outcome(&q, "0.17.0", None), Some("rolled_back"));
+        // A Windows setup seals its binary: the version decides.
+        let q = started(Some("v0.17.0"), None);
+        assert_eq!(boot_outcome(&q, "0.17.0", None), Some("install_ok"));
+        assert_eq!(boot_outcome(&q, "0.16.3", None), Some("rolled_back"));
         // Not an install's pause: the owner or the dead-man ends it.
-        assert_eq!(boot_outcome(&pause(None), "0.17.0"), None);
+        assert_eq!(boot_outcome(&started(None, None), "0.17.0", None), None);
     }
 
     #[test]

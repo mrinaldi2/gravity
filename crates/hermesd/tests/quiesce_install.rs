@@ -10,7 +10,9 @@ use chrono::{Duration, Utc};
 use common::releases::releases;
 use common::tasks::error_text;
 use common::*;
-use hermesd::quiesce::{on_boot, pause_all, PauseRequest};
+use hermesd::quiesce::{
+    check_deadline, extend, file_sha256, install_started, on_boot, pause_all, PauseRequest,
+};
 use serde_json::{json, Value};
 
 /// The owner approves the release and DevOps tasks the tester on "mac".
@@ -107,25 +109,53 @@ fn install_of(version: Option<&'static str>) -> PauseRequest<'static> {
     }
 }
 
-/// The installed daemon boots with the pause open: it is the new version,
-/// so the install worked; the old one booting means it was rolled back.
+/// The running binary's hash, as a booting daemon reads its own.
+fn this_binary() -> String {
+    file_sha256(&std::env::current_exe().unwrap()).unwrap()
+}
+
+/// ARCH-R50 S1: a boot ends the pause only once the install has started,
+/// and then by the installed binary's hash: this one installed means it
+/// worked, any other means the old daemon came back.
 #[tokio::test]
-async fn a_booting_daemon_ends_the_installs_pause_by_its_version() {
+async fn a_booting_daemon_ends_the_installs_pause_once_the_install_started() {
     let d = spawn_daemon().await;
     let this = env!("CARGO_PKG_VERSION");
+    // The old daemon restarting before the swap keeps everything paused.
     pause_all(&d.app, &install_of(Some(this)), Utc::now()).unwrap();
     on_boot(&d.app);
-    let closed = d.app.db.open_quiesce().unwrap();
-    assert!(closed.is_none());
+    assert!(d.app.db.open_quiesce().unwrap().is_some(), "still paused");
+    install_started(&d.app, Some(&this_binary()), Utc::now()).unwrap();
+    on_boot(&d.app);
+    assert!(d.app.db.open_quiesce().unwrap().is_none());
 
-    pause_all(&d.app, &install_of(Some("0.0.1")), Utc::now()).unwrap();
+    // Same version, another binary: the reinstall was rolled back.
+    pause_all(&d.app, &install_of(Some(this)), Utc::now()).unwrap();
     let id = d.app.db.open_quiesce().unwrap().unwrap().id;
+    install_started(&d.app, Some(&"0".repeat(64)), Utc::now()).unwrap();
     on_boot(&d.app);
     let rolled = d.app.db.get_quiesce(&id).unwrap().unwrap();
     assert_eq!(rolled.outcome.as_deref(), Some("rolled_back"));
 
     // A pause that isn't an install's stays for the owner or the deadline.
     pause_all(&d.app, &install_of(None), Utc::now()).unwrap();
+    install_started(&d.app, None, Utc::now()).unwrap();
     on_boot(&d.app);
     assert!(d.app.db.open_quiesce().unwrap().is_some());
+}
+
+/// ARCH-R50 S2: each install step moves the deadline on, so the dead-man
+/// switch doesn't resume projects in the middle of a slow install.
+#[tokio::test]
+async fn install_steps_push_the_deadline_on() {
+    let d = spawn_daemon().await;
+    let t0 = Utc::now();
+    pause_all(&d.app, &install_of(Some("0.17.0")), t0).unwrap();
+    // 25 minutes in, a step extends: the original 30-minute deadline passes
+    // without a resume.
+    extend(&d.app, t0 + Duration::minutes(25)).unwrap();
+    assert!(!check_deadline(&d.app, t0 + Duration::minutes(31)).unwrap());
+    assert!(d.app.db.open_quiesce().unwrap().is_some());
+    // Without another step, the extended deadline still fires.
+    assert!(check_deadline(&d.app, t0 + Duration::minutes(56)).unwrap());
 }

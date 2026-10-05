@@ -109,6 +109,15 @@ impl Db {
         Ok(())
     }
 
+    /// Moves an open pause's deadline (ARCH-R50 S2).
+    pub fn set_quiesce_deadline(&self, id: &str, at: DateTime<Utc>) -> anyhow::Result<()> {
+        self.lock().execute(
+            "UPDATE quiesce SET deadline_at = ?2 WHERE id = ?1 AND resumed_at IS NULL",
+            params![id, ts(at)],
+        )?;
+        Ok(())
+    }
+
     pub fn set_quiesce_services(&self, id: &str, stopped: &[String]) -> anyhow::Result<()> {
         self.lock().execute(
             "UPDATE quiesce SET services_stopped = ?2 WHERE id = ?1",

@@ -200,6 +200,7 @@ pub(super) fn call(
                 req.action.trim(),
                 &req.release_id,
                 req.version.as_deref(),
+                req.binary_sha256.as_deref(),
             )
         }
         "deploy_confirm" => {

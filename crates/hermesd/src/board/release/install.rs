@@ -102,16 +102,35 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
     }
     for build in mine {
         let stage = stage::Stage::new(release)?;
-        let installed = install_one(cfg, &args, build, &stage);
-        if args.dry_run || installed.is_err() {
+        if !args.dry_run {
+            crate::quiesce::cli::extend(cfg, release).await;
+        }
+        let prepared = prepare_one(&args, build, &stage);
+        if args.dry_run || prepared.is_err() {
             stage.remove();
         }
-        if let Err(e) = installed {
-            // Nothing was handed off: every project resumes now.
-            if !args.dry_run {
-                let _ = crate::quiesce::cli::call(cfg, "resume", release, None).await;
+        let ready = match prepared {
+            Ok(ready) => ready,
+            Err(e) => {
+                // Nothing was handed off: every project resumes now.
+                if !args.dry_run {
+                    let _ = crate::quiesce::cli::call(cfg, "resume", release, None).await;
+                }
+                return Err(e);
             }
-            return Err(e);
+        };
+        if let Some((program, service_args, binary)) = ready {
+            // From here the daemon stops: a boot reads how the install
+            // ended from this binary's hash (ARCH-R50 S1).
+            crate::quiesce::cli::install_started(cfg, release, binary.as_deref()).await?;
+            let job = handoff::Job::new(&cfg.home, release, program, service_args, &stage.dir);
+            handoff::hand_off(&job)?;
+            println!(
+                "{} {}: handed to the system to install (log: {})",
+                build.platform,
+                build.version,
+                job.log.display()
+            );
         }
     }
     if !args.dry_run {
@@ -125,13 +144,12 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Stage, check, swap in, hand off: one build.
-fn install_one(
-    cfg: &Config,
-    args: &Args,
-    build: &Build,
-    stage: &stage::Stage,
-) -> anyhow::Result<()> {
+/// What the system's install job runs, and the daemon binary it installs
+/// when the build shows it (not inside a Windows setup).
+type Ready = (PathBuf, Vec<String>, Option<PathBuf>);
+
+/// Stage, check and swap in one build; `None` for a dry run.
+fn prepare_one(args: &Args, build: &Build, stage: &stage::Stage) -> anyhow::Result<Option<Ready>> {
     let file = stage.fetch(build)?;
     stage::verify(&file, &build.sha256).inspect_err(|_| {
         eprintln!("Report it: deploy_confirm with result \"failed\" and this message.");
@@ -153,7 +171,7 @@ fn install_one(
     );
     if args.dry_run {
         println!("dry run: would install it as {kind:?}");
-        return Ok(());
+        return Ok(None);
     }
     let (program, mut service_args) = match kind {
         Kind::AppZip | Kind::AppDmg => (
@@ -169,15 +187,8 @@ fn install_one(
             service_args.extend(["--config".to_string(), config.clone()]);
         }
     }
-    let job = handoff::Job::new(&cfg.home, &args.release, program, service_args, &stage.dir);
-    handoff::hand_off(&job)?;
-    println!(
-        "{} {}: handed to the system to install (log: {})",
-        build.platform,
-        build.version,
-        job.log.display()
-    );
-    Ok(())
+    let binary = (kind != Kind::WindowsSetup).then(|| program.clone());
+    Ok(Some((program, service_args, binary)))
 }
 
 /// `--status`: how the handed-off install ended.

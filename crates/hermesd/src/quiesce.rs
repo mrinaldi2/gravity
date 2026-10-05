@@ -33,7 +33,7 @@ pub mod services;
 mod start;
 pub mod tool;
 
-pub use outcome::{announce, boot_outcome, on_boot};
+pub use outcome::{announce, boot_outcome, file_sha256, on_boot, INSTALL_STARTED};
 pub use start::start;
 
 /// How long a pause may stay open before it resumes by itself.
@@ -238,4 +238,40 @@ pub fn spawn_deadman(app: Arc<AppState>) {
 /// The open pause as clients read it: `{quiesce: …|null}`.
 pub fn status(app: &AppState) -> anyhow::Result<Value> {
     Ok(json!({ "quiesce": app.db.open_quiesce()? }))
+}
+
+fn open(app: &AppState) -> anyhow::Result<Quiesce> {
+    app.db
+        .open_quiesce()?
+        .ok_or_else(|| crate::decisions::not_found("no pause is open"))
+}
+
+/// Each install step pushes the open pause's deadline a full window on, so
+/// the dead-man switch can't resume projects mid-install (ARCH-R50 S2).
+pub fn extend(app: &AppState, now: DateTime<Utc>) -> anyhow::Result<Quiesce> {
+    let q = open(app)?;
+    let at = now + Duration::minutes(app.cfg.quiesce.deadline_minutes.max(1));
+    app.db.set_quiesce_deadline(&q.id, at.max(q.deadline_at))?;
+    changed(app);
+    open(app)
+}
+
+/// Right before the system's install job stops the daemon: the pause is in
+/// `install_started`, the phase a booting daemon ends it from, with the
+/// hash of the daemon binary being installed when known (ARCH-R50 S1).
+pub fn install_started(
+    app: &AppState,
+    binary_sha256: Option<&str>,
+    now: DateTime<Utc>,
+) -> anyhow::Result<Quiesce> {
+    let q = open(app)?;
+    let mut report = if q.report.is_object() {
+        q.report.clone()
+    } else {
+        json!({})
+    };
+    report["install"] = json!({ "started_at": now, "binary_sha256": binary_sha256 });
+    app.db
+        .set_quiesce_phase(&q.id, outcome::INSTALL_STARTED, &report)?;
+    extend(app, now)
 }
