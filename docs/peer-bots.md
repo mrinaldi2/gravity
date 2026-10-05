@@ -139,6 +139,22 @@ and stays that way as the team changes.
   Which side dials says nothing about the home, since both sides may dial.
   Two projects that each have a board can't be linked (`conflict`); when
   only one has a board, that side is the home.
+- **Working on a board from the other side (B9).** The other side mirrors
+  the home's board in memory: it fetches it (`board_snapshot`) when the
+  link comes up, when the project is linked and when the board starts. The
+  home relays every change it publishes as a `board_event`, which the other
+  side applies and republishes to its own clients. Bot ids are rewritten
+  each way through the stand-ins.
+  - A bot there calls the board tools as usual. Its daemon forwards each
+    call (`board_call`), and the home runs it as the bot's stand-in, so the
+    home's roles and guards decide. Release testing and deploys work the
+    same way (`release_test`, `install_release`, `deploy_confirm`).
+  - The owner's clients there see the board and its pushes, read-only. Item
+    details, every change, and releases (review and ruling) stay on the home.
+  - While the home is unreachable, bots there can still read the board as
+    last seen (`board_get`, `item_query`, the card of `item_get`), and every
+    change is refused: "The board lives on mac, which is unreachable." The
+    mirror is not kept across a restart of that daemon.
 - **Stand-ins do not count** towards `max_bots_per_project`; only bots that
   run on a daemon count there.
 - **Unlinking**, from either side, archives the stand-ins on both sides

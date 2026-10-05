@@ -2,6 +2,7 @@
 
 import type { BrowserInputEvent } from "./agents";
 import type { PermissionAnswer } from "./chat";
+import type { DashboardRequestBody } from "./dashboard";
 import type { DecisionRequestBody } from "./decisionRequests";
 import type { ReleaseRequestBody } from "./releases";
 import type {
@@ -17,6 +18,7 @@ import type {
 export type ClientRequestBody =
   | DecisionRequestBody
   | ReleaseRequestBody
+  | DashboardRequestBody
   | {
       readonly type: "hello";
       readonly protocol_version: number;

@@ -87,6 +87,7 @@ const REPLY_TYPES: ReadonlySet<string> = new Set(
     agent_conversation: true,
     releases: true,
     release: true,
+    dashboard: true,
   } satisfies Record<ServerReplyType, true>),
 );
 

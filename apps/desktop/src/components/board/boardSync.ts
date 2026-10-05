@@ -22,6 +22,8 @@ export interface BoardModel {
   readonly roles: readonly ProjectRole[];
   /** The last change this model includes. */
   readonly seq: bigint;
+  /** This connection may make the owner's calls on the board (its home). */
+  readonly canRule: boolean;
 }
 
 function byOrd(columns: readonly BoardColumn[]): BoardColumn[] {
@@ -39,6 +41,7 @@ export function fromSnapshot(snapshot: BoardSnapshot): BoardModel {
     cards: new Map(snapshot.cards.map((card) => [card.id, card])),
     roles: snapshot.roles,
     seq: snapshot.seq,
+    canRule: snapshot.canRule,
   };
 }
 

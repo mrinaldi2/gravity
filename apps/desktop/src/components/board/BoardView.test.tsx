@@ -117,9 +117,10 @@ describe("BoardView", () => {
     await user.click(screen.getByRole("button", { name: "ios" }));
     expect(screen.queryByRole("article", { name: /^H-024/ })).toBeNull();
     expect(screen.getByRole("article", { name: /^H-030/ })).toBeInTheDocument();
-    expect(
-      within(columnNamed(/^Ready, 2 items, 1 shown/)).getByText("1 of 2 · limit 10"),
-    ).toBeInTheDocument();
+    const filtered = columnNamed(/^Ready, 2 items, 1 shown/);
+    expect(within(filtered).getByText("1 of 2 · limit 10")).toBeInTheDocument();
+    // An active filter is marked in the header, not just counted (H-101).
+    expect(within(filtered).getByTitle("Filters hide 1 card here")).toBeInTheDocument();
     expect(screen.getByRole("status", { name: "" })).toHaveTextContent("Showing 1 of 3");
 
     await user.click(screen.getByRole("button", { name: "Clear" }));

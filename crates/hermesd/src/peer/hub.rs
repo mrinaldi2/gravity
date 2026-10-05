@@ -209,6 +209,7 @@ impl PeerHub {
         }
         tokio::spawn(super::term::link_up(app.clone(), peer_id.clone()));
         tokio::spawn(super::browser::link_up(app.clone(), peer_id.clone()));
+        tokio::spawn(super::board::link_up(app.clone(), peer_id.clone()));
 
         // Events are applied in the order they were sent: a roster, then a
         // newer one, must not land the other way round.

@@ -21,6 +21,10 @@ impl Conn {
     pub(super) fn snapshot(&self, project_id: &str) -> Result<c::BoardSnapshot, Refusal> {
         let mut board = match snapshot(&self.app, project_id)? {
             Some(board) => board,
+            // Its home is a peer: the board as last mirrored, read-only (B9).
+            None if self.app.board_mirror.home_peer(project_id).is_some() => {
+                return self.mirrored_snapshot(project_id)
+            }
             None => {
                 self.enable_board(project_id, Enable::Auto)?;
                 snapshot(&self.app, project_id)?
@@ -64,51 +68,14 @@ impl Conn {
     }
 
     pub(super) fn item_get(&self, id: &str) -> Result<c::ItemDetail, Refusal> {
-        self.app
-            .db
-            .board_read(|t| {
-                let Some(item) = t.item(id)? else {
-                    return Ok(None);
-                };
-                let (history, next) = t.item_history(id, None, HISTORY_PAGE)?;
-                Ok(Some(c::ItemDetail {
-                    item: Some(item.into()),
-                    links: t.item_links(id)?.into_iter().map(Into::into).collect(),
-                    comments: t.item_comments(id)?.into_iter().map(Into::into).collect(),
-                    history: history.into_iter().map(Into::into).collect(),
-                    history_next: next,
-                }))
-            })?
-            .ok_or_else(|| not_found(id))
+        item_detail(&self.app, id)
     }
 
     pub(super) fn item_history(&self, r: &c::ItemHistory) -> Result<c::ItemHistoryPage, Refusal> {
-        let limit = match r.limit {
-            0 => HISTORY_PAGE,
-            n => n.min(HISTORY_MAX),
-        };
-        let (events, next) = self
-            .app
-            .db
-            .board_read(|t| {
-                if t.item_project(&r.id)?.is_none() {
-                    return Ok(None);
-                }
-                t.item_history(&r.id, r.after, limit).map(Some)
-            })?
-            .ok_or_else(|| not_found(&r.id))?;
-        Ok(c::ItemHistoryPage {
-            item_id: r.id.clone(),
-            events: events.into_iter().map(Into::into).collect(),
-            next,
-        })
+        history_page(&self.app, r)
     }
 
     pub(super) fn item_query(&self, r: &c::ItemQuery) -> Result<c::ItemQueryResult, Refusal> {
-        let bad = |e: MapError| refuse("invalid_request", e.to_string());
-        let types = wire_list(&r.types, m::ItemType::from_wire).map_err(bad)?;
-        let priorities = wire_list(&r.priorities, m::Priority::from_wire).map_err(bad)?;
-        let platforms = wire_list(&r.platforms, m::Platform::from_wire).map_err(bad)?;
         let text = r.text.as_deref().map(str::trim).filter(|t| !t.is_empty());
         let cards = self.app.db.board_read(|t| match text {
             Some(text) => t.search_cards(&r.project_id, text),
@@ -119,37 +86,102 @@ impl Conn {
             (Err(e), Some(_)) => return Err(refuse("invalid_request", format!("search: {e}"))),
             (Err(e), None) => return Err(e.into()),
         };
-        let wanted = |card: &m::ItemCard| {
-            (r.column_keys.is_empty() || r.column_keys.contains(&card.column_key))
-                && r.assignee
-                    .as_ref()
-                    .is_none_or(|a| card.assignee.as_ref() == Some(a))
-                && (types.is_empty() || types.contains(&card.item_type))
-                && (priorities.is_empty() || priorities.contains(&card.priority))
-                && (platforms.is_empty() || platforms.iter().any(|p| card.platforms.contains(p)))
-                && r.blocked.is_none_or(|b| card.blocked == b)
-        };
-        Ok(c::ItemQueryResult {
-            cards: cards.into_iter().filter(wanted).map(Into::into).collect(),
-        })
+        query_cards(r, cards)
     }
+}
 
+/// The cards among `cards` an `ItemQuery` asks for, its text aside.
+pub(super) fn query_cards(
+    r: &c::ItemQuery,
+    cards: Vec<m::ItemCard>,
+) -> Result<c::ItemQueryResult, Refusal> {
+    let bad = |e: MapError| refuse("invalid_request", e.to_string());
+    let types = wire_list(&r.types, m::ItemType::from_wire).map_err(bad)?;
+    let priorities = wire_list(&r.priorities, m::Priority::from_wire).map_err(bad)?;
+    let platforms = wire_list(&r.platforms, m::Platform::from_wire).map_err(bad)?;
+    let wanted = |card: &m::ItemCard| {
+        (r.column_keys.is_empty() || r.column_keys.contains(&card.column_key))
+            && r.assignee
+                .as_ref()
+                .is_none_or(|a| card.assignee.as_ref() == Some(a))
+            && (types.is_empty() || types.contains(&card.item_type))
+            && (priorities.is_empty() || priorities.contains(&card.priority))
+            && (platforms.is_empty() || platforms.iter().any(|p| card.platforms.contains(p)))
+            && r.blocked.is_none_or(|b| card.blocked == b)
+    };
+    Ok(c::ItemQueryResult {
+        cards: cards.into_iter().filter(wanted).map(Into::into).collect(),
+    })
+}
+
+impl Conn {
     pub(super) fn item_move_check(&self, id: &str) -> Result<c::MoveCheck, Refusal> {
-        if self.app.db.board_read(|t| t.item_project(id))?.is_none() {
-            return Err(not_found(id));
-        }
-        let columns = moves::item_move_check(&self.app.db, id, &self.actor())?;
-        Ok(c::MoveCheck {
-            item_id: id.to_string(),
-            columns: columns
-                .into_iter()
-                .map(|(column, unmet)| c::ColumnCheck {
-                    column_key: column.key,
-                    unmet: unmet.into_iter().map(Into::into).collect(),
-                })
-                .collect(),
-        })
+        move_check(&self.app, id, &self.actor())
     }
+}
+
+/// One item with its links, comments and first page of history.
+pub(super) fn item_detail(app: &AppState, id: &str) -> Result<c::ItemDetail, Refusal> {
+    app.db
+        .board_read(|t| {
+            let Some(item) = t.item(id)? else {
+                return Ok(None);
+            };
+            let (history, next) = t.item_history(id, None, HISTORY_PAGE)?;
+            Ok(Some(c::ItemDetail {
+                item: Some(item.into()),
+                links: t.item_links(id)?.into_iter().map(Into::into).collect(),
+                comments: t.item_comments(id)?.into_iter().map(Into::into).collect(),
+                history: history.into_iter().map(Into::into).collect(),
+                history_next: next,
+            }))
+        })?
+        .ok_or_else(|| not_found(id))
+}
+
+pub(super) fn history_page(
+    app: &AppState,
+    r: &c::ItemHistory,
+) -> Result<c::ItemHistoryPage, Refusal> {
+    let limit = match r.limit {
+        0 => HISTORY_PAGE,
+        n => n.min(HISTORY_MAX),
+    };
+    let (events, next) = app
+        .db
+        .board_read(|t| {
+            if t.item_project(&r.id)?.is_none() {
+                return Ok(None);
+            }
+            t.item_history(&r.id, r.after, limit).map(Some)
+        })?
+        .ok_or_else(|| not_found(&r.id))?;
+    Ok(c::ItemHistoryPage {
+        item_id: r.id.clone(),
+        events: events.into_iter().map(Into::into).collect(),
+        next,
+    })
+}
+
+pub(super) fn move_check(
+    app: &AppState,
+    id: &str,
+    actor: &crate::actor::Actor<'_>,
+) -> Result<c::MoveCheck, Refusal> {
+    if app.db.board_read(|t| t.item_project(id))?.is_none() {
+        return Err(not_found(id));
+    }
+    let columns = moves::item_move_check(&app.db, id, actor)?;
+    Ok(c::MoveCheck {
+        item_id: id.to_string(),
+        columns: columns
+            .into_iter()
+            .map(|(column, unmet)| c::ColumnCheck {
+                column_key: column.key,
+                unmet: unmet.into_iter().map(Into::into).collect(),
+            })
+            .collect(),
+    })
 }
 
 /// Who enables a board: `board_get` on its own, or the owner on purpose.

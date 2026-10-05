@@ -1,0 +1,11 @@
+{
+  "reqId": "22",
+  "boardRequest": {
+    "roleSet": {
+      "projectId": "p1",
+      "bot": "Context Engineer",
+      "role": "ROLE_REVIEWER_ARCH",
+      "remove": false
+    }
+  }
+}

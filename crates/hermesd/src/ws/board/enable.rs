@@ -56,7 +56,17 @@ async fn enable_linked(
     {
         return Err(refuse("not_found", format!("no project {project_id}")));
     }
+    let mut feed = app.board.writer();
     db.ensure_board(project_id, &db.daemon_id()?, None)?;
+    // Relayed to the linked peers, which start mirroring it (B9).
+    feed.publish(crate::board::feed::Change {
+        project_id,
+        kind: crate::board::feed::ChangeKind::SettingsChanged,
+        item_id: "",
+        card: None,
+        from_column: None,
+    });
+    drop(feed);
     snapshot(app, project_id)?
         .ok_or_else(|| refuse("internal", "the board was enabled but is missing"))
 }

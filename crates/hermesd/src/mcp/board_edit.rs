@@ -150,11 +150,15 @@ fn update(app: &Arc<AppState>, me: &Me, req: c::ItemUpdate) -> anyhow::Result<Va
             .parent_id
             .as_deref()
             .map(|p| (!p.is_empty()).then_some(p)),
+        item_type: req.r#type.map(ItemType::from_wire).transpose()?,
     };
+    let retype = edit.item_type;
     let guard = |item: &Item, who: &Who| {
         // Raising to P0 is the lead's or the owner's call (H-017 §3).
         let to_p0 = priority == Some(Priority::P0) && item.priority != Priority::P0;
-        let mut unmet = if to_p0 {
+        // So is changing an item's type, e.g. feature → epic (H-099).
+        let retyped = retype.is_some_and(|t| t != item.item_type);
+        let mut unmet = if to_p0 || retyped {
             guards::check_lead(who)
         } else {
             Vec::new()

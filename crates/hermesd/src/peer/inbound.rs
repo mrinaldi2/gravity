@@ -29,6 +29,9 @@ pub(super) fn handle(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> anyho
         "list_projects" => super::links::serve_list(app, &peer),
         "link_project" => super::links::serve_link(app, &peer, frame),
         "unlink_project" => super::links::serve_unlink(app, &peer, frame),
+        "board_call" => super::board_home::serve_call(app, &peer, frame),
+        "board_snapshot" => super::board_home::serve_snapshot(app, &peer, frame),
+        "board_read" => super::board_home::serve_read(app, &peer, frame),
         "create_bot" => super::remote_bots::serve_create(app, &peer, frame),
         "update_bot" => super::remote_bots::serve_update(app, &peer, frame),
         "delete_bot" => super::remote_bots::serve_delete(app, &peer, frame),
@@ -58,6 +61,7 @@ pub(super) fn event(app: &Arc<AppState>, peer_id: &str, frame: &Value) {
         "chat_turns" => super::chat::receive_turns(app, peer_id, frame),
         "project_roster" => super::mirror::receive_roster(app, peer_id, frame),
         "project_links" => super::mirror::receive_links(app, peer_id, frame),
+        "board_event" => super::board::receive_event(app, peer_id, frame),
         _ => {}
     }
 }

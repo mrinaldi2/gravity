@@ -45,22 +45,28 @@ function checkFor(id: string): MoveCheck {
   });
 }
 
-function client(cards: readonly ItemCard[]): FakeDaemon {
+function client(cards: readonly ItemCard[], canRule = false): FakeDaemon {
   return new FakeDaemon()
-    .onBoard("boardWatch", () => ({ case: "board", value: snapshot(cards) }))
+    .onBoard("boardWatch", () => ({ case: "board", value: { ...snapshot(cards), canRule } }))
     .onBoard("itemMoveCheck", (call) => ({
       case: "moveCheck",
       value: checkFor(call.case === "itemMoveCheck" ? (call.value.id ?? "") : ""),
     }));
 }
 
-function Window({ cards }: { readonly cards: readonly ItemCard[] }): ReactElement {
+function Window({
+  cards,
+  canRule = false,
+}: {
+  readonly cards: readonly ItemCard[];
+  readonly canRule?: boolean;
+}): ReactElement {
   const acme = project({ id: "story-board", name: "The Hermes" });
   return (
     <div className="main" style={{ height: 640 }}>
       <ProjectWindow project={acme} botCount={BOTS.length} tab="board" onSelectTab={noTab}>
         <BoardView
-          client={client(cards)}
+          client={client(cards, canRule)}
           project={acme}
           bots={BOTS}
           connected
@@ -74,6 +80,8 @@ function Window({ cards }: { readonly cards: readonly ItemCard[] }): ReactElemen
 
 export const Live: Story = () => <Window cards={sampleCards()} />;
 export const Empty: Story = () => <Window cards={[]} />;
+/** The owner on the board's home: each column's WIP limit is editable (H-099). */
+export const OwnerOnHome: Story = () => <Window cards={sampleCards()} canRule />;
 
 const columns = defaultColumns();
 const h024 = card({ id: "H-024", title: "Releases tab with approval flow", columnKey: "inbox" });

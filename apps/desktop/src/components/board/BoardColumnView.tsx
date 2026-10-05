@@ -1,8 +1,9 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import type { DragEvent, HTMLAttributes, ReactElement, ReactNode } from "react";
 import type { Bot } from "../../protocol/entities";
 import type { BoardColumn } from "../../protocol/gen/hermes/board/v1/board_pb";
 import BotAvatar from "../BotAvatar";
+import ColumnLimit from "./ColumnLimit";
 import type { WipSummary } from "./wip";
 import { countText, wipDescription } from "./wip";
 
@@ -24,6 +25,8 @@ interface BoardColumnViewProps extends DropHandlers {
   readonly botsById: ReadonlyMap<string, Bot>;
   /** Folds the column back into a rail (Inbox only). */
   readonly onCollapse?: () => void;
+  /** The owner's limit editor; absent for anyone else. */
+  readonly onSetLimit?: (limit: number | undefined) => Promise<void>;
   readonly children: ReactNode;
 }
 
@@ -63,6 +66,23 @@ function WipBadge({ summary }: { readonly summary: WipSummary }): ReactElement |
     );
   }
   return null;
+}
+
+/** Filters hiding cards here: the count reads "1 of 17", marked (H-101). */
+function FilterMark({ summary }: { readonly summary: WipSummary }): ReactElement | null {
+  if (summary.shown === summary.total) {
+    return null;
+  }
+  const hidden = summary.total - summary.shown;
+  return (
+    <span
+      className="board-column-filtered"
+      title={`Filters hide ${hidden} ${hidden === 1 ? "card" : "cards"} here`}
+    >
+      <Filter size={12} aria-hidden="true" />
+      <span className="visually-hidden">Filtered:</span>
+    </span>
+  );
 }
 
 function HeaderCount({ summary }: { readonly summary: WipSummary }): ReactElement {
@@ -108,8 +128,16 @@ export default function BoardColumnView(props: BoardColumnViewProps): ReactEleme
       <header className="board-column-header" title={description}>
         <div className="board-column-heading">
           <h3 className="board-column-name">{column.name}</h3>
+          <FilterMark summary={summary} />
           <HeaderCount summary={summary} />
           <WipBadge summary={summary} />
+          {props.onSetLimit === undefined ? null : (
+            <ColumnLimit
+              columnName={column.name}
+              limit={column.wipLimit}
+              onSave={props.onSetLimit}
+            />
+          )}
           {props.onCollapse === undefined ? null : (
             <button
               type="button"

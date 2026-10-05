@@ -50,6 +50,7 @@ const READ_ONLY: &[&str] = &[
     "list_workers",
     "list_releases",
     "get_release",
+    "dashboard_get",
 ];
 
 /// Requests that exercise the owner's ruling authority.
@@ -70,12 +71,12 @@ const APPROVE_ONLY: &[&str] = &[
     // How much bots may do without asking is the owner's call (H-031).
     "set_project_permission_profile",
     "set_bot_permission_extras",
-    // The one-shot backlog import is the owner's (H-020 §1.5, B6).
-    "board_import",
     // The only way a release decision is settled (H-020 §2.2).
     "release_rule",
     "release_hold",
     "release_unhold",
+    // The one-shot backlog import is the owner's (H-020 §1.5, B6).
+    "board_import",
 ];
 
 /// Capability required for each request type.
@@ -164,6 +165,7 @@ impl Conn {
             "publish_decisions" => self.publish_decisions(&req_id, req),
             "list_releases" => self.list_releases(&req_id, req),
             "get_release" => self.get_release(&req_id, req),
+            "dashboard_get" => self.dashboard_get(&req_id, req),
             "release_rule" => self.release_rule(&req_id, req),
             "release_hold" => self.release_hold(&req_id, req),
             "release_unhold" => self.release_unhold(&req_id, req),
