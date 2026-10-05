@@ -58,10 +58,20 @@ pub(super) fn serve_call(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> any
             )
         })?;
     let args = frame.get("args").cloned().unwrap_or_else(|| json!({}));
-    let mut result = crate::mcp::board_call_as(app, &stand_in.id, tool, &args)?;
-    if tool == "install_release" {
-        published_builds(&mut result)?;
-    }
+    let mut result = match crate::mcp::board_call_as(app, &stand_in.id, tool, &args) {
+        Ok(mut result) => {
+            if tool == "install_release" {
+                published_builds(&mut result)?;
+            }
+            result
+        }
+        // A stale write goes back as data, so the item in it gets the
+        // peer's ids below like any result (H-113).
+        Err(error) => match error.downcast::<crate::mcp::Conflict>() {
+            Ok(conflict) => conflict.to_result(),
+            Err(error) => return Err(error),
+        },
+    };
     board_ids::json(&mut result, &|id| board_ids::to_peer(&app.db, &peer.id, id));
     Ok(result)
 }

@@ -17,7 +17,7 @@ use crate::messaging::{self, Dm};
 
 use super::model::{DeployAction, DeployResult, Release, ReleaseStatus, Smoke, Verdict};
 use super::package::required_machines;
-use super::{check_frozen, daemon_move, load, publish_moves, testers_on, Caller};
+use super::{check_frozen, daemon_move, load, publish_moves, publish_touched, testers_on, Caller};
 
 /// The gate, checked at call time (H-020 §2.4): a settled, unrelayed owner
 /// or device ruling, an unchanged package, and only shipped items.
@@ -232,7 +232,7 @@ pub fn confirm(
     let project = me.bot.project_id.as_str();
     let actor = me.actor();
     let mut feed = app.board.writer();
-    let (release, moved, failed) = app.db.board_tx(|t| {
+    let (release, moved, touched, failed) = app.db.board_tx(|t| {
         let release = load(t, project, release_id)?;
         let action = if result == DeployResult::RolledBack {
             DeployAction::Rollback
@@ -273,15 +273,15 @@ pub fn confirm(
             }
             _ => (release.status, None, String::new()),
         };
-        let mut moved = Vec::new();
+        let (mut moved, mut touched) = (Vec::new(), Vec::new());
         if let Some(to) = to {
             for ri in &release.items {
                 let from = daemon_move(t, project, &ri.item_id, to, &note, false, &actor)?;
                 moved.extend(from.map(|f| (ri.item_id.clone(), f)));
                 // Back in Verify, an item is free to go into a fixed package
                 // (ARCH-R23 F3).
-                if to == ColumnCategory::Verify {
-                    t.set_item_release(&ri.item_id, None, &actor)?;
+                if to == ColumnCategory::Verify && t.set_item_release(&ri.item_id, None, &actor)? {
+                    touched.push(ri.item_id.clone());
                 }
             }
         }
@@ -291,10 +291,12 @@ pub fn confirm(
         Ok((
             t.release(&release.id)?.expect("loaded"),
             moved,
+            touched,
             result == DeployResult::Failed,
         ))
     })?;
     publish_moves(app, &mut feed, project, &moved);
+    publish_touched(app, &mut feed, project, &touched, &moved);
     drop(feed);
     if failed && !me.has(Role::Devops) {
         ask_rollback(app, me, &release, machine)?;
