@@ -104,7 +104,7 @@ fn request(
 /// Sends `request` and reads the one reply line. With `retry`, a daemon
 /// that isn't listening yet (no socket, or refused) is tried again for
 /// [`SESSION_START_RETRY`].
-async fn send(
+pub(crate) async fn send(
     endpoint: &str,
     request: &Value,
     retry: bool,

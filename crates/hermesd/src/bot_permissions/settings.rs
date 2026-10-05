@@ -25,6 +25,9 @@ pub struct SettingsInput<'a> {
     /// and resolved: only the daemon writes there (CE-010 M3).
     pub served: &'a [std::path::PathBuf],
     pub repo_url: Option<&'a str>,
+    /// DevOps installs releases by hand; every other bot only through
+    /// `hermesd release install` (B8).
+    pub devops: bool,
     pub port: u16,
     /// The command that runs the guard hook.
     pub guard_command: String,
@@ -53,6 +56,9 @@ pub const GUARD_MATCHER: &str = "Bash|Read|Grep|Glob|Write|Edit|MultiEdit|Notebo
 
 pub fn generate(input: &SettingsInput<'_>) -> Value {
     let mut deny = hard_deny(input);
+    if !input.devops {
+        deny.extend(INSTALL_DENY.iter().map(|r| (*r).to_string()));
+    }
     let mut allow = artifacts_allow(input.artifacts);
     if input.profile != PermissionProfile::Standard {
         allow.extend(TRUSTED_ALLOW.iter().map(|r| (*r).to_string()));
@@ -212,6 +218,22 @@ fn hard_deny(input: &SettingsInput<'_>) -> Vec<String> {
     deny.extend(STATIC_DENY.iter().map(|r| (*r).to_string()));
     deny
 }
+
+/// Direct installer and service commands, denied to every bot but DevOps
+/// (H-020 §2.6 b): a release goes on a computer through
+/// `hermesd release install`, which checks the gate first.
+const INSTALL_DENY: &[&str] = &[
+    "Bash(*hermesd* service install*)",
+    "Bash(*hermesd* service uninstall*)",
+    "Bash(installer -pkg*)",
+    "Bash(*/installer -pkg*)",
+    "Bash(sudo installer *)",
+    "Bash(msiexec*)",
+    "Bash(*msiexec.exe*)",
+    "Bash(*xcrun devicectl device install*)",
+    "Bash(ios-deploy*)",
+    "Bash(*-setup.exe /S*)",
+];
 
 const STATIC_DENY: &[&str] = &[
     "Bash(git push --force*)",

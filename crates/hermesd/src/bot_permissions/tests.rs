@@ -14,6 +14,10 @@ mod guard_worktrees;
 mod locks;
 
 pub(super) fn input(profile: PermissionProfile, extras: &[PermissionExtra]) -> Value {
+    input_as(profile, extras, false)
+}
+
+fn input_as(profile: PermissionProfile, extras: &[PermissionExtra], devops: bool) -> Value {
     generate(&SettingsInput {
         profile,
         extras,
@@ -24,11 +28,34 @@ pub(super) fn input(profile: PermissionProfile, extras: &[PermissionExtra]) -> V
         trusted_paths: &[PathBuf::from("/Users/me/Developer")],
         served: &[PathBuf::from("/Users/me/.gravity/releases")],
         repo_url: Some("git@github.com:me/hermes.git"),
+        devops,
         port: 49777,
         guard_command: "'/bin/hermesd' guard".to_string(),
         extra_environment: &[],
         interim: None,
     })
+}
+
+/// B8 (H-020 §2.6 b): only DevOps runs installers or `service install` by
+/// hand; everyone else installs a release through `hermesd release install`.
+#[test]
+fn installers_are_denied_to_everyone_but_devops() {
+    let installers = [
+        "Bash(*hermesd* service install*)",
+        "Bash(installer -pkg*)",
+        "Bash(msiexec*)",
+        "Bash(*xcrun devicectl device install*)",
+    ];
+    for profile in [PermissionProfile::Standard, PermissionProfile::Trusted] {
+        let tester = rules(&input_as(profile, &[], false), "deny");
+        let devops = rules(&input_as(profile, &[], true), "deny");
+        for rule in installers {
+            assert!(tester.contains(&rule.to_string()), "{profile:?}: {rule}");
+            assert!(!devops.contains(&rule.to_string()), "{profile:?}: {rule}");
+        }
+        // The supported entry point stays open.
+        assert!(!tester.iter().any(|r| r.contains("release install")));
+    }
 }
 
 pub(super) fn rules(settings: &Value, list: &str) -> Vec<String> {
@@ -188,6 +215,7 @@ fn the_interim_settings_are_folded_in_and_not_passed_twice() {
             trusted_paths: &[],
             served: &[],
             repo_url: None,
+            devops: false,
             port: 1,
             guard_command: String::new(),
             extra_environment: &[],
@@ -260,6 +288,7 @@ fn the_owners_trust_lines_survive_removing_the_interim_argument() {
             trusted_paths: &[],
             served: &[],
             repo_url: None,
+            devops: false,
             port: 1,
             guard_command: String::new(),
             extra_environment: &[],

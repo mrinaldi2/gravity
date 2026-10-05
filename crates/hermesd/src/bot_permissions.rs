@@ -29,6 +29,9 @@ pub struct Stored {
     pub profile: PermissionProfile,
     pub extras: Vec<PermissionExtra>,
     pub repo_url: Option<String>,
+    /// The project's DevOps here: the one bot without the installer deny
+    /// rules (B8).
+    pub devops: bool,
 }
 
 /// Full is not selectable yet (CE-004 (b)): the guard can't cover its own
@@ -60,6 +63,10 @@ impl Stored {
             profile,
             extras: db.bot_permission_extras(&bot.id)?,
             repo_url: db.project_repo(&bot.project_id)?.map(|r| r.url),
+            devops: db
+                .project_roles(&bot.project_id)?
+                .iter()
+                .any(|r| r.role == crate::board::model::Role::Devops && r.bot_id == bot.id),
         })
     }
 }
@@ -76,6 +83,7 @@ pub struct BotStart<'a> {
     pub workspace: &'a Path,
     pub artifacts: Option<&'a Path>,
     pub repo_url: Option<&'a str>,
+    pub devops: bool,
 }
 
 impl BotStart<'_> {
@@ -191,6 +199,7 @@ impl BotStart<'_> {
             trusted_paths: &trusted,
             served: &self.served_dirs(),
             repo_url: self.repo_url,
+            devops: self.devops,
             port: self.cfg.port,
             guard_command: self.guard_command(),
             extra_environment: &extra_environment,

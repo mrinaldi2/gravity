@@ -8,13 +8,17 @@ use serde_json::{json, Value};
 use crate::config::Config;
 
 const USAGE: &str = "usage:
-  hermesd release publish <release> <file> [--platform <p>] [--version <v>] [--bundle-id <id>]";
+  hermesd release publish <release> <file> [--platform <p>] [--version <v>] [--bundle-id <id>]
+  hermesd release install <release> [--dry-run]";
 
 const FLAGS: [&str; 3] = ["--platform", "--version", "--bundle-id"];
 
 pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
-    if args.first().map(String::as_str) != Some("publish") {
-        anyhow::bail!("{USAGE}");
+    match args.first().map(String::as_str) {
+        Some("publish") => {}
+        // A tester installing a release on their computer (B8).
+        Some("install") => return super::install::run(cfg, &args[1..]).await,
+        _ => anyhow::bail!("{USAGE}"),
     }
     let (positional, flags) = split(&args[1..])?;
     let [release, file] = positional.as_slice() else {

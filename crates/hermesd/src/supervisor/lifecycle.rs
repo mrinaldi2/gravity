@@ -80,6 +80,7 @@ impl Supervisor {
             workspace: &workspace,
             artifacts: artifacts.as_deref(),
             repo_url: stored.repo_url.as_deref(),
+            devops: stored.devops,
         }
         .claude_args(&self.inner.cfg.claude_args)?;
         if resume {

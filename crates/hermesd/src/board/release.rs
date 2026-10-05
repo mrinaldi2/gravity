@@ -25,6 +25,7 @@ pub mod cancel;
 pub mod cli;
 pub mod confine;
 pub mod deploy;
+pub mod install;
 pub mod lifecycle;
 pub mod model;
 pub mod package;
