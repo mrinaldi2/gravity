@@ -20,11 +20,15 @@ use stage::{default_legacy_home, remove_if_present, same_path, with_suffix};
 pub const SERVICE_LABEL: &str = crate::brand::WINDOWS_TASK;
 const DEFAULT_CONFIG: &str = include_str!("../../../../../ops/hermesd.example.toml");
 
+#[derive(Clone)]
 pub struct ServicePaths {
     home: PathBuf,
     user_home: PathBuf,
     /// Whether `home` was set with `THEHERMES_HOME`.
     home_overridden: bool,
+    /// The daemon the installer put in Program Files, when that is what
+    /// installs: the task then runs it rather than the home's copy.
+    installed: Option<PathBuf>,
 }
 
 impl ServicePaths {
@@ -33,7 +37,45 @@ impl ServicePaths {
             home,
             user_home,
             home_overridden: crate::config::home_is_overridden(),
+            installed: None,
         }
+    }
+    /// These paths, with the task running `source` when it is the daemon in
+    /// `Program Files\The Hermes`, which only an administrator can replace,
+    /// instead of the home's copy, which every bot can write (ARCH-R38). The
+    /// home copy is still staged: it keeps the upgrade sequence, `status`
+    /// and a downgrade to a per-user release working.
+    fn running(&self, source: &Path) -> Self {
+        let installed = crate::bus_auth::windows_app_dir()
+            .filter(|dir| crate::bus_auth::app_identity::is_installed_daemon(source, dir))
+            .map(|_| source.to_path_buf());
+        Self {
+            installed,
+            ..self.clone()
+        }
+    }
+    #[cfg(test)]
+    fn with_installed(self, installed: PathBuf) -> Self {
+        Self {
+            installed: Some(installed),
+            ..self
+        }
+    }
+    /// The binary the task launches.
+    fn run_bin(&self) -> PathBuf {
+        self.installed.clone().unwrap_or_else(|| self.bin_path())
+    }
+    /// What a daemon of the task in `home` may run from: the home's copies,
+    /// the installed daemon, and the copy the installer renamed aside
+    /// because it was running (`installer-hooks.nsh`).
+    fn daemon_executables(&self, home: &Path) -> Vec<PathBuf> {
+        let bin = home.join("bin");
+        let mut executables = vec![bin.join("hermesd.exe"), bin.join("gravityd.exe")];
+        if let Some(installed) = &self.installed {
+            executables.push(installed.clone());
+            executables.push(with_suffix(installed, ".old"));
+        }
+        executables
     }
     #[cfg(test)]
     fn with_home_overridden(self, home_overridden: bool) -> Self {
@@ -103,6 +145,7 @@ pub fn install_and_start(
     configured_port: u16,
     migration: Option<&crate::migrate_home::Plan>,
 ) -> anyhow::Result<()> {
+    let paths = &paths.running(source);
     let old_home = migration.map_or_else(|| paths.home.clone(), |plan| plan.from.clone());
     let host = TaskScheduler::new(paths, &old_home, configured_port, System)?;
     install_with(source, paths, &old_home, migration, &host)
@@ -129,6 +172,7 @@ fn install_with<S: Schtasks>(
 /// migrates the home.
 pub fn restart(paths: &ServicePaths, configured_port: u16) -> anyhow::Result<()> {
     let bundled = std::env::current_exe().context("locating the bundled daemon")?;
+    let paths = &paths.running(&bundled);
     let host = TaskScheduler::new(paths, &paths.home, configured_port, System)?;
     sequence::restart(&bundled, &layout(paths, &paths.home), &host)
 }
@@ -140,6 +184,8 @@ pub fn uninstall(paths: &ServicePaths) -> anyhow::Result<()> {
     if !paths.home.is_dir() {
         return Ok(());
     }
+    // The installer's uninstall runs the installed daemon itself.
+    let paths = &paths.running(&std::env::current_exe().unwrap_or_default());
     let host = TaskScheduler::new(paths, &paths.home, 0, System)?;
     for id in host.installed() {
         host.disable(id)?;

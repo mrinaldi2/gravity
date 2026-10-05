@@ -1,5 +1,6 @@
 mod daemon;
 mod dictation;
+mod hardening;
 mod legacy_storage;
 mod owner;
 mod shortcut;
@@ -175,8 +176,22 @@ fn handle_run_event(app: &AppHandle, event: tauri::RunEvent) {
 #[cfg(not(target_os = "macos"))]
 fn handle_run_event(_app: &AppHandle, _event: tauri::RunEvent) {}
 
+/// The windows from the config (`"create": false` there), created here so a
+/// release build never has devtools, whichever crate enables tauri's
+/// `devtools` feature (ARCH-R38).
+fn create_windows(app: &tauri::App) -> tauri::Result<()> {
+    for config in &app.config().app.windows {
+        tauri::WebviewWindowBuilder::from_config(app.handle(), config)?
+            .devtools(cfg!(debug_assertions))
+            .build()?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // First, while this is the only thread, and before any webview exists.
+    hardening::harden();
     // Before any webview exists, so it opens on the carried-over storage.
     legacy_storage::migrate();
     tauri::Builder::default()
@@ -184,7 +199,8 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
         .manage(shortcut::ToggleShortcut::default())
-        .setup(|_app| {
+        .setup(|app| {
+            create_windows(app)?;
             // Off the main thread: a repair stops and restarts the service.
             std::thread::spawn(|| {
                 if let Err(err) = daemon::repair_local_daemon_if_broken() {

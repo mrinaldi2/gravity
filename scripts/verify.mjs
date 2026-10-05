@@ -9,10 +9,10 @@ const windows = process.platform === "win32";
 process.chdir(root);
 process.env.PYTHONUTF8 ??= "1";
 
-function run(program, args = []) {
+function run(program, args = [], env = process.env) {
   const result = program === "pnpm" && windows
-    ? spawnSync("cmd.exe", ["/d", "/s", "/c", `pnpm ${args.join(" ")}`], { cwd: root, stdio: "inherit" })
-    : spawnSync(program, args, { cwd: root, stdio: "inherit" });
+    ? spawnSync("cmd.exe", ["/d", "/s", "/c", `pnpm ${args.join(" ")}`], { cwd: root, env, stdio: "inherit" })
+    : spawnSync(program, args, { cwd: root, env, stdio: "inherit" });
   if (result.error) {
     throw result.error;
   }
@@ -57,7 +57,8 @@ run("pnpm", ["--dir", "apps/marketing", "check"]);
 if (windows) {
   run("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/prepare-sidecar.ps1"]);
 } else {
-  run("bash", ["scripts/prepare-sidecar.sh"]);
+  // A check, not a release: no Team ID needed (H-110, ARCH-R38).
+  run("bash", ["scripts/prepare-sidecar.sh"], { ...process.env, HERMES_DEV_BUILD: "1" });
 }
 const native = ["--manifest-path", "apps/desktop/src-tauri/Cargo.toml"];
 run("cargo", ["fmt", ...native, "--check"]);

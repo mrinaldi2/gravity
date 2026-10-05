@@ -172,8 +172,7 @@ impl<'a, S: Schtasks> TaskScheduler<'a, S> {
         let _ = self.schtasks.run(&["/end", "/tn", name]);
         // Never kill a reused PID belonging to another executable. An upgrade
         // from before the rename stops the task's old `gravityd.exe`.
-        let bin = home.join("bin");
-        let executables = [bin.join("hermesd.exe"), bin.join("gravityd.exe")];
+        let executables = self.paths.daemon_executables(home);
         if let Ok(pid) = std::fs::read_to_string(pid_path) {
             let pid: u32 = pid.trim().parse().context("invalid managed daemon PID")?;
             stop_daemon(pid, &executables)?;

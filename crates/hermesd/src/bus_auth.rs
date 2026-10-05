@@ -23,6 +23,8 @@ pub mod owner_client;
 #[cfg(target_os = "macos")]
 mod owner_macos;
 mod owner_os;
+#[cfg(windows)]
+pub use owner_os::app_dir as windows_app_dir;
 pub mod proxy;
 pub mod session;
 
@@ -76,6 +78,23 @@ impl AuthConfig {
             "[auth] bot_bearer = \"refuse\" ignored: this build has no `hermesd hook` \
              transport (H-044 T3), so refusing bearers would break every bot's hooks \
              and delete the tokens needed to roll back. Staying in phase 1."
+                .to_string(),
+        )
+    }
+
+    /// Holds a macOS machine in phase 1 while this build carries the
+    /// placeholder Team ID (`app_identity_known`, normally
+    /// [`app_identity::APP_IDENTITY_KNOWN`]): no app satisfies it, so phase 2
+    /// would delete `client.token` and lock the owner's app out (ARCH-R38).
+    pub fn hold_for_app_identity(&mut self, app_identity_known: bool) -> Option<String> {
+        if self.bot_bearer != BearerPolicy::Refuse || app_identity_known {
+            return None;
+        }
+        self.bot_bearer = BearerPolicy::Accept;
+        Some(
+            "[auth] bot_bearer = \"refuse\" ignored: this hermesd was built without the \
+             owner's Team ID (HERMES_TEAM_ID), so it cannot recognise the signed app and \
+             phase 2 would lock it out. Staying in phase 1."
                 .to_string(),
         )
     }
@@ -202,5 +221,33 @@ mod tests {
 
         let mut auth = AuthConfig::default();
         assert_eq!(auth.hold_phase_two(false), None, "phase 1 needs nothing");
+    }
+
+    #[test]
+    fn phase_two_waits_for_the_owner_team_id() {
+        let mut auth = refusing();
+        let error = auth.hold_for_app_identity(false).expect("refused");
+        assert!(error.contains("HERMES_TEAM_ID"), "{error}");
+        assert_eq!(auth.bot_bearer, BearerPolicy::Accept, "stays in phase 1");
+        assert!(!auth.storage().enforce, "client.token is kept");
+
+        let mut auth = refusing();
+        assert_eq!(auth.hold_for_app_identity(true), None);
+        assert_eq!(auth.bot_bearer, BearerPolicy::Refuse);
+
+        let mut auth = AuthConfig::default();
+        assert_eq!(
+            auth.hold_for_app_identity(false),
+            None,
+            "phase 1 needs nothing"
+        );
+
+        // What this build does: a macOS build with the placeholder holds.
+        let mut auth = refusing();
+        let held = auth
+            .hold_for_app_identity(app_identity::APP_IDENTITY_KNOWN)
+            .is_some();
+        let placeholder = app_identity::TEAM_ID == app_identity::PLACEHOLDER_TEAM_ID;
+        assert_eq!(held, cfg!(target_os = "macos") && placeholder);
     }
 }

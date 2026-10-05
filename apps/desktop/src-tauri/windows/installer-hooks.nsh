@@ -156,9 +156,40 @@
   Pop $0
 !macroend
 
+; hermesd recognises the owner's app only in Program Files\The Hermes
+; (app_identity::WINDOWS_APP_FOLDER), the folder only an administrator can
+; write. The template's directory page can't be hidden from a hook, so a
+; different folder is confirmed here, before anything changes, No by
+; default. A silent install keeps the folder it was given: an update reuses
+; the one already chosen.
+!macro HERMES_CONFIRM_FOLDER
+  ${If} $INSTDIR != "$PROGRAMFILES64\${PRODUCTNAME}"
+    MessageBox MB_YESNO|MB_ICONEXCLAMATION|MB_DEFBUTTON2 "${PRODUCTNAME} recognises its app only in the default folder:$\r$\n$PROGRAMFILES64\${PRODUCTNAME}$\r$\n$\r$\nInstalled in $INSTDIR, the app can't sign in to the Hermes service without its client.token file, and is locked out once bots switch to process identity.$\r$\n$\r$\nInstall in $INSTDIR anyway?" /SD IDYES IDYES +2
+    Abort "Installation cancelled: choose the default folder, $PROGRAMFILES64\${PRODUCTNAME}."
+  ${EndIf}
+!macroend
+
+; The scheduled task runs hermesd.exe from this folder (ARCH-R38), so an
+; upgrade finds it running and couldn't overwrite it. Windows lets a running
+; executable be renamed: move it aside, and the new one is written in its
+; place. "service install" in POSTINSTALL stops the daemon running from
+; the renamed copy, then POSTINSTALL deletes it.
+!macro HERMES_MOVE_RUNNING_DAEMON_ASIDE
+  ${If} ${FileExists} "$INSTDIR\hermesd.exe"
+    Delete "$INSTDIR\hermesd.exe.old"
+    ClearErrors
+    Rename "$INSTDIR\hermesd.exe" "$INSTDIR\hermesd.exe.old"
+    ${If} ${Errors}
+      DetailPrint "Could not move the running hermesd.exe aside"
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 !macro NSIS_HOOK_PREINSTALL
+  !insertmacro HERMES_CONFIRM_FOLDER
   !insertmacro GRAVITY_TAKE_OVER_LEGACY_INSTALL
   !insertmacro HERMES_REMOVE_PER_USER_INSTALL
+  !insertmacro HERMES_MOVE_RUNNING_DAEMON_ASIDE
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
@@ -182,6 +213,8 @@
   ; Releases before the rename shipped the sidecar as gravityd.exe; the
   ; service now runs hermesd.exe from the daemon home, so drop the old copy.
   Delete "$INSTDIR\gravityd.exe"
+  ; Still running when the service wasn't updated: gone at the next reboot.
+  Delete /REBOOTOK "$INSTDIR\hermesd.exe.old"
 !macroend
 
 !macro NSIS_HOOK_PREUNINSTALL
@@ -190,4 +223,10 @@
   ${If} ${FileExists} "$INSTDIR\hermesd.exe"
     !insertmacro GRAVITY_SERVICE uninstall
   ${EndIf}
+!macroend
+
+!macro NSIS_HOOK_POSTUNINSTALL
+  ; Left by an upgrade whose old daemon was still running.
+  Delete /REBOOTOK "$INSTDIR\hermesd.exe.old"
+  RMDir "$INSTDIR"
 !macroend

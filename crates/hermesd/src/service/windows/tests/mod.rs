@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use super::reap::{reap, stop_daemon};
 use super::sequence::Identity;
-use super::task::{quote, render_task, run_task, task_name_for, task_name_in};
+use super::task::{launcher, quote, render_task, run_task, task_name_for, task_name_in};
 use super::*;
 
 mod upgrade;
@@ -104,6 +104,31 @@ fn task_is_scoped_to_current_user_and_escapes_paths() {
     assert!(task.contains("-WindowStyle Hidden"));
     assert!(task.contains("<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>"));
     assert!(task.contains("<UserId>S-1-5-21-123</UserId>"));
+}
+
+/// An install from Program Files runs the daemon from there, never the copy
+/// in the home, which every bot can write; it also stops a daemon running
+/// from the copy the installer renamed aside.
+#[test]
+fn the_task_runs_the_installed_daemon() {
+    let home = PathBuf::from(r"C:\Users\u\.thehermes");
+    let installed = PathBuf::from(r"C:\Program Files\The Hermes\hermesd.exe");
+    let paths = ServicePaths::new(home.clone(), PathBuf::new());
+    assert!(launcher(&paths).contains(&quote(&paths.bin_path())));
+
+    let paths = paths.with_installed(installed.clone());
+    let script = launcher(&paths);
+    assert!(script.contains(&quote(&installed)), "{script}");
+    assert!(!script.contains(&quote(&paths.bin_path())), "{script}");
+    let executables = paths.daemon_executables(&home);
+    assert!(executables.contains(&installed));
+    assert!(executables.contains(&with_suffix(&installed, ".old")));
+    assert!(executables.contains(&paths.bin_path()));
+
+    // Anything else installs as before: the home's copy.
+    let paths = ServicePaths::new(home, PathBuf::new());
+    let elsewhere = paths.running(Path::new(r"C:\Users\u\Downloads\hermesd.exe"));
+    assert_eq!(elsewhere.run_bin(), paths.bin_path());
 }
 
 #[test]

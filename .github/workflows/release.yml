@@ -85,6 +85,9 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       UPDATER_ENABLED: ${{ needs.prepare.outputs.updater }}
       GRAVITY_RELEASE_CONFIG: ${{ needs.prepare.outputs.release-config }}
+      # Compiled into hermesd, which recognises the owner's signed app by it
+      # (H-110). Not a secret; the APPLE_TEAM_ID secret is the fallback.
+      HERMES_TEAM_ID: ${{ vars.HERMES_TEAM_ID || secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -99,6 +102,20 @@ jobs:
           cache-dependency-path: apps/desktop/pnpm-lock.yaml
 
       - uses: dtolnay/rust-toolchain@stable
+
+      # A release with the placeholder Team ID never recognises the signed
+      # app, so it doesn't build (ARCH-R38). hermesd also holds phase 2 at
+      # runtime while it carries the placeholder.
+      - name: Check the Team ID
+        run: |
+          if [[ ! "$HERMES_TEAM_ID" =~ ^[A-Z0-9]{10}$ || "$HERMES_TEAM_ID" == 0000000000 ]]; then
+            echo "Set the HERMES_TEAM_ID variable (or APPLE_TEAM_ID secret) to the owner's 10-character Apple Team ID." >&2
+            exit 1
+          fi
+          if [[ -n "${HERMES_DEV_BUILD:-}" ]]; then
+            echo "HERMES_DEV_BUILD must not be set for a release." >&2
+            exit 1
+          fi
 
       - name: Build hermesd
         run: |

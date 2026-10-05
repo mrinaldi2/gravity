@@ -83,12 +83,16 @@ pub(super) fn task_exists(name: &str) -> bool {
         .is_ok_and(|out| out.status.success())
 }
 
-pub(super) fn write_task_files(paths: &ServicePaths) -> anyhow::Result<()> {
-    let launcher = format!(
+/// The PowerShell launcher the task runs: it starts [`ServicePaths::run_bin`].
+pub(super) fn launcher(paths: &ServicePaths) -> String {
+    format!(
         "$ErrorActionPreference = 'Stop'\n$env:{} = {}\n$p = Start-Process -FilePath {} -ArgumentList '--negotiate-port' -WindowStyle Hidden -PassThru -RedirectStandardOutput {} -RedirectStandardError {}\n[IO.File]::WriteAllText({}, [string]$p.Id)\n$p.WaitForExit()\nexit $p.ExitCode\n",
-        crate::brand::env_name("HOME"), quote(&paths.home), quote(&paths.bin_path()), quote(&paths.log_dir().join(crate::brand::daemon_file(".out.log"))), quote(&paths.log_dir().join(crate::brand::daemon_file(".err.log"))), quote(&paths.pid_path())
-    );
-    std::fs::write(paths.launcher_path(), launcher)?;
+        crate::brand::env_name("HOME"), quote(&paths.home), quote(&paths.run_bin()), quote(&paths.log_dir().join(crate::brand::daemon_file(".out.log"))), quote(&paths.log_dir().join(crate::brand::daemon_file(".err.log"))), quote(&paths.pid_path())
+    )
+}
+
+pub(super) fn write_task_files(paths: &ServicePaths) -> anyhow::Result<()> {
+    std::fs::write(paths.launcher_path(), launcher(paths))?;
     let sid = crate::permissions::user_sid()?;
     // schtasks reads task definitions as UTF-16, matching its own exports.
     let definition: Vec<u8> = std::iter::once(0xfeff)
