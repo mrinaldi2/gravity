@@ -4,8 +4,12 @@ param([Parameter(Mandatory = $true)][string]$Installer)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $installerPath = (Resolve-Path -LiteralPath $Installer).Path
-$uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\The Hermes'
-$productKey = 'HKCU:\Software\mikolajczuk\The Hermes'
+# The setup installs per machine (H-110): its entries are in HKLM, and it
+# needs an elevated shell, as the owner's own install does.
+$elevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (!$elevated) { throw 'Run the installer smoke test from an elevated PowerShell.' }
+$uninstallKey = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\The Hermes'
+$productKey = 'HKLM:\Software\mikolajczuk\The Hermes'
 if ((Test-Path -LiteralPath $uninstallKey) -or (Test-Path -LiteralPath $productKey)) {
     throw 'Installer smoke test requires a clean The Hermes installation registry.'
 }

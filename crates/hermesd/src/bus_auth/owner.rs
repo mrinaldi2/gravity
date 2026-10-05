@@ -3,8 +3,8 @@
 //! Instead:
 //! - the desktop app asks the local endpoint for a one-time ticket
 //!   (`hermes/owner_ticket`), granted when the process asking is the app
-//!   pinned at `service install` (its code signature on macOS, its install
-//!   folder on Windows);
+//!   compiled into hermesd (`app_identity`: its Developer ID signature on
+//!   macOS, its Program Files folder on Windows);
 //! - a CLI owner command asks for one too (`hermes/owner_request`), and the
 //!   owner allows or denies it on a card in the app.
 //!
@@ -16,7 +16,6 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::app::AppState;
@@ -39,45 +38,22 @@ pub trait CodeCheck: Send + Sync {
     fn is_owner_app(&self, peer: &Peer) -> bool;
 }
 
-/// What `service install` recorded about the app it ran from.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
-pub struct Pin {
-    /// macOS: the app bundle's designated requirement, e.g. its cdhash.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub requirement: Option<String>,
-    /// Windows: the folder the app is installed in.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub app_dir: Option<String>,
-}
+/// The app as `app_identity` describes it, checked by the OS.
+struct CompiledApp;
 
-fn pin_path(home: &Path) -> std::path::PathBuf {
-    home.join("secrets").join("owner-app.json")
-}
-
-/// Records the app the bundled daemon at `sidecar` ships in, at `service
-/// install`. Nothing is pinned for a binary outside an app (a dev build).
-pub fn pin_app(home: &Path, sidecar: &Path) -> anyhow::Result<Option<Pin>> {
-    let Some(pin) = super::owner_os::pin_for(sidecar)? else {
-        return Ok(None);
-    };
-    let path = pin_path(home);
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    std::fs::write(&path, serde_json::to_vec_pretty(&pin)?)?;
-    Ok(Some(pin))
-}
-
-/// The app pinned in the home, checked against a peer by the OS. Read on
-/// every check: `service install` pins after the new daemon has started.
-struct PinnedApp(std::path::PathBuf);
-
-impl CodeCheck for PinnedApp {
+impl CodeCheck for CompiledApp {
     fn is_owner_app(&self, peer: &Peer) -> bool {
-        std::fs::read(pin_path(&self.0))
-            .ok()
-            .and_then(|raw| serde_json::from_slice::<Pin>(&raw).ok())
-            .is_some_and(|pin| super::owner_os::is_pinned_app(&pin, peer))
+        super::owner_os::is_owner_app(peer)
+    }
+}
+
+/// T4 kept the app's identity in this file, which any bot could rewrite.
+fn remove_old_pin(home: &Path) {
+    let old = home.join("secrets").join("owner-app.json");
+    if let Err(e) = std::fs::remove_file(&old) {
+        if e.kind() != std::io::ErrorKind::NotFound {
+            tracing::warn!("can't remove {}: {e}", old.display());
+        }
     }
 }
 
@@ -89,8 +65,9 @@ pub struct Owner {
 
 impl Owner {
     pub fn new(home: &Path) -> Self {
+        remove_old_pin(home);
         Self {
-            check: RwLock::new(Arc::new(PinnedApp(home.to_path_buf()))),
+            check: RwLock::new(Arc::new(CompiledApp)),
             tickets: Mutex::new(HashMap::new()),
         }
     }

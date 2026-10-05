@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub mod app_identity;
 pub mod ipc;
 pub mod os;
 pub mod owner;
@@ -59,7 +60,8 @@ impl AuthConfig {
     /// Phase 2 keeps no owner or bot token on disk and hashes device tokens.
     pub fn storage(&self) -> crate::secrets::Storage {
         crate::secrets::Storage {
-            enforce: self.bot_bearer == BearerPolicy::Refuse,
+            // A dev build never enforces: its unsigned app needs client.token.
+            enforce: self.bot_bearer == BearerPolicy::Refuse && !app_identity::DEV_BUILD,
             peer_tokens: self.peer_tokens,
         }
     }

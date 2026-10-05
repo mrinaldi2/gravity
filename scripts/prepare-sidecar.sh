@@ -13,6 +13,10 @@ case "$TRIPLE" in
   *-windows-*) EXT=".exe" ;;
 esac
 
+# hermesd recognises the owner's app by the Team ID compiled in (H-110).
+if [ -z "${HERMES_TEAM_ID:-}" ]; then
+  echo "prepare-sidecar: HERMES_TEAM_ID is not set; hermesd gets the placeholder and won't recognise a signed app" >&2
+fi
 cargo build --release -p hermesd --manifest-path "$ROOT/Cargo.toml"
 
 DEST="$ROOT/apps/desktop/src-tauri/binaries"
