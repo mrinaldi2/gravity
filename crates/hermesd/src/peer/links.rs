@@ -235,6 +235,9 @@ pub(super) fn serve_list(app: &AppState, peer: &Peer) -> anyhow::Result<Value> {
             "name": Db::display_project_name(&project),
             "bot_count": app.db.count_live_bots(&project.id)?,
             "linked_project_id": link.map(|l| l.remote_project_id),
+            // Asked before the owner starts a board on a linked project
+            // (ARCH-R18 M1).
+            "has_board": app.db.board_settings(&project.id)?.is_some(),
         }));
     }
     Ok(json!({ "projects": projects }))

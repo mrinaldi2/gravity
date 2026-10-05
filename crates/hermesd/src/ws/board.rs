@@ -19,6 +19,7 @@ use crate::actor::Actor;
 use crate::board::feed::{card_after_commit, BoardChange, BoardFeed, Change, ChangeKind};
 use crate::board::moves::{self, MoveRequest, Moved};
 
+mod enable;
 mod reads;
 
 /// A request refused before the board service answered it: no grant, an
@@ -111,7 +112,7 @@ impl Conn {
         }
         Ok(Some(match request {
             Request::BoardGet(r) => Response::Board(self.snapshot(&r.project_id)?),
-            Request::BoardEnable(r) => Response::Board(self.board_enable(&r.project_id)?),
+            Request::BoardEnable(r) => return self.board_enable(req_id, r.project_id),
             Request::BoardWatch(r) => {
                 self.board_watch(req_id, &r.project_id)?;
                 return Ok(None);

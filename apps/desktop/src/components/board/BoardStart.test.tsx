@@ -55,4 +55,23 @@ describe("starting a board (H-037)", () => {
     expect(await screen.findByText(LINKED)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Start the board on this computer" })).toBeNull();
   });
+
+  it("shows why the daemon refused to start it here", async () => {
+    const user = userEvent.setup();
+    const elsewhere = "This project's board already lives on imac; open it there.";
+    const fake = new FakeDaemon()
+      .onBoard("boardWatch", () => {
+        throw new DaemonError("no_board", LINKED);
+      })
+      .onBoard("boardEnable", () => {
+        throw new DaemonError("conflict", elsewhere);
+      });
+    fake.grants = ["read", "control", "approve"];
+    show(fake);
+    await user.click(
+      await screen.findByRole("button", { name: "Start the board on this computer" }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(elsewhere);
+    expect(screen.getByRole("button", { name: "Start the board on this computer" })).toBeEnabled();
+  });
 });

@@ -62,21 +62,21 @@ function Notice({
 function NoBoard(
   props: BoardViewProps & { readonly message: string; readonly refresh: () => void },
 ): ReactElement {
-  const { client, project, message, refresh, addToast } = props;
+  const { client, project, message, refresh } = props;
   const [starting, setStarting] = useState(false);
+  // Why the daemon refused to start it here: the board already lives on a
+  // linked computer, or one can't confirm it has none (ARCH-R18 M1).
+  const [refusal, setRefusal] = useState<string | null>(null);
   const owner = client.hasGrant("approve");
   const start = (): void => {
     setStarting(true);
+    setRefusal(null);
     void (async () => {
       try {
         await boardCall(client, { case: "boardEnable", value: { projectId: project.id } }, "board");
         refresh();
       } catch (error) {
-        addToast(
-          "error",
-          "Couldn't start the board",
-          error instanceof Error ? error.message : String(error),
-        );
+        setRefusal(error instanceof Error ? error.message : String(error));
       } finally {
         setStarting(false);
       }
@@ -92,9 +92,16 @@ function NoBoard(
       }
       action={
         owner ? (
-          <button type="button" className="btn btn-small" disabled={starting} onClick={start}>
-            Start the board on this computer
-          </button>
+          <>
+            <button type="button" className="btn btn-small" disabled={starting} onClick={start}>
+              Start the board on this computer
+            </button>
+            {refusal === null ? null : (
+              <p className="field-error" role="alert">
+                {refusal}
+              </p>
+            )}
+          </>
         ) : undefined
       }
     />
