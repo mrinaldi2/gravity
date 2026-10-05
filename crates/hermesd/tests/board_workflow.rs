@@ -8,62 +8,10 @@ mod common;
 
 use bus::contract::board::{self as c, board_request::Request};
 use common::board::*;
-use common::tasks::{error_text, project_with_bots, Pair};
+use common::tasks::error_text;
+use common::team::{get, item, team, OWNER};
 use common::*;
-use hermesd::actor::Actor;
-use hermesd::board::model::{ItemType, Platform, Priority};
-use hermesd::db::{MoveTo, NewItem};
 use serde_json::json;
-
-const OWNER: Actor<'static> = Actor::User;
-
-/// A project with a board and these bots, its first one the lead.
-async fn team(names: &[&str]) -> (Pair, Vec<McpClient>, String) {
-    let (pair, bots) = project_with_bots(names).await;
-    let db = &pair.d.app.db;
-    let project = db.get_bot(&pair.ids[0]).unwrap().unwrap().project_id;
-    db.set_project_lead(&project, Some(&pair.ids[0])).unwrap();
-    db.ensure_board(&project, &db.daemon_id().unwrap(), Some("H"))
-        .unwrap();
-    (pair, bots, project)
-}
-
-/// An item in `column`, assigned to `assignee`.
-fn item(pair: &Pair, project: &str, column: &str, assignee: Option<&str>) -> String {
-    let db = &pair.d.app.db;
-    let item = db
-        .create_item(
-            &NewItem {
-                project_id: project,
-                item_type: ItemType::Feature,
-                title: "Workflow",
-                description: "",
-                platforms: &[Platform::Daemon],
-                size: None,
-                priority: Priority::P1,
-                labels: &[],
-                parent_id: None,
-                acceptance_criteria: &[],
-            },
-            &OWNER,
-        )
-        .unwrap();
-    let to = MoveTo {
-        column,
-        ..MoveTo::default()
-    };
-    let moved = db.move_item(&item.id, item.version, &to, &OWNER).unwrap();
-    let version = match moved {
-        hermesd::db::Write::Done(item) => item.version,
-        hermesd::db::Write::Conflict(_) => unreachable!(),
-    };
-    db.assign_item(&item.id, version, assignee, &OWNER).unwrap();
-    item.id
-}
-
-async fn get(bot: &mut McpClient, id: &str) -> serde_json::Value {
-    bot.call("item_get", json!({ "id": id })).await["item"].clone()
-}
 
 #[tokio::test]
 async fn ready_is_a_queue_and_the_owner_sets_limits_and_roles() {
@@ -100,18 +48,28 @@ async fn ready_is_a_queue_and_the_owner_sets_limits_and_roles() {
     );
     assert_eq!(ready(&snapshot(call(&mut owner, limit(None)).await)), None);
 
-    let role = Request::RoleSet(c::RoleSet {
-        project_id: project.clone(),
-        bot: "desktop dev".into(),
-        role: c::Role::ReviewerUx as i32,
-        machine: None,
-        remove: None,
-    });
-    let board = snapshot(call(&mut owner, role.clone()).await);
-    assert!(board
-        .roles
-        .iter()
-        .any(|r| r.bot_id == pair.ids[1] && r.role == c::Role::ReviewerUx as i32));
+    // The owner gives any role, those the lead can't included.
+    let role = |role: c::Role, machine: Option<&str>| {
+        Request::RoleSet(c::RoleSet {
+            project_id: project.clone(),
+            bot: "desktop dev".into(),
+            role: role as i32,
+            machine: machine.map(str::to_string),
+            remove: None,
+        })
+    };
+    for (r, machine) in [
+        (c::Role::ReviewerUx, None),
+        (c::Role::Devops, None),
+        (c::Role::Tester, Some("mac")),
+    ] {
+        let board = snapshot(call(&mut owner, role(r, machine)).await);
+        assert!(board
+            .roles
+            .iter()
+            .any(|x| x.bot_id == pair.ids[1] && x.role == r as i32));
+    }
+    let role = role(c::Role::ReviewerUx, None);
 
     // Both are the owner's: a device without the approve grant can't.
     let created = owner
@@ -137,7 +95,7 @@ async fn the_lead_assigns_roles_and_retypes_items() {
     let roles = lead
         .call(
             "role_set",
-            json!({"bot": "Desktop Dev", "role": "tester", "machine": "mac"}),
+            json!({"bot": "Desktop Dev", "role": "reviewer.ux"}),
         )
         .await;
     assert!(
@@ -145,9 +103,29 @@ async fn the_lead_assigns_roles_and_retypes_items() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|r| r["role"] == "tester" && r["machine"] == "mac"),
+            .any(|r| r["role"] == "reviewer.ux" && r["bot_id"] == json!(pair.ids[1])),
         "{roles}"
     );
+    // Lead, DevOps and tester are the owner's to give (ARCH-R30 M1), to
+    // itself included, and to take away.
+    for (bot, role, remove) in [
+        ("Desktop Dev", "devops", false),
+        ("Desktop Dev", "tester", false),
+        ("Team Lead", "devops", false),
+        ("Desktop Dev", "lead", false),
+        ("Team Lead", "lead", true),
+    ] {
+        let raw = lead
+            .call_raw(
+                "role_set",
+                json!({"bot": bot, "role": role, "remove": remove}),
+            )
+            .await;
+        assert!(
+            error_text(&raw).contains(&format!("only the owner assigns {role}")),
+            "{raw}"
+        );
+    }
     let raw = dev
         .call_raw("role_set", json!({"bot": "Desktop Dev", "role": "lead"}))
         .await;
