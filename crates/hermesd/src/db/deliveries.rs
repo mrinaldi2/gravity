@@ -280,4 +280,23 @@ impl Db {
             |r| r.get(0),
         )?)
     }
+
+    /// The latest message to `bot_id` whose body starts with `prefix`, and
+    /// when it was written (H-041: a resume note already sent).
+    pub fn last_message_to(
+        &self,
+        bot_id: &str,
+        prefix: &str,
+    ) -> anyhow::Result<Option<(String, DateTime<Utc>)>> {
+        let conn = self.lock();
+        Ok(conn
+            .query_row(
+                "SELECT m.body, m.created_at FROM message m JOIN delivery d ON d.message_id = m.id
+                  WHERE d.bot_id = ?1 AND substr(m.body, 1, length(?2)) = ?2
+                  ORDER BY m.num DESC LIMIT 1",
+                params![bot_id, prefix],
+                |r| Ok((r.get::<_, String>(0)?, parse_ts(&r.get::<_, String>(1)?))),
+            )
+            .optional()?)
+    }
 }
