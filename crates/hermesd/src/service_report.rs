@@ -24,6 +24,8 @@ pub struct Report {
     pub port: u16,
     /// What `/health` on `port` reports; `None` when nothing answers.
     pub version: Option<String>,
+    /// How this hermesd build knows the owner's app (H-114).
+    pub identity: String,
 }
 
 /// The parts of a [`Report`] that come from the home rather than the

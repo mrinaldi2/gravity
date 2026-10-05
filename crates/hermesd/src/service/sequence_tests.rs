@@ -380,6 +380,11 @@ fn verification_rejects_a_short_or_altered_copy() {
 fn version_output_is_parsed_and_checked() {
     use super::super::stage::parse_version;
     assert_eq!(parse_version("hermesd 0.15.0\n").unwrap(), "0.15.0");
+    // H-114: the identity line after it doesn't count.
+    assert_eq!(
+        parse_version("hermesd 0.16.2\nidentity: signed ABCDE12345\n").unwrap(),
+        "0.16.2"
+    );
     assert!(parse_version("").is_err());
     assert!(parse_version("usage: hermesd").is_err());
 }

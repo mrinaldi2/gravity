@@ -231,6 +231,7 @@ pub fn report(
         migrated: home.migrated,
         port,
         version: crate::server::probe_health(port, Duration::from_secs(2)),
+        identity: crate::bus_auth::app_identity::identity_line(),
     }
 }
 
@@ -242,6 +243,10 @@ pub fn status(paths: &ServicePaths, configured_port: u16) -> bool {
         "task: {}; daemon: {} (127.0.0.1:{port})",
         if installed { "installed" } else { "missing" },
         version.as_deref().unwrap_or("unreachable")
+    );
+    println!(
+        "identity: {}",
+        crate::bus_auth::app_identity::identity_line()
     );
     installed && version.is_some()
 }

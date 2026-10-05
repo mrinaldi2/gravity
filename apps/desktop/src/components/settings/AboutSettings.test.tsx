@@ -71,6 +71,17 @@ describe("AboutSettings", () => {
     expect(invoke).toHaveBeenCalledWith("install_local_daemon", { currentVersion: "0.6.0" });
   });
 
+  it("shows how the service's build knows this app (H-114)", async () => {
+    invoke.mockImplementation((command) =>
+      command === "daemon_health"
+        ? Promise.resolve({ status: "ok", version: "0.7.0", identity: "signed ABCDE12345" })
+        : Promise.resolve(null),
+    );
+    renderAbout(LOCAL, "0.7.0");
+
+    expect(await screen.findByText("identity: signed ABCDE12345")).toBeInTheDocument();
+  });
+
   it("shows nothing to update when no local daemon answers", async () => {
     renderAbout(LOCAL, "");
 
