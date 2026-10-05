@@ -252,6 +252,17 @@ const ROWS: &[Row] = &[
         expect: &["done.flow", "done.outcome"],
     },
     Row {
+        rule: "Verify → Done, no release: the owner, with a reason (ARCH-R22 F1)",
+        from: Cat::Verify,
+        to: Cat::Done,
+        ok: |c| {
+            c.who = Who::Owner;
+            c.reason = Some("shipped in 0.14.1 by hand");
+        },
+        bad: |c| c.reason = None,
+        expect: &["reason.required"],
+    },
+    Row {
         rule: "Any → Cancelled: lead or owner, with a reason",
         from: Cat::Verify,
         to: Cat::Cancelled,

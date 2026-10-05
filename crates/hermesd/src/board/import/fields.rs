@@ -3,34 +3,44 @@
 
 use crate::board::model::{ColumnCategory, ItemType, Platform, Size};
 
-/// A state cell's column: its leading words, as the backlog writes them.
-pub(super) fn state(text: &str) -> Option<ColumnCategory> {
+/// A state cell's column, and the label that keeps a state the board can't
+/// hold: its leading words, as the backlog writes them.
+///
+/// Awaiting owner and deploying land in Verify (ARCH-R22 M1): every exit
+/// from owner testing and deploying is the daemon's, on a release ruling,
+/// and an imported item has no release, so it would never leave them.
+pub(super) fn state(text: &str) -> Option<(ColumnCategory, Option<&'static str>)> {
     use ColumnCategory::*;
     let s = text.trim().to_lowercase();
     let starts = |words: &[&str]| words.iter().any(|w| s.starts_with(w));
     Some(if starts(&["done"]) {
-        Done
+        (Done, None)
     } else if starts(&["dropped", "superseded", "folded into", "cancelled"]) {
-        Cancelled
+        (Cancelled, None)
     } else if starts(&["inbox"]) {
-        Inbox
+        (Inbox, None)
     } else if starts(&["ready", "next"]) {
-        Ready
+        (Ready, None)
     } else if starts(&["doing", "changes needed"]) {
         // Changes needed is a review sent back: rework, in Doing (H-017 §3).
-        Doing
+        (Doing, None)
     } else if starts(&["review"]) {
-        Review
+        (Review, None)
     } else if starts(&["verify"]) {
-        Verify
+        (Verify, None)
     } else if starts(&["awaiting owner"]) {
-        Approval
+        (Verify, Some(AWAITING_OWNER_LABEL))
     } else if starts(&["deploying"]) || (starts(&["approved"]) && s.contains("rolling out")) {
-        Deploying
+        (Verify, Some(DEPLOYING_LABEL))
     } else {
         return None;
     })
 }
+
+/// The label of an item that was awaiting the owner in the backlog.
+pub const AWAITING_OWNER_LABEL: &str = "imported:awaiting-owner";
+/// The label of an item that was deploying, or rolling out, in the backlog.
+pub const DEPLOYING_LABEL: &str = "imported:deploying";
 
 /// A bug says so; a plan is a spike (an artifact is its outcome); the rest
 /// are features until the lead says otherwise.

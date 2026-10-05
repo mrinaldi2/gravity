@@ -156,6 +156,18 @@ pub fn rule(from: Cat, to: Cat) -> Rule {
     }
 }
 
+/// The owner closing an item out of Verify that is in no release package
+/// (ARCH-R22 F1): until B7 builds packages, nothing else takes shipped work
+/// to Done. An item with a release stays the release's to move, and a move
+/// `Finish` already allows needs no escape.
+pub fn closes_without_release(item: &Item, mv: &Move<'_>, who: &Who, ctx: &Context) -> bool {
+    *who == Who::Owner
+        && item.category == Cat::Verify
+        && mv.to.category == Cat::Done
+        && item.release_id.is_none()
+        && !conditions::finish(item, ctx).is_empty()
+}
+
 /// Work sent back for rework: never refused for WIP, and placed first.
 pub fn is_return(rule: Rule) -> bool {
     matches!(rule, Rule::Rework | Rule::Reject)

@@ -1,8 +1,11 @@
 //! The backlog import's storage (B6): key adoption, kept and new ids,
 //! idempotent re-runs, dry runs, and the home-only rule.
 
-use crate::board::import::parse;
+use crate::board::import::{
+    is_imported, parse, AWAITING_OWNER_LABEL, DEPLOYING_LABEL, NOT_IMPORTED_SQL,
+};
 use crate::board::model::*;
+use crate::board::moves::{item_move, MoveRequest, Moved, CLOSED_WITHOUT_RELEASE};
 
 use super::board_tests::new_item;
 use super::{Actor, Db};
@@ -139,4 +142,85 @@ fn it_runs_only_on_the_home_and_never_renames_items() {
         .board_import(&q.id, "d-home", &parsed, false, &OWNER)
         .unwrap_err();
     assert!(err.to_string().contains("no board"), "{err}");
+}
+
+#[test]
+fn nothing_lands_where_only_the_daemon_moves_it() {
+    let (db, p) = board("G");
+    db.board_import(&p, "d-home", &parse(FIXTURE), false, &OWNER)
+        .unwrap();
+    let cards = db.board_cards(&p).unwrap();
+    assert!(cards
+        .iter()
+        .all(|c| !matches!(c.column_key.as_str(), "approval" | "deploying")));
+    let rel = db.get_item("H-043").unwrap().unwrap();
+    assert_eq!(rel.category, ColumnCategory::Verify);
+    assert_eq!(rel.labels, ["was:REL-D-1", DEPLOYING_LABEL]);
+    let h11 = db.get_item("H-011").unwrap().unwrap();
+    assert_eq!(h11.category, ColumnCategory::Verify);
+    assert_eq!(h11.labels, [AWAITING_OWNER_LABEL]);
+}
+
+fn close(db: &Db, id: &str, actor: &Actor<'_>) -> Moved {
+    let item = db.get_item(id).unwrap().unwrap();
+    let req = MoveRequest {
+        id,
+        to: "done",
+        expected_version: item.version,
+        reason: Some("shipped in 0.14.0 before the board"),
+        override_reason: None,
+    };
+    item_move(db, &req, actor).unwrap()
+}
+
+#[test]
+fn the_owner_closes_an_imported_item_out_of_verify_and_it_is_logged() {
+    let (db, p) = board("G");
+    db.board_import(&p, "d-home", &parse(FIXTURE), false, &OWNER)
+        .unwrap();
+    let bots = db.list_bots(Some(&p)).unwrap();
+    let dev = Actor::Bot {
+        id: &bots.iter().find(|b| b.name == "Desktop Dev").unwrap().id,
+        project_id: &p,
+    };
+    // H-043 (was REL-D-1): a feature in Verify, in no release.
+    assert!(matches!(close(&db, "H-043", &dev), Moved::Refused(_)));
+    let Moved::Done(item) = close(&db, "H-043", &OWNER) else {
+        panic!("the owner may close it");
+    };
+    assert_eq!(item.category, ColumnCategory::Done);
+    let event = db.item_events("H-043").unwrap().pop().unwrap();
+    assert_eq!(event.kind, ItemEventKind::Moved);
+    assert_eq!(
+        event.note.as_deref(),
+        Some(format!("{CLOSED_WITHOUT_RELEASE} · shipped in 0.14.0 before the board").as_str())
+    );
+
+    // In a release, it is the release's to move: refused for the owner too.
+    db.conn
+        .lock()
+        .unwrap()
+        .execute("UPDATE item SET release_id = 'R-1' WHERE id = 'H-003'", [])
+        .unwrap();
+    for actor in [&OWNER, &dev] {
+        assert!(matches!(close(&db, "H-003", actor), Moved::Refused(_)));
+    }
+}
+
+#[test]
+fn flow_metrics_can_leave_imported_items_out() {
+    let (db, p) = board("G");
+    db.board_import(&p, "d-home", &parse(FIXTURE), false, &OWNER)
+        .unwrap();
+    let made = db.create_item(&new_item(&p, "Made here"), &OWNER).unwrap();
+    let sql = format!("SELECT id FROM item WHERE project_id = ?1 AND {NOT_IMPORTED_SQL}");
+    let counted: Vec<String> = {
+        let conn = db.conn.lock().unwrap();
+        let mut stmt = conn.prepare(&sql).unwrap();
+        let rows = stmt.query_map([&p], |r| r.get(0)).unwrap();
+        rows.map(Result::unwrap).collect()
+    };
+    assert_eq!(counted, [made.id.as_str()]);
+    assert!(is_imported(&db.item_events("H-001").unwrap()));
+    assert!(!is_imported(&db.item_events(&made.id).unwrap()));
 }

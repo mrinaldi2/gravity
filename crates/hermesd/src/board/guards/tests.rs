@@ -237,6 +237,33 @@ fn dor_sections_come_from_the_description() {
 }
 
 #[test]
+fn only_the_owner_closes_verify_without_a_release_and_never_a_released_item() {
+    let mut c = case(Cat::Verify);
+    c.reason = Some("shipped by hand");
+    assert!(run(&c, Cat::Done).is_empty());
+    for who in [bot("dev", &[Role::Dev]), bot("lead", LEAD)] {
+        c.who = who;
+        assert!(
+            run(&c, Cat::Done).contains(&"done.flow".to_string()),
+            "{:?}",
+            c.who
+        );
+    }
+    c.who = Who::Owner;
+    c.item.release_id = Some("R-1".into());
+    assert_eq!(run(&c, Cat::Done), ["done.flow", "done.outcome"]);
+    c.who = bot("lead", LEAD);
+    assert_eq!(
+        run(&c, Cat::Done),
+        ["role.not_allowed", "done.flow", "done.outcome"]
+    );
+    // The escape is out of Verify only.
+    let mut c = case(Cat::Review);
+    c.reason = Some("shipped by hand");
+    assert_eq!(run(&c, Cat::Done), ["done.flow", "done.outcome"]);
+}
+
+#[test]
 fn same_column_is_refused_even_for_the_daemon() {
     let mut c = case(Cat::Doing);
     c.who = Who::Daemon;

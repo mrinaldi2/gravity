@@ -61,8 +61,18 @@ fn states_types_and_fields_map_without_guessing() {
     assert_eq!([cat("H-006"), cat("B1"), cat("U2")], [Doing, Doing, Ready]);
     assert_eq!(
         [cat("REL-D-1"), cat("H-011"), cat("H-040")],
-        [Deploying, Approval, Inbox]
+        [Verify, Verify, Inbox]
     );
+    // Owner testing and deploying are the daemon's: imported, they wait in
+    // Verify and say where they were (ARCH-R22 M1).
+    assert_eq!(
+        entry(&parsed, "REL-D-1").labels,
+        ["was:REL-D-1", DEPLOYING_LABEL]
+    );
+    assert_eq!(entry(&parsed, "H-011").labels, [AWAITING_OWNER_LABEL]);
+    assert!(entry(&parsed, "H-011")
+        .description
+        .contains("- State: Awaiting owner"));
 
     assert_eq!(entry(&parsed, "H-006").item_type, ItemType::Bug);
     assert_eq!(entry(&parsed, "H-011").item_type, ItemType::Spike);
@@ -115,4 +125,17 @@ fn a_table_needs_its_header_and_a_heading_needs_an_id() {
         1,
         "a heading without a title is reported"
     );
+}
+
+#[test]
+fn daemon_only_states_wait_in_verify_with_their_label() {
+    use ColumnCategory::Verify;
+    for (text, label) in [
+        ("Awaiting owner (H-032 fix)", AWAITING_OWNER_LABEL),
+        ("Deploying (rc/desktop-0.15.0)", DEPLOYING_LABEL),
+        ("Approved → rolling out Mac → imac", DEPLOYING_LABEL),
+    ] {
+        assert_eq!(fields::state(text), Some((Verify, Some(label))), "{text}");
+    }
+    assert_eq!(fields::state("Approved; merge after B1"), None);
 }

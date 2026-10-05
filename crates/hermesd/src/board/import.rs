@@ -3,12 +3,14 @@
 //! is `db::board_import`. Rows keep their `H-nnn` ids; any other single id
 //! (R1-I2, B1, UX-001) gets a new one and keeps the old as a `was:` label.
 //! A row this can't map without guessing is skipped and reported, never
-//! approximated.
+//! approximated. Imported items are left out of flow metrics
+//! (`NOT_IMPORTED_SQL`, `is_imported`).
 
-use super::model::{ColumnCategory, ItemType, Platform, Size};
+use super::model::{ColumnCategory, ItemEvent, ItemEventKind, ItemType, Platform, Size};
 
 pub mod cli;
 mod fields;
+pub use fields::{AWAITING_OWNER_LABEL, DEPLOYING_LABEL};
 pub mod service;
 #[cfg(test)]
 mod tests;
@@ -22,8 +24,24 @@ pub const SOURCE_KEY: &str = "H";
 pub const RENAME_LABEL: &str = "rename";
 
 /// The history note every imported item is created with; a re-run knows
-/// its own items by it.
+/// its own items by it, and flow metrics leave them out by it.
 pub const IMPORT_NOTE: &str = "imported from backlog.md";
+
+/// Flow metrics (B11: throughput, cycle time, rework) leave imported items
+/// out (ARCH-R22 F2): their history starts at the import, and the import
+/// sets `done_at` on every Done row, which would read as one day's work.
+/// A SQL condition on an `item` row, aliased `item`, true when it wasn't
+/// imported: `SELECT … FROM item WHERE project_id = ?1 AND <this>`.
+pub const NOT_IMPORTED_SQL: &str = "NOT EXISTS (SELECT 1 FROM item_event imp
+    WHERE imp.item_id = item.id AND imp.kind = 'created'
+      AND imp.note = 'imported from backlog.md')";
+
+/// The same test on an item's history, for metrics computed in Rust.
+pub fn is_imported(events: &[ItemEvent]) -> bool {
+    events
+        .iter()
+        .any(|e| e.kind == ItemEventKind::Created && e.note.as_deref() == Some(IMPORT_NOTE))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Key {
@@ -220,7 +238,7 @@ fn row_entry(h: &Header, row: &[String], line: usize) -> Result<Entry, Skipped> 
     let cell = |i: Option<usize>| i.and_then(|i| row.get(i)).map_or("", String::as_str);
     let id = cell(Some(h.id));
     let state_text = cell(Some(h.state));
-    let category = state(state_text).ok_or_else(|| {
+    let (category, state_label) = state(state_text).ok_or_else(|| {
         skipped(
             line,
             id,
@@ -228,6 +246,7 @@ fn row_entry(h: &Header, row: &[String], line: usize) -> Result<Entry, Skipped> 
         )
     })?;
     let mut e = base(line, id, cell(Some(h.title)), category)?;
+    e.labels.extend(state_label.map(str::to_string));
     let (platform_text, size_text) = (cell(h.platform), cell(h.size));
     let (list, unknown) = platforms(platform_text);
     e.platforms = list;
