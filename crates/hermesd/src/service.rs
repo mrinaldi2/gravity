@@ -278,7 +278,7 @@ fn report_with<L: Launchctl>(
         migrated: home.migrated,
         port,
         version,
-        identity: crate::bus_auth::app_identity::identity_line(),
+        identity: crate::bus_auth::app_identity::identity(),
     }
 }
 

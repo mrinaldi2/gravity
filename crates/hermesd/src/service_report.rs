@@ -25,7 +25,7 @@ pub struct Report {
     /// What `/health` on `port` reports; `None` when nothing answers.
     pub version: Option<String>,
     /// How this hermesd build knows the owner's app (H-114).
-    pub identity: String,
+    pub identity: crate::bus_auth::app_identity::Identity,
 }
 
 /// The parts of a [`Report`] that come from the home rather than the
