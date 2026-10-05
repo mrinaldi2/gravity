@@ -143,6 +143,15 @@ describe("ReleaseReview", () => {
     expect(screen.getByText(/win-pc didn't pass. Approve anyway/)).toBeInTheDocument();
   });
 
+  it("opens the approval with ⌘↩ while the review has focus", async () => {
+    const { user } = setup(release());
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    screen.getByRole("tab", { name: "Changelog" }).focus();
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    expect(screen.getByRole("dialog", { name: "Approve 0.16.0?" })).toBeInTheDocument();
+  });
+
   it("disables ruling where this connection can't rule, and says where it can", () => {
     setup(release({ can_rule: false, rule_on: "Mac" }));
     expect(screen.getByRole("button", { name: "Approve 0.16.0" })).toBeDisabled();
@@ -232,6 +241,8 @@ describe("ReleaseReview", () => {
         addToast={actionToastSpy()}
       />,
     );
-    expect(screen.getByText(/Cancelled by DevOps/, { selector: ".release-banner *" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Cancelled by DevOps/, { selector: ".release-banner *" }),
+    ).toBeInTheDocument();
   });
 });

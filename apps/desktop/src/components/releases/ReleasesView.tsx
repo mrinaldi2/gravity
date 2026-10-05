@@ -1,7 +1,7 @@
 // The project's Releases tab (H-018 §4A.2): packages on the left, Current
 // then History, and the selected one's review on the right.
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactElement } from "react";
 import type { AddToast } from "../../app/useToasts";
 import type { DaemonApi } from "../../protocol/api";
@@ -33,14 +33,17 @@ export function useItemTitles(
       return;
     }
     let live = true;
-    boardCall(client, { case: "boardGet", value: { projectId } }, "board")
-      .then((board) => {
+    const load = async (): Promise<void> => {
+      try {
+        const board = await boardCall(client, { case: "boardGet", value: { projectId } }, "board");
         if (live) {
           setTitles(new Map(board.cards.map((c) => [c.id, c.title])));
         }
-      })
-      // Titles are a courtesy: a package still reads by item id without them.
-      .catch(() => undefined);
+      } catch {
+        // Titles are a courtesy: a package still reads by item id without them.
+      }
+    };
+    void load();
     return () => {
       live = false;
     };
@@ -67,28 +70,25 @@ export default function ReleasesView({
   const current = releases.filter(isCurrent);
   const history = releases.filter((r) => !isCurrent(r));
   const shown = releases.find((r) => r.id === selected) ?? current[0] ?? history[0];
-  const row = useCallback(
-    (r: Release): ReactElement => {
-      const label = statusLabel(r.status);
-      return (
-        <li key={r.id}>
-          <button
-            type="button"
-            className={r.id === shown?.id ? "release-list-row on" : "release-list-row"}
-            aria-current={r.id === shown?.id ? "true" : undefined}
-            onClick={() => setSelected(r.id)}
-          >
-            <span aria-hidden="true">{label.glyph}</span>
-            <span className="release-list-name">{releaseTitle(r)}</span>
-            <span className="release-meta">
-              {r.items.length} item{r.items.length === 1 ? "" : "s"} · {label.word}
-            </span>
-          </button>
-        </li>
-      );
-    },
-    [shown?.id],
-  );
+  const row = (r: Release): ReactElement => {
+    const label = statusLabel(r.status);
+    return (
+      <li key={r.id}>
+        <button
+          type="button"
+          className={r.id === shown?.id ? "release-list-row on" : "release-list-row"}
+          aria-current={r.id === shown?.id ? "true" : undefined}
+          onClick={() => setSelected(r.id)}
+        >
+          <span aria-hidden="true">{label.glyph}</span>
+          <span className="release-list-name">{releaseTitle(r)}</span>
+          <span className="release-meta">
+            {r.items.length} item{r.items.length === 1 ? "" : "s"} · {label.word}
+          </span>
+        </button>
+      </li>
+    );
+  };
 
   if (loaded && releases.length === 0) {
     return (
@@ -104,7 +104,11 @@ export default function ReleasesView({
     <div className="releases-view">
       <nav className="release-list" aria-label="Releases">
         <h3>Current</h3>
-        {current.length ? <ul>{current.map(row)}</ul> : <p className="release-hint">Nothing waiting.</p>}
+        {current.length ? (
+          <ul>{current.map(row)}</ul>
+        ) : (
+          <p className="release-hint">Nothing waiting.</p>
+        )}
         {history.length ? (
           <>
             <h3>History</h3>

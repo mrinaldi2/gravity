@@ -18,15 +18,15 @@ export type ReleaseStatus =
   | "rolled_back"
   | "cancelled";
 
-export type Verdict = "pending" | "ship" | "hold" | "rework";
+type Verdict = "pending" | "ship" | "hold" | "rework";
 
-export interface ReleaseItem {
+interface ReleaseItem {
   readonly item_id: string;
   readonly verdict: Verdict;
   readonly owner_note: string | null;
 }
 
-export interface ReleaseBuild {
+interface ReleaseBuild {
   readonly platform: string;
   readonly version: string;
   readonly artifact: string;
@@ -58,7 +58,7 @@ export interface ReleaseDeployment {
 }
 
 /** One how-to-test entry: the steps for one platform, maybe for one item. */
-export interface HowToTest {
+interface HowToTest {
   readonly item_id?: string | null;
   readonly platform: string;
   readonly steps: readonly string[];

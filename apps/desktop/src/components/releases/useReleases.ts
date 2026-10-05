@@ -106,7 +106,10 @@ export function useProjectReleases(
   const [loaded, setLoaded] = useState(false);
   const load = useCallback(async (): Promise<void> => {
     try {
-      const reply = await client.request({ type: "list_releases", project_id: projectId }, "releases");
+      const reply = await client.request(
+        { type: "list_releases", project_id: projectId },
+        "releases",
+      );
       setReleases(reply.releases);
     } catch (error) {
       addToast("error", "Couldn't load the releases", errText(error));
