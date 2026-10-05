@@ -7,7 +7,8 @@
 //! lasting:
 //!
 //! - the connect watchdog restarts a session that has not reported its socket
-//!   in time, a bounded number of times, then says so to the owner;
+//!   in time, a bounded number of times, then says so to the owner — or,
+//!   for a worker, cancels its task so its slot goes to the next in line;
 //! - mass starts are staggered, so a daemon boot does not launch every
 //!   session at once into a fight over Claude Code's config lock;
 //! - a trust pre-approval that loses that fight defers the start and retries
@@ -15,12 +16,15 @@
 
 use std::path::Path;
 
+use bus::{TaskState, WorkerState};
 use serde::{Deserialize, Serialize};
 
 use super::*;
 
 /// The state reason shown once the watchdog has given up on a bot.
 pub const DIDNT_CONNECT: &str = "Didn't connect — Restart bot";
+/// Why a worker the watchdog gave up on lost its task.
+pub const WORKER_DIDNT_CONNECT: &str = "didn't connect";
 /// Trust attempts deferred for a busy config lock before starting anyway.
 const TRUST_RETRIES: u32 = 4;
 const TRUST_RETRY_BASE: Duration = Duration::from_secs(1);
@@ -35,8 +39,9 @@ pub struct StartupConfig {
     pub connect_restarts: u32,
     /// Claude Code sessions allowed to be coming up at once.
     pub max_concurrent_starts: usize,
-    /// How long a started session counts as coming up when it never reports
-    /// its socket, so a stuck one cannot hold a start slot forever.
+    /// How long a session counts as coming up while its start hangs or it
+    /// never reports its socket, so a stuck one cannot hold a start slot
+    /// forever.
     pub warmup_ms: u64,
 }
 
@@ -78,7 +83,10 @@ impl Supervisor {
         let warming = self
             .lock_bots()
             .values()
-            .filter(|h| h.starting || (h.awaiting_socket() && h.last_start.elapsed() < warmup))
+            .filter(|h| {
+                (h.starting && h.starting_since.elapsed() < warmup)
+                    || (h.awaiting_socket() && h.last_start.elapsed() < warmup)
+            })
             .count();
         warming >= self.startup().max_concurrent_starts.max(1)
     }
@@ -130,8 +138,11 @@ impl Supervisor {
                     tracing::warn!(
                         bot_id,
                         restarts = limit,
-                        "inbox socket never registered; giving up until the owner restarts the bot"
+                        "inbox socket never registered; giving up"
                     );
+                    if self.release_worker(&bot_id) {
+                        continue;
+                    }
                     self.set_state(&bot_id, BotState::WaitingForUser, DIDNT_CONNECT);
                     self.inner.events.push(Push::notice(
                         "error",
@@ -141,6 +152,74 @@ impl Supervisor {
                 }
             }
         }
+    }
+
+    /// A worker nobody will restart: its task is cancelled, which frees its
+    /// slot for the next queued worker once the worker reconciler retires it,
+    /// and whoever delegated the task is told. False for a permanent bot.
+    fn release_worker(&self, bot_id: &str) -> bool {
+        let bot = match self.inner.db.get_bot(bot_id) {
+            Ok(Some(bot)) if bot.temporary => bot,
+            _ => return false,
+        };
+        if let Err(e) = self.cancel_worker_task(&bot) {
+            tracing::warn!(bot_id, error = %e, "could not cancel the worker's task");
+        }
+        self.set_state(
+            bot_id,
+            BotState::WaitingForUser,
+            "Didn't connect — task cancelled",
+        );
+        self.inner.events.push(Push::notice(
+            "error",
+            format!("{} didn't connect", Db::display_name(&bot)),
+            "Its task was cancelled and its worker slot freed.",
+        ));
+        true
+    }
+
+    fn cancel_worker_task(&self, bot: &bus::Bot) -> anyhow::Result<()> {
+        let db = &self.inner.db;
+        let task = db
+            .latest_task_to(&bot.id)?
+            .filter(|t| t.state == TaskState::Open);
+        if let Some(task) = task {
+            let closed = db.try_close_task(&task.id, TaskState::Cancelled)?;
+            let parent = match task.from_bot_id.as_deref() {
+                Some(id) if closed => db.get_live_bot(id)?,
+                _ => None,
+            };
+            if let Some(parent) = parent {
+                let body = format!(
+                    "Task {} you delegated to {} was cancelled: it didn't connect. \
+                     Re-delegate it if it still needs doing.",
+                    task.id, bot.name
+                );
+                crate::messaging::send_dm(
+                    db,
+                    &self.inner.events,
+                    crate::messaging::Dm::new(
+                        &parent.id,
+                        &crate::messaging::daemon_sender(),
+                        bus::MessageKind::Note,
+                        &body,
+                    )
+                    .re(&task.origin_message_id),
+                )?;
+            }
+        }
+        if let Some(worker) = db.worker_for_bot(&bot.id)? {
+            if db.finish_worker(
+                &worker.id,
+                WorkerState::Cancelled,
+                Some(WORKER_DIDNT_CONNECT),
+            )? {
+                self.inner.events.push(Push::WorkersUpdated {
+                    project_id: worker.project_id,
+                });
+            }
+        }
+        Ok(())
     }
 
     /// The socket arrived: the bot is reachable, and the watchdog starts over.

@@ -24,6 +24,7 @@ impl Supervisor {
             return None;
         }
         handle.starting = true;
+        handle.starting_since = Instant::now();
         Some(StartClaim { sup: self, bot_id })
     }
 }

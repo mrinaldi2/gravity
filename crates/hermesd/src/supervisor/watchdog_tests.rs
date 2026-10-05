@@ -224,6 +224,97 @@ async fn a_silent_session_stops_holding_its_slot_after_the_warmup() {
         .await;
 }
 
+/// A runtime whose start for `hung` never returns until released.
+struct HangingAdapter {
+    starts: AtomicUsize,
+    release: Mutex<std::sync::mpsc::Receiver<()>>,
+}
+
+impl RuntimeAdapter for HangingAdapter {
+    fn capabilities(&self) -> Capabilities {
+        DoubleAdapter.capabilities()
+    }
+
+    fn start(&self, spec: &BotSpec) -> anyhow::Result<StartedSession> {
+        self.starts.fetch_add(1, Ordering::SeqCst);
+        if spec.bot_name == "hung" {
+            let _ = self.release.lock().expect("release").recv();
+        }
+        DoubleAdapter.start(spec)
+    }
+
+    fn probe(&self) -> anyhow::Result<String> {
+        DoubleAdapter.probe()
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_hung_start_stops_holding_its_slot_after_the_warmup() {
+    let home = tempfile::tempdir().expect("tempdir");
+    let mut cfg = Config {
+        home: home.path().to_path_buf(),
+        user_home: home.path().join("user"),
+        ..Config::default()
+    };
+    cfg.startup.connect_timeout_ms = 60_000;
+    cfg.startup.max_concurrent_starts = 1;
+    cfg.startup.warmup_ms = 200;
+    let db = Db::open(&home.path().join("bus.sqlite")).expect("db");
+    let project_id = db.create_project("p", "p").expect("project").id;
+    let (release, rx) = std::sync::mpsc::channel();
+    let adapter = Arc::new(HangingAdapter {
+        starts: AtomicUsize::new(0),
+        release: Mutex::new(rx),
+    });
+    let secrets = Arc::new(Secrets::open(&home.path().join("secrets")).expect("secrets"));
+    let sup = Supervisor::new(
+        adapter.clone(),
+        cfg,
+        db.clone(),
+        Events::new(),
+        secrets,
+        AutoCompactOverride::default(),
+    );
+    let ids: Vec<String> = ["hung", "next"]
+        .iter()
+        .map(|name| {
+            let workspace = home.path().join(format!("p/bots/{name}/workspace"));
+            db.create_bot(
+                &project_id,
+                name,
+                "",
+                "",
+                "",
+                &workspace.display().to_string(),
+                name,
+                None,
+            )
+            .expect("bot")
+            .id
+        })
+        .collect();
+    let starts = || adapter.starts.load(Ordering::SeqCst);
+
+    let hung = {
+        let (sup, id) = (sup.clone(), ids[0].clone());
+        tokio::task::spawn_blocking(move || sup.start_bot(&id))
+    };
+    while starts() == 0 {
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    sup.reconcile();
+    assert_eq!(starts(), 1, "the hung start's slot was not held");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !sup.has_session(&ids[1]) {
+        assert!(Instant::now() < deadline, "the next bot never started");
+        sup.reconcile();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    release.send(()).expect("release");
+    hung.await.expect("join").expect("hung start");
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_busy_config_lock_defers_the_start_and_retries() {
     let f = Fixture::new(|cfg| cfg.startup.connect_timeout_ms = 60_000);

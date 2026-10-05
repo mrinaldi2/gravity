@@ -130,6 +130,9 @@ struct BotHandle {
     /// Set while one `start_bot` call is bringing the runtime up, so a second
     /// caller does not launch another runtime against the same conversation.
     starting: bool,
+    /// When the in-flight start was claimed; bounds how long a hung start
+    /// holds a stagger slot.
+    starting_since: Instant,
     consecutive_crashes: u32,
     last_start: Instant,
     /// Earliest time the reconciler may start this bot again; set while a
@@ -167,6 +170,7 @@ impl BotHandle {
             stopping: false,
             restart_pending: false,
             starting: false,
+            starting_since: Instant::now(),
             consecutive_crashes: 0,
             last_start: Instant::now(),
             next_start_at: None,

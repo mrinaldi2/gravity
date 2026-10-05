@@ -73,15 +73,25 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(cfg: Config, db: Db) -> anyhow::Result<Arc<Self>> {
+        let adapter: Arc<dyn RuntimeAdapter> = match cfg.runtime {
+            RuntimeKind::Pty => Arc::new(MixedAdapter::new(&cfg)),
+            RuntimeKind::Double => Arc::new(DoubleAdapter),
+        };
+        Self::with_adapter(cfg, db, adapter)
+    }
+
+    /// The daemon's state around a given runtime, for tests that need one
+    /// the config cannot name.
+    pub fn with_adapter(
+        cfg: Config,
+        db: Db,
+        adapter: Arc<dyn RuntimeAdapter>,
+    ) -> anyhow::Result<Arc<Self>> {
         std::fs::create_dir_all(&cfg.home)?;
         std::fs::create_dir_all(cfg.logs_dir())?;
         std::fs::create_dir_all(cfg.projects_dir())?;
         let secrets = Arc::new(Secrets::open(&cfg.secrets_dir())?);
         let events = Events::new();
-        let adapter: Arc<dyn RuntimeAdapter> = match cfg.runtime {
-            RuntimeKind::Pty => Arc::new(MixedAdapter::new(&cfg)),
-            RuntimeKind::Double => Arc::new(DoubleAdapter),
-        };
         let auto_compact = AutoCompactOverride::default();
         if let Some(stored) = db.get_meta(AUTO_COMPACT_META_KEY)? {
             auto_compact.restore(&stored);
