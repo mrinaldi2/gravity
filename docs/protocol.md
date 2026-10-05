@@ -703,7 +703,7 @@ runs through the tester the same way.
 
 ## The project dashboard
 
-`dashboard_get {project_id}` (read) answers with `{type: "dashboard", dashboard}`, which holds what the dashboard's first four widgets show (H-018 §2.1, H-076):
+`dashboard_get {project_id}` (read) answers with `{type: "dashboard", dashboard}`, which holds what the dashboard's widgets show (H-018 §2.1, H-076, H-102):
 
 - **`needs_you`:** only what the owner must act on (H-112), each row with a `kind`:
   - `release`: the package, with `can_rule`. Its decision gets no row of its own.
@@ -718,4 +718,17 @@ runs through the tester the same way.
   - `done_this_week` and `rework_this_week`: since `since`, seven days back. Items brought in by the backlog import never count. Off the board's home, where the history isn't, both are null and `home` names the computer holding the board.
 - **`releases`:** the current package and the last two, newest first.
 - **`team`:** each bot of the project (`bot`, as in `list_bots`), its items in Doing, and its open task count.
-- **`meetings` and `action_items`:** empty until meetings land.
+- **`meetings`:** one row per meeting series, `{series, next_at, collecting, last_held}`: `next_at` is when its routine next starts it (null while disabled), `collecting` the meeting taking contributions now, `last_held` the last one closed. Ad-hoc meetings still collecting follow, with `series` null. Meetings are summaries (see below). Empty off the board's home.
+- **`action_items`:** the open ones, soonest due first, each with `meeting_name` and `overdue`.
+
+## Meetings
+
+Meetings live with the board, on its home (H-017 §1.5, H-020 §4, H-102). A **series** (`standup`, `refinement`, `demo`, `retro` or `adhoc`) owns a routine: creating or changing one upserts the routine with the facilitator as its bot, the series' cron and time zone, and a prompt telling it to run the meeting. A new facilitator gets a new routine; disabling the series disables it. Each run, the facilitator calls `meeting_start`. That opens an occurrence (`MTG-<date>-<type>`, collecting), freezes `inputs_snapshot` (the board's columns with counts, Doing, blocked and stale items, the open action items) and sends each attendee bot one note. Attendees `meeting_contribute`, the facilitator (or the lead) records `action_add`s and `meeting_close`s it as held, with outputs by section and a summary of at most ten lines, or skipped with a reason. Open action items carry over: `meeting_get` lists those of the series' earlier meetings as `carried_over`. `action_promote` (lead) turns one into a chore in the board's Inbox, linked to its meeting (link kind `meeting`), and sets the action's `item_id`. Attendees and action owners are bot ids, or `owner`.
+
+**MCP tools.** Every bot: `meeting_list {type?, upcoming?}`, `meeting_get {meeting_id}`, `meeting_start {series_id}` (its facilitator or the lead; ad-hoc with `name`, `attendees` for the lead), `meeting_contribute {meeting_id, section, body, item_refs}` (attendees and the facilitator), `meeting_close {meeting_id, outputs, summary?, skip_reason?}` and `action_add {meeting_id, text, owner, due_at?}` (facilitator or lead), `action_update {action_id, status?, text?, due_at?}` (the action's owner, the facilitator or the lead). Lead: `meeting_series_upsert {series_id?, type, name, cron, tz, facilitator, attendees, input_scope?, enabled?}` and `action_promote {action_id, title?}`. The service checks who may act, so a facilitator needs no board role.
+
+**WebSocket (owner).** Fields as the MCP tools, plus `project_id`, except a meeting's type, sent as `meeting_type` because `type` names the request:
+- read: `meeting_list` → `{type: "meetings", series, meetings}`; `meeting_get` → `{type: "meeting", meeting}`.
+- control: `meeting_series_upsert` → `{type: "meeting_series", series}`; `meeting_contribute` (the owner as an attendee) → `{type: "meeting", meeting}`; `action_update` and `action_promote` → `{type: "meeting_action", action}`.
+- Off the board's home they're refused with the computer to use.
+- Every change pushes `{type: "meeting_event", project_id, meeting_id?}`; clients reread.

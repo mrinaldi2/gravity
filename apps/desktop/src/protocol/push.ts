@@ -13,6 +13,7 @@ export function emptyHandlers(): PushHandlerSets {
     bot_updated: new Set(),
     project_updated: new Set(),
     workers_updated: new Set(),
+    meeting_event: new Set(),
     activity_update: new Set(),
     delivery_update: new Set(),
     routine_run_update: new Set(),
@@ -29,83 +30,19 @@ export function emptyHandlers(): PushHandlerSets {
   };
 }
 
-function emitPush<K extends ServerPushType>(
-  handlers: PushHandlerSets,
-  type: K,
-  push: PushOf<K>,
-): void {
-  for (const handler of handlers[type]) {
-    handler(push);
-  }
-}
-
 /**
  * Route a parsed push to its handler set.
  *
- * The switch is exhaustive on purpose: a new push type without a case here
- * would be parsed and then dropped, which is exactly how `bot_updated` went
- * missing once.
+ * Every push type has a set: `PushHandlerSets` is keyed by the whole
+ * `ServerPushType` union, so a new push type without a set in
+ * `emptyHandlers` is a type error rather than a frame parsed and then
+ * dropped, which is how `bot_updated` went missing once.
  */
 export function dispatchPush(handlers: PushHandlerSets, push: ServerPush): void {
-  switch (push.type) {
-    case "term":
-      emitPush(handlers, "term", push);
-      break;
-    case "bot_state":
-      emitPush(handlers, "bot_state", push);
-      break;
-    case "message_new":
-      emitPush(handlers, "message_new", push);
-      break;
-    case "bot_updated":
-      emitPush(handlers, "bot_updated", push);
-      break;
-    case "activity_update":
-      emitPush(handlers, "activity_update", push);
-      break;
-    case "delivery_update":
-      emitPush(handlers, "delivery_update", push);
-      break;
-    case "routine_run_update":
-      emitPush(handlers, "routine_run_update", push);
-      break;
-    case "approval_pending":
-      emitPush(handlers, "approval_pending", push);
-      break;
-    case "project_updated":
-      emitPush(handlers, "project_updated", push);
-      break;
-    case "workers_updated":
-      emitPush(handlers, "workers_updated", push);
-      break;
-    case "notify":
-      emitPush(handlers, "notify", push);
-      break;
-    case "decision_update":
-      emitPush(handlers, "decision_update", push);
-      break;
-    case "decision_deleted":
-      emitPush(handlers, "decision_deleted", push);
-      break;
-    case "decision_comment_new":
-      emitPush(handlers, "decision_comment_new", push);
-      break;
-    case "chat_turns":
-      emitPush(handlers, "chat_turns", push);
-      break;
-    case "permission_request":
-      emitPush(handlers, "permission_request", push);
-      break;
-    case "permission_resolved":
-      emitPush(handlers, "permission_resolved", push);
-      break;
-    case "browser_tabs":
-      emitPush(handlers, "browser_tabs", push);
-      break;
-    case "browser_frame":
-      emitPush(handlers, "browser_frame", push);
-      break;
-    default:
-      push satisfies never;
+  // The set for `push.type` takes exactly that push; TypeScript can't relate
+  // the two through the union, hence the widening.
+  const set = handlers[push.type] as ReadonlySet<(push: ServerPush) => void>;
+  for (const handler of set) {
+    handler(push);
   }
 }
