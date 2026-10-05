@@ -105,7 +105,10 @@ impl Owner {
         check.is_owner_app(peer)
     }
 
-    fn mint(&self) -> String {
+    /// A ticket for the owner; only `handle` hands one out, after its check.
+    /// Public for tests, which stand in for the app in phase 2.
+    #[doc(hidden)]
+    pub fn mint(&self) -> String {
         let ticket = hex::encode(rand::random::<[u8; 32]>());
         let mut tickets = self.tickets.lock().unwrap_or_else(|e| e.into_inner());
         tickets.retain(|_, issued| issued.elapsed() < TICKET_TTL);

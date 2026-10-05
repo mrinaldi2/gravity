@@ -96,9 +96,7 @@ impl AppState {
         std::fs::create_dir_all(&cfg.home)?;
         std::fs::create_dir_all(cfg.logs_dir())?;
         std::fs::create_dir_all(cfg.projects_dir())?;
-        // Phase 2 of H-044 keeps no owner or bot token on disk.
-        let enforce = cfg.auth.bot_bearer == crate::bus_auth::BearerPolicy::Refuse;
-        let secrets = Arc::new(Secrets::open_for(&cfg.secrets_dir(), enforce)?);
+        let secrets = Arc::new(Secrets::open_for(&cfg.secrets_dir(), cfg.auth.storage())?);
         let events = Events::new();
         let auto_compact = AutoCompactOverride::default();
         if let Some(stored) = db.get_meta(AUTO_COMPACT_META_KEY)? {

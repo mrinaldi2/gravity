@@ -16,6 +16,19 @@ use anyhow::Context;
 use rand::RngCore;
 
 mod devices;
+mod vault;
+
+pub use vault::PeerTokens;
+use vault::Vault;
+
+/// How this daemon keeps its secrets.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Storage {
+    /// Phase 2 (`bot_bearer = "refuse"`): the client and bot token files are
+    /// deleted and device tokens are reduced to hashes.
+    pub enforce: bool,
+    pub peer_tokens: PeerTokens,
+}
 
 pub struct Secrets {
     dir: PathBuf,
@@ -28,6 +41,7 @@ pub struct Secrets {
     /// token -> peer_id for the `/peer` link. The same token serves both
     /// ends: the listening daemon accepts it, the dialing daemon presents it.
     peer_tokens: Mutex<HashMap<String, String>>,
+    peer_vault: Vault,
     /// None in phase 2: the owner is known by their app or their OK (T4).
     client_token: Option<String>,
 }
@@ -59,12 +73,11 @@ fn remove_if_present(path: &Path) -> anyhow::Result<()> {
 impl Secrets {
     /// Phase 1: every token file is read and written as before.
     pub fn open(dir: &Path) -> anyhow::Result<Self> {
-        Self::open_for(dir, false)
+        Self::open_for(dir, Storage::default())
     }
 
-    /// `enforce` is phase 2 (`bot_bearer = "refuse"`): the client and bot
-    /// token files are deleted and device tokens are reduced to hashes.
-    pub fn open_for(dir: &Path, enforce: bool) -> anyhow::Result<Self> {
+    pub fn open_for(dir: &Path, storage: Storage) -> anyhow::Result<Self> {
+        let enforce = storage.enforce;
         fs::create_dir_all(dir)?;
         crate::permissions::private(dir, true)?;
 
@@ -81,7 +94,6 @@ impl Secrets {
         };
 
         let mut bot_tokens = HashMap::new();
-        let mut peer_tokens = HashMap::new();
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().to_string();
@@ -94,16 +106,10 @@ impl Secrets {
                 } else if let Some(token) = read_token(&entry.path())? {
                     bot_tokens.insert(token, bot_id.to_string());
                 }
-            } else if let Some(peer_id) = name
-                .strip_prefix("peer-")
-                .and_then(|s| s.strip_suffix(".token"))
-            {
-                if let Some(token) = read_token(&entry.path())? {
-                    peer_tokens.insert(token, peer_id.to_string());
-                }
             }
         }
         let device_hashes = devices::load(dir, enforce)?;
+        let (peer_vault, peer_tokens) = Vault::open(dir, storage.peer_tokens)?;
 
         Ok(Self {
             dir: dir.to_path_buf(),
@@ -111,6 +117,7 @@ impl Secrets {
             bot_tokens: Mutex::new(bot_tokens),
             device_hashes: Mutex::new(device_hashes),
             peer_tokens: Mutex::new(peer_tokens),
+            peer_vault,
             client_token,
         })
     }
@@ -185,7 +192,7 @@ impl Secrets {
     pub fn store_peer_token(&self, peer_id: &str, token: &str) -> anyhow::Result<()> {
         let mut map = self.peer_tokens.lock().unwrap_or_else(|e| e.into_inner());
         map.retain(|_, id| id.as_str() != peer_id);
-        write_secret(&self.dir.join(format!("peer-{peer_id}.token")), token)?;
+        self.peer_vault.put(peer_id, token)?;
         map.insert(token.to_string(), peer_id.to_string());
         Ok(())
     }
@@ -208,7 +215,7 @@ impl Secrets {
     pub fn remove_peer_token(&self, peer_id: &str) -> anyhow::Result<()> {
         let mut map = self.peer_tokens.lock().unwrap_or_else(|e| e.into_inner());
         map.retain(|_, id| id.as_str() != peer_id);
-        remove_if_present(&self.dir.join(format!("peer-{peer_id}.token")))
+        self.peer_vault.remove(peer_id)
     }
 }
 

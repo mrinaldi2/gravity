@@ -51,6 +51,18 @@ pub enum BotTransport {
 pub struct AuthConfig {
     pub bot_bearer: BearerPolicy,
     pub bot_transport: BotTransport,
+    /// Where peer link tokens live: `file` or (macOS) `keychain` (T5).
+    pub peer_tokens: crate::secrets::PeerTokens,
+}
+
+impl AuthConfig {
+    /// Phase 2 keeps no owner or bot token on disk and hashes device tokens.
+    pub fn storage(&self) -> crate::secrets::Storage {
+        crate::secrets::Storage {
+            enforce: self.bot_bearer == BearerPolicy::Refuse,
+            peer_tokens: self.peer_tokens,
+        }
+    }
 }
 
 /// When each bot last used a bearer token, accepted or refused: what decides

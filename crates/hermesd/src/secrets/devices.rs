@@ -87,6 +87,14 @@ impl Secrets {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::secrets::Storage;
+
+    fn enforced() -> Storage {
+        Storage {
+            enforce: true,
+            ..Storage::default()
+        }
+    }
 
     #[test]
     fn a_device_is_stored_as_a_hash_and_still_recognised() {
@@ -128,7 +136,7 @@ mod tests {
             "phase 1 changes nothing"
         );
 
-        let phase2 = Secrets::open_for(dir.path(), true).expect("phase 2");
+        let phase2 = Secrets::open_for(dir.path(), enforced()).expect("phase 2");
         assert!(!dir.path().join("client.token").exists());
         assert!(!dir.path().join("bot-b1.token").exists());
         assert!(!token_file(dir.path(), "d0").exists());
@@ -146,7 +154,7 @@ mod tests {
         // A bot started in phase 2 gets a token in memory only.
         phase2.bot_token("b2").expect("bot");
         assert!(!dir.path().join("bot-b2.token").exists());
-        let again = Secrets::open_for(dir.path(), true).expect("restart");
+        let again = Secrets::open_for(dir.path(), enforced()).expect("restart");
         assert!(!dir.path().join("client.token").exists(), "never recreated");
         assert_eq!(
             again.device_for_token("phone-secret").as_deref(),

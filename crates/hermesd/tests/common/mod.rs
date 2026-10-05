@@ -98,7 +98,11 @@ pub struct WsClient {
 
 impl WsClient {
     pub async fn connect(d: &TestDaemon) -> Self {
-        Self::connect_as(d, d.app.secrets.client_token()).await
+        match d.app.secrets.client_token() {
+            // Phase 2 has no client token: the owner's app gets a ticket.
+            "" => Self::connect_as(d, &d.app.owner.mint()).await,
+            token => Self::connect_as(d, token).await,
+        }
     }
 
     /// Connects on `token`: the client token, a ticket or a device's token.
