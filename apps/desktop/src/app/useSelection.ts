@@ -16,12 +16,12 @@ export interface SelectionApi {
   readonly selectBot: (botId: string) => void;
 }
 
-/** Fills in a project window's tab: the one it last showed, else the Dashboard. */
+/** Fills in a project window's tab: the one it last showed, else the Overview. */
 function withProjectTab(selection: Selection): Selection {
   if (selection.kind !== "project" || selection.tab !== undefined) {
     return selection;
   }
-  return { ...selection, tab: loadProjectTab(selection.projectId) ?? "dashboard" };
+  return { ...selection, tab: loadProjectTab(selection.projectId) ?? "overview" };
 }
 
 /**

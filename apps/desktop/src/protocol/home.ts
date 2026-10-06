@@ -5,8 +5,12 @@
 
 import { fromJson } from "@bufbuild/protobuf";
 import type { JsonValue } from "@bufbuild/protobuf";
-import { ProjectsOverviewSchema } from "./gen/hermes/home/v1/home_pb";
-import type { ProjectsOverview } from "./gen/hermes/home/v1/home_pb";
+import {
+  OwnerThreadPageSchema,
+  OwnerThreadsSchema,
+  ProjectsOverviewSchema,
+} from "./gen/hermes/home/v1/home_pb";
+import type { OwnerThreadPage, OwnerThreads, ProjectsOverview } from "./gen/hermes/home/v1/home_pb";
 
 export type HomeRequestBody =
   | { readonly type: "projects_overview"; readonly project_ids?: readonly string[] }
@@ -52,4 +56,12 @@ const LENIENT = { ignoreUnknownFields: true } as const;
 
 export function decodeOverview(json: JsonValue): ProjectsOverview {
   return fromJson(ProjectsOverviewSchema, json, LENIENT);
+}
+
+export function decodeOwnerThreads(json: JsonValue): OwnerThreads {
+  return fromJson(OwnerThreadsSchema, json, LENIENT);
+}
+
+export function decodeOwnerThread(json: JsonValue): OwnerThreadPage {
+  return fromJson(OwnerThreadPageSchema, json, LENIENT);
 }

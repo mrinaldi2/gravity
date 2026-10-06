@@ -12,6 +12,7 @@ import type { BrowserWatch } from "../browser/useBrowserWatch";
 import RoutinesPanel from "../RoutinesPanel";
 import TerminalPane from "../TerminalPane";
 import type { BotTab } from "./BotTabs";
+import ReportsPane from "./ReportsPane";
 
 interface BotPanesProps {
   readonly client: DaemonApi;
@@ -27,6 +28,8 @@ interface BotPanesProps {
   readonly onOpenDecision?: (decisionId: string) => void;
   readonly onRoutinesChanged: (botId: string, routines: readonly Routine[]) => void;
   readonly onToast: AddToast;
+  /** Reply on Reports: answers the bot, quoting what it said. */
+  readonly onReply: (quote: string) => void;
 }
 
 /** Why the owner cannot write to a bot right now, or null when they can. */
@@ -52,13 +55,42 @@ function paneClass(shown: boolean): string {
   return shown ? "tab-pane" : "tab-pane tab-pane-hidden";
 }
 
+/** The Chat tab: a linked bot's chat read from its machine, else the bot's own. */
+function ChatTab(
+  props: Pick<
+    BotPanesProps,
+    "client" | "bot" | "connected" | "canControl" | "active" | "onOpenFile" | "onOpenDecision"
+  >,
+): ReactElement {
+  const { client, bot, connected } = props;
+  const writeBlocked = writeBlockedReason(connected, props.canControl, bot);
+  const linked = bot.peer != null;
+  return (
+    <div className={paneClass(props.active === "chat")}>
+      {linked && !client.capabilities.includes("peer_chat") ? (
+        <LinkedChat client={client} bot={bot} connected={connected} writeBlocked={writeBlocked} />
+      ) : (
+        <ChatPane
+          client={client}
+          bot={bot}
+          connected={connected}
+          writeBlocked={writeBlocked}
+          onOpenFile={props.onOpenFile}
+          onOpenDecision={props.onOpenDecision}
+          active={props.active === "chat"}
+          note={linked ? machineNote(bot) : undefined}
+        />
+      )}
+    </div>
+  );
+}
+
 /**
  * The bot's tab bodies. Chat and terminal stay mounted when hidden, so
  * switching back keeps the loaded conversation and the terminal buffer.
  */
 export default function BotPanes(props: BotPanesProps): ReactElement {
   const { client, bot, tabs, active, connected, canControl, onToast } = props;
-  const writeBlocked = writeBlockedReason(connected, canControl, bot);
   const linked = bot.peer != null;
   const permissions = usePermissions(client, bot.id, connected && !linked);
   return (
@@ -66,28 +98,19 @@ export default function BotPanes(props: BotPanesProps): ReactElement {
       {/* Above every tab: a prompt waits whether the owner reads the chat or the terminal. */}
       <PermissionCards permissions={permissions} canAnswer={connected && canControl} />
       <div className="bot-view-body">
+        {active === "reports" ? (
+          <ReportsPane client={client} bot={bot} connected={connected} onReply={props.onReply} />
+        ) : null}
         {tabs.includes("chat") ? (
-          <div className={paneClass(active === "chat")}>
-            {linked && !client.capabilities.includes("peer_chat") ? (
-              <LinkedChat
-                client={client}
-                bot={bot}
-                connected={connected}
-                writeBlocked={writeBlocked}
-              />
-            ) : (
-              <ChatPane
-                client={client}
-                bot={bot}
-                connected={connected}
-                writeBlocked={writeBlocked}
-                onOpenFile={props.onOpenFile}
-                onOpenDecision={props.onOpenDecision}
-                active={active === "chat"}
-                note={linked ? machineNote(bot) : undefined}
-              />
-            )}
-          </div>
+          <ChatTab
+            client={client}
+            bot={bot}
+            connected={connected}
+            canControl={canControl}
+            active={active}
+            onOpenFile={props.onOpenFile}
+            onOpenDecision={props.onOpenDecision}
+          />
         ) : null}
         {tabs.includes("terminal") ? (
           <div className={paneClass(active === "terminal")}>

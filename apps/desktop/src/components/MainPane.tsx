@@ -1,38 +1,23 @@
-import { useCallback } from "react";
 import type { ReactElement } from "react";
-import type { ProjectTab } from "../app/selection";
 import type { DaemonState } from "../app/useDaemonState";
-import type { AddToast } from "../app/useToasts";
 import heroArt from "../assets/empty/hero.png";
 import quietArt from "../assets/empty/quiet.png";
-import type { DaemonApi } from "../protocol/api";
 import { connectionStatusLabel } from "../protocol/connection";
-import type { Project, ProjectRepo } from "../protocol/entities";
 import BotView from "./BotView";
 import ControlCenterView from "./control/ControlCenterView";
 import type { Permissions } from "./permissions/usePermissions";
-import BoardView from "./board/BoardView";
-import ConversationsView from "./conversations/ConversationsView";
-import DashboardView from "./dashboard/DashboardView";
 import ProjectsHome from "./home/ProjectsHome";
-import ComingSoon, { isUpcomingTab } from "./project/ComingSoon";
-import ProjectWindow from "./project/ProjectWindow";
-import ProjectView from "./ProjectView";
-import ReleasesView from "./releases/ReleasesView";
+import ProjectPane from "./project/ProjectPane";
+import type { ProjectActions } from "./project/ProjectPane";
 import NewProjectForm from "./sidebar/NewProjectForm";
 
-interface MainPaneProps {
-  readonly client: DaemonApi;
-  readonly daemon: DaemonState;
-  readonly addToast: AddToast;
+interface MainPaneProps extends ProjectActions {
   readonly onCreateProject: (name: string) => Promise<void>;
-  readonly onRenameProject: (projectId: string, name: string) => Promise<void>;
-  readonly onSetProjectLead: (projectId: string, botId: string | null) => Promise<void>;
-  readonly onSetProjectRepo: (projectId: string, repo: ProjectRepo | null) => Promise<void>;
-  readonly onDeleteProject: (projectId: string) => Promise<void>;
   /** Every bot's permission requests, answered in Decisions. */
   readonly permissions?: Permissions;
   readonly onOpenBot?: (botId: string) => void;
+  /** Answers a bot quoting one of its reports; else Reply opens the bot. */
+  readonly onReply?: (botId: string, quote: string) => void;
 }
 
 interface EmptyStateProps {
@@ -67,7 +52,7 @@ function EmptyState(props: EmptyStateProps): ReactElement {
       <div className="empty-state">
         <img className="empty-art-quiet" src={quietArt} alt="" draggable={false} />
         <h1>The Hermes</h1>
-        <p>Select a bot from the sidebar, or create one to get started.</p>
+        <p>{connected ? "This is no longer here." : "Waiting for the Hermes service."}</p>
         {connected ? null : (
           <p className={`conn-hint conn-${status}`}>
             {`Hermes service: ${connectionStatusLabel(status)} (${endpoint.host}:${endpoint.port})`}
@@ -78,106 +63,15 @@ function EmptyState(props: EmptyStateProps): ReactElement {
   );
 }
 
-interface ProjectPaneProps extends MainPaneProps {
-  readonly project: Project;
-  readonly tab: ProjectTab;
-}
-
-/** A project window showing `tab`. */
-function ProjectPane(props: ProjectPaneProps): ReactElement {
-  const { client, daemon, project, tab } = props;
-  const { connected, canControl, select } = daemon;
-  const bots = daemon.bots.filter((item) => item.project_id === project.id);
-  const onSelectTab = useCallback(
-    (next: ProjectTab): void => {
-      select({ kind: "project", projectId: project.id, tab: next });
-    },
-    [select, project.id],
-  );
-
-  let content: ReactElement;
-  if (isUpcomingTab(tab)) {
-    content = <ComingSoon tab={tab} />;
-  } else if (tab === "dashboard") {
-    content = (
-      <DashboardView
-        client={client}
-        project={project}
-        bots={bots}
-        connected={connected}
-        canControl={canControl}
-        addToast={props.addToast}
-        onOpenTab={onSelectTab}
-        onOpenBot={(botId) => select({ kind: "bot", botId })}
-        onOpenDecision={(decisionId) => select({ kind: "control", decisionId })}
-      />
-    );
-  } else if (tab === "releases") {
-    content = (
-      <ReleasesView
-        client={client}
-        project={project}
-        bots={bots}
-        connected={connected}
-        canControl={canControl}
-        addToast={props.addToast}
-      />
-    );
-  } else if (tab === "board") {
-    content = (
-      <BoardView
-        client={client}
-        project={project}
-        bots={bots}
-        connected={connected}
-        canControl={canControl}
-        addToast={props.addToast}
-      />
-    );
-  } else if (tab === "conversations") {
-    content = client.capabilities.includes("agent_conversations") ? (
-      <ConversationsView client={client} project={project} bots={bots} connected={connected} />
-    ) : (
-      <div className="empty-pane">
-        <div className="empty-state">
-          <p>Conversations need a newer Hermes service.</p>
-        </div>
-      </div>
-    );
-  } else {
-    content = (
-      <ProjectView
-        client={client}
-        project={project}
-        bots={bots}
-        connected={connected}
-        canControl={canControl}
-        onRename={props.onRenameProject}
-        onSetLead={props.onSetProjectLead}
-        onSetRepo={props.onSetProjectRepo}
-        onDelete={props.onDeleteProject}
-        onToast={props.addToast}
-      />
-    );
-  }
-
-  return (
-    <ProjectWindow
-      key={project.id}
-      project={project}
-      botCount={bots.length}
-      tab={tab}
-      onSelectTab={onSelectTab}
-    >
-      {content}
-    </ProjectWindow>
-  );
-}
-
 /** Renders whichever view the current selection points at. */
 export default function MainPane(props: MainPaneProps): ReactElement {
   const { client, daemon, addToast } = props;
   const { selection, bots, connected, canControl } = daemon;
+  const reply =
+    props.onReply ??
+    ((botId: string): void => {
+      daemon.select({ kind: "bot", botId });
+    });
 
   if (selection.kind === "control") {
     return (
@@ -200,7 +94,7 @@ export default function MainPane(props: MainPaneProps): ReactElement {
     return project === undefined ? (
       <EmptyState daemon={daemon} onCreateProject={props.onCreateProject} />
     ) : (
-      <ProjectPane {...props} project={project} tab={selection.tab ?? "dashboard"} />
+      <ProjectPane {...props} project={project} tab={selection.tab ?? "overview"} onReply={reply} />
     );
   }
 
@@ -221,6 +115,10 @@ export default function MainPane(props: MainPaneProps): ReactElement {
         onToast={addToast}
         onOpenDecision={(decisionId) => {
           daemon.select({ kind: "control", decisionId });
+        }}
+        onReply={props.onReply}
+        onBack={() => {
+          daemon.select({ kind: "project", projectId: bot.project_id, tab: "team" });
         }}
       />
     );

@@ -60,13 +60,13 @@ describe("App actions", () => {
     vi.unstubAllGlobals();
   });
 
-  it("opens the project window on the Dashboard, then on the tab last used", async () => {
+  it("opens the project window on the Overview, then on the tab last used", async () => {
     const user = userEvent.setup();
     stubLocalStorage();
     await renderApp();
 
     await user.click(screen.getByRole("button", { name: "Acme" }));
-    expect(screen.getByRole("tab", { name: "Dashboard", selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Overview", selected: true })).toBeInTheDocument();
     expect(
       await within(screen.getByRole("tabpanel")).findByText(
         /Loading the dashboard…|Couldn't load the dashboard|Needs you/,
@@ -74,17 +74,32 @@ describe("App actions", () => {
     ).toBeInTheDocument();
 
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "6", metaKey: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "3", metaKey: true }));
     });
-    expect(screen.getByRole("tab", { name: "Settings", selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Team", selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "alice" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "More ▾" }));
+    await user.click(screen.getByRole("menuitem", { name: "Settings" }));
     expect(screen.getByRole("heading", { name: "Danger zone" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Conversations" }));
+    await user.click(screen.getByRole("button", { name: "Settings ▾" }));
+    await user.click(screen.getByRole("menuitem", { name: "Conversations" }));
     expect(screen.getByText("Conversations need a newer Hermes service.")).toBeInTheDocument();
 
     await user.click(screen.getByText("alice", { selector: ".bot-row-name" }));
     await user.click(screen.getByRole("button", { name: "Project" }));
-    expect(screen.getByRole("tab", { name: "Conversations", selected: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Conversations ▾" })).toBeInTheDocument();
+  });
+
+  it("goes from a bot back to its project's Team", async () => {
+    const user = userEvent.setup();
+    stubLocalStorage();
+    await renderApp();
+    await user.click(screen.getByRole("button", { name: "‹ Team" }));
+    expect(screen.getByRole("tab", { name: "Team", selected: true })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open alice" }));
+    expect(screen.getByText("alice", { selector: ".view-title" })).toBeInTheDocument();
   });
 
   it("walks a fresh daemon through creating the first project", async () => {

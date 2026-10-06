@@ -218,6 +218,7 @@ export default function App(): ReactElement {
             onSetProjectLead={actions.setProjectLead}
             onSetProjectRepo={actions.setProjectRepo}
             onDeleteProject={actions.deleteProject}
+            onCreateBot={actions.createBot}
             permissions={inbox.permissions}
             onOpenBot={openBot}
           />

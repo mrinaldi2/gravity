@@ -1,9 +1,9 @@
 import { useEffect } from "react";
-import { PROJECT_TABS } from "../../app/selection";
+import { PRIMARY_TABS } from "../../app/selection";
 import type { ProjectTab } from "../../app/selection";
 
 /**
- * ⌘1…⌘6 switch the project window's tabs, the same pattern as a bot's ⌘1…⌘4.
+ * ⌘1…⌘5 switch the project window's tabs, the same pattern as a bot's ⌘1…⌘4.
  * Registered in the capture phase so a focused field cannot swallow them.
  */
 export function useProjectKeys(onSelect: (tab: ProjectTab) => void): void {
@@ -12,7 +12,7 @@ export function useProjectKeys(onSelect: (tab: ProjectTab) => void): void {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) {
         return;
       }
-      const tab = PROJECT_TABS[Number.parseInt(event.key, 10) - 1];
+      const tab = PRIMARY_TABS[Number.parseInt(event.key, 10) - 1];
       if (tab !== undefined) {
         event.preventDefault();
         onSelect(tab);

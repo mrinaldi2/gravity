@@ -44,7 +44,7 @@ function Window({
   const bots = data.team.map((row) => row.bot);
   return (
     <div className="main" style={{ height: 900 }}>
-      <ProjectWindow project={hermes} botCount={bots.length} tab="dashboard" onSelectTab={noTab}>
+      <ProjectWindow project={hermes} botCount={bots.length} tab="overview" onSelectTab={noTab}>
         <DashboardView
           client={client}
           project={hermes}

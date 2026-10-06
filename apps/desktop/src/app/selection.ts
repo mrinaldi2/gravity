@@ -1,7 +1,11 @@
-/** The tabs of a project window, in tab-bar and ⌘1…⌘6 order. */
-export const PROJECT_TABS = [
-  "dashboard",
+/**
+ * The tabs of a project window (UX-024 §2): the first five are in the tab bar
+ * on ⌘1…⌘5; the rest sit under More.
+ */
+const PROJECT_TABS = [
+  "overview",
   "board",
+  "team",
   "releases",
   "meetings",
   "conversations",
@@ -9,6 +13,12 @@ export const PROJECT_TABS = [
 ] as const;
 
 export type ProjectTab = (typeof PROJECT_TABS)[number];
+
+/** The tabs in the tab bar itself, in ⌘1…⌘5 order. */
+export const PRIMARY_TABS = PROJECT_TABS.slice(0, 5);
+
+/** The tabs under More. */
+export const MORE_TABS = PROJECT_TABS.slice(5);
 
 /** What the main pane is currently showing. */
 export type Selection =

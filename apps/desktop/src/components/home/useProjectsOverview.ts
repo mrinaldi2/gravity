@@ -68,21 +68,7 @@ export function useProjectsOverview(
     }
   }, [client, supported]);
   useLoadOnConnect(connected, refresh);
-
-  useEffect(() => {
-    if (!supported) {
-      return undefined;
-    }
-    const again = (): void => {
-      void refresh();
-    };
-    const offChanged = client.on("projects_overview_changed", again);
-    const offPinned = client.on("project_pinned", again);
-    return () => {
-      offChanged();
-      offPinned();
-    };
-  }, [client, refresh, supported]);
+  useOverviewPushes(client, supported, refresh);
 
   const pin = useCallback(
     async (projectId: string, pinned: boolean): Promise<void> => {
@@ -100,4 +86,66 @@ export function useProjectsOverview(
     return { rows: fallback, sources: [], legacy: true, error: null, loaded: true, pin };
   }
   return { rows, sources, legacy: false, error, loaded, pin };
+}
+
+/**
+ * One project's overview row, for its window's header, Overview and Team:
+ * what needs the owner, its release, who is doing what, the lead's summary.
+ * Null on an older service, or until it loads.
+ */
+export function useProjectRow(
+  client: DaemonApi,
+  projectId: string,
+  connected: boolean,
+): ProjectRow | null {
+  const supported = client.capabilities.includes("projects_overview");
+  const [row, setRow] = useState<ProjectRow | null>(null);
+  const refresh = useCallback(async (): Promise<void> => {
+    if (!supported) {
+      return;
+    }
+    try {
+      const reply = await client.request(
+        { type: "projects_overview", project_ids: [projectId] },
+        "projects_overview",
+      );
+      setRow(decodeOverview(reply.overview).rows.find((r) => r.projectId === projectId) ?? null);
+    } catch {
+      // The header and Team read fine without it.
+    }
+  }, [client, projectId, supported]);
+  useLoadOnConnect(connected, refresh);
+  useOverviewPushes(client, supported, refresh, projectId);
+  return row;
+}
+
+/**
+ * Reads again when the service says the overview changed, or a pin moved;
+ * with `projectId`, only for a change that names it (or names none).
+ */
+function useOverviewPushes(
+  client: DaemonApi,
+  supported: boolean,
+  refresh: () => Promise<void>,
+  projectId?: string,
+): void {
+  useEffect(() => {
+    if (!supported) {
+      return undefined;
+    }
+    const again = (): void => {
+      void refresh();
+    };
+    const offChanged = client.on("projects_overview_changed", (push) => {
+      const named = push.project_ids.length === 0 || projectId === undefined;
+      if (named || push.project_ids.includes(projectId)) {
+        again();
+      }
+    });
+    const offPinned = client.on("project_pinned", again);
+    return () => {
+      offChanged();
+      offPinned();
+    };
+  }, [client, projectId, refresh, supported]);
 }

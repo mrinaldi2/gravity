@@ -81,3 +81,62 @@ export function overviewJson(): JsonValue {
     ],
   };
 }
+
+/** The owner's threads: Desktop Dev asked a question, Team Lead reported. */
+export function ownerThreadsJson(): JsonValue {
+  return {
+    threads: [
+      {
+        bot: { daemon_id: "mac", bot_id: "b2", name: "Desktop Dev" },
+        project_id: "p1",
+        last: {
+          num: "12",
+          from_owner: false,
+          text: "Should Resume now also restart the services?",
+          at: "2026-10-06T10:20:00Z",
+          asks: true,
+        },
+        unread: 1,
+        open_question: true,
+      },
+      {
+        bot: { daemon_id: "mac", bot_id: "b1", name: "Team Lead" },
+        project_id: "p1",
+        last: {
+          num: "9",
+          from_owner: false,
+          text: "Verify is full; testers clear H-008 first.",
+          at: "2026-10-06T09:40:00Z",
+        },
+      },
+    ],
+  };
+}
+
+/** Desktop Dev's thread with the owner, oldest first. */
+export function ownerThreadJson(): JsonValue {
+  return {
+    bot: { daemon_id: "mac", bot_id: "b2", name: "Desktop Dev" },
+    project_id: "p1",
+    messages: [
+      {
+        num: "10",
+        id: "m10",
+        from_owner: false,
+        text: "Pushed 058a4f7.",
+        at: "2026-10-06T09:00:00Z",
+      },
+      { num: "11", id: "m11", from_owner: true, text: "Thanks.", at: "2026-10-06T09:05:00Z" },
+      {
+        num: "12",
+        id: "m12",
+        from_owner: false,
+        text: "Should Resume now also restart the services?",
+        at: "2026-10-06T10:20:00Z",
+        asks: true,
+        open: true,
+      },
+    ],
+    last_read_num: "11",
+  };
+}

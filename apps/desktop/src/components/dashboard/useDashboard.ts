@@ -27,7 +27,7 @@ export function useDashboard(
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const reply = await client.request(
-        { type: "dashboard_get", project_id: projectId },
+        { type: "dashboard_get", project_id: projectId, all_kinds: true },
         "dashboard",
       );
       setDashboard(reply.dashboard);

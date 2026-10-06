@@ -38,7 +38,7 @@ describe("useSelection project windows", () => {
     expect(result.current.selection).toEqual({
       kind: "project",
       projectId: "p1",
-      tab: "dashboard",
+      tab: "overview",
     });
   });
 
@@ -63,7 +63,7 @@ describe("useSelection project windows", () => {
     expect(result.current.selection).toEqual({
       kind: "project",
       projectId: "p2",
-      tab: "dashboard",
+      tab: "overview",
     });
   });
 
@@ -76,7 +76,7 @@ describe("useSelection project windows", () => {
     expect(result.current.selection).toEqual({
       kind: "project",
       projectId: "p1",
-      tab: "dashboard",
+      tab: "overview",
     });
   });
 });

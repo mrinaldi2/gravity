@@ -29,6 +29,10 @@ interface BotViewProps {
   readonly onRoutinesChanged: (botId: string, routines: readonly Routine[]) => void;
   readonly onToast: AddToast;
   readonly onOpenDecision?: (decisionId: string) => void;
+  /** Replies to the bot quoting a report; without it, Reply opens the bot's Chat tab. */
+  readonly onReply?: (botId: string, quote: string) => void;
+  /** Back to the bot's project (its Team tab); the crumb is hidden without it. */
+  readonly onBack?: () => void;
 }
 
 interface DragState {
@@ -51,6 +55,7 @@ export default function BotView(props: BotViewProps): ReactElement {
       browser: client.capabilities.includes("bot_browser"),
       peerTerminal: client.capabilities.includes("peer_terminal"),
       peerBrowser: client.capabilities.includes("peer_browser"),
+      reports: client.capabilities.includes("owner_threads"),
     },
     bot.peer != null,
   );
@@ -171,6 +176,7 @@ export default function BotView(props: BotViewProps): ReactElement {
             onToast={onToast}
           />
         }
+        onBack={props.onBack}
         infoPanelCollapsed={infoPanel.collapsed}
         onToggleInfoPanel={() => {
           setInfoPanel((current) => ({ ...current, collapsed: !current.collapsed }));
@@ -197,6 +203,13 @@ export default function BotView(props: BotViewProps): ReactElement {
             onOpenDecision={props.onOpenDecision}
             onRoutinesChanged={props.onRoutinesChanged}
             onToast={onToast}
+            onReply={(quote) => {
+              if (props.onReply === undefined) {
+                setTab("chat");
+              } else {
+                props.onReply(bot.id, quote);
+              }
+            }}
           />
         </section>
         {infoPanel.collapsed ? null : (

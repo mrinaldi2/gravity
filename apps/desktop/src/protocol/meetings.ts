@@ -67,7 +67,33 @@ export interface DashboardAction extends ActionItem {
   readonly overdue: boolean;
 }
 
+/** A series as `meeting_list` lists it, with when it next runs. */
+export interface ListedSeries extends MeetingSeries {
+  readonly next_at: string | null;
+}
+
+/** One contribution to a meeting, by section. */
+interface Contribution {
+  readonly id: string;
+  /** A bot id, or "owner". */
+  readonly author: string;
+  readonly section: string;
+  readonly body: string;
+  readonly at: string;
+}
+
+/** A meeting in full: its minutes (summary and outputs), contributions and actions. */
+export interface MeetingDetail extends MeetingSummary {
+  readonly scheduled_at: string | null;
+  readonly contributions: readonly Contribution[];
+  readonly action_items: readonly ActionItem[];
+  readonly carried_over: readonly ActionItem[];
+}
+
 export type MeetingRequestBody =
+  /** The series and the recent meetings (H-133 Meetings tab). */
+  | { readonly type: "meeting_list"; readonly project_id: string }
+  | { readonly type: "meeting_get"; readonly project_id: string; readonly meeting_id: string }
   | {
       readonly type: "action_update";
       readonly project_id: string;
@@ -85,4 +111,12 @@ export type MeetingRequestBody =
       readonly title?: string;
     };
 
-export type MeetingReply = { readonly type: "meeting_action"; readonly action: ActionItem };
+export type MeetingReply =
+  | { readonly type: "meeting_action"; readonly action: ActionItem }
+  | {
+      readonly type: "meetings";
+      readonly series: readonly ListedSeries[];
+      /** Newest first. */
+      readonly meetings: readonly MeetingSummary[];
+    }
+  | { readonly type: "meeting"; readonly meeting: MeetingDetail };

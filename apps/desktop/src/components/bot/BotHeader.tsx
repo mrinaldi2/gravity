@@ -21,6 +21,8 @@ interface BotHeaderProps {
   readonly onToggleInfoPanel: () => void;
   /** Session actions shown before the info toggle. */
   readonly actions?: ReactNode;
+  /** "‹ Team": back to the bot's project; hidden without it. */
+  readonly onBack?: () => void;
 }
 
 export default function BotHeader(props: BotHeaderProps): ReactElement {
@@ -31,6 +33,11 @@ export default function BotHeader(props: BotHeaderProps): ReactElement {
   return (
     <header className="view-header" data-tauri-drag-region="deep">
       <div className="view-header-main">
+        {props.onBack === undefined ? null : (
+          <button type="button" className="project-crumb" onClick={props.onBack}>
+            ‹ Team
+          </button>
+        )}
         <span className={`dot dot-${bot.state}`} title={stateTitle} aria-label={stateTitle} />
         <BotAvatar avatar={bot.avatar} name={bot.name} id={bot.id} size="md" />
         <h2 className="view-title">{bot.name}</h2>
