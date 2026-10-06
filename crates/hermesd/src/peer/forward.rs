@@ -123,6 +123,7 @@ fn build(
                 .ok_or_else(|| anyhow::anyhow!("task for message {} is no longer open", msg.num))?;
             Some(TaskFrame {
                 item_id: app.db.task_card(&task.id)?,
+                release_id: app.db.task_release(&task.id)?,
                 id: task.id,
                 deadline_at: task.deadline_at,
                 hop_count: task.hop_count,

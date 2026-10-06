@@ -245,7 +245,8 @@ A forwarded frame carries:
   "kind": "task | reply | note | done | chat",
   "body": "…",
   "ref": "<sender-side message id this answers, if any>",
-  "task": { "id": "<sender-side task id>", "deadline_at": "…", "hop_count": 2 },
+  "task": { "id": "<sender-side task id>", "deadline_at": "…", "hop_count": 2,
+            "item_id": "<card, board home's id>", "release_id": "<release, its home's id>" },
   "closes_task": { "id": "<receiver-side task id>", "state": "done | cancelled" },
   "artifacts": [{ "name": "build.log", "bytes": "<base64>" }]
 }
@@ -267,7 +268,11 @@ The receiver handles it in one transaction:
 5. **Mirror the task.** A `task` frame opens a local task from the linked
    sender to the recipient. It keeps the sender's `deadline_at`, and its
    `hop_count` is the sender's, so the hop limit holds across the whole chain.
-   `peer_task` maps the two task ids. A `closes_task` frame flips the mapped
+   `peer_task` maps the two task ids. `item_id` names the task's card
+   (H-125); `release_id` is set on a release's deploy or rollback task
+   (H-158), which the receiver keeps in `task_release` so G4 counts the task
+   as on the board there too. Both are optional: an older peer sends neither
+   and ignores them. A `closes_task` frame flips the mapped
    local task (`try_close_task`) before inserting the `done` or cancel note,
    exactly as the local tool would.
 

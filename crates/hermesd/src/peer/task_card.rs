@@ -66,4 +66,27 @@ mod tests {
         let back: TaskFrame = serde_json::from_value(wire).expect("round trip");
         assert_eq!(back.item_id.as_deref(), Some("H-125"));
     }
+
+    /// H-158: a deploy task names its release; an older peer's frame has
+    /// none and still reads, and one without it sends no key an older peer
+    /// would have to know.
+    #[test]
+    fn a_task_frame_carries_its_release_and_an_older_one_has_none() {
+        let old: TaskFrame =
+            serde_json::from_value(json!({"id": "t1", "hop_count": 1, "item_id": "H-1"}))
+                .expect("old frame");
+        assert_eq!(old.release_id, None);
+        assert!(serde_json::to_value(&old)
+            .expect("frame")
+            .get("release_id")
+            .is_none());
+        let new = TaskFrame {
+            release_id: Some("r1".to_string()),
+            ..old
+        };
+        let wire = serde_json::to_value(&new).expect("frame");
+        assert_eq!(wire["release_id"], "r1");
+        let back: TaskFrame = serde_json::from_value(wire).expect("round trip");
+        assert_eq!(back.release_id.as_deref(), Some("r1"));
+    }
 }

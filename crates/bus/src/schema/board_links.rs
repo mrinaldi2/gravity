@@ -96,3 +96,15 @@ CREATE TABLE IF NOT EXISTS board_home (
     peer_id    TEXT NOT NULL
 );
 "#;
+
+/// The release a deploy or rollback task is for (H-158). On the release's
+/// home `release_deployment` says so; a task forwarded to a tester on another
+/// computer carries it in its frame, and the receiver keeps it here, so G4
+/// counts that task as on the board there too. By the home's id, so no key
+/// to `release`; a table of its own, so it runs again safely.
+pub(super) const MIGRATION_TASK_RELEASE: &str = r#"
+CREATE TABLE IF NOT EXISTS task_release (
+    task_id    TEXT PRIMARY KEY,
+    release_id TEXT NOT NULL
+);
+"#;
