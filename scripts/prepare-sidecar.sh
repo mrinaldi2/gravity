@@ -30,7 +30,9 @@ cargo build --release -p hermesd --manifest-path "$ROOT/Cargo.toml"
 
 # The gate asserts on the binary itself, not the build log (H-114): a macOS
 # release must say it is signed with this Team ID.
-IDENTITY="$("$ROOT/target/release/hermesd$EXT" --version | sed -n 's/^identity: //p')"
+# Cargo builds into $CARGO_TARGET_DIR when set: a bot's own target (H-029).
+TARGET="${CARGO_TARGET_DIR:-$ROOT/target}"
+IDENTITY="$("$TARGET/release/hermesd$EXT" --version | sed -n 's/^identity: //p')"
 echo "identity: $IDENTITY"
 case "$TRIPLE" in
   *-apple-darwin)
@@ -43,5 +45,5 @@ esac
 
 DEST="$ROOT/apps/desktop/src-tauri/binaries"
 mkdir -p "$DEST"
-cp "$ROOT/target/release/hermesd$EXT" "$DEST/hermesd-$TRIPLE$EXT"
+cp "$TARGET/release/hermesd$EXT" "$DEST/hermesd-$TRIPLE$EXT"
 echo "staged $DEST/hermesd-$TRIPLE$EXT"

@@ -46,6 +46,8 @@ pub fn archive_bot(
     // Stop first: the runtime must not outlive its credential, or it would keep
     // making authenticated calls that then fail confusingly.
     app.supervisor.stop_bot(&bot.id)?;
+    // Its Cargo target is build output, not work: it goes now (H-029).
+    crate::workers::target::remove_bot_target(std::path::Path::new(&bot.workspace_path));
 
     release_open_tasks(app, bot)?;
     // Its board items go to the lead, who moves them on (H-099).

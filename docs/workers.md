@@ -91,6 +91,16 @@ instead.
    (`CARGO_TARGET_DIR=<home>/cache/worker-target`), deleted once the last
    worker has retired (H-109).
 
+Every other bot session, and workers elsewhere, build into the bot's own
+Cargo target, `CARGO_TARGET_DIR=<bot dir>/cargo-target`, beside its workspace
+(H-029). All of a bot's worktrees share it, and Cargo's lock serialises their
+builds. A `CARGO_TARGET_DIR` in the bot's own settings `env` still wins. The
+folder is the bot's own, so its guard lets it `rm -rf` it or `cargo clean
+--target-dir` it, but never another bot's. Deleting the bot removes it,
+because it is build output, while the workspace is kept.
+`scripts/prepare-sidecar.{sh,ps1}` and `scripts/dev.sh` read the binary from
+`$CARGO_TARGET_DIR` when it is set.
+
 If the parent is deleted, its queued spawns are dropped and its running
 workers' tasks are cancelled. If the owner deletes a running worker, its task
 is cancelled and the spawn closes as `cancelled`.

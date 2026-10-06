@@ -161,3 +161,51 @@ fn a_bots_own_folder_in_git_bash_spelling_is_its_own() {
     assert_eq!(call(format!("rm -rf {g}/repo/target")), None);
     assert!(call("rm -rf /c/Windows/Temp/x".to_string()).is_some());
 }
+
+/// H-029 on Windows: a bot cleans its own `cargo-target` in any spelling,
+/// and not another bot's.
+#[test]
+fn a_bot_cleans_its_own_cargo_target_on_windows() {
+    let target = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target");
+    std::fs::create_dir_all(&target).expect("mkdir target");
+    let root = tempfile::Builder::new()
+        .prefix("guard-cargo-")
+        .tempdir_in(&target)
+        .expect("root");
+    let bots = root.path().canonicalize().expect("real root").join("bots");
+    let workspace = bots.join("dev/workspace");
+    std::fs::create_dir_all(&workspace).expect("mkdir");
+    std::fs::create_dir_all(bots.join("ops/cargo-target")).expect("mkdir");
+    let ctx = GuardContext {
+        home: root.path().join("home"),
+        user_home: root.path().join("user"),
+        writable: vec![bots.join("dev")],
+        worktrees: Vec::new(),
+        bot_slug: Some("dev".into()),
+        releases: false,
+        allow_main: false,
+        full: false,
+        served: Vec::new(),
+    };
+    let call = |command: String| {
+        decide(
+            &json!({ "tool_name": "Bash", "tool_input": { "command": command },
+                     "cwd": workspace }),
+            &ctx,
+        )
+    };
+    let own = spelled(&bots.join("dev/cargo-target"));
+    let msys = format!("/{}{}", own[..1].to_lowercase(), &own[2..]);
+    let back = own.replace('/', "\\");
+    for spelling in [own.clone(), msys, format!("'{back}'")] {
+        assert_eq!(
+            call(format!("cargo clean --target-dir {spelling}")),
+            None,
+            "{spelling}"
+        );
+        assert_eq!(call(format!("rm -rf {spelling}")), None, "{spelling}");
+    }
+    let others = spelled(&bots.join("ops/cargo-target"));
+    assert!(call(format!("cargo clean --target-dir {others}")).is_some());
+    assert!(call(format!("rm -rf '{}'", others.replace('/', "\\"))).is_some());
+}
