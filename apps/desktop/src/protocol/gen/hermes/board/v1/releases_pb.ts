@@ -165,7 +165,8 @@ export const ReleasePlanSchema: GenMessage<ReleasePlan> = /*@__PURE__*/
 /**
  * Lead or DevOps: add items to a release or take them out before it is
  * submitted, recorded as a release event. A planned release takes any open
- * item; one being assembled takes items in Verify only.
+ * item; one being assembled takes items in Verify only, and none once it has
+ * a build or a test result.
  *
  * @generated from message hermes.board.v1.ReleaseItems
  */

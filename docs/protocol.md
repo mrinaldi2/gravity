@@ -695,7 +695,7 @@ runs through the tester the same way.
 **Lifecycle (H-020 §6).**
 
 - **Planned (H-137):** the lead or DevOps calls `release_plan {name, display_version?, items, changelog?}` as soon as a release's contents are decided. Its items may be in any open column, and each item is in at most one open package (planned included).
-  - `release_items {release_id, add?, remove?, reason?}` changes its scope until it is submitted. A planned package takes any open item; one being assembled takes items in Verify only. It can't be left empty.
+  - `release_items {release_id, add?, remove?, reason?}` changes its scope until it is submitted. A planned package takes any open item; one being assembled takes items in Verify only. Once it has a build or a test result its items are fixed (cancel it and package a new one). It can't be left empty.
   - `release_assemble {release_id}` moves `planned` → `assembling` once every item is in Verify. Builds, `release_test`, submit and the frozen hash then work as above, unchanged. Builds and installer builds are refused while it is planned.
   - Each step is a release event: `planned {items}`, `items_changed {added, removed}` with the reason as its note, and `assembled`.
   - The lead may cancel a planned package; anything later is DevOps's.

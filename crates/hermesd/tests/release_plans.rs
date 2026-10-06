@@ -246,3 +246,64 @@ async fn scope_changes_are_the_leads_or_devops_and_on_the_record() {
         .await;
     assert!(error_text(&not_lead).contains("role"), "{not_lead}");
 }
+
+/// The package's builds of `r.items` for "daemon", sha "a…".
+async fn built(r: &mut Releases, id: &str) {
+    r.bots[1]
+        .call(
+            "release_attach_build",
+            json!({"release_id": id, "platform": "daemon", "version": "0.17.0",
+                   "artifact": "/builds/0.17.0", "sha256": "a".repeat(64)}),
+        )
+        .await;
+}
+
+/// CE-016 M1: a build is of the items as they were, so none is added after it.
+#[tokio::test]
+async fn no_item_joins_a_package_once_it_has_a_build() {
+    let mut r = releases(2).await;
+    let (a, b) = (r.items[0].clone(), r.items[1].clone());
+    let created = r.bots[1]
+        .call("release_create", json!({"name": "0.17.0", "items": [a]}))
+        .await["release"]
+        .clone();
+    let id = created["id"].as_str().unwrap().to_string();
+    // Before the first build, an item in Verify may still join.
+    let before = r.bots[1]
+        .call("release_items", json!({"release_id": id, "add": [b]}))
+        .await;
+    assert_eq!(before["release"]["items"].as_array().unwrap().len(), 2);
+    r.bots[1]
+        .call("release_items", json!({"release_id": id, "remove": [b]}))
+        .await;
+    built(&mut r, &id).await;
+    let after = r.bots[1]
+        .call_raw("release_items", json!({"release_id": id, "add": [b]}))
+        .await;
+    assert!(error_text(&after).contains("builds"), "{after}");
+}
+
+/// CE-016 M1: a test pass is of the items as they were, so none leaves after it.
+#[tokio::test]
+async fn no_item_leaves_a_package_once_it_is_tested() {
+    let mut r = releases(2).await;
+    let items = r.items.clone();
+    let created = r.bots[1]
+        .call("release_create", json!({"name": "0.17.0", "items": items}))
+        .await["release"]
+        .clone();
+    let id = created["id"].as_str().unwrap().to_string();
+    built(&mut r, &id).await;
+    r.passed(&id).await;
+    let removed = r.bots[0]
+        .call_raw(
+            "release_items",
+            json!({"release_id": id, "remove": [items[1]]}),
+        )
+        .await;
+    assert!(error_text(&removed).contains("test results"), "{removed}");
+    let still = r.bots[0]
+        .call("release_get", json!({"release_id": id}))
+        .await;
+    assert_eq!(still["release"]["items"].as_array().unwrap().len(), 2);
+}

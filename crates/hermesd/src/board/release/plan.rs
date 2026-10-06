@@ -4,7 +4,8 @@
 //!
 //! - `plan`: a `planned` package; nothing is built or frozen yet.
 //! - `change_items`: add or remove items. While planned, any open item;
-//!   once assembling, only items in Verify, as `release_create`.
+//!   once assembling, only items in Verify, as `release_create`; never once
+//!   it has a build or a test result (CE-016 M1).
 //! - `assemble`: planned → assembling once every item is in Verify. From
 //!   there the B7 gate is unchanged: builds, tests, submit, frozen hash.
 //!
@@ -170,6 +171,15 @@ pub fn change_items(
                 "release {} is {}; its items are fixed once it is submitted",
                 release.name,
                 release.status.as_str()
+            )));
+        }
+        // Builds and test passes are of the items as they were (CE-016 M1):
+        // the set changes only before the first build.
+        if !release.builds.is_empty() || !release.tests.is_empty() {
+            return Err(conflict(format!(
+                "release {} already has builds or test results, which are of its items as they \
+                 are; cancel it and package a new one to change what it holds",
+                release.name
             )));
         }
         let holds = |id: &str| release.items.iter().any(|i| i.item_id == id);
