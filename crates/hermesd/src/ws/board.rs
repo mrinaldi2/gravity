@@ -173,7 +173,8 @@ impl Conn {
             | Request::ItemUnblock(_)
             | Request::ItemAssign(_)
             | Request::ItemRank(_)
-            | Request::ItemCheckAc(_) => {
+            | Request::ItemCheckAc(_)
+            | Request::ItemFlagAc(_) => {
                 return Err(refuse(
                     "unsupported",
                     "item edits aren't served over WebSocket yet",

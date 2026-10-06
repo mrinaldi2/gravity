@@ -34,7 +34,8 @@
     {
       "idx": 1,
       "text": "A refused move says why",
-      "checked": false
+      "checked": false,
+      "postInstall": true
     }
   ],
   "people": [

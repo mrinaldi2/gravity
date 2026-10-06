@@ -48,3 +48,15 @@ CREATE TABLE IF NOT EXISTS worker_item (
     item_id   TEXT NOT NULL REFERENCES item(id)
 );
 "#;
+
+/// Acceptance criteria provable only after install (H-116): release_submit
+/// leaves them open; Done and the last deploy_confirm want them checked.
+/// Keyed by the criterion's text, as its check is, so an edit that keeps
+/// the text keeps the flag. A table of its own, so it runs again safely.
+pub(super) const MIGRATION_AC_POST_INSTALL: &str = r#"
+CREATE TABLE IF NOT EXISTS item_ac_post_install (
+    item_id TEXT NOT NULL REFERENCES item(id),
+    text    TEXT NOT NULL,
+    PRIMARY KEY (item_id, text)
+);
+"#;

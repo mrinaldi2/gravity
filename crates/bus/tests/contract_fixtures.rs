@@ -173,6 +173,7 @@ fn arm_of(envelope: &bus::contract::wire::Envelope) -> String {
                 board_request::Request::BoardEnable(_) => "board_enable",
                 board_request::Request::ColumnSetLimit(_) => "column_set_limit",
                 board_request::Request::RoleSet(_) => "role_set",
+                board_request::Request::ItemFlagAc(_) => "item_flag_ac",
             }
         ),
         Body::BoardResponse(r) => format!(
@@ -225,6 +226,7 @@ const ARMS: &[&str] = &[
     "request.board_enable",
     "request.column_set_limit",
     "request.role_set",
+    "request.item_flag_ac",
     "response.board",
     "response.item",
     "response.history",

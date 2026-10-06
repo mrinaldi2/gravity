@@ -375,7 +375,7 @@ fn item_move(app: &Arc<AppState>, me: &Me, req: c::ItemMove) -> anyhow::Result<V
         ChangeKind::ItemMoved,
         from,
         || match move_item(&app.db, &request, &me.actor())? {
-            Moved::Done(item) => Ok((json!({ "item": item_out(*item)? }), req.id.clone())),
+            Moved::Done(item) => Ok((super::board_edit::moved(*item)?, req.id.clone())),
             Moved::Refused(unmet) => Err(refused(unmet)),
             Moved::Conflict(current) => Err(conflict(*current)),
         },

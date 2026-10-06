@@ -259,18 +259,19 @@ fn independent_review(item: &Item, who: &Who, ctx: &Context, out: &mut Vec<Unmet
     }
 }
 
-/// Verify → Owner testing: required machines passed, AC checked, packaged.
+/// Verify → Owner testing: required machines passed, AC checked (those
+/// provable only after install wait for it, H-116), packaged.
 fn ready_to_package(item: &Item, ctx: &Context, out: &mut Vec<Unmet>) {
     let open = item
         .acceptance_criteria
         .iter()
-        .filter(|ac| !ac.checked)
+        .filter(|ac| !ac.checked && !ac.post_install)
         .count();
     if open > 0 {
         out.push(unmet(
             "verify.ac",
             format!("{open} acceptance criteria are not checked."),
-            None,
+            Some("Tick each one verified with item_check_ac, or flag it post-install with item_flag_ac."),
         ));
     }
     let machines: BTreeSet<&String> = item
@@ -298,6 +299,30 @@ fn ready_to_package(item: &Item, ctx: &Context, out: &mut Vec<Unmet>) {
             "verify.release",
             "It isn't in a submitted release package.",
             Some("Add it to a package and submit it."),
+        ));
+    }
+}
+
+/// The acceptance criteria provable only after install that aren't checked
+/// yet (H-116): nothing reaches Done while one is open.
+pub fn open_post_install(item: &Item) -> Vec<&crate::board::model::AcceptanceCriterion> {
+    item.acceptance_criteria
+        .iter()
+        .filter(|ac| ac.post_install && !ac.checked)
+        .collect()
+}
+
+/// Any move into Done (H-116).
+pub(super) fn post_install_done(item: &Item, out: &mut Vec<Unmet>) {
+    let open = open_post_install(item);
+    if !open.is_empty() {
+        out.push(unmet(
+            "done.post_install",
+            format!(
+                "{} post-install acceptance criteria aren't checked yet.",
+                open.len()
+            ),
+            Some("Tick them with item_check_ac once it is installed."),
         ));
     }
 }

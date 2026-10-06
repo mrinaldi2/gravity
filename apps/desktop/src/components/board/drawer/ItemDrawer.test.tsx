@@ -18,12 +18,13 @@ function setup(
     readonly canComment?: boolean;
     readonly fake?: FakeDaemon;
     readonly check?: ReturnType<typeof drawerCheck>;
+    readonly detail?: ReturnType<typeof itemDetail>;
   } = {},
 ) {
   const fake = options.fake ?? new FakeDaemon();
   const check = options.check ?? drawerCheck();
   fake
-    .onBoard("itemGet", () => ({ case: "item", value: itemDetail() }))
+    .onBoard("itemGet", () => ({ case: "item", value: options.detail ?? itemDetail() }))
     .onBoard("itemMoveCheck", () => ({ case: "moveCheck", value: check }));
   const onClose = vi.fn<() => void>();
   const onMove = vi.fn<(anchor: { readonly x: number; readonly y: number }) => void>();
@@ -70,6 +71,17 @@ describe("ItemDrawer", () => {
     expect(overview).toHaveTextContent("Verification mac ✓");
     expect(overview).toHaveTextContent("Assignee Desktop Dev · Reviewers Architect");
     expect(overview).toHaveTextContent("Parent H-016");
+  });
+
+  it("says which open criteria are checked after install", async () => {
+    const detail = itemDetail();
+    const second = detail.item?.acceptanceCriteria[1];
+    if (second) second.postInstall = true;
+    setup({ detail });
+    await screen.findByText("Guards refuse with reasons");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent(
+      "Guards refuse with reasonschecked after install",
+    );
   });
 
   it("groups links by kind", async () => {

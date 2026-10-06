@@ -186,6 +186,10 @@ message AcceptanceCriterion {
   optional google.protobuf.Timestamp checked_at = 5;
   // Where it was checked, for platform criteria.
   optional string machine = 6;
+  // Provable only once installed (H-116): release_submit leaves it open,
+  // and the item can't reach Done (nor the last deploy_confirm pass) until
+  // it is checked.
+  bool post_install = 7;
 }
 
 message ItemPerson {

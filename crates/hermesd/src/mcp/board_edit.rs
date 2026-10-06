@@ -2,6 +2,7 @@
 //! load the item and the caller's roles, check the version, run the guard,
 //! write (ARCH-R4 §3).
 
+use std::cell::Cell;
 use std::sync::Arc;
 
 use bus::contract::board as c;
@@ -11,7 +12,9 @@ use crate::app::AppState;
 use crate::board::contract::model_list;
 use crate::board::feed::ChangeKind;
 use crate::board::guards::{self, Who};
-use crate::board::model::{Item, ItemType, LinkKind, Platform, Priority, Size, Unmet};
+use crate::board::model::{
+    ColumnCategory, Item, ItemType, LinkKind, Platform, Priority, Size, Unmet,
+};
 use crate::board::moves::load_in;
 use crate::db::{BoardTx, ItemEdit, NewItem, Write};
 
@@ -36,6 +39,7 @@ pub(super) fn call(
         "item_assign" => assign(app, me, decode("ItemAssign", args, project)?),
         "item_rank" => rank(app, me, decode("ItemRank", args, project)?),
         "item_check_ac" => check_ac(app, me, decode("ItemCheckAc", args, project)?),
+        "item_flag_ac" => flag_ac(app, me, decode("ItemFlagAc", args, project)?),
         other => anyhow::bail!("unknown tool: {other}"),
     }
 }
@@ -287,21 +291,73 @@ fn rank(app: &Arc<AppState>, me: &Me, req: c::ItemRank) -> anyhow::Result<Value>
 fn check_ac(app: &Arc<AppState>, me: &Me, req: c::ItemCheckAc) -> anyhow::Result<Value> {
     let passed = c::VerificationResult::try_from(req.result) == Ok(c::VerificationResult::Pass);
     let actor = me.actor();
+    let evidence = req.evidence.as_deref().map(str::trim);
+    // The lead's evidence goes on the item as a comment, in the same write.
+    let lead_check = Cell::new(false);
+    let guard = |item: &Item, who: &Who| {
+        lead_check.set(guards::needs_evidence(item, who));
+        guards::check_ac(item, who, evidence)
+    };
+    guarded(app, me, &req.id, req.expected_version, guard, |t| {
+        let write = t.check_ac(
+            &req.id,
+            req.expected_version,
+            req.index,
+            passed,
+            req.machine.as_deref(),
+            &actor,
+        )?;
+        if let (true, Some(evidence)) = (lead_check.get(), evidence) {
+            let verb = if passed { "ticked" } else { "marked failed" };
+            let body = format!(
+                "Acceptance criterion {} {verb} by the lead. Evidence: {evidence}",
+                req.index + 1
+            );
+            t.add_item_comment(&req.id, &body, None, &actor)?;
+        }
+        Ok(write)
+    })
+}
+
+fn flag_ac(app: &Arc<AppState>, me: &Me, req: c::ItemFlagAc) -> anyhow::Result<Value> {
+    let actor = me.actor();
     guarded(
         app,
         me,
         &req.id,
         req.expected_version,
-        guards::check_ac,
+        guards::flag_ac,
         |t| {
-            t.check_ac(
+            t.flag_ac(
                 &req.id,
                 req.expected_version,
                 req.index,
-                passed,
-                req.machine.as_deref(),
+                req.post_install,
                 &actor,
             )
         },
     )
+}
+
+/// An item_move reply. Into Verify it lists the criteria nobody has ticked,
+/// so the mover sees what the testers still have to prove (H-116).
+pub(super) fn moved(item: Item) -> anyhow::Result<Value> {
+    let unticked: Vec<Value> = if item.category == ColumnCategory::Verify {
+        item.acceptance_criteria
+            .iter()
+            .filter(|ac| !ac.checked)
+            .map(|ac| json!({ "index": ac.idx, "text": ac.text, "post_install": ac.post_install }))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let mut reply = json!({ "item": item_out(item)? });
+    if !unticked.is_empty() {
+        reply["unticked_ac"] = json!(unticked);
+        reply["note"] = json!(
+            "These acceptance criteria aren't ticked yet. Tick each one already verified \
+             with item_check_ac; flag those provable only after install with item_flag_ac."
+        );
+    }
+    Ok(reply)
 }

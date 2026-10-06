@@ -62,6 +62,8 @@ export function Overview(props: {
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
+              ) : c.postInstall ? (
+                <span className="drawer-dim">checked after install</span>
               ) : null}
             </li>
           ))}

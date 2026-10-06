@@ -142,6 +142,52 @@ impl BoardTx<'_> {
             Ok(())
         })
     }
+
+    /// Mark one acceptance criterion provable only after install, or not
+    /// (H-116); versioned like an edit. The flag follows its text.
+    pub fn flag_ac(
+        &self,
+        id: &str,
+        expected: u64,
+        idx: u32,
+        post_install: bool,
+        actor: &Actor<'_>,
+    ) -> anyhow::Result<Write<Item>> {
+        versioned(self.conn, id, expected, |tx| {
+            let text: String = tx
+                .query_row(
+                    "SELECT text FROM item_ac WHERE item_id = ?1 AND idx = ?2",
+                    params![id, idx],
+                    |r| r.get(0),
+                )
+                .map_err(|_| anyhow::anyhow!("{id} has no acceptance criterion {idx}"))?;
+            if post_install {
+                tx.execute(
+                    "INSERT OR IGNORE INTO item_ac_post_install(item_id, text) VALUES (?1, ?2)",
+                    params![id, text],
+                )?;
+            } else {
+                tx.execute(
+                    "DELETE FROM item_ac_post_install WHERE item_id = ?1 AND text = ?2",
+                    params![id, text],
+                )?;
+            }
+            let field = format!("ac:{idx}");
+            let event = Event {
+                kind: ItemEventKind::Edited,
+                from: None,
+                to: Some(if post_install {
+                    "post_install"
+                } else {
+                    "before_release"
+                }),
+                field: Some(&field),
+                note: None,
+            };
+            record(tx, id, actor, event)?;
+            Ok(())
+        })
+    }
 }
 
 /// Replace an item's acceptance criteria with `texts`, in order. A criterion

@@ -9,6 +9,7 @@ use bus::{DecisionState, MessageKind, Sender, SenderKind, TaskState, DEFAULT_TAS
 use serde_json::{json, Value};
 
 use crate::app::AppState;
+use crate::board::guards;
 use crate::board::model::{ColumnCategory, Role};
 use crate::db::BoardTx;
 use crate::decisions::authority::is_relayed;
@@ -273,6 +274,9 @@ pub fn confirm(
             }
             _ => (release.status, None, String::new()),
         };
+        if to == Some(ColumnCategory::Done) {
+            post_install_checked(t, &release)?;
+        }
         let (mut moved, mut touched) = (Vec::new(), Vec::new());
         if let Some(to) = to {
             for ri in &release.items {
@@ -302,6 +306,31 @@ pub fn confirm(
         ask_rollback(app, me, &release, machine)?;
     }
     Ok(release)
+}
+
+/// Nothing reaches Done with a post-install criterion unticked (H-116): the
+/// last good deploy is refused, and kept for later, until they are ticked.
+fn post_install_checked(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<()> {
+    let mut open = Vec::new();
+    for ri in &release.items {
+        let Some(item) = t.item(&ri.item_id)? else {
+            continue;
+        };
+        open.extend(
+            guards::open_post_install(&item)
+                .into_iter()
+                .map(|ac| format!("{} #{} \"{}\"", item.id, ac.idx + 1, ac.text)),
+        );
+    }
+    if open.is_empty() {
+        return Ok(());
+    }
+    Err(conflict(format!(
+        "release {} is installed everywhere, but these post-install acceptance criteria \
+         aren't ticked: {}. Tick each with item_check_ac, then confirm again.",
+        release.name,
+        open.join("; ")
+    )))
 }
 
 /// Every machine the items' platforms require (or, with none configured,

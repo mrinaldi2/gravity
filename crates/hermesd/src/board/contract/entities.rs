@@ -135,6 +135,7 @@ impl From<m::AcceptanceCriterion> for c::AcceptanceCriterion {
             checked_by: v.checked_by,
             checked_at: v.checked_at.and_then(stamp),
             machine: v.machine,
+            post_install: v.post_install,
         }
     }
 }
@@ -150,6 +151,7 @@ impl TryFrom<c::AcceptanceCriterion> for m::AcceptanceCriterion {
             checked_by: v.checked_by,
             checked_at: maybe_at(v.checked_at, "AcceptanceCriterion.checked_at")?,
             machine: v.machine,
+            post_install: v.post_install,
         })
     }
 }

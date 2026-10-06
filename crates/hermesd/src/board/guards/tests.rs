@@ -79,6 +79,7 @@ fn item(category: Cat) -> Item {
             checked_by: None,
             checked_at: None,
             machine: None,
+            post_install: false,
         }],
         people: Vec::new(),
         verifications: Vec::new(),
@@ -346,4 +347,45 @@ fn acceptance_criteria_are_fixed_from_verify_on() {
     ] {
         assert_eq!(check_ac_edit(&item(cat))[0].code, "ac.locked", "{cat:?}");
     }
+}
+
+#[test]
+fn post_install_criteria_wait_for_done_not_for_the_package() {
+    let mut c = case(Cat::Verify);
+    c.item.release_id = Some("R-1".into());
+    c.item.acceptance_criteria[0].checked = false;
+    assert!(run(&c, Cat::Approval).contains(&"verify.ac".to_string()));
+    c.item.acceptance_criteria[0].post_install = true;
+    assert!(!run(&c, Cat::Approval).contains(&"verify.ac".to_string()));
+    // Into Done, even the owner's by-hand close waits for it.
+    c.item.release_id = None;
+    c.reason = Some("shipped by hand");
+    assert_eq!(run(&c, Cat::Done), ["done.post_install"]);
+    c.item.acceptance_criteria[0].checked = true;
+    assert!(run(&c, Cat::Done).is_empty());
+}
+
+#[test]
+fn flagging_is_the_leads_or_the_assignees_before_verify() {
+    let dev = bot("dev", &[Role::Dev]);
+    assert!(flag_ac(&item(Cat::Doing), &dev).is_empty());
+    assert_eq!(
+        flag_ac(&item(Cat::Verify), &dev)[0].code,
+        "role.not_allowed"
+    );
+    assert!(flag_ac(&item(Cat::Verify), &bot("lead", LEAD)).is_empty());
+    assert_eq!(flag_ac(&item(Cat::Done), &Who::Owner)[0].code, "ac.locked");
+    let other = bot("other", &[Role::Dev]);
+    assert_eq!(
+        flag_ac(&item(Cat::Doing), &other)[0].code,
+        "role.not_allowed"
+    );
+    // The lead's check needs evidence; a tester's doesn't.
+    let it = item(Cat::Verify);
+    assert_eq!(
+        check_ac(&it, &bot("lead", LEAD), None)[0].code,
+        "ac.evidence"
+    );
+    assert!(check_ac(&it, &bot("lead", LEAD), Some("CI green")).is_empty());
+    assert!(check_ac(&it, &bot("t", &[Role::Tester]), None).is_empty());
 }

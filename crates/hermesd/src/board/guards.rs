@@ -6,8 +6,9 @@
 
 use std::collections::BTreeMap;
 
+pub use ac::{check_ac, check_ac_edit, flag_ac, needs_evidence};
 use conditions::conditions;
-pub use conditions::{check_template, DOR_FIELDS};
+pub use conditions::{check_template, open_post_install, DOR_FIELDS};
 
 use super::model::{
     BoardColumn, ColumnCategory as Cat, Item, ItemLink, LinkKind, PersonRole, Platform, Role,
@@ -235,6 +236,9 @@ pub fn evaluate(item: &Item, mv: &Move<'_>, who: &Who, ctx: &Context) -> Vec<Unm
         ));
     }
     conditions(rule, item, mv, who, ctx, &mut out);
+    if mv.to.category == Cat::Done {
+        conditions::post_install_done(item, &mut out);
+    }
     if !is_return(rule) {
         out.extend(wip(item, mv, who, ctx));
     }
@@ -331,37 +335,6 @@ pub fn check_block(item: &Item, who: &Who, setting: bool, reason: Option<&str>) 
     out
 }
 
-/// Checking an acceptance criterion: a tester, a verifier named on the item,
-/// the lead or the owner.
-pub fn check_ac(item: &Item, who: &Who) -> Vec<Unmet> {
-    if who.leads() || *who == Who::Daemon || who.verifies(item) {
-        Vec::new()
-    } else {
-        vec![unmet(
-            "role.not_allowed",
-            "Only a tester, a named verifier or the lead can.",
-            None,
-        )]
-    }
-}
-
-/// Changing acceptance criteria: until the item reaches Verify; after that
-/// they are what testers and the owner check against.
-pub fn check_ac_edit(item: &Item) -> Vec<Unmet> {
-    if matches!(
-        item.category,
-        Cat::Verify | Cat::Approval | Cat::Deploying | Cat::Done | Cat::Cancelled
-    ) {
-        vec![unmet(
-            "ac.locked",
-            "Its acceptance criteria are fixed once it reaches Verify.",
-            Some("Send it back to Doing first."),
-        )]
-    } else {
-        Vec::new()
-    }
-}
-
 /// Ranking, P0, and editing WIP limits, columns or templates: the lead or the owner.
 pub fn check_lead(who: &Who) -> Vec<Unmet> {
     if who.leads() || *who == Who::Daemon {
@@ -375,6 +348,7 @@ pub fn check_lead(who: &Who) -> Vec<Unmet> {
     }
 }
 
+mod ac;
 mod conditions;
 #[cfg(test)]
 mod tests;

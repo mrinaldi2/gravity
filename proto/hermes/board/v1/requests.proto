@@ -47,6 +47,8 @@ message BoardRequest {
     // bot's board role (the owner's here, the lead's over MCP).
     ColumnSetLimit column_set_limit = 20;
     RoleSet role_set = 21;
+    // Post-install acceptance criteria (H-116).
+    ItemFlagAc item_flag_ac = 22;
   }
 }
 
@@ -270,7 +272,7 @@ message ItemRank {
   optional string before = 4;
 }
 
-// Tester: record an acceptance criterion's result.
+// Tester, named verifier or lead: record an acceptance criterion's result.
 message ItemCheckAc {
   string id = 1;
   uint64 expected_version = 2;
@@ -279,6 +281,20 @@ message ItemCheckAc {
   VerificationResult result = 4;
   // The machine it was checked on.
   optional string machine = 5;
+  // What shows it holds; required from the lead (H-116), and posted on the
+  // item as a comment.
+  optional string evidence = 6;
+}
+
+// Lead or the item's assignee: mark an acceptance criterion as provable
+// only after install, or not (H-116). The lead may, until Done; the
+// assignee, until it reaches Verify.
+message ItemFlagAc {
+  string id = 1;
+  uint64 expected_version = 2;
+  // The criterion's index, from item_get.
+  uint32 index = 3;
+  bool post_install = 4;
 }
 
 // Lead: import the markdown backlog into the board once (B6). Rows keep

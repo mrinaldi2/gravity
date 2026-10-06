@@ -127,8 +127,11 @@ pub(super) fn item_in(conn: &Connection, id: &str) -> rusqlite::Result<Option<It
     };
     item.acceptance_criteria = conn
         .prepare(
-            "SELECT idx, text, checked, checked_by, checked_at, machine FROM item_ac
-             WHERE item_id = ?1 ORDER BY idx",
+            "SELECT a.idx, a.text, a.checked, a.checked_by, a.checked_at, a.machine,
+                    p.item_id IS NOT NULL
+             FROM item_ac a
+             LEFT JOIN item_ac_post_install p ON p.item_id = a.item_id AND p.text = a.text
+             WHERE a.item_id = ?1 ORDER BY a.idx",
         )?
         .query_map(params![id], |r| {
             Ok(AcceptanceCriterion {
@@ -138,6 +141,7 @@ pub(super) fn item_in(conn: &Connection, id: &str) -> rusqlite::Result<Option<It
                 checked_by: r.get(3)?,
                 checked_at: r.get::<_, Option<String>>(4)?.map(parse_at),
                 machine: r.get(5)?,
+                post_install: r.get(6)?,
             })
         })?
         .collect::<Result<_, _>>()?;

@@ -131,6 +131,9 @@ pub struct AcceptanceCriterion {
     pub checked_by: Option<String>,
     pub checked_at: Option<DateTime<Utc>>,
     pub machine: Option<String>,
+    /// Provable only once installed (H-116): open at submit, required for
+    /// Done.
+    pub post_install: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
