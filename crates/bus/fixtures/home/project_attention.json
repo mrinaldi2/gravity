@@ -1,0 +1,27 @@
+{
+  "parts": [
+    {
+      "project_id": "p-gravity",
+      "local": {
+        "count": 1,
+        "score": 3,
+        "by_kind": { "owner_action": 1 },
+        "oldest_at": "2026-10-06T09:00:00Z"
+      },
+      "rows": [
+        {
+          "id": "owner_action:d-imac:oa-7",
+          "kind": "OWNER_ACTION",
+          "daemon_id": "d-imac",
+          "project_id": "p-gravity-imac",
+          "title": "Run: stop colima for the install",
+          "created_at": "2026-10-06T09:00:00Z",
+          "weight": 3,
+          "action_id": "oa-7"
+        }
+      ],
+      "bots_working": 1,
+      "last_activity_at": "2026-10-06T10:40:00Z"
+    }
+  ]
+}

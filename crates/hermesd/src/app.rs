@@ -43,6 +43,12 @@ pub const CAPABILITIES: &[&str] = &[
     // Commands a bot proposes for the owner to run (H-117 R1).
     "owner_actions",
     "permission_profiles",
+    // The projects home (H-128): `projects_overview`, `attention_rows`.
+    "projects_overview",
+    // Owner threads and pins (H-128 D6, D7): `owner_threads`,
+    // `owner_thread_get`, `owner_thread_read`, `project_pin`.
+    "owner_threads",
+    "project_pin",
 ];
 
 pub struct AppState {
@@ -69,6 +75,8 @@ pub struct AppState {
     pub board: crate::board::feed::BoardFeed,
     /// Boards whose home is a peer, as last seen (B9).
     pub board_mirror: crate::board::mirror::BoardMirror,
+    /// The projects home's peer answers and liveness (H-128).
+    pub overview: crate::overview::Overview,
     /// Bots that used a bearer token, and when (H-044 phase 1).
     pub bearers: crate::bus_auth::BearerLog,
     /// The owner's one-time tickets and the app check behind them (H-044 T4).
@@ -127,6 +135,7 @@ impl AppState {
             workers: crate::workers::Workers::default(),
             board: crate::board::feed::BoardFeed::default(),
             board_mirror: crate::board::mirror::BoardMirror::default(),
+            overview: crate::overview::Overview::default(),
             bearers: crate::bus_auth::BearerLog::default(),
             owner: crate::bus_auth::owner::Owner::new(&cfg_home),
             started_at: Instant::now(),

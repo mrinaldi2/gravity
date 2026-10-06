@@ -5,21 +5,52 @@ use serde_json::{json, Value};
 
 use crate::messaging;
 
-use super::Conn;
+use super::{owner_card, Conn};
 
 impl Conn {
     // ---- messaging ----
 
+    /// The owner's chat to a bot, optionally on a card (H-128 D5).
     pub(super) fn send_user_message(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let body = Self::str_field(req, "body")?;
         let sender = messaging::user_sender();
         let bot_id = Self::str_field(req, "to_bot_id")?;
+        let item_id = req["item_id"].as_str().filter(|id| !id.is_empty());
+        let card = match item_id {
+            Some(item_id) => {
+                let bot = self
+                    .app
+                    .db
+                    .get_live_bot(bot_id)?
+                    .ok_or_else(|| crate::decisions::not_found(format!("no bot {bot_id}")))?;
+                Some((item_id, self.owner_card(&bot, item_id)?, bot))
+            }
+            None => None,
+        };
+        let stored = match &card {
+            Some((item_id, ..)) => owner_card::with_card(item_id, body),
+            None => body.to_string(),
+        };
         let msg = messaging::send_dm(
             &self.app.db,
             &self.app.events,
-            messaging::Dm::new(bot_id, &sender, MessageKind::Chat, body),
+            messaging::Dm::new(bot_id, &sender, MessageKind::Chat, &stored),
         )?;
-        self.send(json!({ "type": "message", "req_id": req_id, "message": msg }));
+        let Some((item_id, board, bot)) = card else {
+            self.send(json!({ "type": "message", "req_id": req_id, "message": msg }));
+            return Ok(());
+        };
+        // The message is sent: a comment that fails is logged, not refused.
+        let commented = self
+            .comment_owner_card(&board, &bot, item_id, body)
+            .unwrap_or_else(|e| {
+                tracing::warn!(item_id, error = %e, "owner's card comment failed");
+                false
+            });
+        self.send(json!({
+            "type": "message", "req_id": req_id, "message": msg,
+            "item_id": item_id, "commented": commented,
+        }));
         Ok(())
     }
 

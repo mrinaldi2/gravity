@@ -1,0 +1,9 @@
+{
+  "reqId": "43",
+  "homeResponse": {
+    "project_pinned": {
+      "project_id": "p-gravity",
+      "pinned": true
+    }
+  }
+}

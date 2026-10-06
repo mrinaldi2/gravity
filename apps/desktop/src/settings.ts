@@ -111,53 +111,6 @@ export function markSetupComplete(): void {
   }
 }
 
-const PINNED_KEY = "pinned-bots";
-
-/** Loads the pinned bot ids, most recently pinned last, in display order. */
-export function loadPinnedBotIds(): readonly string[] {
-  try {
-    const raw = readStored(PINNED_KEY);
-    if (raw === null) {
-      return [];
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed.filter((id): id is string => typeof id === "string" && id.length > 0);
-    }
-  } catch {
-    // fall through to no pins
-  }
-  return [];
-}
-
-export function savePinnedBotIds(ids: readonly string[]): void {
-  try {
-    writeStored(PINNED_KEY, JSON.stringify(ids));
-  } catch {
-    // localStorage unavailable; pins are session-only
-  }
-}
-
-const LAST_USED_BOT_KEY = "last-used-bot";
-
-/** Loads the bot that was open when the app was last used. */
-export function loadLastUsedBotId(): string | undefined {
-  try {
-    const botId = readStored(LAST_USED_BOT_KEY);
-    return botId === null || botId.length === 0 ? undefined : botId;
-  } catch {
-    return undefined;
-  }
-}
-
-export function saveLastUsedBotId(botId: string): void {
-  try {
-    writeStored(LAST_USED_BOT_KEY, botId);
-  } catch {
-    // localStorage unavailable; selection is session-only
-  }
-}
-
 const PROJECT_TAB_KEY = "project-tab.";
 
 /** The tab a project window was last showing, so it reopens there. */

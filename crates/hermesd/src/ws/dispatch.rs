@@ -52,6 +52,12 @@ const READ_ONLY: &[&str] = &[
     "release_machines",
     "get_release",
     "dashboard_get",
+    "projects_overview",
+    "attention_rows",
+    // Reading an owner thread marks it read: the owner's own state (D6).
+    "owner_threads",
+    "owner_thread_get",
+    "owner_thread_read",
     "quiesce_status",
     "bot_grants",
     "owner_action_list",
@@ -93,6 +99,8 @@ const APPROVE_ONLY: &[&str] = &[
     // Running or rejecting a command proposed for the owner (H-117 R1).
     "owner_action_run",
     "owner_action_reject",
+    // Closing an owner question for the owner (H-128 R2.2).
+    "attention_dismiss",
 ];
 
 /// Capability required for each request type.
@@ -185,6 +193,13 @@ impl Conn {
             "release_machines_set" => self.release_machines_set(&req_id, req),
             "get_release" => self.get_release(&req_id, req),
             "dashboard_get" => self.dashboard_get(&req_id, req),
+            "projects_overview" => self.projects_overview(&req_id, req),
+            "attention_rows" => self.attention_rows(&req_id, req),
+            "attention_dismiss" => self.attention_dismiss(&req_id, req),
+            "project_pin" => self.project_pin(&req_id, req),
+            "owner_threads" => self.owner_threads(&req_id),
+            "owner_thread_get" => self.owner_thread_get(&req_id, req),
+            "owner_thread_read" => self.owner_thread_read(&req_id, req),
             "quiesce_status" => self.quiesce_status(&req_id),
             "quiesce_resume" => self.quiesce_resume(&req_id),
             "owner_action_list" => self.owner_action_list(&req_id, req),

@@ -1,0 +1,265 @@
+// The projects home (H-128 rev 2, frozen): one row per project with what
+// needs the owner, across linked computers. Requests travel in WS binary
+// frames inside `hermes.wire.v1.Envelope` (`HomeRequest`/`HomeResponse`) and
+// as proto3 JSON on the JSON WS, `{type, req_id, ...}`, with the proto field
+// names. The peer messages ride the JSON peer link as proto3 JSON.
+//
+// Fields may be added; none renamed or renumbered (ADR-001): a breaking
+// change is hermes.home.v2.
+syntax = "proto3";
+
+package hermes.home.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ---- requests (WS type in brackets; grant) ----
+message ProjectsOverviewRequest {          // [projects_overview] read
+  repeated string project_ids = 1;          // empty = all (iOS N1)
+}
+message AttentionRowsRequest {              // [attention_rows] read
+  string project_id = 1;
+}
+message AttentionDismissRequest {           // [attention_dismiss] approve
+  string id = 1;
+}
+message ProjectPinRequest {                 // [project_pin] control
+  string project_id = 1;
+  bool pinned = 2;
+}
+message OwnerThreadsRequest {}              // [owner_threads] read
+message OwnerThreadGetRequest {             // [owner_thread_get] read
+  string bot_id = 1;
+  optional int64 before_num = 2;
+  optional uint32 limit = 3;                // default 50, max 200
+}
+message OwnerThreadReadRequest {            // [owner_thread_read] read
+  string bot_id = 1;
+  int64 up_to_num = 2;
+}
+
+// ---- answers ----
+message ProjectsOverview {
+  google.protobuf.Timestamp as_of = 1;
+  repeated ProjectRow rows = 2;             // sorted by rank
+  repeated Source sources = 3;
+  AttentionSummary total = 4;               // across rows: the app badge (iOS N2)
+}
+
+message ProjectRow {
+  string project_id = 1;                    // this computer's id
+  string name = 2;
+  repeated Member members = 3;              // this computer first
+  string board_home = 4;                    // daemon_id; empty = no board
+  ReleaseBrief current_release = 5;         // unset = none
+  uint32 open_tasks = 6;
+  repeated DoingBrief doing = 7;            // at most 3, board order
+  uint32 bots = 8;
+  uint32 bots_working = 9;
+  AttentionSummary attention = 10;
+  bool partial = 11;
+  repeated string stale_sources = 12;       // daemon_ids answering from last-good or not at all (iOS N5)
+  google.protobuf.Timestamp last_activity_at = 13;   // last item event, task or message (iOS N3)
+  bool pinned = 14;
+  uint32 rank = 15;                         // 0 = first
+  SummaryBrief latest_summary = 16;         // unset = none
+  bool legacy = 17;                         // only set by clients for an older daemon (R2.1)
+}
+
+message Member {
+  string daemon_id = 1;
+  string project_id = 2;
+  string computer_name = 3;
+}
+
+message Source {
+  enum State { STATE_UNSPECIFIED = 0; OK = 1; OFFLINE = 2; TIMEOUT = 3; OLD_VERSION = 4; }
+  string daemon_id = 1;
+  string name = 2;
+  State state = 3;
+  google.protobuf.Timestamp as_of = 4;      // of the data in use; unset = never answered
+}
+
+message AttentionSummary {
+  uint32 count = 1;
+  uint32 score = 2;
+  map<string, uint32> by_kind = 3;          // key = AttentionKind name, lowercase
+  google.protobuf.Timestamp oldest_at = 4;  // oldest counted row (iOS M2)
+}
+
+enum AttentionKind {
+  ATTENTION_KIND_UNSPECIFIED = 0;
+  RELEASE_AWAITING = 1;
+  OWNER_ACTION = 2;
+  PERMISSION_PROMPT = 3;
+  DECISION = 4;
+  RELAYED_RULINGS = 5;
+  P0_ITEM = 6;
+  BOT_WAITING = 7;
+  OFF_BOARD = 8;
+  SERVING_OFF = 9;
+  OWNER_QUESTION = 10;
+}
+
+message AttentionRow {
+  string id = 1;                            // stable: "<kind>:<daemon_id>:<target id>" (iOS M3)
+  AttentionKind kind = 2;
+  string daemon_id = 3;                     // the computer that acts on it
+  string project_id = 4;                    // in that computer's ids
+  string title = 5;                         // one line, at most 120 characters, set by the daemon
+  google.protobuf.Timestamp created_at = 6;
+  uint32 weight = 7;
+  oneof target {
+    string decision_id = 10;
+    string release_id = 11;
+    string action_id = 12;                  // owner action (H-117)
+    string request_id = 13;                 // permission prompt or terminal card
+    BotRef bot = 14;                        // bot_waiting, off_board, owner_question in a thread
+    string item_id = 15;                    // p0_item, owner_question on a card
+  }
+  uint32 relayed_count = 20;                // relayed_rulings only
+  string priority = 21;                     // decision only: P0..P3
+}
+
+message AttentionRows {
+  repeated AttentionRow rows = 1;           // sorted: weight desc, created_at asc
+  repeated Source sources = 2;
+}
+
+message BotRef {
+  string daemon_id = 1;                     // the bot's own computer
+  string bot_id = 2;                        // its id there
+  string name = 3;
+}
+
+message ReleaseBrief {                      // iOS M4
+  string release_id = 1;
+  string version = 2;
+  string state = 3;                         // ReleaseStatus name
+  bool awaiting_owner = 4;
+  uint32 items_total = 5;
+  uint32 items_done = 6;
+  google.protobuf.Timestamp deployed_at = 7;
+}
+
+message DoingBrief {
+  string item_id = 1;
+  string title = 2;                         // at most 80 characters, cut by the daemon with "…"
+  string assignee_name = 3;
+  string assignee_bot_id = 4;
+}
+
+message SummaryBrief {
+  string meeting_id = 1;
+  string text = 2;                          // at most 200 characters
+  google.protobuf.Timestamp at = 3;
+}
+
+message OwnerThreads { repeated OwnerThread threads = 1; }
+message OwnerThread {
+  BotRef bot = 1;
+  string project_id = 2;
+  MessageBrief last = 3;
+  uint32 unread = 4;
+  bool open_question = 5;
+}
+message MessageBrief {
+  int64 num = 1;
+  bool from_owner = 2;
+  string text = 3;                          // at most 200 characters
+  google.protobuf.Timestamp at = 4;
+  bool asks = 5;
+}
+
+// ---- pushes ----
+message ProjectsOverviewChanged { repeated string project_ids = 1; }   // [projects_overview_changed]
+message OwnerThreadUpdated { BotRef bot = 1; string project_id = 2; }  // [owner_thread_updated]
+
+// ---- peer (wire envelope, peer protocol v1 unchanged otherwise) ----
+message ProjectAttentionRequest { repeated string project_ids = 1; }   // [project_attention]
+message ProjectAttention {
+  message Part {
+    string project_id = 1;                  // the caller's ids
+    AttentionSummary local = 2;             // rows this computer owns
+    repeated AttentionRow rows = 3;         // the same, in full, for attention_rows
+    uint32 bots_working = 4;                // its own bots (iOS N7)
+    bool is_home = 5;
+    ReleaseBrief current_release = 6;       // home only
+    SummaryBrief latest_summary = 7;        // home only
+    google.protobuf.Timestamp last_activity_at = 8;
+    bool pinned = 9;                        // addition (D7): pinned on that computer
+  }
+  repeated Part parts = 1;
+}
+message ProjectAttentionChanged { repeated string project_ids = 1; }  // peer notify, debounced 2 s
+
+// ---- binary transport (additions to the frozen contract) ----
+// One request per binary frame, answered under its `req_id`.
+message HomeRequest {
+  oneof request {
+    ProjectsOverviewRequest projects_overview = 1;
+    AttentionRowsRequest attention_rows = 2;
+    AttentionDismissRequest attention_dismiss = 3;
+    ProjectPinRequest project_pin = 4;
+    OwnerThreadsRequest owner_threads = 5;
+    OwnerThreadGetRequest owner_thread_get = 6;
+    OwnerThreadReadRequest owner_thread_read = 7;
+  }
+}
+
+message HomeResponse {
+  oneof response {
+    // To `projects_overview`.
+    ProjectsOverview projects_overview = 1;
+    // To `attention_rows`.
+    AttentionRows attention_rows = 2;
+    // To `attention_dismiss`.
+    AttentionDismissed attention_dismissed = 3;
+    // To `project_pin`.
+    ProjectPinned project_pinned = 4;
+    // To `owner_threads`.
+    OwnerThreads owner_threads = 5;
+    // To `owner_thread_get`.
+    OwnerThreadPage owner_thread = 6;
+    // To `owner_thread_read`.
+    OwnerThreadMarked owner_thread_marked = 7;
+  }
+}
+
+// [attention_dismissed] the row closed.
+message AttentionDismissed {
+  string id = 1;
+}
+
+// ---- owner threads and pins (additions, H-132: D6, D7) ----
+
+// [project_pinned] the pin as stored on this computer.
+message ProjectPinned {
+  string project_id = 1;
+  bool pinned = 2;
+}
+
+// [owner_thread] a page of one bot's owner thread, oldest first.
+message OwnerThreadPage {
+  BotRef bot = 1;
+  string project_id = 2;                    // the asking computer's id
+  repeated ThreadMessage messages = 3;
+  int64 last_read_num = 4;                  // 0 = nothing read
+  bool has_more = 5;                        // older messages exist
+}
+
+message ThreadMessage {
+  int64 num = 1;
+  string id = 2;
+  bool from_owner = 3;
+  string text = 4;                          // in full; a bot's is at most 4 KB
+  google.protobuf.Timestamp at = 5;
+  bool asks = 6;                            // the bot asked the owner here
+  bool open = 7;                            // that question is still open
+}
+
+// [owner_thread_marked] read state after `owner_thread_read`.
+message OwnerThreadMarked {
+  string bot_id = 1;
+  int64 last_read_num = 2;
+  uint32 unread = 3;
+}

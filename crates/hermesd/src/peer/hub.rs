@@ -210,6 +210,7 @@ impl PeerHub {
         tokio::spawn(super::term::link_up(app.clone(), peer_id.clone()));
         tokio::spawn(super::browser::link_up(app.clone(), peer_id.clone()));
         tokio::spawn(super::board::link_up(app.clone(), peer_id.clone()));
+        tokio::spawn(crate::overview::link_up(app.clone(), peer_id.clone()));
 
         // Events are applied in the order they were sent: a roster, then a
         // newer one, must not land the other way round.
@@ -281,6 +282,7 @@ impl PeerHub {
         let _ = app.db.touch_peer(&peer_id);
         if current {
             push_stand_ins(&app, &peer_id);
+            crate::overview::link_down(&app, &peer_id);
         }
         tracing::info!(peer_id, "peer link down");
     }

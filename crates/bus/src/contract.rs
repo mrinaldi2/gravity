@@ -24,6 +24,12 @@ mod hermes {
             include!(concat!(env!("OUT_DIR"), "/hermes.board.v1.serde.rs"));
         }
     }
+    pub mod home {
+        pub mod v1 {
+            include!(concat!(env!("OUT_DIR"), "/hermes.home.v1.rs"));
+            include!(concat!(env!("OUT_DIR"), "/hermes.home.v1.serde.rs"));
+        }
+    }
     pub mod wire {
         pub mod v1 {
             include!(concat!(env!("OUT_DIR"), "/hermes.wire.v1.rs"));
@@ -45,13 +51,22 @@ pub mod board {
         include_str!(concat!(env!("OUT_DIR"), "/board_messages.schema.json"));
 }
 
+/// The projects home (H-128): the overview, attention rows, and the peer
+/// messages that build them across computers.
+pub mod home {
+    pub use super::hermes::home::v1::*;
+
+    /// Bumped only on a breaking change to this surface.
+    pub const VERSION: u32 = 1;
+}
+
 /// What a WebSocket binary frame carries: an `Envelope` per frame.
 pub mod wire {
     pub use super::hermes::wire::v1::*;
 }
 
 /// Every contract surface this build speaks, with its version.
-pub const CONTRACTS: &[(&str, u32)] = &[("board", board::VERSION)];
+pub const CONTRACTS: &[(&str, u32)] = &[("board", board::VERSION), ("home", home::VERSION)];
 
 /// Binary encodings this build accepts, advertised in `hello_ok.encodings`.
 pub const ENCODINGS: &[&str] = &["proto"];
@@ -71,5 +86,6 @@ mod tests {
     #[test]
     fn versions_list_every_surface() {
         assert_eq!(versions().get("board"), Some(&board::VERSION));
+        assert_eq!(versions().get("home"), Some(&home::VERSION));
     }
 }

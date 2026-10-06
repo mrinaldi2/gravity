@@ -39,6 +39,9 @@ const PUSH_TYPES: Readonly<Record<ServerPushType, true>> = {
   permission_resolved: true,
   browser_tabs: true,
   browser_frame: true,
+  projects_overview_changed: true,
+  owner_thread_updated: true,
+  project_pinned: true,
 };
 
 const REPLY_TYPES: ReadonlySet<string> = new Set(
@@ -96,10 +99,19 @@ const REPLY_TYPES: ReadonlySet<string> = new Set(
     metrics: true,
     relayed_confirmed: true,
     meeting_action: true,
+    meetings: true,
+    meeting: true,
     quiesce: true,
     owner_actions: true,
     owner_action: true,
     bot_grants: true,
+    projects_overview: true,
+    attention_rows: true,
+    attention_dismissed: true,
+    project_pinned: true,
+    owner_threads: true,
+    owner_thread: true,
+    owner_thread_marked: true,
   } satisfies Record<ServerReplyType, true>),
 );
 

@@ -19,6 +19,7 @@ import type {
   BrowserTabsPush,
 } from "./agents";
 import type { DashboardReply } from "./dashboard";
+import type { HomePush, HomeReply } from "./home";
 import type { MeetingReply } from "./meetings";
 import type { OwnerAction, OwnerActionReply } from "./ownerActions";
 import type { Quiesce, QuiesceReply } from "./quiesce";
@@ -68,6 +69,7 @@ export type ServerReply =
   | (ReplyBase & QuiesceReply)
   | (ReplyBase & OwnerActionReply)
   | (ReplyBase & MetricsReply)
+  | (ReplyBase & HomeReply)
   | (ReplyBase & {
       readonly type: "hello_ok";
       readonly protocol_version: number;
@@ -309,6 +311,8 @@ export type ServerPush =
     }
   | BrowserTabsPush
   | BrowserFramePush
+  /** The projects home and owner threads changed (H-128 D4, D6, D7). */
+  | HomePush
   | {
       readonly type: "chat_turns";
       readonly bot_id: string;

@@ -29,11 +29,11 @@ mod reads;
 /// A request refused before the board service answered it: no grant, an
 /// unknown item, bad arguments. Sent as the envelope's `Error`.
 pub(super) struct Refusal {
-    code: &'static str,
-    message: String,
+    pub(super) code: &'static str,
+    pub(super) message: String,
 }
 
-fn refuse(code: &'static str, message: impl Into<String>) -> Refusal {
+pub(super) fn refuse(code: &'static str, message: impl Into<String>) -> Refusal {
     Refusal {
         code,
         message: message.into(),
@@ -77,8 +77,7 @@ pub(crate) fn home_snapshot(
     reads::snapshot(app, project_id).map_err(|r| crate::peer::refuse(r.code, r.message))
 }
 
-/// What answering a request needs: the response, or none when the handler
-/// already sent it itself (`board_watch` orders it before its pushes).
+/// The response, or none when the handler sent it itself (as `board_watch` does).
 type Reply = Result<Option<Response>, Refusal>;
 
 impl Conn {
@@ -93,6 +92,11 @@ impl Conn {
                         response: Some(response),
                     },
                 ),
+                Ok(None) => return,
+                Err(r) => binary::error(req_id, r.code, r.message),
+            },
+            Frame::Home(req_id, request) => match self.home(req_id, request) {
+                Ok(Some(response)) => binary::home_response(req_id, response),
                 Ok(None) => return,
                 Err(r) => binary::error(req_id, r.code, r.message),
             },

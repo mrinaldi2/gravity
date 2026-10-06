@@ -147,6 +147,7 @@ fn message_dir() -> PathBuf {
 /// a new arm fails to compile until it is named here, and the test below
 /// then wants its fixture.
 fn arm_of(envelope: &bus::contract::wire::Envelope) -> String {
+    use bus::contract::home::{home_request, home_response};
     use bus::contract::wire::envelope::Body;
     match envelope.body.as_ref().expect("a body") {
         Body::BoardRequest(r) => format!(
@@ -200,6 +201,30 @@ fn arm_of(envelope: &bus::contract::wire::Envelope) -> String {
                 board_push::Push::BoardEvent(_) => "board_event",
             }
         ),
+        Body::HomeRequest(r) => format!(
+            "request.{}",
+            match r.request.as_ref().expect("a request") {
+                home_request::Request::ProjectsOverview(_) => "projects_overview",
+                home_request::Request::AttentionRows(_) => "attention_rows",
+                home_request::Request::AttentionDismiss(_) => "attention_dismiss",
+                home_request::Request::ProjectPin(_) => "project_pin",
+                home_request::Request::OwnerThreads(_) => "owner_threads",
+                home_request::Request::OwnerThreadGet(_) => "owner_thread_get",
+                home_request::Request::OwnerThreadRead(_) => "owner_thread_read",
+            }
+        ),
+        Body::HomeResponse(r) => format!(
+            "response.{}",
+            match r.response.as_ref().expect("a response") {
+                home_response::Response::ProjectsOverview(_) => "projects_overview",
+                home_response::Response::AttentionRows(_) => "attention_rows",
+                home_response::Response::AttentionDismissed(_) => "attention_dismissed",
+                home_response::Response::ProjectPinned(_) => "project_pinned",
+                home_response::Response::OwnerThreads(_) => "owner_threads",
+                home_response::Response::OwnerThread(_) => "owner_thread",
+                home_response::Response::OwnerThreadMarked(_) => "owner_thread_marked",
+            }
+        ),
         Body::Error(_) => "error".to_string(),
     }
 }
@@ -238,6 +263,20 @@ const ARMS: &[&str] = &[
     "response.unwatched",
     "response.edited",
     "push.board_event",
+    "request.projects_overview",
+    "request.attention_rows",
+    "request.attention_dismiss",
+    "response.projects_overview",
+    "response.attention_rows",
+    "response.attention_dismissed",
+    "request.project_pin",
+    "request.owner_threads",
+    "request.owner_thread_get",
+    "request.owner_thread_read",
+    "response.project_pinned",
+    "response.owner_threads",
+    "response.owner_thread",
+    "response.owner_thread_marked",
     "error",
 ];
 

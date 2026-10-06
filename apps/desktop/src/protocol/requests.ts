@@ -7,6 +7,7 @@ import type { MeetingRequestBody } from "./meetings";
 import type { OwnerActionRequestBody } from "./ownerActions";
 import type { QuiesceRequestBody } from "./quiesce";
 import type { DecisionRequestBody } from "./decisionRequests";
+import type { HomeRequestBody } from "./home";
 import type { MetricsRequestBody } from "./metrics";
 import type { ReleaseRequestBody } from "./releases";
 import type {
@@ -27,6 +28,7 @@ export type ClientRequestBody =
   | QuiesceRequestBody
   | OwnerActionRequestBody
   | MetricsRequestBody
+  | HomeRequestBody
   | {
       readonly type: "hello";
       readonly protocol_version: number;

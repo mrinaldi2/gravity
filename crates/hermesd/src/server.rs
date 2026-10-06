@@ -108,6 +108,7 @@ pub fn spawn_workers(app: &Arc<AppState>) {
     crate::quiesce::spawn_deadman(app.clone());
     crate::peer::mirror::spawn(app.clone());
     crate::peer::spawn_board_relay(app.clone());
+    crate::overview::spawn(app.clone());
     crate::peer::spawn_dialers(app);
 
     let worker = DeliveryWorker {

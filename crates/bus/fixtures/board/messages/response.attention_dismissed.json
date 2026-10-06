@@ -1,0 +1,8 @@
+{
+  "reqId": "42",
+  "homeResponse": {
+    "attention_dismissed": {
+      "id": "owner_question:d-mac:q-1"
+    }
+  }
+}

@@ -64,7 +64,32 @@ type Row =
       readonly reason: string;
     }
   /** In Needs you on daemons before 0.16.2; shown beside it here. */
-  | ({ readonly kind: "wip_override" } & WipOverride);
+  | ({ readonly kind: "wip_override" } & WipOverride)
+  | AttentionRowJson;
+
+/**
+ * The kinds added with the projects home (H-128), sent to a client that asks
+ * with `all_kinds`: the typed `AttentionRow` as proto3 JSON, `kind` in words.
+ */
+export interface AttentionRowJson {
+  readonly kind:
+    | "owner_action"
+    | "permission_prompt"
+    | "bot_waiting"
+    | "off_board"
+    | "owner_question";
+  readonly id: string;
+  /** One line, set by the daemon. */
+  readonly title: string;
+  readonly daemon_id?: string;
+  readonly created_at?: string;
+  /** The bot a thread question, a wait or off-board work is about. */
+  readonly bot?: { readonly daemon_id?: string; readonly bot_id?: string; readonly name?: string };
+  /** The card a question is on. */
+  readonly item_id?: string;
+  readonly request_id?: string;
+  readonly action_id?: string;
+}
 
 /** A row, and off the board's home the computer to act on it (H-112). */
 export type NeedsYou = Row & { readonly elsewhere?: string };
@@ -118,7 +143,12 @@ export interface Dashboard {
 }
 
 export type DashboardRequestBody =
-  | { readonly type: "dashboard_get"; readonly project_id: string }
+  | {
+      readonly type: "dashboard_get";
+      readonly project_id: string;
+      /** Also the kinds added with the projects home (H-128). */
+      readonly all_kinds?: boolean;
+    }
   /** Confirms those of the listed relayed rulings that still are; needs approve. */
   | {
       readonly type: "confirm_relayed";

@@ -29,22 +29,76 @@
   border-radius: 4px 4px 0 0;
 }
 
-/* A tab whose view has not shipped yet. */
-.coming-soon {
-  max-width: 420px;
-  padding: 0 24px;
+.project-header-main,
+.project-window-header .view-header-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.coming-soon p {
-  line-height: 1.5;
+.project-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
-.coming-soon-icon {
-  width: 40px;
-  height: 40px;
-  margin-bottom: 8px;
-  color: var(--text-faint);
-  stroke-width: 1.5;
+/* "Projects ›" over the name, and "‹ Team" in a bot's header. */
+.project-crumb {
+  align-self: flex-start;
+  padding: 0;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.project-crumb:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.project-tablist {
+  display: flex;
+  gap: 2px;
+}
+
+/* More ▾: Conversations and Settings. */
+.project-more {
+  position: relative;
+}
+
+.project-more-menu {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 30%);
+}
+
+.project-more-item {
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.project-more-item:hover,
+.project-more-item:focus-visible {
+  background: var(--bg-hover);
 }
 
 /* The sidebar row that opens the window. */
@@ -90,4 +144,15 @@
 
 .project-chevron + .project-name {
   padding-left: 4px;
+}
+
+/* The header pills are actions: they open Needs you or the release. */
+.project-pill {
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.project-pill:hover {
+  filter: brightness(1.15);
 }

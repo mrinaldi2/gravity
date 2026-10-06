@@ -1,0 +1,25 @@
+{
+  "reqId": "44",
+  "homeResponse": {
+    "owner_threads": {
+      "threads": [
+        {
+          "bot": {
+            "daemon_id": "d-mac",
+            "bot_id": "b-lead",
+            "name": "Team Lead"
+          },
+          "project_id": "p-gravity",
+          "last": {
+            "num": "812",
+            "text": "Should 0.17 wait for the iOS build?",
+            "at": "2026-10-06T09:30:00Z",
+            "asks": true
+          },
+          "unread": 2,
+          "open_question": true
+        }
+      ]
+    }
+  }
+}

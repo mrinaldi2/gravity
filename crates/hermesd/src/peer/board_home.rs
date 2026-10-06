@@ -114,7 +114,8 @@ pub(super) fn serve_metrics(
 
 /// `dashboard_needs_you {project_id}`: the dashboard's Needs you as this home
 /// has it, in the peer's ids (H-112). Rulings stay here, so no package can
-/// be ruled from there.
+/// be ruled from there. With `all_kinds`, the kinds the projects home added
+/// too (H-128).
 pub(super) fn serve_needs_you(
     app: &Arc<AppState>,
     peer: &Peer,
@@ -122,7 +123,8 @@ pub(super) fn serve_needs_you(
 ) -> anyhow::Result<Value> {
     let link = home_link(app, peer, frame)?;
     let since = chrono::Utc::now() - chrono::Duration::days(7);
-    let needs = crate::ws::home_needs_you(app, &link.project_id, since, |release| {
+    let all_kinds = frame["all_kinds"].as_bool().unwrap_or(false);
+    let needs = crate::attention::needs_you(app, &link.project_id, since, all_kinds, &|release| {
         let mut v = release.to_json();
         v["can_rule"] = json!(false);
         Ok(v)

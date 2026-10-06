@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import type { ReactElement } from "react";
 import { useDaemonActions } from "./app/useDaemonActions";
 import { useFirstRunSetup } from "./app/useFirstRunSetup";
@@ -15,6 +15,9 @@ import type { AddToast } from "./app/useToasts";
 import { useServiceRecovery } from "./app/useServiceRecovery";
 import { useUpdates } from "./app/useUpdates";
 import CommandPalette from "./components/CommandPalette";
+import Rail from "./components/home/Rail";
+import MainChat from "./components/mainchat/MainChat";
+import { useAppChat } from "./components/mainchat/useAppChat";
 import HomeMigrationConfirm from "./components/overlay/HomeMigrationConfirm";
 import MainPane from "./components/MainPane";
 import SearchOverlay from "./components/SearchOverlay";
@@ -22,7 +25,6 @@ import QuiesceLayer from "./components/service/QuiesceBanner";
 import ServiceRecoveryBanner from "./components/service/ServiceRecoveryBanner";
 import SettingsOverlay from "./components/settings/SettingsOverlay";
 import SetupScreen from "./components/setup/SetupScreen";
-import Sidebar from "./components/Sidebar";
 import Toasts from "./components/Toasts";
 import type { Toast } from "./components/Toasts";
 import type { DaemonApi } from "./protocol/api";
@@ -30,17 +32,6 @@ import type { Endpoint } from "./protocol/connection";
 import { DaemonClient } from "./protocol/client";
 import { loadEndpoint } from "./settings";
 import { readClientToken } from "./token";
-
-/** Failed deliveries per bot, for the sidebar badge. */
-function countByBot(
-  deliveries: readonly { readonly bot_id: string }[],
-): ReadonlyMap<string, number> {
-  const map = new Map<string, number>();
-  for (const delivery of deliveries) {
-    map.set(delivery.bot_id, (map.get(delivery.bot_id) ?? 0) + 1);
-  }
-  return map;
-}
 
 interface SettingsLayerProps {
   readonly client: DaemonApi;
@@ -168,7 +159,12 @@ export default function App(): ReactElement {
     openSettings: overlays.openSettings,
   });
 
-  const failedByBot = useMemo(() => countByBot(daemon.failedDeliveries), [daemon.failedDeliveries]);
+  const { chat, threads, asking } = useAppChat(
+    client,
+    connected,
+    daemon.selection,
+    daemon.projects,
+  );
 
   useDesktopShell(daemon.unreadBots, pending.total, addToast);
 
@@ -177,24 +173,22 @@ export default function App(): ReactElement {
   return (
     <SetupGate setup={setup} toasts={toasts} onDismissToast={dismissToast}>
       <div className="app">
-        <Sidebar
+        <Rail
+          selection={daemon.selection}
+          needsYou={pending.total}
           status={daemon.status}
           endpoint={daemon.endpoint}
-          projects={daemon.projects}
-          bots={bots}
-          unreadBots={daemon.unreadBots}
-          failedByBot={failedByBot}
-          nextRun={daemon.nextRun}
-          activityByBot={daemon.activityByBot}
-          pendingDecisions={pending}
-          selection={daemon.selection}
           canControl={canControl}
+          chatOpen={chat.open}
+          chatAsking={asking}
           onSelect={select}
-          onOpenSearch={overlays.openBlankSearch}
-          onCreateProject={actions.createProject}
-          onCreateBot={actions.createBot}
-          onDeleteBot={actions.deleteBot}
-          onDeleteProject={actions.deleteProject}
+          onToggleChat={() => {
+            if (chat.open) {
+              chat.close();
+            } else {
+              chat.openOn();
+            }
+          }}
           onOpenSettings={overlays.openSettings}
         />
         <main className="main">
@@ -209,10 +203,24 @@ export default function App(): ReactElement {
             onSetProjectLead={actions.setProjectLead}
             onSetProjectRepo={actions.setProjectRepo}
             onDeleteProject={actions.deleteProject}
+            onCreateBot={actions.createBot}
+            onDeleteBot={actions.deleteBot}
             permissions={inbox.permissions}
             onOpenBot={openBot}
+            onReply={chat.openOn}
           />
         </main>
+        <MainChat
+          client={client}
+          connected={connected}
+          canControl={canControl}
+          bots={bots}
+          projects={daemon.projects}
+          threads={threads}
+          chat={chat}
+          addToast={addToast}
+          onOpenBot={openBot}
+        />
         {overlays.paletteOpen ? (
           <CommandPalette
             actions={paletteActions}

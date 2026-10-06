@@ -14,8 +14,10 @@ import { plural, releaseTitle, testLabel } from "../releases/labels";
 import { names, when } from "./needsYouText";
 import RelayedDialog from "./RelayedDialog";
 import type { ConfirmOutcome } from "./useConfirmRelayed";
+import { attentionRow } from "./attentionRows";
+import type { AttentionActions } from "./attentionRows";
 
-interface NeedsYouActions {
+interface NeedsYouActions extends AttentionActions {
   readonly onReview: (release: Release) => void;
   readonly onDecision: (decisionId: string) => void;
   /** Confirms exactly these relayed rulings, as the dialog listed them. */
@@ -48,7 +50,12 @@ const ORDER: Readonly<Record<Shown["kind"], number>> = {
   release: 0,
   decision: 1,
   relayed: 2,
+  owner_action: 1,
+  permission_prompt: 1,
   p0: 3,
+  owner_question: 4,
+  bot_waiting: 5,
+  off_board: 6,
 };
 
 /** "bot:<id>", "user", "device:…": who made a move, in words. */
@@ -59,7 +66,7 @@ function actorName(actor: string, botName: (id: string) => string): string {
   return "You";
 }
 
-interface RowViewProps {
+export interface RowViewProps {
   readonly glyph: string;
   readonly tone?: "bad" | "you";
   readonly title: ReactElement | string;
@@ -193,7 +200,11 @@ function servingRow(r: Extract<Shown, { readonly kind: "serving_off" }>): RowVie
   return { glyph: "⚠", tone: "bad", title: r.title, meta: r.reason, verb: "Fix it" };
 }
 
-function rowProps(r: Shown, props: NeedsYouProps, onReviewRelayed: () => void): RowViewProps {
+function rowProps(
+  r: Shown,
+  props: NeedsYouProps,
+  onReviewRelayed: () => void,
+): RowViewProps | undefined {
   switch (r.kind) {
     case "serving_off":
       return servingRow(r);
@@ -205,6 +216,8 @@ function rowProps(r: Shown, props: NeedsYouProps, onReviewRelayed: () => void): 
       return relayedRow(r, props, onReviewRelayed);
     case "p0":
       return p0Row(r, props);
+    default:
+      return attentionRow(r, props);
   }
 }
 
@@ -266,7 +279,10 @@ export default function NeedsYou(props: NeedsYouProps): ReactElement {
   const [reviewing, setReviewing] = useState(false);
   // A daemon before 0.16.2 sends overrides as rows: they move below too.
   const legacy = props.rows.filter((r): r is Legacy => r.kind === "wip_override");
-  const rows = props.rows.filter((r): r is Shown => r.kind !== "wip_override");
+  // Owner actions have their own widget, "Commands for you to run", with Run.
+  const rows = props.rows.filter(
+    (r): r is Shown => r.kind !== "wip_override" && r.kind !== "owner_action",
+  );
   // oxlint-disable-next-line unicorn/no-array-sort
   rows.sort((a, b) => ORDER[a.kind] - ORDER[b.kind]);
   const relayed = localRelayed(rows);
@@ -277,19 +293,23 @@ export default function NeedsYou(props: NeedsYouProps): ReactElement {
   }
   const openReview = useCallback((): void => setReviewing(true), []);
   const closeReview = useCallback((): void => setReviewing(false), []);
+  const views = rows.flatMap((r) => {
+    const view = rowProps(r, props, openReview);
+    return view === undefined ? [] : [{ key: rowKey(r), view, elsewhere: r.elsewhere }];
+  });
   return (
     <section className="dash-widget dash-wide" aria-labelledby="dash-needs-you">
       {/* At zero the empty sentence says it; no "· 0" badge (UX-010). */}
-      <h2 id="dash-needs-you">Needs you{rows.length > 0 ? ` · ${rows.length}` : ""}</h2>
+      <h2 id="dash-needs-you">Needs you{views.length > 0 ? ` · ${views.length}` : ""}</h2>
       {props.note ? (
         <p className="dash-note">
           <strong>{props.note}</strong>
         </p>
       ) : null}
-      {rows.length > 0 ? (
+      {views.length > 0 ? (
         <ul className="dash-rows">
-          {rows.map((r) => (
-            <RowView key={rowKey(r)} {...rowProps(r, props, openReview)} elsewhere={r.elsewhere} />
+          {views.map(({ key, view, elsewhere }) => (
+            <RowView key={key} {...view} elsewhere={elsewhere} />
           ))}
         </ul>
       ) : null}

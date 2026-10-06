@@ -1,8 +1,9 @@
 import type { ReactElement } from "react";
 
-export type BotTab = "chat" | "terminal" | "browser" | "routines";
+export type BotTab = "reports" | "chat" | "terminal" | "browser" | "routines";
 
 const TAB_LABEL: Readonly<Record<BotTab, string>> = {
+  reports: "Reports",
   chat: "Chat",
   terminal: "Terminal",
   browser: "Browser",
@@ -18,13 +19,21 @@ export interface TabSupport {
   readonly peerTerminal?: boolean;
   /** A linked bot's browser, relayed from its machine. */
   readonly peerBrowser?: boolean;
+  /** The owner threads (H-132) that Reports reads; the page opens there (UX-024). */
+  readonly reports?: boolean;
 }
 
 /**
- * The tabs a bot offers. A linked bot has its chat, and its terminal and
+ * The tabs a bot offers: Reports first where the daemon keeps owner threads,
+ * then chat and terminal. A linked bot has its chat, and its terminal and
  * browser when the daemon relays them from its machine.
  */
 export function botTabs(support: TabSupport, linked: boolean): readonly BotTab[] {
+  const lead: BotTab[] = support.reports === true ? ["reports"] : [];
+  return [...lead, ...workTabs(support, linked)];
+}
+
+function workTabs(support: TabSupport, linked: boolean): readonly BotTab[] {
   const { chat, browser = false, peerTerminal = false, peerBrowser = false } = support;
   if (linked) {
     const tabs: BotTab[] = ["chat"];

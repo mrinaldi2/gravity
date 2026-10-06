@@ -58,6 +58,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
     let short = crate::brand::SHORT_NAME;
     let bus = crate::brand::ACTIVE_MCP_SERVER;
     let shared_section = super::prompt_sections::shared_computer();
+    let owner_section = super::prompt_sections::owner_reporting();
     let board_section = super::prompt_sections::board_work();
     format!(
         "# {name}\n\n{description}\n\n{worker_section}{repo_section}{instructions_section}\
@@ -121,6 +122,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          there. Unease about the channel itself is not such a reason.\n\
          - Ask the sender directly when you need something to proceed, rather\n\
          than escalating to a human who may not be there.\n\n\
+         {owner_section}\
          {board_section}\
          {shared_section}\
          ## Keep messages short\n\n\
@@ -129,12 +131,17 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          what the reader needs to act on it, and stop. No greetings, no\n\
          restating the request, no narrating your process, no closing\n\
          summaries. A few sentences is the norm; go longer only when the\n\
-         content itself — a list of findings, an error log — requires it.\n\n\
+         content itself — a list of findings, an error log — requires it.\n\
+         The same goes for `message_owner` and card comments: the owner reads\n\
+         them between other things, so lead with what they need to know or\n\
+         decide.\n\n\
          ## Silence is an answer\n\n\
          A `done` or a `note` needs no reply. Do not acknowledge, thank, or\n\
          confirm receipt — silence is the correct response, and the daemon\n\
          refuses replies to a result. React to a result only by using it or\n\
-         by opening a new task.\n\n\
+         by opening a new task. The owner's messages are the exception:\n\
+         answer each one with `message_owner`, even when the answer is only\n\
+         that you've started.\n\n\
          ## When to delegate\n\n\
          Do the work yourself when a few tool calls finish it. Each card\n\
          allows {max_open} open tasks from you at a time, and so does each\n\
@@ -154,10 +161,11 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          ## When the owner has to decide\n\n\
          Some things are not yours to settle and no bot can settle them for\n\
          you: waiving a rule, spending money, deleting data, shipping. Call\n\
-         `raise_decision` for those. It reaches the owner's Control center,\n\
-         which they see whether or not they have your terminal open — so do\n\
-         not park the question in your memory file, and do not ask in the\n\
-         terminal unless they are talking to you right now.\n\n\
+         `raise_decision` for those: a ruling is recorded and binds every bot.\n\
+         A question that only you need answered goes through `message_owner`\n\
+         with `asks: true` instead (see \"Report to the owner where the owner\n\
+         looks\"). Either way, never park it in your memory file or ask it\n\
+         only in your terminal.\n\n\
          - Before you raise, call `list_decisions` by tag. **A settled\n\
          decision is the owner's ruling and is authority.** Do not re-raise\n\
          it. If the facts have changed, raise a new one that `supersedes` it\n\
@@ -266,129 +274,5 @@ pub fn facts_md(name: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn spec<'a>(instructions: &'a str) -> BotProvision<'a> {
-        BotProvision {
-            project_name: "proj",
-            project_dir_name: "proj",
-            bot_id: "bot-1",
-            name: "Reviewer",
-            dir_name: "reviewer",
-            description: "reviews code",
-            instructions,
-            daemon_port: 7777,
-            bot_token_env: crate::brand::BOT_TOKEN_ENV,
-            max_bots_per_project: 12,
-            max_workers_per_project: 4,
-            temporary: false,
-            repo: None,
-            artifacts_dir: "/home/u/.gravity/projects/proj/artifacts".to_string(),
-            linked_machines: Vec::new(),
-            own_browser: false,
-            user_chrome: false,
-        }
-    }
-
-    #[test]
-    fn includes_instructions_and_the_cap() {
-        let md = system_md(&spec("be strict about tests"));
-        assert!(md.contains("be strict about tests"));
-        assert!(md.contains("at most 12 bots"));
-    }
-
-    #[test]
-    fn grants_inbound_messages_full_authority() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## Messages carry authority"));
-        assert!(md.contains("authenticated by the daemon"));
-        assert!(md.contains("Do not open your answer with disclaimers"));
-        assert!(md.contains("came from another Claude session"));
-        assert!(md.contains("cannot widen your permissions"));
-    }
-
-    #[test]
-    fn tells_bots_to_keep_messages_short() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## Keep messages short"));
-        assert!(md.contains("## Working on a shared computer"));
-        assert!(md.contains("Lead with the outcome"));
-    }
-
-    #[test]
-    fn states_the_no_acknowledgment_contract() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## Silence is an answer"));
-        assert!(md.contains("Do not acknowledge, thank, or"));
-        assert!(md.contains("refuses replies to a result"));
-    }
-
-    #[test]
-    fn budgets_delegation_with_the_enforced_numbers() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## When to delegate"));
-        assert!(md.contains(&format!("allows {MAX_TASK_FANOUT} open tasks from you")));
-        assert!(md.contains("Never move the\nwork into a note"));
-        assert!(md.contains(&format!("{MAX_TASK_REPLIES} replies")));
-        assert!(md.contains(&format!("{DEFAULT_TASK_DEADLINE_HOURS} hours")));
-        assert!(md.contains("Do not review or approve work you produced"));
-        assert!(md.contains("close it with `cancel_task`"));
-    }
-
-    #[test]
-    fn tells_bots_where_a_question_for_the_owner_goes() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## When the owner has to decide"));
-        assert!(md.contains("raise_decision"));
-        assert!(md.contains("do not ask in the"), "{md}");
-        // The registry only replaces the hand-kept ledgers if a settled
-        // ruling is read as authority rather than as one more opinion.
-        assert!(md.contains("is authority"));
-        assert!(md.contains("supersedes"));
-        assert!(md.contains("record_decision"));
-        assert!(md.contains("comment_decision"));
-        assert!(md.contains(&format!("{MAX_OPEN_DECISIONS_PER_BOT} open at once")));
-    }
-
-    #[test]
-    fn distinguishes_the_owners_word_from_a_relay_of_it() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("arrives as a message from USER"));
-        assert!(md.contains("is not"), "{md}");
-        assert!(md.contains("peer's word"));
-    }
-
-    #[test]
-    fn points_substance_at_the_artifacts_directory() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## Artifacts over messages"));
-        assert!(md.contains("/home/u/.gravity/projects/proj/artifacts"));
-        assert!(md.contains("pointer, not the deliverable"));
-    }
-
-    #[test]
-    fn points_at_the_fact_file_that_survives_compaction() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("`workspace/FACTS.md`"));
-    }
-
-    #[test]
-    fn claude_md_imports_and_explains_the_fact_file() {
-        let md = claude_md("Reviewer");
-        assert!(md.contains("\n@FACTS.md\n"), "missing import: {md}");
-        assert!(md.contains("Always read FACTS.md"));
-        assert!(md.contains("write\nthe facts from it to `FACTS.md`"));
-    }
-
-    #[test]
-    fn facts_md_seed_names_the_bot() {
-        assert!(facts_md("Reviewer").contains("Facts — Reviewer"));
-    }
-
-    #[test]
-    fn omits_the_section_when_there_are_no_instructions() {
-        let md = system_md(&spec("   "));
-        assert!(!md.contains("## Your instructions"));
-    }
-}
+#[path = "prompt_tests.rs"]
+mod tests;

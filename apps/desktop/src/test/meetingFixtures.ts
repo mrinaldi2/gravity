@@ -1,7 +1,9 @@
 // Meetings and action items for the dashboard's tests and stories (H-102).
 
+import type { ServerReply } from "../protocol/messages";
 import type {
   DashboardAction,
+  MeetingDetail,
   MeetingRow,
   MeetingSeries,
   MeetingSummary,
@@ -100,3 +102,62 @@ export const ACTION_ITEMS: readonly DashboardAction[] = [
     overdue: false,
   }),
 ];
+
+/** The Meetings tab's two meetings: a held stand-up, a retro still collecting. */
+const TAB_MEETINGS: readonly MeetingSummary[] = [
+  meeting({
+    id: "m1",
+    name: "Stand-up",
+    facilitator: "b1",
+    summary: "Verify is full; testers clear H-008 and H-010 first.",
+    outputs: { blockers: "H-013 push budget: who can unblock: you" },
+  }),
+  meeting({
+    id: "m2",
+    series_id: "s-retro",
+    type: "retro",
+    name: "Retro W41",
+    status: "collecting",
+    closed_at: null,
+    summary: "",
+    outputs: {},
+    contributed: 4,
+    attendee_count: 6,
+  }),
+];
+
+/** `meeting_list` for the Meetings tab. */
+export function meetingListReply(): ServerReply {
+  return {
+    type: "meetings",
+    req_id: "1",
+    series: [{ ...series({ name: "Stand-up" }), next_at: "2026-10-07T07:00:00Z" }],
+    meetings: TAB_MEETINGS,
+  };
+}
+
+/** `meeting_get` for one of the Meetings tab's meetings. */
+export function meetingDetail(id: string): MeetingDetail {
+  const summary = TAB_MEETINGS.find((m) => m.id === id) ?? meeting();
+  return {
+    ...summary,
+    scheduled_at: null,
+    contributions: [],
+    action_items:
+      id === "m1"
+        ? [
+            {
+              id: "a1",
+              meeting_id: "m1",
+              series_id: "s-standup",
+              text: "Split H-014",
+              owner: "b1",
+              due_at: null,
+              status: "open",
+              item_id: null,
+            },
+          ]
+        : [],
+    carried_over: [],
+  };
+}

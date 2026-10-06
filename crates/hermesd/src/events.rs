@@ -55,6 +55,22 @@ pub enum Push {
         #[serde(skip_serializing_if = "Option::is_none")]
         meeting_id: Option<String>,
     },
+    /// Rows of the projects home changed (H-128 D4): clients refetch
+    /// `projects_overview`. Debounced at 2 s.
+    ProjectsOverviewChanged {
+        project_ids: Vec<String>,
+    },
+    /// A bot's owner thread, its read state or its questions changed
+    /// (H-128 D6): clients refetch `owner_threads` or the open thread.
+    OwnerThreadUpdated {
+        bot: bus::contract::home::BotRef,
+        project_id: String,
+    },
+    /// A project was pinned or unpinned on this computer (H-128 D7).
+    ProjectPinned {
+        project_id: String,
+        pinned: bool,
+    },
     /// A bot's sidebar preview line changed. Emitted once the finished turn is
     /// actually readable in the transcript, which lags the `ready` state.
     ActivityUpdate {

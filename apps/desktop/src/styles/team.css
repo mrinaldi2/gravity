@@ -1,0 +1,176 @@
+/* A project's Team tab, a bot's Reports, From the team and the Meetings
+   tab (UX-024, H-133 U2). Cards reuse the projects home's grid. */
+
+.team-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.team-card {
+  grid-column: span 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+@media (max-width: 760px) {
+  .team-card {
+    grid-column: span 12;
+  }
+}
+
+.team-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.team-card-head h3 {
+  flex: 1;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  color: var(--text-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-badge {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 8px;
+}
+
+.team-new {
+  color: var(--bg);
+  background: var(--amber);
+}
+
+.team-failed {
+  color: var(--red);
+  border: 1px solid var(--red);
+}
+
+.team-menu {
+  position: relative;
+  z-index: 1;
+  padding: 0 6px;
+  font: inherit;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.team-menu:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.team-line {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.team-activity {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Working is the accent everywhere (UX-027). */
+.release-tone-acc {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: transparent;
+}
+
+/* From the team: who · what · when, the words, and Reply. */
+.team-report {
+  align-items: flex-start;
+}
+
+.team-report-text {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: pre-line;
+}
+
+.team-report-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+/* A bot's Reports tab. */
+.reports-pane {
+  padding: 16px 20px;
+}
+
+.report-section {
+  max-width: 720px;
+  margin-bottom: 18px;
+}
+
+.report-section h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.report-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.report-message .home-quote {
+  flex: 1;
+  white-space: pre-line;
+}
+
+/* The Meetings tab's minutes. */
+.meeting-status {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.meeting-summary {
+  white-space: pre-line;
+}
+
+.meeting-section h3 {
+  margin: 12px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.meeting-section p {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-line;
+}
+
+.meeting-reply {
+  margin-top: 12px;
+}

@@ -1,26 +1,32 @@
 import type { Story } from "@ladle/react";
 import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
+import { decodeOverview } from "../../protocol/home";
 import { project } from "../../test/fixtures";
-import ComingSoon from "./ComingSoon";
-import type { UpcomingTab } from "./ComingSoon";
+import { overviewJson } from "../../test/homeFixtures";
 import ProjectWindow from "./ProjectWindow";
 
 const noop = (_tab: ProjectTab): void => {};
+const row = decodeOverview(overviewJson()).rows.find((r) => r.projectId === "p1") ?? null;
 
-function Window({ tab }: { readonly tab: UpcomingTab }): ReactElement {
+function Window({ tab }: { readonly tab: ProjectTab }): ReactElement {
   return (
-    <div className="main" style={{ height: 600 }}>
+    <div className="main" style={{ height: 300 }}>
       <ProjectWindow
         project={project({ name: "The Hermes" })}
-        botCount={6}
+        botCount={8}
         tab={tab}
+        row={row}
+        onHome={() => {}}
         onSelectTab={noop}
       >
-        <ComingSoon tab={tab} />
+        <p style={{ padding: 16 }}>The {tab} view.</p>
       </ProjectWindow>
     </div>
   );
 }
 
-export const Meetings: Story = () => <Window tab="meetings" />;
+/** The header with what needs you and the release, and the five tabs plus More. */
+export const Overview: Story = () => <Window tab="overview" />;
+/** A tab under More: the More button names it. */
+export const Settings: Story = () => <Window tab="settings" />;

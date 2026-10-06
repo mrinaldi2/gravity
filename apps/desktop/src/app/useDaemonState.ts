@@ -53,11 +53,7 @@ export interface DaemonState {
 export function useDaemonState(client: DaemonApi, addToast: AddToast): DaemonState {
   const entities = useEntities();
   const unread = useUnread();
-  const { selection, selectionRef, select, selectBot } = useSelection(
-    entities.projects,
-    entities.bots,
-    unread,
-  );
+  const { selection, selectionRef, select, selectBot } = useSelection(unread);
 
   const conversationsRef = useLatestRef(entities.conversations);
   const botsRef = useLatestRef(entities.bots);

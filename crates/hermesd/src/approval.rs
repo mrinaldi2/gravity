@@ -332,13 +332,16 @@ fn summary(tool: &str, input: &Value) -> String {
         .or_else(|| field("path"))
         .or_else(|| field("description"))
         .or_else(|| field("reason"));
-    match detail {
+    let line = match detail {
         Some(detail) => format!(
             "{tool}: {}",
             crate::chat::truncate(detail.lines().next().unwrap_or(detail), 200)
         ),
         None => tool.to_string(),
-    }
+    };
+    // It reaches the owner's devices, list_permissions and the attention
+    // rows alike (CE-014 F1).
+    crate::redact::secrets(&line)
 }
 
 #[cfg(test)]
@@ -357,5 +360,12 @@ mod tests {
             "Write: /w/a.txt"
         );
         assert_eq!(summary("mcp__x__y", &json!({})), "mcp__x__y");
+        assert_eq!(
+            summary(
+                "Bash",
+                &json!({"command": "curl -H 'Authorization: Bearer s3cr3t' x"})
+            ),
+            "Bash: curl -H 'Authorization: Bearer ***' x"
+        );
     }
 }

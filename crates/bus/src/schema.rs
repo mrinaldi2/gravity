@@ -14,6 +14,7 @@ mod board;
 mod board_links;
 mod decisions;
 mod history;
+mod home;
 mod meetings;
 mod owner_actions;
 mod peers;
@@ -33,6 +34,7 @@ use history::{
     MIGRATION_10, MIGRATION_11, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6,
     MIGRATION_7, MIGRATION_8, MIGRATION_9,
 };
+use home::{MIGRATION_OWNER_READ, MIGRATION_PROJECT_PIN};
 use meetings::MIGRATION_MEETINGS;
 use owner_actions::MIGRATION_OWNER_ACTIONS;
 use peers::{MIGRATION_14, MIGRATION_15, MIGRATION_16};
@@ -84,6 +86,8 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_RELEASE_MACHINES,
     MIGRATION_TASK_CARDS,
     MIGRATION_RELEASE_PLANS,
+    MIGRATION_OWNER_READ,
+    MIGRATION_PROJECT_PIN,
 ];
 
 #[cfg(test)]

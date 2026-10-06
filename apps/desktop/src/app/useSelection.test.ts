@@ -15,7 +15,7 @@ const unread: UnreadApi = {
 };
 
 function render(): { current: ReturnType<typeof useSelection> } {
-  return renderHook(() => useSelection([], [], unread)).result;
+  return renderHook(() => useSelection(unread)).result;
 }
 
 function openProject(result: { current: ReturnType<typeof useSelection> }, next: Selection): void {
@@ -38,7 +38,7 @@ describe("useSelection project windows", () => {
     expect(result.current.selection).toEqual({
       kind: "project",
       projectId: "p1",
-      tab: "dashboard",
+      tab: "overview",
     });
   });
 
@@ -63,7 +63,7 @@ describe("useSelection project windows", () => {
     expect(result.current.selection).toEqual({
       kind: "project",
       projectId: "p2",
-      tab: "dashboard",
+      tab: "overview",
     });
   });
 
@@ -76,7 +76,7 @@ describe("useSelection project windows", () => {
     expect(result.current.selection).toEqual({
       kind: "project",
       projectId: "p1",
-      tab: "dashboard",
+      tab: "overview",
     });
   });
 });

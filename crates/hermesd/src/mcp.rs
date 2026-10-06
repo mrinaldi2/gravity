@@ -22,6 +22,7 @@ mod board_schema;
 mod decisions;
 pub(crate) mod meetings;
 mod owner_actions;
+mod owner_threads;
 mod releases;
 mod remote;
 mod routines;
@@ -193,15 +194,18 @@ fn tool_error(msg: &str) -> Value {
 async fn remote_call(app: &Arc<AppState>, bot_id: &str, params: &Value) -> Option<Value> {
     let name = params.get("name").and_then(|n| n.as_str())?;
     let args = params.get("arguments").cloned().unwrap_or(json!({}));
-    let result = match workers::intercept(app, bot_id, name, &args).await {
+    let result = match owner_threads::intercept(app, bot_id, name, &args).await {
         Some(result) => result,
-        None => match remote::intercept(app, bot_id, name, &args).await {
+        None => match workers::intercept(app, bot_id, name, &args).await {
             Some(result) => result,
-            None => match owner_actions::intercept(app, bot_id, name, &args).await {
+            None => match remote::intercept(app, bot_id, name, &args).await {
                 Some(result) => result,
-                None => match task_card::intercept(app, bot_id, name, &args).await {
+                None => match owner_actions::intercept(app, bot_id, name, &args).await {
                     Some(result) => result,
-                    None => board_remote::intercept(app, bot_id, name, &args).await?,
+                    None => match task_card::intercept(app, bot_id, name, &args).await {
+                        Some(result) => result,
+                        None => board_remote::intercept(app, bot_id, name, &args).await?,
+                    },
                 },
             },
         },

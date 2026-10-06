@@ -14,7 +14,6 @@ use std::collections::HashMap;
 use chrono::{Duration, Utc};
 use serde_json::{json, Value};
 
-use super::needs_you::home_needs_you;
 use super::Conn;
 use crate::board::model::{ColumnCategory, ItemCard};
 
@@ -57,7 +56,12 @@ impl Conn {
         let home_peer = (!local)
             .then(|| self.app.board_mirror.home_peer(project_id))
             .flatten();
-        let needs = home_needs_you(&self.app, project_id, since, |r| self.release_json(r))?;
+        // The kinds added with the projects home (H-128) go to a client that
+        // asks for them; an older one would not know how to show them.
+        let all_kinds = req["all_kinds"].as_bool().unwrap_or(false);
+        let needs = crate::attention::needs_you(&self.app, project_id, since, all_kinds, &|r| {
+            self.release_json(r)
+        })?;
 
         let strip: Vec<Value> = columns
             .iter()
@@ -135,7 +139,13 @@ impl Conn {
         match home_peer {
             Some(peer) => self.answer_later(
                 req_id,
-                from_home(self.app.clone(), project_id.to_string(), peer, dashboard),
+                from_home(
+                    self.app.clone(),
+                    project_id.to_string(),
+                    peer,
+                    all_kinds,
+                    dashboard,
+                ),
             ),
             None => {
                 self.send(json!({ "type": "dashboard", "req_id": req_id, "dashboard": dashboard }))
@@ -152,10 +162,13 @@ async fn from_home(
     app: std::sync::Arc<crate::app::AppState>,
     project_id: String,
     home: String,
+    all_kinds: bool,
     mut dashboard: Value,
 ) -> anyhow::Result<Value> {
     let name = crate::peer::board::home_name(&app, &home);
-    let frame = json!({ "type": "dashboard_needs_you", "project_id": project_id });
+    let frame = json!({
+        "type": "dashboard_needs_you", "project_id": project_id, "all_kinds": all_kinds,
+    });
     let link = app.db.project_link(&project_id, &home)?;
     match (app.peers.request(&home, frame).await, link) {
         (Ok(mut answer), Some(link)) => {

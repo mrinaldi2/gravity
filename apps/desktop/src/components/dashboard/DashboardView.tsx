@@ -5,7 +5,7 @@
 
 import { RefreshCw, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
 import { useDrawerEscape } from "../../hooks/useDrawerEscape";
@@ -37,6 +37,12 @@ export interface DashboardViewProps {
   readonly onOpenTab: (tab: ProjectTab) => void;
   readonly onOpenBot: (botId: string) => void;
   readonly onOpenDecision: (decisionId: string) => void;
+  /** Opens a message to a bot quoting what it asked (UX-024 §4). */
+  readonly onReply?: (botId: string, quote: string) => void;
+  /** Opens Needs you, where permission prompts are answered. */
+  readonly onOpenNeedsYou?: () => void;
+  /** "From the team", shown right after Needs you on the Overview. */
+  readonly fromTheTeam?: ReactNode;
 }
 
 function asOf(at: string): string {
@@ -151,7 +157,11 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             onDecision={props.onOpenDecision}
             onConfirmRelayed={relayed.confirm}
             onItem={showItem}
+            onOpenBot={props.onOpenBot}
+            onReply={props.onReply}
+            onOpenNeedsYou={props.onOpenNeedsYou}
           />
+          {props.fromTheTeam}
           <OwnerActionList
             client={client}
             connected={connected}
