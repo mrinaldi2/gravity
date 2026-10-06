@@ -58,7 +58,7 @@ describe("ReleaseProgress", () => {
     render(<ReleaseProgress release={planned()} botName={names} />);
     const section = screen.getByRole("region", { name: "Progress" });
     expect(section).toHaveTextContent(
-      "Waiting on 2 of 3 items: H-137, H-121. It is built once every item is ready.",
+      "Packaging starts when every item reaches Verify: 2 to go (H-137 in In progress, H-121 in In progress, ⛔ blocked).",
     );
     expect(section).toHaveTextContent(
       "1 of 3 items ready · Not built yet · Tested on 0 of 2 computers",
@@ -67,13 +67,16 @@ describe("ReleaseProgress", () => {
     expect(rows[0]).toHaveTextContent(
       /○ Still in progress.*Planned releases.*In progress · Architect · ☑ 1\/3 AC/,
     );
+    expect(rows[0]).toHaveTextContent("1 of 3 acceptance criteria");
     expect(rows[1]).toHaveTextContent(/✓ Ready for the release.*Guardrails.*Awaiting owner/);
-    expect(rows[2]).toHaveTextContent(/Deployed via.*Unassigned.*Blocked/);
+    expect(rows[2]).toHaveTextContent(/Deployed via.*Unassigned.*⛔ Blocked/);
   });
 
-  it("names at most three unready items, then each later state's next step", () => {
+  it("says what is left in each state (UX-025 §5)", () => {
     const many = planned({
-      plan: ["H-1", "H-2", "H-3", "H-4", "H-5"].map((id) => item({ item_id: id })),
+      plan: ["H-1", "H-2", "H-3", "H-4", "H-5"].map((id) =>
+        item({ item_id: id, column_name: undefined, column_key: "review" }),
+      ),
       readiness: {
         items_total: 5,
         items_ready: 0,
@@ -83,13 +86,43 @@ describe("ReleaseProgress", () => {
       },
     });
     expect(leftSentence(many)).toBe(
-      "Waiting on 5 of 5 items: H-1, H-2, H-3 and 2 more. It is built once every item is ready.",
+      "Packaging starts when every item reaches Verify: 5 to go (H-1 in Review, H-2 in Review, H-3 in Review, +2 more).",
+    );
+    const ready = planned({ plan: [item({ ready: true })] });
+    expect(leftSentence(ready)).toBe(
+      "Every item has reached Verify. DevOps can start packaging it now.",
     );
     expect(leftSentence(planned({ status: "assembling" }))).toBe(
-      "Every item is ready. Next, DevOps attaches the builds.",
+      "DevOps is building it. Next: tests on 2 computers.",
+    );
+    const someBuilds = planned({
+      status: "assembling",
+      readiness: {
+        items_total: 3,
+        items_ready: 3,
+        builds: ["desktop-mac", "desktop-win"],
+        tests_required: ["mac"],
+        tests_passed: [],
+      },
+    });
+    expect(leftSentence(someBuilds)).toBe(
+      "DevOps is building it: built for Mac and Windows so far. Next: tests on 1 computer.",
     );
     expect(leftSentence(planned({ status: "built" }))).toBe(
-      "Built. Waiting for tests on mac, win-pc.",
+      "Being tested: 0 of 2 computers passed. It comes to you to test when all of them pass.",
+    );
+    const passed = planned({
+      status: "built",
+      readiness: {
+        items_total: 3,
+        items_ready: 3,
+        builds: ["desktop-mac"],
+        tests_required: ["mac"],
+        tests_passed: ["mac"],
+      },
+    });
+    expect(leftSentence(passed)).toBe(
+      "Every computer passed. DevOps sends it to you to test next.",
     );
   });
 
