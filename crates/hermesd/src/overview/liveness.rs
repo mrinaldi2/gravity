@@ -48,7 +48,11 @@ async fn watch_pushes(app: Arc<AppState>, marks: mpsc::UnboundedSender<Mark>) {
             bot_id, state, at, ..
         } = &push
         {
-            let since = (*state == BotState::WaitingForUser).then(|| {
+            let waits = matches!(
+                state,
+                BotState::WaitingForUser | BotState::WaitingForApproval
+            );
+            let since = waits.then(|| {
                 chrono::DateTime::parse_from_rfc3339(at)
                     .map_or_else(|_| chrono::Utc::now(), |t| t.with_timezone(&chrono::Utc))
             });

@@ -237,6 +237,10 @@ async fn a_permission_prompt_via_the_hook_is_one_row_until_answered() {
         .filter(|r| r["kind"] == "PERMISSION_PROMPT")
         .collect();
     assert_eq!(prompts.len(), 1, "{rows}");
+    assert!(
+        !rows.to_string().contains("BOT_WAITING"),
+        "a prompt with a card is not counted twice (H-172): {rows}"
+    );
     assert_eq!(prompts[0]["request_id"], request_id.as_str());
     assert_eq!(prompts[0]["weight"], 3);
     assert_eq!(

@@ -1,10 +1,8 @@
 //! The row builder (H-128 §1): one function per kind, each reading only
 //! what this computer owns.
 
-use std::collections::HashMap;
-
 use bus::contract::home::{attention_row::Target, AttentionKind, AttentionRow, BotRef};
-use bus::{BotState, Decision, DecisionState};
+use bus::{Decision, DecisionState};
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 
@@ -48,22 +46,22 @@ pub(crate) fn is_home(app: &AppState, project_id: &str) -> bool {
 }
 
 /// What one row is made of, before its id and weight are added.
-struct Part {
-    kind: AttentionKind,
-    target_id: String,
-    title: String,
-    created_at: DateTime<Utc>,
-    target: Option<Target>,
+pub(super) struct Part {
+    pub kind: AttentionKind,
+    pub target_id: String,
+    pub title: String,
+    pub created_at: DateTime<Utc>,
+    pub target: Option<Target>,
 }
 
-struct Builder<'a> {
-    me: String,
-    project_id: &'a str,
+pub(super) struct Builder<'a> {
+    pub me: String,
+    pub project_id: &'a str,
     out: Vec<Built>,
 }
 
 impl Builder<'_> {
-    fn push(&mut self, part: Part, weight: u32, legacy: Option<Value>) -> &mut AttentionRow {
+    pub fn push(&mut self, part: Part, weight: u32, legacy: Option<Value>) -> &mut AttentionRow {
         self.out.push(Built {
             row: AttentionRow {
                 id: row_id(part.kind, &self.me, &part.target_id),
@@ -115,7 +113,7 @@ pub(crate) fn rows(
     }
     if scope.local {
         owner_actions(app, &mut b)?;
-        prompts_and_waiting(app, &mut b)?;
+        super::waiting::prompts_and_waiting(app, &mut b)?;
         owner_questions(app, &mut b)?;
         off_board(app, &mut b)?;
     }
@@ -280,57 +278,6 @@ fn owner_actions(app: &AppState, b: &mut Builder<'_>) -> anyhow::Result<()> {
             target: Some(Target::ActionId(action.id.clone())),
         };
         b.push(part, weight(AttentionKind::OwnerAction), None);
-    }
-    Ok(())
-}
-
-/// Permission prompts of the project's bots here, and its bots waiting for
-/// the owner. Stand-ins run elsewhere: their computer counts them.
-fn prompts_and_waiting(app: &AppState, b: &mut Builder<'_>) -> anyhow::Result<()> {
-    let bots: HashMap<String, bus::Bot> = app
-        .db
-        .list_bots(Some(b.project_id))?
-        .into_iter()
-        .filter(|bot| !bot.is_linked())
-        .map(|bot| (bot.id.clone(), bot))
-        .collect();
-    for prompt in app.approvals.list(None) {
-        let Some(bot) = bots.get(&prompt.bot_id) else {
-            continue;
-        };
-        let part = Part {
-            kind: AttentionKind::PermissionPrompt,
-            target_id: prompt.id.clone(),
-            title: format!("{} asks: {}", bot.name, prompt.summary),
-            created_at: prompt.created_at,
-            target: Some(Target::RequestId(prompt.id.clone())),
-        };
-        b.push(part, weight(AttentionKind::PermissionPrompt), None);
-    }
-    let mut waiting: Vec<&bus::Bot> = bots
-        .values()
-        .filter(|bot| app.supervisor.state(&bot.id).0 == BotState::WaitingForUser)
-        .collect();
-    waiting.sort_by(|a, b| a.name.cmp(&b.name));
-    for bot in waiting {
-        let reason = app.supervisor.state(&bot.id).1;
-        let title = if reason.is_empty() {
-            format!("{} is waiting for you", bot.name)
-        } else {
-            format!("{} is waiting for you: {reason}", bot.name)
-        };
-        let part = Part {
-            kind: AttentionKind::BotWaiting,
-            target_id: bot.id.clone(),
-            title,
-            created_at: app.overview.waiting_since(&bot.id),
-            target: Some(Target::Bot(BotRef {
-                daemon_id: b.me.clone(),
-                bot_id: bot.id.clone(),
-                name: bot.name.clone(),
-            })),
-        };
-        b.push(part, weight(AttentionKind::BotWaiting), None);
     }
     Ok(())
 }
