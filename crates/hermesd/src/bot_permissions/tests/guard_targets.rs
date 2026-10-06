@@ -135,8 +135,8 @@ fn cargo_aliases_and_subcommand_binaries_are_followed() {
         "cargo bad",
         "cargo nosuch",
         "cargo --config alias.yb='build' yb",
-        &format!("cargo-clippy clippy --target-dir {other}"),
-        &format!("cargo-clippy --target-dir {other}"),
+        &format!("cargo-clippy clippy --target-dir '{other}'"),
+        &format!("cargo-clippy --target-dir '{other}'"),
         "CARGO_ALIAS_ZB='build' cargo zb",
     ] {
         assert!(call(command).is_some(), "{command}");
@@ -146,7 +146,7 @@ fn cargo_aliases_and_subcommand_binaries_are_followed() {
         "cargo ok -p hermesd",
         "cargo clippy --all-targets",
         "cargo-clippy clippy --all-targets",
-        &format!("cargo-clippy clippy --target-dir {own}"),
+        &format!("cargo-clippy clippy --target-dir '{own}'"),
     ] {
         assert_eq!(call(command), None, "{command}");
     }
