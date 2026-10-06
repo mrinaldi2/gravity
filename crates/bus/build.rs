@@ -15,6 +15,7 @@ const FILES: &[&str] = &[
     "hermes/board/v1/requests.proto",
     "hermes/board/v1/releases.proto",
     "hermes/board/v1/meetings.proto",
+    "hermes/home/v1/home.proto",
     "hermes/wire/v1/envelope.proto",
 ];
 
@@ -42,9 +43,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .skip_protoc_run()
         .compile_fds(descriptors)?;
 
+    let descriptor_bytes = std::fs::read(&descriptor_path)?;
     pbjson_build::Builder::new()
-        .register_descriptors(&std::fs::read(&descriptor_path)?)?
+        .register_descriptors(&descriptor_bytes)?
         .btree_map(["."])
-        .build(&[".hermes"])?;
+        .build(&[".hermes.board", ".hermes.wire"])?;
+    // The home surface's JSON keeps the proto field names (snake_case), as
+    // the JSON WS frames around it do (H-128 rev 2, iOS N4).
+    pbjson_build::Builder::new()
+        .register_descriptors(&descriptor_bytes)?
+        .btree_map(["."])
+        .preserve_proto_field_names()
+        .build(&[".hermes.home"])?;
     Ok(())
 }

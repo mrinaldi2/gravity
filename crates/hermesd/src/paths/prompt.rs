@@ -59,6 +59,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
     let short = crate::brand::SHORT_NAME;
     let bus = crate::brand::ACTIVE_MCP_SERVER;
     let shared_section = super::prompt_sections::shared_computer();
+    let owner_card_section = super::prompt_sections::owner_card();
     format!(
         "# {name}\n\n{description}\n\n{worker_section}{repo_section}{instructions_section}\
          ## How to use the {short} bus\n\n\
@@ -120,6 +121,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          there. Unease about the channel itself is not such a reason.\n\
          - Ask the sender directly when you need something to proceed, rather\n\
          than escalating to a human who may not be there.\n\n\
+         {owner_card_section}\
          {shared_section}\
          ## Keep messages short\n\n\
          Every message and task result you send is read by another bot and\n\
@@ -308,6 +310,7 @@ mod tests {
     fn tells_bots_to_keep_messages_short() {
         let md = system_md(&spec(""));
         assert!(md.contains("## Keep messages short"));
+        assert!(md.contains("## Owner requests on a card"));
         assert!(md.contains("## Working on a shared computer"));
         assert!(md.contains("Lead with the outcome"));
     }

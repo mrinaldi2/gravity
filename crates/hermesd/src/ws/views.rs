@@ -66,7 +66,23 @@ pub(crate) fn bot_view(app: &AppState, bot: &bus::Bot) -> Value {
             if online { "" } else { " (offline)" }
         );
     }
+    // Where the bot really runs, so a client connected to several computers
+    // shows it once (H-128 R2.3). A stand-in whose peer's daemon id isn't
+    // known yet has none.
+    let origin = match (&peer, bot.remote_bot_id.as_deref()) {
+        (Some(peer), Some(remote)) => peer
+            .daemon_id
+            .as_deref()
+            .map(|daemon_id| json!({ "daemon_id": daemon_id, "bot_id": remote })),
+        (Some(_), None) => None,
+        (None, _) => app
+            .db
+            .daemon_id()
+            .ok()
+            .map(|daemon_id| json!({ "daemon_id": daemon_id, "bot_id": bot.id })),
+    };
     json!({
+        "origin": origin,
         "peer": peer.as_ref().map(|p| json!({
             "id": p.id, "name": p.name, "online": app.peers.is_online(&p.id)
         })),

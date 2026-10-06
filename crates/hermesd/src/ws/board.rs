@@ -29,11 +29,11 @@ mod reads;
 /// A request refused before the board service answered it: no grant, an
 /// unknown item, bad arguments. Sent as the envelope's `Error`.
 pub(super) struct Refusal {
-    code: &'static str,
-    message: String,
+    pub(super) code: &'static str,
+    pub(super) message: String,
 }
 
-fn refuse(code: &'static str, message: impl Into<String>) -> Refusal {
+pub(super) fn refuse(code: &'static str, message: impl Into<String>) -> Refusal {
     Refusal {
         code,
         message: message.into(),
@@ -94,6 +94,10 @@ impl Conn {
                     },
                 ),
                 Ok(None) => return,
+                Err(r) => binary::error(req_id, r.code, r.message),
+            },
+            Frame::Home(req_id, request) => match self.home(request) {
+                Ok(response) => binary::home_response(req_id, response),
                 Err(r) => binary::error(req_id, r.code, r.message),
             },
         };

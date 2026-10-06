@@ -6,6 +6,7 @@ syntax = "proto3";
 package hermes.wire.v1;
 
 import "hermes/board/v1/requests.proto";
+import "hermes/home/v1/home.proto";
 
 message Envelope {
   // Correlates a response with its request, as `req_id` does in JSON frames.
@@ -17,6 +18,9 @@ message Envelope {
     hermes.board.v1.BoardResponse board_response = 3;
     // Pushes carry `req_id` 0.
     hermes.board.v1.BoardPush board_push = 4;
+    // The projects home (H-128).
+    hermes.home.v1.HomeRequest home_request = 5;
+    hermes.home.v1.HomeResponse home_response = 6;
     Error error = 15;
   }
 }

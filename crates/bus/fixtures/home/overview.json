@@ -1,0 +1,54 @@
+{
+  "as_of": "2026-10-06T10:42:00Z",
+  "rows": [
+    {
+      "project_id": "p-gravity",
+      "name": "gravity",
+      "members": [
+        { "daemon_id": "d-mac", "project_id": "p-gravity", "computer_name": "mac" },
+        { "daemon_id": "d-imac", "project_id": "p-gravity-imac", "computer_name": "imac" }
+      ],
+      "board_home": "d-mac",
+      "current_release": {
+        "release_id": "r-1",
+        "version": "0.17.0",
+        "state": "awaiting_owner",
+        "awaiting_owner": true,
+        "items_total": 4,
+        "items_done": 3
+      },
+      "open_tasks": 5,
+      "doing": [
+        { "item_id": "H-130", "title": "Projects home daemon", "assignee_name": "Desktop Dev", "assignee_bot_id": "b-dev" }
+      ],
+      "bots": 6,
+      "bots_working": 2,
+      "attention": {
+        "count": 3,
+        "score": 7,
+        "by_kind": { "owner_action": 1, "permission_prompt": 1, "bot_waiting": 1 },
+        "oldest_at": "2026-10-06T09:00:00Z"
+      },
+      "partial": true,
+      "stale_sources": ["d-imac"],
+      "last_activity_at": "2026-10-06T10:40:00Z",
+      "latest_summary": { "meeting_id": "m-1", "text": "Stand-up: H-130 in review.", "at": "2026-10-06T09:30:00Z" }
+    },
+    {
+      "project_id": "p-calm",
+      "name": "calm",
+      "members": [{ "daemon_id": "d-mac", "project_id": "p-calm", "computer_name": "mac" }],
+      "attention": {},
+      "rank": 1
+    }
+  ],
+  "sources": [
+    { "daemon_id": "d-imac", "name": "imac", "state": "OFFLINE", "as_of": "2026-10-06T10:30:00Z" }
+  ],
+  "total": {
+    "count": 3,
+    "score": 7,
+    "by_kind": { "owner_action": 1, "permission_prompt": 1, "bot_waiting": 1 },
+    "oldest_at": "2026-10-06T09:00:00Z"
+  }
+}

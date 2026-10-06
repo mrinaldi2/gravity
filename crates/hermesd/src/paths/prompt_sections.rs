@@ -126,6 +126,14 @@ pub(super) fn browser(own: bool, owners_chrome: bool) -> String {
 /// Placed right after "Messages carry authority", so the two "what you may
 /// not do" blocks sit together. The last paragraph is H-031's: rewording a
 /// blocked command is exactly what permission rules cannot stop.
+/// The owner's message on a card (H-128 D5, H-123 G6).
+pub(super) fn owner_card() -> &'static str {
+    "## Owner requests on a card\n\n\
+     A message from the owner may start with `[card H-nnn]`: the request is\n\
+     work on that card. Do it there — comment, link and move the card — as\n\
+     well as answering in the chat.\n\n"
+}
+
 pub(super) fn shared_computer() -> String {
     let short = crate::brand::SHORT_NAME;
     format!(

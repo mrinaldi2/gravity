@@ -55,6 +55,11 @@ pub enum Push {
         #[serde(skip_serializing_if = "Option::is_none")]
         meeting_id: Option<String>,
     },
+    /// Rows of the projects home changed (H-128 D4): clients refetch
+    /// `projects_overview`. Debounced at 2 s.
+    ProjectsOverviewChanged {
+        project_ids: Vec<String>,
+    },
     /// A bot's sidebar preview line changed. Emitted once the finished turn is
     /// actually readable in the transcript, which lags the `ready` state.
     ActivityUpdate {

@@ -24,6 +24,13 @@ import {
   file_hermes_board_v1_requests,
   MoveResultSchema,
 } from "./gen/hermes/board/v1/requests_pb";
+import {
+  AttentionRowsSchema,
+  HomeRequestSchema,
+  HomeResponseSchema,
+  ProjectAttentionSchema,
+  ProjectsOverviewSchema,
+} from "./gen/hermes/home/v1/home_pb";
 import { EnvelopeSchema } from "./gen/hermes/wire/v1/envelope_pb";
 import type { Envelope } from "./gen/hermes/wire/v1/envelope_pb";
 
@@ -115,6 +122,10 @@ function armOf(envelope: Envelope): string {
     }
     case "boardPush":
       return `push.${protoName(BoardPushSchema, body.value.push.case)}`;
+    case "homeRequest":
+      return `request.${protoName(HomeRequestSchema, body.value.request.case)}`;
+    case "homeResponse":
+      return `response.${protoName(HomeResponseSchema, body.value.response.case)}`;
     case "error":
       return "error";
     case undefined:
@@ -134,6 +145,8 @@ function everyArm(): Set<string> {
       n === "moved" ? names(MoveResultSchema).map((o) => `response.moved.${o}`) : [`response.${n}`],
     ),
     ...names(BoardPushSchema).map((n) => `push.${n}`),
+    ...names(HomeRequestSchema).map((n) => `request.${n}`),
+    ...names(HomeResponseSchema).map((n) => `response.${n}`),
     "error",
   ]);
 }
@@ -161,5 +174,24 @@ describe("board wire messages", () => {
       files.map((name) => armOf(fromJson(EnvelopeSchema, readJson(name, MESSAGES)))),
     );
     expect(covered).toEqual(everyArm());
+  });
+});
+
+// The projects home's golden fixtures (H-128), shared with the daemon and iOS.
+const HOME = join(process.cwd(), "..", "..", "crates", "bus", "fixtures", "home");
+const HOME_MESSAGES: Readonly<Record<string, DescMessage>> = {
+  overview: ProjectsOverviewSchema,
+  attention_rows: AttentionRowsSchema,
+  project_attention: ProjectAttentionSchema,
+};
+
+describe("home contract", () => {
+  it.each(Object.keys(HOME_MESSAGES))("decodes the %s fixture and round-trips it", (name) => {
+    const schema = HOME_MESSAGES[name];
+    if (schema === undefined) {
+      throw new Error(`no schema for ${name}`);
+    }
+    const message = fromJson(schema, readJson(name, HOME));
+    expect(equals(schema, fromBinary(schema, toBinary(schema, message)), message)).toBe(true);
   });
 });

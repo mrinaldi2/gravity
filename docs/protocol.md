@@ -161,7 +161,7 @@ Codes: `auth_failed`, `unsupported_version`, `not_found`, `invalid_request`,
 | `detach` | `bot_id` | `ok` |
 | `input` | `bot_id, data` (utf8 string, may contain control chars) | none (fire-and-forget; requires `control` grant) |
 | `resize` | `bot_id, cols, rows, force?` | none (requires `control` grant) |
-| `send_user_message` | `to_bot_id, body` | `message` |
+| `send_user_message` | `to_bot_id, body, item_id?` | `message` (with `item_id`, `commented`) |
 | `list_messages` | `conversation_id, before_id?, limit?` | `messages` |
 | `list_conversations` | `project_id?` | `conversations` |
 | `list_routines` | `bot_id` | `routines` |
@@ -893,6 +893,7 @@ A bot proposes an exact command for the owner to run; only the owner runs it.
   - `relayed`: one row for every ruling a bot recorded for the owner and they haven't confirmed: `count`, `decision_ids`, `by` (`[{bot_id, count}]`), and `rulings` (`[{id, title, answer, bot_id, at}]`, what the confirm dialog lists). `confirm_relayed {project_id, decision_ids}` (approve) confirms those of `decision_ids` still relayed (ARCH-R42 M1) and answers `{type: "relayed_confirmed", confirmed: [ids], failed: [{id, message}], changed: [ids]}`; `changed` holds the ones answered, reopened or gone since, and the client rereads.
   - `p0`: an open P0 item.
   - `serving_off`: `{title, reason}`, listed first: the served folder is refused, so no build can be published until `[releases] dir` is fixed (H-100). It has no action in the app.
+  - With `all_kinds: true` in the request, the kinds the projects home added are listed too (`owner_action`, `permission_prompt`, `bot_waiting`), each as its typed `AttentionRow` in proto3 JSON with `kind` its lowercase name. An older client leaves `all_kinds` out and sees only the kinds above.
 - **`wip_overrides`:** moves made over a WIP limit in the last seven days, with their notes. They're the lead's call, so they sit beside Needs you, not in it.
 - **Off the board's home:** this computer's own decisions are listed, and the daemon adds the home's rows (asked as peer request `dashboard_needs_you`), each with `elsewhere` naming the home, where they're acted on; `wip_overrides` are the home's too. When the home can't be reached, `needs_you_note` says so and names it.
 - **`board`:** null without a board. Otherwise:
@@ -903,6 +904,19 @@ A bot proposes an exact command for the owner to run; only the owner runs it.
 - **`team`:** each bot of the project (`bot`, as in `list_bots`), its items in Doing, and its open task count.
 - **`meetings`:** one row per meeting series, `{series, next_at, collecting, last_held}`: `next_at` is when its routine next starts it (null while disabled), `collecting` the meeting taking contributions now, `last_held` the last one closed. Ad-hoc meetings still collecting follow, with `series` null. Meetings are summaries (see below). Empty off the board's home.
 - **`action_items`:** the open ones, soonest due first, each with `meeting_name` and `overdue`.
+
+### The projects home (H-128)
+
+The typed surface `hermes.home.v1` (`proto/hermes/home/v1/home.proto`, contract `home` 1, capability `projects_overview`). Each request travels as a binary `HomeRequest` envelope, or as JSON `{type, req_id, ...fields}` answered with the message in proto3 JSON under the proto field names (snake_case; enums by name, timestamps RFC 3339).
+
+- **`projects_overview {project_ids?}`** (read) answers `{type: "projects_overview", overview}`: one `ProjectRow` per live project (all when `project_ids` is empty), ranked pinned first, then `attention.score` desc, `attention.oldest_at` asc, `last_activity_at` desc, name; `rank` numbers that order. It answers at once from local data and each linked peer's last good part: it never asks a peer. `sources` lists each linked computer with its `state` (`OK`, `OFFLINE`, `TIMEOUT`, `OLD_VERSION`; `STATE_UNSPECIFIED` until first asked) and the `as_of` of the data in use; a row whose peer isn't `OK` is `partial` and names it in `stale_sources`. `pinned` is always false until D7.
+- **`attention_rows {project_id}`** (read) answers `{type: "attention_rows", attention_rows}`: the rows the project's `attention` counts, this computer's and each linked peer's last good ones, weight desc then oldest first. Row ids are `<kind>:<daemon_id>:<target>` and stay the same across reads; `daemon_id` is the computer to act on it, `project_id` in its ids.
+- **`attention_dismiss {id}`** (approve) closes an `owner_question` row (D6); any other kind is refused with `invalid_request`.
+- **Push `projects_overview_changed {project_ids}`**, debounced at 2 s: a bot's state, a task or message, a card, a decision, an owner action, a permission prompt or a meeting changed one of those rows, or a peer's part changed. Clients refetch.
+- **Weights:** release awaiting, owner action, permission prompt 3; P0 item, serving off 2; relayed rulings, bot waiting, off board, owner question 1; a decision 3 when urgent, else 1. Each computer counts only the rows it owns: its prompts, Run cards (`target_machine` here), waiting bots, decisions and serving state, plus releases awaiting the owner and P0 cards when it holds the board.
+- **Peers:** `project_attention {project_ids}` (peer request, the callee's ids) answers `ProjectAttention` in proto3 JSON: a `Part` per project linked with the caller, in the caller's ids, with its rows, summary, own working bots, and on the board's home the current release and latest meeting summary. A project not linked with the caller is left out. A peer sends `project_attention_changed {project_ids}` (the receiver's ids), debounced at 2 s, when its part may have changed; the receiver asks again. It also asks on link-up and every 60 s while a client fetched the overview in the last 5 min, at most one request per peer at a time, 3 s each. A peer without `project_attention` is `OLD_VERSION`.
+- **Bots** carry `origin {daemon_id, bot_id}`: where the bot runs, a stand-in's peer and remote id, so a client connected to several computers shows each bot once.
+- **A card on the owner's message (D5):** `send_user_message` with `item_id` checks the card is on the bot's project's board and open (else `invalid_request`, or `not_found`), stores and delivers the body as `[card <id>] <body>`, and comments "Owner asked <bot>: …" on the card when its board lives here (`commented: false` on a board mirrored from its home).
 
 ### Flow metrics (B11)
 

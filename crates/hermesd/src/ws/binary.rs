@@ -4,12 +4,14 @@
 //! client may not send is answered with an `Error` naming why.
 
 use bus::contract::board::{BoardPush, BoardRequest, BoardResponse};
+use bus::contract::home::{HomeRequest, HomeResponse};
 use bus::contract::wire::{envelope::Body, Envelope, Error};
 use prost::Message;
 
 /// A request the daemon serves, or the error frame to answer instead.
 pub(super) enum Frame {
     Board(u64, BoardRequest),
+    Home(u64, HomeRequest),
     Refused(Vec<u8>),
 }
 
@@ -20,10 +22,20 @@ pub(super) fn decode(frame: &[u8]) -> Frame {
             req_id,
             body: Some(Body::BoardRequest(request)),
         }) => return Frame::Board(req_id, request),
+        Ok(Envelope {
+            req_id,
+            body: Some(Body::HomeRequest(request)),
+        }) => return Frame::Home(req_id, request),
         Ok(Envelope { req_id, body: None }) => (req_id, "empty envelope".to_string()),
         Ok(Envelope {
             req_id,
-            body: Some(Body::Error(_) | Body::BoardResponse(_) | Body::BoardPush(_)),
+            body:
+                Some(
+                    Body::Error(_)
+                    | Body::BoardResponse(_)
+                    | Body::BoardPush(_)
+                    | Body::HomeResponse(_),
+                ),
         }) => (
             req_id,
             "clients send requests, not errors, responses or pushes".to_string(),
@@ -34,6 +46,10 @@ pub(super) fn decode(frame: &[u8]) -> Frame {
 
 pub(super) fn response(req_id: u64, response: BoardResponse) -> Vec<u8> {
     encode(req_id, Body::BoardResponse(response))
+}
+
+pub(super) fn home_response(req_id: u64, response: HomeResponse) -> Vec<u8> {
+    encode(req_id, Body::HomeResponse(response))
 }
 
 pub(super) fn push(push: BoardPush) -> Vec<u8> {
@@ -99,6 +115,16 @@ mod tests {
         }
         .encode_to_vec();
         assert_eq!(error_of(decode(&request)), (7, "invalid_request".into()));
+    }
+
+    #[test]
+    fn a_home_request_is_served() {
+        let request = Envelope {
+            req_id: 11,
+            body: Some(Body::HomeRequest(HomeRequest::default())),
+        }
+        .encode_to_vec();
+        assert!(matches!(decode(&request), Frame::Home(11, _)));
     }
 
     #[test]

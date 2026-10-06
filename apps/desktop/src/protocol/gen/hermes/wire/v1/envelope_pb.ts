@@ -10,13 +10,15 @@ import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
 import type { BoardPush, BoardRequest, BoardResponse } from "../../board/v1/requests_pb";
 import { file_hermes_board_v1_requests } from "../../board/v1/requests_pb";
+import type { HomeRequest, HomeResponse } from "../../home/v1/home_pb";
+import { file_hermes_home_v1_home } from "../../home/v1/home_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file hermes/wire/v1/envelope.proto.
  */
 export const file_hermes_wire_v1_envelope: GenFile = /*@__PURE__*/
-  fileDesc("Ch1oZXJtZXMvd2lyZS92MS9lbnZlbG9wZS5wcm90bxIOaGVybWVzLndpcmUudjEi7gEKCEVudmVsb3BlEg4KBnJlcV9pZBgBIAEoBBI2Cg1ib2FyZF9yZXF1ZXN0GAIgASgLMh0uaGVybWVzLmJvYXJkLnYxLkJvYXJkUmVxdWVzdEgAEjgKDmJvYXJkX3Jlc3BvbnNlGAMgASgLMh4uaGVybWVzLmJvYXJkLnYxLkJvYXJkUmVzcG9uc2VIABIwCgpib2FyZF9wdXNoGAQgASgLMhouaGVybWVzLmJvYXJkLnYxLkJvYXJkUHVzaEgAEiYKBWVycm9yGA8gASgLMhUuaGVybWVzLndpcmUudjEuRXJyb3JIAEIGCgRib2R5IiYKBUVycm9yEgwKBGNvZGUYASABKAkSDwoHbWVzc2FnZRgCIAEoCWIGcHJvdG8z", [file_hermes_board_v1_requests]);
+  fileDesc("Ch1oZXJtZXMvd2lyZS92MS9lbnZlbG9wZS5wcm90bxIOaGVybWVzLndpcmUudjEi2gIKCEVudmVsb3BlEg4KBnJlcV9pZBgBIAEoBBI2Cg1ib2FyZF9yZXF1ZXN0GAIgASgLMh0uaGVybWVzLmJvYXJkLnYxLkJvYXJkUmVxdWVzdEgAEjgKDmJvYXJkX3Jlc3BvbnNlGAMgASgLMh4uaGVybWVzLmJvYXJkLnYxLkJvYXJkUmVzcG9uc2VIABIwCgpib2FyZF9wdXNoGAQgASgLMhouaGVybWVzLmJvYXJkLnYxLkJvYXJkUHVzaEgAEjMKDGhvbWVfcmVxdWVzdBgFIAEoCzIbLmhlcm1lcy5ob21lLnYxLkhvbWVSZXF1ZXN0SAASNQoNaG9tZV9yZXNwb25zZRgGIAEoCzIcLmhlcm1lcy5ob21lLnYxLkhvbWVSZXNwb25zZUgAEiYKBWVycm9yGA8gASgLMhUuaGVybWVzLndpcmUudjEuRXJyb3JIAEIGCgRib2R5IiYKBUVycm9yEgwKBGNvZGUYASABKAkSDwoHbWVzc2FnZRgCIAEoCWIGcHJvdG8z", [file_hermes_board_v1_requests, file_hermes_home_v1_home]);
 
 /**
  * @generated from message hermes.wire.v1.Envelope
@@ -55,6 +57,20 @@ export type Envelope = Message<"hermes.wire.v1.Envelope"> & {
      */
     value: BoardPush;
     case: "boardPush";
+  } | {
+    /**
+     * The projects home (H-128).
+     *
+     * @generated from field: hermes.home.v1.HomeRequest home_request = 5;
+     */
+    value: HomeRequest;
+    case: "homeRequest";
+  } | {
+    /**
+     * @generated from field: hermes.home.v1.HomeResponse home_response = 6;
+     */
+    value: HomeResponse;
+    case: "homeResponse";
   } | {
     /**
      * @generated from field: hermes.wire.v1.Error error = 15;

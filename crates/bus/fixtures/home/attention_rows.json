@@ -1,0 +1,58 @@
+{
+  "rows": [
+    {
+      "id": "owner_action:d-imac:oa-7",
+      "kind": "OWNER_ACTION",
+      "daemon_id": "d-imac",
+      "project_id": "p-gravity-imac",
+      "title": "Run: stop colima for the install",
+      "created_at": "2026-10-06T09:00:00Z",
+      "weight": 3,
+      "action_id": "oa-7"
+    },
+    {
+      "id": "permission_prompt:d-mac:req-1",
+      "kind": "PERMISSION_PROMPT",
+      "daemon_id": "d-mac",
+      "project_id": "p-gravity",
+      "title": "Desktop Dev asks: Bash: rm -rf build",
+      "created_at": "2026-10-06T09:10:00Z",
+      "weight": 3,
+      "request_id": "req-1"
+    },
+    {
+      "id": "decision:d-mac:dec-1",
+      "kind": "DECISION",
+      "daemon_id": "d-mac",
+      "project_id": "p-gravity",
+      "title": "Budget for push",
+      "created_at": "2026-10-06T09:20:00Z",
+      "weight": 3,
+      "decision_id": "dec-1",
+      "priority": "urgent"
+    },
+    {
+      "id": "relayed_rulings:d-mac:p-gravity",
+      "kind": "RELAYED_RULINGS",
+      "daemon_id": "d-mac",
+      "project_id": "p-gravity",
+      "title": "Confirm 2 ruling(s) a bot recorded for you",
+      "created_at": "2026-10-06T09:25:00Z",
+      "weight": 1,
+      "relayed_count": 2
+    },
+    {
+      "id": "bot_waiting:d-mac:b-dev",
+      "kind": "BOT_WAITING",
+      "daemon_id": "d-mac",
+      "project_id": "p-gravity",
+      "title": "Desktop Dev is waiting for you: Didn't connect",
+      "created_at": "2026-10-06T09:30:00Z",
+      "weight": 1,
+      "bot": { "daemon_id": "d-mac", "bot_id": "b-dev", "name": "Desktop Dev" }
+    }
+  ],
+  "sources": [
+    { "daemon_id": "d-imac", "name": "imac", "state": "OK", "as_of": "2026-10-06T10:41:00Z" }
+  ]
+}

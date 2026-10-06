@@ -5,6 +5,11 @@ modules:
 lint:
   use:
     - STANDARD
+  # hermes.home.v1 was frozen with short enum values (H-128 rev 2): clients
+  # key `by_kind` and their JSON on those names, so they stay unprefixed.
+  ignore_only:
+    ENUM_VALUE_PREFIX:
+      - proto/hermes/home/v1/home.proto
 breaking:
   use:
     - FILE

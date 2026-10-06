@@ -1,0 +1,37 @@
+{
+  "reqId": "40",
+  "homeResponse": {
+    "projects_overview": {
+      "as_of": "2026-10-06T10:42:00Z",
+      "rows": [
+        {
+          "project_id": "p1",
+          "name": "gravity",
+          "members": [
+            {
+              "daemon_id": "d-mac",
+              "project_id": "p1",
+              "computer_name": "mac"
+            }
+          ],
+          "attention": {
+            "count": 1,
+            "score": 3,
+            "by_kind": {
+              "owner_action": 1
+            },
+            "oldest_at": "2026-10-06T09:00:00Z"
+          }
+        }
+      ],
+      "total": {
+        "count": 1,
+        "score": 3,
+        "by_kind": {
+          "owner_action": 1
+        },
+        "oldest_at": "2026-10-06T09:00:00Z"
+      }
+    }
+  }
+}

@@ -38,6 +38,7 @@ pub(super) fn handle(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> anyho
         "owner_action_close" => super::owner_actions::serve_close(app, &peer, frame),
         "grant_extras" => crate::decisions::grants::serve_grant(app, &peer.id, frame),
         "metrics_get" => super::board_home::serve_metrics(app, &peer, frame),
+        "project_attention" => crate::overview::serve(app, &peer, frame),
         "create_bot" => super::remote_bots::serve_create(app, &peer, frame),
         "update_bot" => super::remote_bots::serve_update(app, &peer, frame),
         "delete_bot" => super::remote_bots::serve_delete(app, &peer, frame),
@@ -70,6 +71,7 @@ pub(super) fn event(app: &Arc<AppState>, peer_id: &str, frame: &Value) {
         "board_event" => super::board::receive_event(app, peer_id, frame),
         "owner_action_update" => super::owner_actions::receive_update(app, peer_id, frame),
         "owner_action_output" => super::owner_actions::receive_output(app, peer_id, frame),
+        "project_attention_changed" => crate::overview::receive_changed(app, peer_id),
         _ => {}
     }
 }
