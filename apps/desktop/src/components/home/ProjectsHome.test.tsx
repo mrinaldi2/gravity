@@ -174,8 +174,8 @@ describe("ProjectsHome", () => {
     try {
       const daemon = daemonWithOverview();
       const request = daemon.request.bind(daemon);
-      vi.spyOn(daemon, "request").mockImplementation((body, expect) =>
-        body.type === "projects_overview" ? new Promise(() => {}) : request(body, expect),
+      vi.spyOn(daemon, "request").mockImplementation((body, replyType) =>
+        body.type === "projects_overview" ? new Promise(() => {}) : request(body, replyType),
       );
       renderHome(daemon);
       expect(screen.queryByRole("article", { name: "Acme" })).not.toBeInTheDocument();

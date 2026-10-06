@@ -35,22 +35,18 @@ export interface ProjectsOverviewState {
 export const OVERVIEW_WAIT_MS = 8000;
 
 /** `reply`, or a failure once `ms` pass without one. */
-function inTime<T>(reply: Promise<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
+async function inTime<T>(reply: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
       reject(new Error("The service didn't answer in time"));
     }, ms);
-    reply.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (failure: unknown) => {
-        clearTimeout(timer);
-        reject(failure instanceof Error ? failure : new Error(String(failure)));
-      },
-    );
   });
+  try {
+    return await Promise.race([reply, late]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Rows for a daemon without `projects_overview`: names and bot counts only. */
