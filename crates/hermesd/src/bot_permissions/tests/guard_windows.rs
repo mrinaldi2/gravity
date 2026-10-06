@@ -194,12 +194,21 @@ fn a_bot_cleans_its_own_cargo_target_on_windows() {
             &ctx,
         )
     };
+    // A home with its protected folders, as the protected-path check sees it.
+    std::fs::create_dir_all(root.path().join("home/secrets")).expect("mkdir");
     let own = spelled(&bots.join("dev/cargo-target"));
     let msys = format!("/{}{}", own[..1].to_lowercase(), &own[2..]);
     let back = own.replace('/', "\\");
-    for spelling in [own.clone(), msys, format!("'{back}'")] {
+    // The verbatim spelling too (WIN-CHK-12): its `?` is no wildcard.
+    let verbatim = format!(r"'\\?\{back}'");
+    for spelling in [own.clone(), msys, format!("'{back}'"), verbatim] {
         assert_eq!(
             call(format!("cargo clean --target-dir {spelling}")),
+            None,
+            "{spelling}"
+        );
+        assert_eq!(
+            call(format!("cargo-clippy clippy --target-dir {spelling}")),
             None,
             "{spelling}"
         );

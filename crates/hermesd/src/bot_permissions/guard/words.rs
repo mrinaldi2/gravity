@@ -81,7 +81,7 @@ impl GuardContext {
                 }
             }
         }
-        out
+        plain_verbatim(out)
     }
 
     fn variable(&self, name: &str, scope: &Scope) -> Option<String> {
@@ -142,4 +142,39 @@ fn braces(word: &str) -> Option<(&str, &str, &str)> {
     let options = &word[open + 1..close];
     (options.contains(',') && !options.contains('{'))
         .then(|| (&word[..open], options, &word[close + 1..]))
+}
+
+/// A Windows verbatim path (`\\?\C:\…`, `\\?\UNC\server\share\…`, or the
+/// same with `/`) in its plain spelling. Its `?` would otherwise read as a
+/// wildcard everywhere paths are matched, protected ones included
+/// (WIN-CHK-11, WIN-CHK-12).
+pub(super) fn plain_verbatim(path: String) -> String {
+    for unc in [r"\\?\UNC\", "//?/UNC/"] {
+        if let Some(rest) = path.strip_prefix(unc) {
+            return format!(r"\\{rest}");
+        }
+    }
+    for verbatim in [r"\\?\", "//?/"] {
+        if let Some(rest) = path.strip_prefix(verbatim) {
+            return rest.to_string();
+        }
+    }
+    path
+}
+
+#[cfg(test)]
+mod verbatim_tests {
+    use super::plain_verbatim;
+
+    #[test]
+    fn a_verbatim_path_is_matched_plainly() {
+        let plain = |p: &str| plain_verbatim(p.to_string());
+        assert_eq!(
+            plain(r"\\?\C:\Users\me\bots\dev\cargo-target"),
+            r"C:\Users\me\bots\dev\cargo-target"
+        );
+        assert_eq!(plain("//?/C:/Users/me/x"), "C:/Users/me/x");
+        assert_eq!(plain(r"\\?\UNC\server\share\x"), r"\\server\share\x");
+        assert_eq!(plain("/a/?/b"), "/a/?/b", "only the prefix");
+    }
 }
