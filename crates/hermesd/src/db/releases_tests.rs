@@ -41,7 +41,11 @@ fn the_releases_migration_runs_again_without_losing_packages() {
         .copied()
         .filter(|m| m.contains("CREATE TABLE IF NOT EXISTS release"))
         .collect();
-    assert_eq!(ours.len(), 3, "releases, release events and build commits");
+    assert_eq!(
+        ours.len(),
+        4,
+        "releases, release events, build commits and required machines"
+    );
     for sql in ours {
         db.lock().execute_batch(sql).unwrap();
     }

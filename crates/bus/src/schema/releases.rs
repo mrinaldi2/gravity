@@ -128,3 +128,13 @@ CREATE TABLE IF NOT EXISTS release_build_commit (
     PRIMARY KEY (release_id, platform)
 );
 "#;
+
+/// The computers a release must be tested on before it is submitted (H-115),
+/// as the owner or lead set them. None set: every tester's computer.
+pub(super) const MIGRATION_RELEASE_MACHINES: &str = r#"
+CREATE TABLE IF NOT EXISTS release_machine (
+    project_id TEXT NOT NULL REFERENCES project(id),
+    machine    TEXT NOT NULL,
+    PRIMARY KEY (project_id, machine)
+);
+"#;

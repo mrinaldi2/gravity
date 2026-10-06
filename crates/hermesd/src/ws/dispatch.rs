@@ -49,6 +49,7 @@ const READ_ONLY: &[&str] = &[
     "get_task",
     "list_workers",
     "list_releases",
+    "release_machines",
     "get_release",
     "dashboard_get",
     "quiesce_status",
@@ -82,6 +83,8 @@ const APPROVE_ONLY: &[&str] = &[
     "release_rule",
     "release_hold",
     "release_unhold",
+    // Which computers a release must pass on before submit (H-115).
+    "release_machines_set",
     // The one-shot backlog import is the owner's (H-020 §1.5, B6).
     "board_import",
     // Ending a pause for an install early is the owner's call (H-117).
@@ -177,6 +180,8 @@ impl Conn {
             "delete_decision" => self.delete_decision(&req_id, req),
             "publish_decisions" => self.publish_decisions(&req_id, req),
             "list_releases" => self.list_releases(&req_id, req),
+            "release_machines" => self.release_machines(&req_id, req),
+            "release_machines_set" => self.release_machines_set(&req_id, req),
             "get_release" => self.get_release(&req_id, req),
             "dashboard_get" => self.dashboard_get(&req_id, req),
             "quiesce_status" => self.quiesce_status(&req_id),

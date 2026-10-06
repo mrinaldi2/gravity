@@ -155,8 +155,27 @@ export type ReleaseRequestBody =
     }
   | { readonly type: "release_unhold"; readonly release_id: string }
   | { readonly type: "release_pause"; readonly release_id: string; readonly reason: string }
-  | { readonly type: "release_resume"; readonly release_id: string };
+  | { readonly type: "release_resume"; readonly release_id: string }
+  | { readonly type: "release_machines"; readonly project_id: string }
+  | {
+      readonly type: "release_machines_set";
+      readonly project_id: string;
+      /** Empty: every tester's computer again. */
+      readonly machines: readonly string[];
+    };
+
+/** The computers a package must pass on before it is submitted (H-115). */
+export interface ReleaseMachines {
+  readonly project_id: string;
+  /** What submit waits for: `set`, or every tester's computer. */
+  readonly required: readonly string[];
+  /** What the owner or lead chose; empty means every tester's computer. */
+  readonly set: readonly string[];
+  /** Each tester and the computer it tests on. */
+  readonly testers: readonly { readonly bot_id: string; readonly machine: string }[];
+}
 
 export type ReleaseReply =
   | { readonly type: "releases"; readonly releases: readonly Release[] }
-  | { readonly type: "release"; readonly release: Release };
+  | { readonly type: "release"; readonly release: Release }
+  | { readonly type: "release_machines"; readonly machines: ReleaseMachines };

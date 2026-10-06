@@ -11,6 +11,7 @@ import type { Release } from "../../protocol/releases";
 import { isCurrent, releaseTitle, statusLabel } from "./labels";
 import type { BotName } from "./labels";
 import ReleaseReview from "./ReleaseReview";
+import TestedOn from "./TestedOn";
 import { useProjectReleases, useReleaseActions } from "./useReleases";
 
 export interface ReleasesViewProps {
@@ -116,6 +117,14 @@ export default function ReleasesView({
             <ul>{history.map(row)}</ul>
           </>
         ) : null}
+        <TestedOn
+          client={client}
+          projectId={project.id}
+          connected={connected}
+          canApprove={connected && client.hasGrant("approve")}
+          botName={botNamer(bots)}
+          addToast={addToast}
+        />
       </nav>
       {shown ? (
         <ReleaseReview

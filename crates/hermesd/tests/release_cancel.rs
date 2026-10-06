@@ -189,7 +189,7 @@ async fn submit_is_refused_with_no_machine_to_test_on() {
         .call_raw("release_submit", json!({"release_id": id}))
         .await;
     assert!(
-        error_text(&raw).contains("no machine to test it on"),
+        error_text(&raw).contains("no computer to test it on"),
         "{raw}"
     );
     assert_eq!(r.column(&r.items[0]), "verify");

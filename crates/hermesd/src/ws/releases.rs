@@ -9,6 +9,7 @@ use bus::Capability;
 use chrono::{DateTime, Utc};
 
 use crate::board::release::lifecycle::{self, can_rule};
+use crate::board::release::machines;
 use crate::board::release::model::{parse_arg, Release, Verdict};
 use crate::board::release::rule::{rule, ItemVerdict};
 use crate::decisions::{invalid, not_found};
@@ -121,5 +122,47 @@ impl Conn {
         let v = self.release_json(release)?;
         self.send(json!({ "type": "release", "req_id": req_id, "release": v }));
         Ok(())
+    }
+
+    /// `{project_id}`: who tests on which computer, and the computers a
+    /// package must pass on (H-115).
+    pub(super) fn release_machines(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        let project_id = Self::str_field(req, "project_id")?;
+        self.on_home(project_id)?;
+        let view = self.app.db.board_read(|t| machines::view(t, project_id))?;
+        self.send(json!({ "type": "release_machines", "req_id": req_id, "machines": view }));
+        Ok(())
+    }
+
+    /// `{project_id, machines: [..]}`, approve; empty goes back to every
+    /// tester's computer.
+    pub(super) fn release_machines_set(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        let project_id = Self::str_field(req, "project_id")?;
+        self.on_home(project_id)?;
+        let list: Vec<String> = req
+            .get("machines")
+            .and_then(Value::as_array)
+            .ok_or_else(|| invalid("'machines' is a list of computer names"))?
+            .iter()
+            .map(|m| m.as_str().unwrap_or_default().to_string())
+            .collect();
+        let view = self
+            .app
+            .db
+            .board_tx(|t| machines::set(t, project_id, &list))?;
+        self.send(json!({ "type": "release_machines", "req_id": req_id, "machines": view }));
+        Ok(())
+    }
+
+    /// Releases are reviewed and set on the board's home only (B9).
+    fn on_home(&self, project_id: &str) -> anyhow::Result<()> {
+        match self.app.board_mirror.home_peer(project_id) {
+            Some(home) => Err(crate::decisions::forbidden(format!(
+                "This project's releases are reviewed on {}, which holds its board; \
+                 rule on them there.",
+                crate::peer::board::home_name(&self.app, &home)
+            ))),
+            None => Ok(()),
+        }
     }
 }

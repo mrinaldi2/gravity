@@ -3,7 +3,6 @@
 //! against the exact build. Submit refuses until every required machine has
 //! passed the builds being frozen.
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use serde_json::Value;
@@ -11,35 +10,19 @@ use serde_json::Value;
 use crate::app::AppState;
 use crate::board::model::{Platform, Role};
 use crate::db::{BoardTx, NewReleaseTest};
-use crate::decisions::{conflict, forbidden, invalid};
+use crate::decisions::{conflict, invalid};
 
+use super::machines;
 use super::model::{Release, ReleaseStatus};
 use super::{load, Caller};
 
 /// Results a machine reports for a package.
 pub const TEST_RESULTS: &[&str] = &["pass", "fail", "blocked"];
 
-/// The machines a package must pass on and deploy to: the board's
-/// `required_machines` for its items' platforms, or with none configured,
-/// every machine a tester is assigned to (ARCH-R23 F2).
+/// The computers a package must pass on and deploy to (H-115): the list the
+/// owner or lead set, or every tester's computer (see [`machines`]).
 pub fn required_machines(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<Vec<String>> {
-    let platforms = item_platforms(t, release)?;
-    let settings = t.settings(&release.project_id)?;
-    let mut machines: BTreeSet<String> = settings
-        .iter()
-        .flat_map(|s| platforms.iter().filter_map(|p| s.required_machines.get(p)))
-        .flatten()
-        .cloned()
-        .collect();
-    if machines.is_empty() {
-        machines = t
-            .roles(&release.project_id)?
-            .into_iter()
-            .filter(|r| r.role == Role::Tester)
-            .filter_map(|r| r.machine)
-            .collect();
-    }
-    Ok(machines.into_iter().collect())
+    machines::required(t, &release.project_id)
 }
 
 fn item_platforms(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<Vec<Platform>> {
@@ -98,8 +81,8 @@ pub fn check_tested(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<()> {
     let required = required_machines(t, release)?;
     if required.is_empty() {
         return Err(conflict(format!(
-            "release {} has no machine to test it on: set the board's required_machines for its \
-             items' platforms, or assign a tester to a machine",
+            "release {} has no computer to test it on: give a bot the tester role, or set the \
+             computers with release_machines_set",
             release.name
         )));
     }
@@ -182,17 +165,13 @@ pub fn record_test(
     }
     app.db.board_tx(|t| {
         let release = load(t, &me.bot.project_id, release_id)?;
-        let mine = t.roles(&release.project_id)?.into_iter().any(|r| {
-            r.role == Role::Tester
-                && r.bot_id == me.bot.id
-                && r.machine.as_deref() == Some(result.machine)
-        });
-        if !mine {
-            return Err(forbidden(format!(
-                "only the tester assigned to {} can report its result",
-                result.machine
-            )));
-        }
+        // Each computer's own tester reports for it (H-115); `machine` may
+        // be left out by a tester on one computer.
+        let machine = machines::reporting_for(t, &release.project_id, &me.bot.id, result.machine)?;
+        let result = &NewReleaseTest {
+            machine: &machine,
+            ..*result
+        };
         if release.status != ReleaseStatus::Built {
             return Err(conflict(format!(
                 "release {} is {}; test it once it has its builds and before it is submitted",

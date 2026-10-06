@@ -18,7 +18,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file hermes/board/v1/releases.proto.
  */
 export const file_hermes_board_v1_releases: GenFile = /*@__PURE__*/
-  fileDesc("Ch5oZXJtZXMvYm9hcmQvdjEvcmVsZWFzZXMucHJvdG8SD2hlcm1lcy5ib2FyZC52MSIhCgtSZWxlYXNlTGlzdBISCgpwcm9qZWN0X2lkGAEgASgJIiAKClJlbGVhc2VHZXQSEgoKcmVsZWFzZV9pZBgBIAEoCSK0AQoNUmVsZWFzZUNyZWF0ZRISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSHAoPZGlzcGxheV92ZXJzaW9uGAMgASgJSACIAQESDQoFaXRlbXMYBCADKAkSFgoJY2hhbmdlbG9nGAUgASgJSAGIAQESEQoEZnJvbRgGIAEoCUgCiAEBQhIKEF9kaXNwbGF5X3ZlcnNpb25CDAoKX2NoYW5nZWxvZ0IHCgVfZnJvbSJOCglIb3dUb1Rlc3QSFAoHaXRlbV9pZBgBIAEoCUgAiAEBEhAKCHBsYXRmb3JtGAIgASgJEg0KBXN0ZXBzGAMgAygJQgoKCF9pdGVtX2lkIjsKDUhvd1RvVGVzdExpc3QSKgoGdmFsdWVzGAEgAygLMhouaGVybWVzLmJvYXJkLnYxLkhvd1RvVGVzdCKwAQoNUmVsZWFzZVVwZGF0ZRISCgpyZWxlYXNlX2lkGAEgASgJEhwKD2Rpc3BsYXlfdmVyc2lvbhgCIAEoCUgAiAEBEhYKCWNoYW5nZWxvZxgDIAEoCUgBiAEBEjMKC2hvd190b190ZXN0GAQgASgLMh4uaGVybWVzLmJvYXJkLnYxLkhvd1RvVGVzdExpc3RCEgoQX2Rpc3BsYXlfdmVyc2lvbkIMCgpfY2hhbmdlbG9nIt4BCgtSZWxlYXNlVGVzdBISCgpyZWxlYXNlX2lkGAEgASgJEg8KB21hY2hpbmUYAiABKAkSFAoMYnVpbGRfc2hhMjU2GAMgASgJEg4KBnJlc3VsdBgEIAEoCRIaCg1jaGVja3NfcGFzc2VkGAUgASgNSACIAQESGQoMY2hlY2tzX3RvdGFsGAYgASgNSAGIAQESGQoMbG9nX2FydGlmYWN0GAcgASgJSAKIAQFCEAoOX2NoZWNrc19wYXNzZWRCDwoNX2NoZWNrc190b3RhbEIPCg1fbG9nX2FydGlmYWN0IjIKDFJlbGVhc2VQYXVzZRISCgpyZWxlYXNlX2lkGAEgASgJEg4KBnJlYXNvbhgCIAEoCSIjCg1SZWxlYXNlUmVzdW1lEhIKCnJlbGVhc2VfaWQYASABKAkiQwoNUmVsZWFzZUNhbmNlbBISCgpyZWxlYXNlX2lkGAEgASgJEhMKBnJlYXNvbhgCIAEoCUgAiAEBQgkKB19yZWFzb24i3wEKElJlbGVhc2VBdHRhY2hCdWlsZBISCgpyZWxlYXNlX2lkGAEgASgJEhAKCHBsYXRmb3JtGAIgASgJEg8KB3ZlcnNpb24YAyABKAkSEAoIYXJ0aWZhY3QYBCABKAkSDgoGc2hhMjU2GAUgASgJEhAKA3VybBgGIAEoCUgAiAEBEhgKC2luc3RhbGxfdXJsGAcgASgJSAGIAQESGgoNc291cmNlX2NvbW1pdBgIIAEoCUgCiAEBQgYKBF91cmxCDgoMX2luc3RhbGxfdXJsQhAKDl9zb3VyY2VfY29tbWl0IswBCg5SZWxlYXNlUHVibGlzaBISCgpyZWxlYXNlX2lkGAEgASgJEgwKBGZpbGUYAiABKAkSFQoIcGxhdGZvcm0YAyABKAlIAIgBARIUCgd2ZXJzaW9uGAQgASgJSAGIAQESFgoJYnVuZGxlX2lkGAUgASgJSAKIAQESGgoNc291cmNlX2NvbW1pdBgGIAEoCUgDiAEBQgsKCV9wbGF0Zm9ybUIKCghfdmVyc2lvbkIMCgpfYnVuZGxlX2lkQhAKDl9zb3VyY2VfY29tbWl0IiMKDVJlbGVhc2VTdWJtaXQSEgoKcmVsZWFzZV9pZBgBIAEoCSI0Cg1SZWxlYXNlRGVwbG95EhIKCnJlbGVhc2VfaWQYASABKAkSDwoHbWFjaGluZRgCIAEoCSI2Cg9SZWxlYXNlUm9sbGJhY2sSEgoKcmVsZWFzZV9pZBgBIAEoCRIPCgdtYWNoaW5lGAIgASgJIiQKDkluc3RhbGxSZWxlYXNlEhIKCnJlbGVhc2VfaWQYASABKAkihAEKDkluc3RhbGxRdWllc2NlEhIKCnJlbGVhc2VfaWQYASABKAkSDgoGYWN0aW9uGAIgASgJEhQKB3ZlcnNpb24YAyABKAlIAIgBARIaCg1iaW5hcnlfc2hhMjU2GAQgASgJSAGIAQFCCgoIX3ZlcnNpb25CEAoOX2JpbmFyeV9zaGEyNTYijgEKDURlcGxveUNvbmZpcm0SEgoKcmVsZWFzZV9pZBgBIAEoCRIPCgdtYWNoaW5lGAIgASgJEg4KBnJlc3VsdBgDIAEoCRISCgVzbW9rZRgEIAEoCUgAiAEBEhkKDGxvZ19hcnRpZmFjdBgFIAEoCUgBiAEBQggKBl9zbW9rZUIPCg1fbG9nX2FydGlmYWN0YgZwcm90bzM");
+  fileDesc("Ch5oZXJtZXMvYm9hcmQvdjEvcmVsZWFzZXMucHJvdG8SD2hlcm1lcy5ib2FyZC52MSIhCgtSZWxlYXNlTGlzdBISCgpwcm9qZWN0X2lkGAEgASgJIiAKClJlbGVhc2VHZXQSEgoKcmVsZWFzZV9pZBgBIAEoCSK0AQoNUmVsZWFzZUNyZWF0ZRISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSHAoPZGlzcGxheV92ZXJzaW9uGAMgASgJSACIAQESDQoFaXRlbXMYBCADKAkSFgoJY2hhbmdlbG9nGAUgASgJSAGIAQESEQoEZnJvbRgGIAEoCUgCiAEBQhIKEF9kaXNwbGF5X3ZlcnNpb25CDAoKX2NoYW5nZWxvZ0IHCgVfZnJvbSJOCglIb3dUb1Rlc3QSFAoHaXRlbV9pZBgBIAEoCUgAiAEBEhAKCHBsYXRmb3JtGAIgASgJEg0KBXN0ZXBzGAMgAygJQgoKCF9pdGVtX2lkIjsKDUhvd1RvVGVzdExpc3QSKgoGdmFsdWVzGAEgAygLMhouaGVybWVzLmJvYXJkLnYxLkhvd1RvVGVzdCKwAQoNUmVsZWFzZVVwZGF0ZRISCgpyZWxlYXNlX2lkGAEgASgJEhwKD2Rpc3BsYXlfdmVyc2lvbhgCIAEoCUgAiAEBEhYKCWNoYW5nZWxvZxgDIAEoCUgBiAEBEjMKC2hvd190b190ZXN0GAQgASgLMh4uaGVybWVzLmJvYXJkLnYxLkhvd1RvVGVzdExpc3RCEgoQX2Rpc3BsYXlfdmVyc2lvbkIMCgpfY2hhbmdlbG9nIu8BCgtSZWxlYXNlVGVzdBISCgpyZWxlYXNlX2lkGAEgASgJEhQKB21hY2hpbmUYAiABKAlIAIgBARIUCgxidWlsZF9zaGEyNTYYAyABKAkSDgoGcmVzdWx0GAQgASgJEhoKDWNoZWNrc19wYXNzZWQYBSABKA1IAYgBARIZCgxjaGVja3NfdG90YWwYBiABKA1IAogBARIZCgxsb2dfYXJ0aWZhY3QYByABKAlIA4gBAUIKCghfbWFjaGluZUIQCg5fY2hlY2tzX3Bhc3NlZEIPCg1fY2hlY2tzX3RvdGFsQg8KDV9sb2dfYXJ0aWZhY3QiMgoMUmVsZWFzZVBhdXNlEhIKCnJlbGVhc2VfaWQYASABKAkSDgoGcmVhc29uGAIgASgJIiMKDVJlbGVhc2VSZXN1bWUSEgoKcmVsZWFzZV9pZBgBIAEoCSJDCg1SZWxlYXNlQ2FuY2VsEhIKCnJlbGVhc2VfaWQYASABKAkSEwoGcmVhc29uGAIgASgJSACIAQFCCQoHX3JlYXNvbiLfAQoSUmVsZWFzZUF0dGFjaEJ1aWxkEhIKCnJlbGVhc2VfaWQYASABKAkSEAoIcGxhdGZvcm0YAiABKAkSDwoHdmVyc2lvbhgDIAEoCRIQCghhcnRpZmFjdBgEIAEoCRIOCgZzaGEyNTYYBSABKAkSEAoDdXJsGAYgASgJSACIAQESGAoLaW5zdGFsbF91cmwYByABKAlIAYgBARIaCg1zb3VyY2VfY29tbWl0GAggASgJSAKIAQFCBgoEX3VybEIOCgxfaW5zdGFsbF91cmxCEAoOX3NvdXJjZV9jb21taXQizAEKDlJlbGVhc2VQdWJsaXNoEhIKCnJlbGVhc2VfaWQYASABKAkSDAoEZmlsZRgCIAEoCRIVCghwbGF0Zm9ybRgDIAEoCUgAiAEBEhQKB3ZlcnNpb24YBCABKAlIAYgBARIWCglidW5kbGVfaWQYBSABKAlIAogBARIaCg1zb3VyY2VfY29tbWl0GAYgASgJSAOIAQFCCwoJX3BsYXRmb3JtQgoKCF92ZXJzaW9uQgwKCl9idW5kbGVfaWRCEAoOX3NvdXJjZV9jb21taXQiIwoNUmVsZWFzZVN1Ym1pdBISCgpyZWxlYXNlX2lkGAEgASgJIjQKDVJlbGVhc2VEZXBsb3kSEgoKcmVsZWFzZV9pZBgBIAEoCRIPCgdtYWNoaW5lGAIgASgJIjYKD1JlbGVhc2VSb2xsYmFjaxISCgpyZWxlYXNlX2lkGAEgASgJEg8KB21hY2hpbmUYAiABKAkiJAoOSW5zdGFsbFJlbGVhc2USEgoKcmVsZWFzZV9pZBgBIAEoCSKEAQoOSW5zdGFsbFF1aWVzY2USEgoKcmVsZWFzZV9pZBgBIAEoCRIOCgZhY3Rpb24YAiABKAkSFAoHdmVyc2lvbhgDIAEoCUgAiAEBEhoKDWJpbmFyeV9zaGEyNTYYBCABKAlIAYgBAUIKCghfdmVyc2lvbkIQCg5fYmluYXJ5X3NoYTI1NiKOAQoNRGVwbG95Q29uZmlybRISCgpyZWxlYXNlX2lkGAEgASgJEg8KB21hY2hpbmUYAiABKAkSDgoGcmVzdWx0GAMgASgJEhIKBXNtb2tlGAQgASgJSACIAQESGQoMbG9nX2FydGlmYWN0GAUgASgJSAGIAQFCCAoGX3Ntb2tlQg8KDV9sb2dfYXJ0aWZhY3QiJQoPUmVsZWFzZU1hY2hpbmVzEhIKCnByb2plY3RfaWQYASABKAkiOgoSUmVsZWFzZU1hY2hpbmVzU2V0EhIKCnByb2plY3RfaWQYASABKAkSEAoIbWFjaGluZXMYAiADKAliBnByb3RvMw");
 
 /**
  * The project's release packages, newest first.
@@ -205,8 +205,8 @@ export const ReleaseUpdateSchema: GenMessage<ReleaseUpdate> = /*@__PURE__*/
   messageDesc(file_hermes_board_v1_releases, 5);
 
 /**
- * Tester: your machine's result for a package, against one of its builds for
- * your machine's platform. Submit needs a pass from every required machine on
+ * Tester: your computer's result for a package, against one of its builds for
+ * your computer's platform. Submit needs a pass from every required computer on
  * the current builds.
  *
  * @generated from message hermes.board.v1.ReleaseTest
@@ -218,9 +218,11 @@ export type ReleaseTest = Message<"hermes.board.v1.ReleaseTest"> & {
   releaseId: string;
 
   /**
-   * @generated from field: string machine = 2;
+   * The computer you tested on; leave it out when you test on one.
+   *
+   * @generated from field: optional string machine = 2;
    */
-  machine: string;
+  machine?: string | undefined;
 
   /**
    * The sha256 of the build you tested.
@@ -627,4 +629,49 @@ export type DeployConfirm = Message<"hermes.board.v1.DeployConfirm"> & {
  */
 export const DeployConfirmSchema: GenMessage<DeployConfirm> = /*@__PURE__*/
   messageDesc(file_hermes_board_v1_releases, 17);
+
+/**
+ * Who tests a release on which computer, and the computers a package must
+ * pass on before it is submitted: the list set, or every tester's computer.
+ *
+ * @generated from message hermes.board.v1.ReleaseMachines
+ */
+export type ReleaseMachines = Message<"hermes.board.v1.ReleaseMachines"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+};
+
+/**
+ * Describes the message hermes.board.v1.ReleaseMachines.
+ * Use `create(ReleaseMachinesSchema)` to create a new message.
+ */
+export const ReleaseMachinesSchema: GenMessage<ReleaseMachines> = /*@__PURE__*/
+  messageDesc(file_hermes_board_v1_releases, 18);
+
+/**
+ * Lead: set the computers a package must pass on, each one a tester tests
+ * on. An empty list goes back to every tester's computer.
+ *
+ * @generated from message hermes.board.v1.ReleaseMachinesSet
+ */
+export type ReleaseMachinesSet = Message<"hermes.board.v1.ReleaseMachinesSet"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: repeated string machines = 2;
+   */
+  machines: string[];
+};
+
+/**
+ * Describes the message hermes.board.v1.ReleaseMachinesSet.
+ * Use `create(ReleaseMachinesSetSchema)` to create a new message.
+ */
+export const ReleaseMachinesSetSchema: GenMessage<ReleaseMachinesSet> = /*@__PURE__*/
+  messageDesc(file_hermes_board_v1_releases, 19);
 

@@ -31,6 +31,7 @@ pub mod git;
 pub mod install;
 pub mod land;
 pub mod lifecycle;
+pub mod machines;
 pub mod model;
 pub mod package;
 pub mod post_install;
@@ -230,7 +231,8 @@ pub fn publish_touched(
     }
 }
 
-/// The bot ids of a project's testers on `machine`.
+/// The bot ids of a project's testers on `machine`, a computer as
+/// [`machines::testers`] names it (H-115).
 pub fn testers_on(
     app: &Arc<AppState>,
     project_id: &str,
@@ -238,9 +240,9 @@ pub fn testers_on(
 ) -> anyhow::Result<Vec<String>> {
     Ok(app
         .db
-        .project_roles(project_id)?
+        .board_read(|t| machines::testers(t, project_id))?
         .into_iter()
-        .filter(|r| r.role == Role::Tester && r.machine.as_deref() == Some(machine))
-        .map(|r| r.bot_id)
+        .filter(|(_, m)| m.eq_ignore_ascii_case(machine))
+        .map(|(bot, _)| bot)
         .collect())
 }

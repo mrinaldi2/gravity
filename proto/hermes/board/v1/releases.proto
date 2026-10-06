@@ -60,12 +60,13 @@ message ReleaseUpdate {
   HowToTestList how_to_test = 4;
 }
 
-// Tester: your machine's result for a package, against one of its builds for
-// your machine's platform. Submit needs a pass from every required machine on
+// Tester: your computer's result for a package, against one of its builds for
+// your computer's platform. Submit needs a pass from every required computer on
 // the current builds.
 message ReleaseTest {
   string release_id = 1;
-  string machine = 2;
+  // The computer you tested on; leave it out when you test on one.
+  optional string machine = 2;
   // The sha256 of the build you tested.
   string build_sha256 = 3;
   // "pass", "fail" or "blocked".
@@ -180,4 +181,17 @@ message DeployConfirm {
   // "pass" or "fail".
   optional string smoke = 4;
   optional string log_artifact = 5;
+}
+
+// Who tests a release on which computer, and the computers a package must
+// pass on before it is submitted: the list set, or every tester's computer.
+message ReleaseMachines {
+  string project_id = 1;
+}
+
+// Lead: set the computers a package must pass on, each one a tester tests
+// on. An empty list goes back to every tester's computer.
+message ReleaseMachinesSet {
+  string project_id = 1;
+  repeated string machines = 2;
 }

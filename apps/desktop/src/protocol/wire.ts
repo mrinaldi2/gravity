@@ -91,6 +91,7 @@ const REPLY_TYPES: ReadonlySet<string> = new Set(
     agent_conversation: true,
     releases: true,
     release: true,
+    release_machines: true,
     dashboard: true,
     relayed_confirmed: true,
     meeting_action: true,

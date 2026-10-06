@@ -12,7 +12,9 @@ use crate::board::model::Role;
 use crate::board::release::assemble::{self, NewPackage};
 use crate::board::release::model::{DeployResult, ReleaseBuild, Smoke};
 use crate::board::release::publish::{self, Publish};
-use crate::board::release::{cancel, deploy, lifecycle, load, model::parse_arg, package, Caller};
+use crate::board::release::{
+    cancel, deploy, lifecycle, load, machines, model::parse_arg, package, Caller,
+};
 use crate::db::NewReleaseTest;
 
 use super::board_schema::{decode, shared, tool, Audience, BoardTool};
@@ -30,6 +32,8 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
     tool("release_update", "ReleaseUpdate", Audience::Devops),
     tool("release_cancel", "ReleaseCancel", Audience::Devops),
     tool("release_test", "ReleaseTest", Audience::Tester),
+    tool("release_machines", "ReleaseMachines", Audience::Everyone),
+    tool("release_machines_set", "ReleaseMachinesSet", Audience::Lead),
     shared(
         "release_submit",
         "ReleaseSubmit",
@@ -145,7 +149,7 @@ pub(super) fn call(
         "release_test" => {
             let req: c::ReleaseTest = decode("ReleaseTest", args, project)?;
             let test = NewReleaseTest {
-                machine: req.machine.trim(),
+                machine: req.machine.as_deref().unwrap_or_default().trim(),
                 tester: &me.bot.id,
                 build_sha256: req.build_sha256.trim(),
                 result: req.result.trim(),
@@ -154,6 +158,16 @@ pub(super) fn call(
                 log_artifact: req.log_artifact.as_deref(),
             };
             released(package::record_test(app, &me, &req.release_id, &test)?)
+        }
+        "release_machines" => {
+            let _: c::ReleaseMachines = decode("ReleaseMachines", args, project)?;
+            app.db.board_read(|t| machines::view(t, project))
+        }
+        "release_machines_set" => {
+            let req: c::ReleaseMachinesSet = decode("ReleaseMachinesSet", args, project)?;
+            me.require(Role::Lead, "set the computers a release is tested on")?;
+            app.db
+                .board_tx(|t| machines::set(t, project, &req.machines))
         }
         "release_pause" => {
             let req: c::ReleasePause = decode("ReleasePause", args, project)?;

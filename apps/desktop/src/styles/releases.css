@@ -131,6 +131,13 @@
   color: var(--text-faint);
 }
 
+.release-tested-on ul {
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
 .release-tone-ok {
   color: var(--green);
 }
