@@ -9,7 +9,7 @@ import type { MeetingDetail, MeetingSummary } from "../../protocol/meetings";
 import { OWNER } from "../../protocol/meetings";
 import { when } from "../dashboard/needsYouText";
 import { Widget } from "../dashboard/Widgets";
-import { useMeetings } from "./useMeetings";
+import { minutesTitle, useMeetings } from "./useMeetings";
 
 const STATUS: Readonly<Record<MeetingSummary["status"], string>> = {
   scheduled: "○ Scheduled",
@@ -101,6 +101,33 @@ interface MeetingsViewProps {
   readonly project: Project;
   readonly bots: readonly Bot[];
   readonly connected: boolean;
+  /** Answers the facilitator in the main chat, quoting the summary. */
+  readonly onReply?: (botId: string, quote: string) => void;
+}
+
+/** "Reply to the stand-up…": opens the facilitator's thread with the minutes quoted. */
+function ReplyToMinutes(props: {
+  readonly meeting: MeetingDetail;
+  readonly bots: readonly Bot[];
+  readonly onReply?: (botId: string, quote: string) => void;
+}): ReactElement | null {
+  const { meeting, onReply } = props;
+  const facilitator = props.bots.find((b) => b.id === meeting.facilitator);
+  if (onReply === undefined || facilitator === undefined || meeting.summary.trim() === "") {
+    return null;
+  }
+  const what = minutesTitle(meeting).replace(/ minutes$/, "");
+  return (
+    <button
+      type="button"
+      className="btn btn-small meeting-reply"
+      onClick={() => {
+        onReply(facilitator.id, meeting.summary);
+      }}
+    >
+      Reply to the {what.charAt(0).toLowerCase() + what.slice(1)}…
+    </button>
+  );
 }
 
 export default function MeetingsView(props: MeetingsViewProps): ReactElement {
@@ -167,7 +194,10 @@ export default function MeetingsView(props: MeetingsViewProps): ReactElement {
             {state.open === null ? (
               <p className="dash-empty">Pick a meeting to read its minutes.</p>
             ) : (
-              <Minutes meeting={state.open} bots={props.bots} />
+              <>
+                <Minutes meeting={state.open} bots={props.bots} />
+                <ReplyToMinutes meeting={state.open} bots={props.bots} onReply={props.onReply} />
+              </>
             )}
           </Widget>
         </div>

@@ -170,3 +170,7 @@
   font-size: 13px;
   white-space: pre-line;
 }
+
+.meeting-reply {
+  margin-top: 12px;
+}

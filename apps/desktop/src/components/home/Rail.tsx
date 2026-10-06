@@ -13,7 +13,13 @@ interface RailProps {
   readonly endpoint: Endpoint;
   /** False on a read-only connection, which the status says. */
   readonly canControl: boolean;
+  /** The main chat panel is open. */
+  readonly chatOpen?: boolean;
+  /** Threads with a question for the owner: the Chat badge, as Needs you counts. */
+  readonly chatAsking?: number;
   readonly onSelect: (next: Selection) => void;
+  /** ⌘J: opens or closes the main chat. Without it, Chat isn't offered. */
+  readonly onToggleChat?: () => void;
   readonly onOpenSettings: (category?: SettingsCategory) => void;
 }
 
@@ -118,6 +124,16 @@ export default function Rail(props: RailProps): ReactElement {
           onSelect({ kind: "control" });
         }}
       />
+      {props.onToggleChat === undefined ? null : (
+        <RailItem
+          glyph="✉"
+          label="Chat"
+          shortcut="⌘J"
+          active={props.chatOpen === true}
+          badge={props.chatAsking}
+          onClick={props.onToggleChat}
+        />
+      )}
       <span className="rail-spacer" />
       <Connection
         status={props.status}

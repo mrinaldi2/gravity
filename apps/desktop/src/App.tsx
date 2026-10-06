@@ -16,6 +16,8 @@ import { useServiceRecovery } from "./app/useServiceRecovery";
 import { useUpdates } from "./app/useUpdates";
 import CommandPalette from "./components/CommandPalette";
 import Rail from "./components/home/Rail";
+import MainChat from "./components/mainchat/MainChat";
+import { useAppChat } from "./components/mainchat/useAppChat";
 import HomeMigrationConfirm from "./components/overlay/HomeMigrationConfirm";
 import MainPane from "./components/MainPane";
 import SearchOverlay from "./components/SearchOverlay";
@@ -157,6 +159,13 @@ export default function App(): ReactElement {
     openSettings: overlays.openSettings,
   });
 
+  const { chat, threads, asking } = useAppChat(
+    client,
+    connected,
+    daemon.selection,
+    daemon.projects,
+  );
+
   useDesktopShell(daemon.unreadBots, pending.total, addToast);
 
   const setup = useFirstRunSetup(client, daemon.changeEndpoint);
@@ -170,7 +179,16 @@ export default function App(): ReactElement {
           status={daemon.status}
           endpoint={daemon.endpoint}
           canControl={canControl}
+          chatOpen={chat.open}
+          chatAsking={asking}
           onSelect={select}
+          onToggleChat={() => {
+            if (chat.open) {
+              chat.close();
+            } else {
+              chat.openOn();
+            }
+          }}
           onOpenSettings={overlays.openSettings}
         />
         <main className="main">
@@ -189,8 +207,20 @@ export default function App(): ReactElement {
             onDeleteBot={actions.deleteBot}
             permissions={inbox.permissions}
             onOpenBot={openBot}
+            onReply={chat.openOn}
           />
         </main>
+        <MainChat
+          client={client}
+          connected={connected}
+          canControl={canControl}
+          bots={bots}
+          projects={daemon.projects}
+          threads={threads}
+          chat={chat}
+          addToast={addToast}
+          onOpenBot={openBot}
+        />
         {overlays.paletteOpen ? (
           <CommandPalette
             actions={paletteActions}

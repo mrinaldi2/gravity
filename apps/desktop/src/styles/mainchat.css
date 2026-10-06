@@ -1,0 +1,229 @@
+/* The main chat (UX-024, H-133 U3): a right-hand panel of the app, threads
+   on its left and the open thread with its composer on the right. */
+
+.main-chat {
+  display: flex;
+  flex-shrink: 0;
+  width: 520px;
+  max-width: 50vw;
+  padding-top: var(--titlebar-h);
+  background: var(--bg-raised);
+  border-left: 1px solid var(--border);
+}
+
+.mc-threads {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 2px;
+  width: 168px;
+  padding: 0 6px 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+}
+
+.mc-threads-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px 8px;
+  color: var(--text-strong);
+}
+
+.mc-close {
+  padding: 0 4px;
+  font: inherit;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.mc-close:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
+.mc-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.mc-thread:hover {
+  background: var(--bg-hover);
+}
+
+.mc-thread-on {
+  background: var(--bg-active);
+}
+
+.mc-thread-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mc-thread small {
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-thread-asks {
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.mc-thread-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 12px 12px;
+}
+
+.mc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mc-head b {
+  color: var(--text-strong);
+}
+
+.mc-head-project {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.mc-open-bot {
+  margin-left: auto;
+}
+
+.mc-messages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 10px 0;
+  overflow-y: auto;
+}
+
+.mc-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 85%;
+  padding: 7px 10px;
+  font-size: 13px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+
+.mc-bubble-me {
+  align-self: flex-end;
+  background: var(--bg-active);
+}
+
+.mc-bubble-src {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+.mc-bubble-text {
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mc-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.mc-to {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.mc-to select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.mc-quote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg);
+  border-radius: 0 6px 6px 0;
+}
+
+.mc-quote-label {
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+
+.mc-quote-text {
+  flex: 1;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.mc-quote-clear {
+  padding: 0 4px;
+  font: inherit;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.mc-composer textarea {
+  min-height: 64px;
+  padding: 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  resize: vertical;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.mc-send {
+  align-self: flex-end;
+}

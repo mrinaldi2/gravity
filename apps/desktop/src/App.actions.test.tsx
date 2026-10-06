@@ -98,6 +98,31 @@ describe("App actions", () => {
     expect(screen.getByRole("button", { name: "Conversations ▾" })).toBeInTheDocument();
   });
 
+  it("opens the main chat with ⌘J, to the bot on screen, from the rail too", async () => {
+    const user = userEvent.setup();
+    daemon.onRequest("send_user_message", () => ({
+      type: "message",
+      req_id: "1",
+      message: fx.message(),
+    }));
+    stubLocalStorage();
+    await renderApp();
+    await user.keyboard("{Meta>}j{/Meta}");
+    const chat = screen.getByRole("complementary", { name: "Chat" });
+    expect(within(chat).getByRole("combobox", { name: "To" })).toHaveValue("b1");
+    await user.type(within(chat).getByRole("textbox", { name: "Message" }), "status?");
+    await user.click(within(chat).getByRole("button", { name: "Send ⌘↩" }));
+    await waitFor(() => {
+      expect(daemon.requests.map((r) => r.body)).toContainEqual({
+        type: "send_user_message",
+        to_bot_id: "b1",
+        body: "status?",
+      });
+    });
+    await user.click(screen.getByRole("button", { name: /^Chat/ }));
+    expect(screen.queryByRole("complementary", { name: "Chat" })).not.toBeInTheDocument();
+  });
+
   it("goes from a bot back to its project's Team", async () => {
     stubLocalStorage();
     await renderApp();

@@ -178,7 +178,15 @@ function TabView({ ctx }: { readonly ctx: TabContext }): ReactElement {
         />
       );
     case "meetings":
-      return <MeetingsView client={client} project={project} bots={bots} connected={connected} />;
+      return (
+        <MeetingsView
+          client={client}
+          project={project}
+          bots={bots}
+          connected={connected}
+          onReply={ctx.onReply}
+        />
+      );
     case "conversations":
       return client.capabilities.includes("agent_conversations") ? (
         <ConversationsView client={client} project={project} bots={bots} connected={connected} />
