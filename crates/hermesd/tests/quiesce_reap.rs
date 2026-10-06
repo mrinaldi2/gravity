@@ -1,7 +1,9 @@
 //! Quiesce reaps what bot sessions left running and stops the services
 //! holding the home (H-117 Q3): a detached runner is reaped, a stranger
 //! holding the home is only reported, and a service is stopped and started
-//! again through its own manager, found by absolute path.
+//! again through its own manager, found by absolute path. Unix only: the
+//! fake runners and services are shell scripts.
+#![cfg(unix)]
 
 mod common;
 
@@ -37,7 +39,6 @@ fn fake_brew(dir: &Path, running: bool) {
     );
     let brew = dir.join("brew");
     std::fs::write(&brew, script).unwrap();
-    #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&brew, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -58,7 +59,6 @@ fn log(dir: &Path) -> String {
     std::fs::read_to_string(dir.join("brew.log")).unwrap_or_default()
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn a_running_service_is_stopped_through_its_manager_and_started_again() {
     let _one = ONE_AT_A_TIME.lock().await;
@@ -85,7 +85,6 @@ async fn a_running_service_is_stopped_through_its_manager_and_started_again() {
     assert_eq!(calls.matches("services start colima").count(), 1, "{calls}");
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn a_service_the_owner_stopped_stays_stopped() {
     let _one = ONE_AT_A_TIME.lock().await;
@@ -113,7 +112,6 @@ async fn a_service_the_owner_stopped_stays_stopped() {
 /// The phd case: a session's script detaches a long runner and exits. It is
 /// reaped; a process of the owner's with its working directory in the home
 /// is not, and is listed as unresolved.
-#[cfg(unix)]
 #[tokio::test]
 async fn a_detached_runner_is_reaped_and_a_stranger_is_only_reported() {
     let _one = ONE_AT_A_TIME.lock().await;

@@ -58,8 +58,10 @@ fn worktree() -> (tempfile::TempDir, String) {
     let root = tempfile::tempdir().unwrap();
     sh(
         root.path(),
-        "git init -q -b main && mkdir scripts && echo 'Write-Host build' > scripts/build-nsis.ps1 \
-         && git add -A && git commit -q -m R",
+        // Checked out byte for byte, whatever the machine's global
+        // core.autocrlf (win-pc sets it true).
+        "git init -q -b main && git config core.autocrlf false && mkdir scripts \
+         && echo 'Write-Host build' > scripts/build-nsis.ps1 && git add -A && git commit -q -m R",
     );
     let head = super::super::git::git(root.path(), &["rev-parse", "HEAD"]).unwrap();
     (root, head)
