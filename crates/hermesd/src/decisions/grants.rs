@@ -103,6 +103,16 @@ pub fn apply(app: &Arc<AppState>, decision: &Decision) {
     if option.grants.is_empty() {
         return;
     }
+    // What a linked bot's grant is bound to until it lands (CE-020).
+    let sha = sha(option);
+    let ruling = crate::db::GrantRuling {
+        decision_id: &decision.id,
+        grants_sha: &sha,
+        decided_at: decision
+            .ruling
+            .as_ref()
+            .map_or_else(chrono::Utc::now, |r| r.answered_at),
+    };
     let mut by_bot: Vec<(String, Vec<PermissionExtra>)> = Vec::new();
     for g in &option.grants {
         let Some(extra) = PermissionExtra::parse(&g.extra) else {
@@ -127,7 +137,7 @@ pub fn apply(app: &Arc<AppState>, decision: &Decision) {
         if bot.is_linked() {
             // Kept until that computer applies or refuses it (H-163).
             let names: Vec<String> = names.iter().map(|n| n.to_string()).collect();
-            lines.push(super::grants_peer::queue(app, &decision.id, &bot, &names));
+            lines.push(super::grants_peer::queue(app, &ruling, &bot, &names));
             continue;
         }
         match add_extras(app, &bot, &extras) {
@@ -159,6 +169,19 @@ pub fn serve_grant(app: &AppState, peer_id: &str, frame: &Value) -> anyhow::Resu
         .get_live_bot(bot_id)?
         .filter(|b| !b.is_linked())
         .ok_or_else(|| crate::peer::refuse("not_found", "no such bot here"))?;
+    // The owner here changed this bot's extras after the ruling: that is the
+    // newer word, and a late grant must not undo it (CE-020 M2).
+    let decided_at = frame["decided_at"]
+        .as_str()
+        .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok());
+    if let (Some(decided), Some(changed)) = (decided_at, app.db.extras_changed_at(&bot.id)?) {
+        if changed > decided {
+            return Err(crate::peer::refuse(
+                "conflict",
+                "the owner changed its extras here after the ruling; set it here",
+            ));
+        }
+    }
     // A linked computer grants only what installs need (ARCH-R51 S1c). The
     // rest is refused one by one, said in the answer, rather than turning
     // the whole grant away (H-163): the grantable extras still apply.

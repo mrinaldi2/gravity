@@ -7,65 +7,10 @@
 mod common;
 
 use bus::PermissionExtra;
-use common::peers::{team, wait_until, Team};
-use common::{TestDaemon, WsClient};
-use serde_json::{json, Value};
-
-async fn desktop(d: &TestDaemon) -> WsClient {
-    WsClient::connect_with(d, d.app.secrets.client_token(), &["decision_grants"]).await
-}
-
-/// The lead asks for `extras` for the linked Windev; the owner grants them.
-/// Returns the decision's id once the ruling is published.
-async fn grant(t: &mut Team, extras: &[&str], before_publish: impl FnOnce(&Team)) -> String {
-    let grants: Vec<Value> = extras
-        .iter()
-        .map(|e| json!({"bot": t.linked_windev, "extra": e}))
-        .collect();
-    let raised = t
-        .lead
-        .call(
-            "raise_decision",
-            json!({"title": "Let Windev ship?", "body": "b",
-                   "options": [{"key": "yes", "label": "Yes", "grants": grants}]}),
-        )
-        .await;
-    let id = raised["decision"]["id"].as_str().expect("id").to_string();
-    let mut owner = desktop(&t.mac).await;
-    let got = owner
-        .request(json!({"type": "get_decision", "decision_id": id}))
-        .await;
-    let sha = got["decision"]["options"][0]["grants_sha"].clone();
-    before_publish(t);
-    owner
-        .request(
-            json!({"type": "publish_decisions", "items": [{"decision_id": id,
-                        "ruling_option": "yes", "ruling_text": "Yes.", "grants_sha": sha}]}),
-        )
-        .await;
-    id
-}
-
-fn comments(d: &TestDaemon, id: &str) -> Vec<String> {
-    d.app
-        .db
-        .list_decision_comments(id)
-        .unwrap()
-        .into_iter()
-        .map(|c| c.body)
-        .collect()
-}
-
-async fn said(d: &TestDaemon, id: &str, needle: &str) {
-    wait_until(&format!("the decision says '{needle}'"), || {
-        comments(d, id).iter().any(|c| c.contains(needle))
-    })
-    .await;
-}
-
-fn extras(t: &Team) -> Vec<PermissionExtra> {
-    t.win.app.db.bot_permission_extras(&t.windev_id).unwrap()
-}
+use common::grants::{comments, drop_link, extras, grant, said};
+use common::peers::{team, wait_until};
+use common::WsClient;
+use serde_json::json;
 
 /// What Tester Win got on 0.16.4: install, quiesce and build_installers in
 /// one ruling, all turned away together. Now install and quiesce apply, and
@@ -103,18 +48,11 @@ async fn the_grantable_extras_apply_and_each_other_one_says_where_to_set_it() {
 }
 
 /// A ruling while the PC is away waits, says so, and lands when the link
-/// comes back.
+/// comes back, when nobody changed the bot there meanwhile (CE-020 d).
 #[tokio::test]
 async fn a_grant_sent_while_the_pc_is_offline_applies_when_it_is_back() {
     let mut t = team().await;
-    let id = grant(&mut t, &["install"], |t| {
-        // The Mac drops its link to the PC, as a restart there does; it
-        // redials no sooner than two seconds on.
-        for p in t.mac.app.db.list_peers().unwrap() {
-            t.mac.app.peers.disconnect(&p.id);
-        }
-    })
-    .await;
+    let id = grant(&mut t, &["install"], drop_link).await;
     said(&t.mac, &id, "Waiting for win").await;
     wait_until("the PC grants it once back", || {
         extras(&t) == vec![PermissionExtra::Install]

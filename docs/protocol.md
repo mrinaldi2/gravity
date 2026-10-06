@@ -380,9 +380,17 @@ Decision { "id", "project_id", "kind": "question"|"decision", "title", "body",
   - **Until it lands (H-163):** the ruling's computer keeps each linked bot's grant in `peer_grant` until that computer applies or refuses it.
     - It is sent at once, again on link-up, and on a 60 s sweep.
     - Only a transient failure is retried: the peer offline, its link closing mid-request, or no answer. Any answer is final.
+    - **Bound to its ruling (CE-020 M1):** each row keeps the picked option's `grants_sha` and `decided_at`. Before every send, the decision must still be settled, not superseded (reopened or replaced; a withdrawn one isn't settled), and on the same option sha. Otherwise the row ends `cancelled`.
+    - **The bot's computer has the last word (M2):**
+      - the frame carries `decided_at`;
+      - `set_bot_permission_extras` stamps the bot (`bot_extras_changed`);
+      - a grant decided before the owner's last change there is refused (`conflict`, "the owner changed its extras here after the ruling; set it here").
+      - A row still waiting 24 h after it was filed ends `expired`.
     - The decision gets a comment for each outcome:
       - "Granted on <computer>: <bot> now has …";
       - "Not granted on <computer>: <bot>'s <extra> (<why>); set it on <computer>, …", one per refused extra;
+      - "No longer granted on <computer>: the ruling changed, …";
+      - "Not sent: <computer> was unreachable for a day, …; set it on <computer>, …";
       - "Waiting for <computer> …", said once while it is unreachable.
   - **Record:** a comment on the decision lists what was applied.
 DecisionComment { "id", "decision_id", "author_kind": "bot"|"user", "author_bot_id?",

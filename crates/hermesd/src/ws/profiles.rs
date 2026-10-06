@@ -137,6 +137,11 @@ impl Conn {
                 );
                 return Ok(());
             }
+            // The owner's own change here: a grant from another computer
+            // decided before it must not undo it (CE-020 M2).
+            if let Err(error) = self.app.db.stamp_extras_changed(&bot.id) {
+                tracing::warn!(bot_id = %bot.id, %error, "extras change not stamped");
+            }
             if let Err(error) = self.app.supervisor.restart_bot(&bot.id) {
                 tracing::warn!(bot_id = %bot.id, %error, "bot not restarted for its new extras");
             }

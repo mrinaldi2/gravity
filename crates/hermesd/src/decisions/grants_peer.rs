@@ -12,11 +12,29 @@ use bus::{Bot, CommentAuthorKind};
 use serde_json::{json, Value};
 
 use crate::app::AppState;
-use crate::db::{GrantEnd, PeerGrant};
+use crate::db::{GrantEnd, GrantRuling, PeerGrant};
 use crate::peer::PeerError;
 
 /// How often grants still waiting are tried again, besides on link-up.
 const SWEEP: Duration = Duration::from_secs(60);
+
+/// How long a grant may wait for its computer (CE-020 M2): after that the
+/// owner sets it there, on what that computer holds by then.
+const EXPIRY_HOURS: i64 = 24;
+
+/// Whether the ruling a grant came from still stands as it was: settled,
+/// not superseded (reopened or replaced) and on the same option grants
+/// (CE-020 M1). A withdrawn decision isn't settled.
+fn ruling_holds(decision: Option<&bus::Decision>, grant: &PeerGrant) -> bool {
+    let Some(d) = decision else {
+        return false;
+    };
+    let picked = d.ruling.as_ref().and_then(|r| r.option.as_deref());
+    let option = d.options.iter().find(|o| Some(o.key.as_str()) == picked);
+    d.state == bus::DecisionState::Settled
+        && d.superseded_by_id.is_none()
+        && option.is_some_and(|o| super::grants::sha(o) == grant.grants_sha)
+}
 
 /// What it takes to grant what another computer can't: the owner sets it on
 /// the bot's own computer.
@@ -28,7 +46,13 @@ fn set_it_on(there: &str, name: &str) -> String {
 /// ruling's "Applied this ruling's grants" comment says for it. Extras the
 /// bot's computer won't take from another one (ARCH-R51 S1c) aren't sent:
 /// each is refused here, on the decision, with where to set it instead.
-pub fn queue(app: &Arc<AppState>, decision_id: &str, bot: &Bot, extras: &[String]) -> String {
+pub fn queue(
+    app: &Arc<AppState>,
+    ruling: &GrantRuling<'_>,
+    bot: &Bot,
+    extras: &[String],
+) -> String {
+    let decision_id = ruling.decision_id;
     let name = crate::db::Db::display_name(bot);
     let Some(peer_id) = bot.peer_id.clone() else {
         return format!("{name}: not granted, it isn't linked");
@@ -51,10 +75,7 @@ pub fn queue(app: &Arc<AppState>, decision_id: &str, bot: &Bot, extras: &[String
     if sent.is_empty() {
         return format!("{name}: not granted here, see below");
     }
-    if let Err(e) = app
-        .db
-        .insert_peer_grant(decision_id, &bot.id, &peer_id, &sent)
-    {
+    if let Err(e) = app.db.insert_peer_grant(ruling, &bot.id, &peer_id, &sent) {
         return format!("{name}: not granted ({e})");
     }
     let app = app.clone();
@@ -122,15 +143,43 @@ async fn send(app: &Arc<AppState>, grant: &PeerGrant) {
         return;
     };
     let name = crate::db::Db::display_name(&bot);
-    let title = app
-        .db
-        .get_decision(&grant.decision_id)
-        .ok()
-        .flatten()
-        .map(|d| d.title)
-        .unwrap_or_default();
+    let decision = app.db.get_decision(&grant.decision_id).ok().flatten();
+    if !ruling_holds(decision.as_ref(), grant) {
+        if let Ok(true) =
+            app.db
+                .end_peer_grant(&grant.id, GrantEnd::Cancelled, Some("the ruling changed"))
+        {
+            say(
+                app,
+                &grant.decision_id,
+                &format!(
+                    "No longer granted on {there}: the ruling changed, so {name} doesn't get {}.",
+                    grant.extras.join(", ")
+                ),
+            );
+        }
+        return;
+    }
+    if chrono::Utc::now() - grant.created_at > chrono::Duration::hours(EXPIRY_HOURS) {
+        if let Ok(true) =
+            app.db
+                .end_peer_grant(&grant.id, GrantEnd::Expired, Some("not delivered in a day"))
+        {
+            say(
+                app,
+                &grant.decision_id,
+                &format!(
+                "Not sent: {there} was unreachable for a day, so {name}'s {} wasn't granted; {}.",
+                grant.extras.join(", "),
+                set_it_on(&there, &name)
+            ),
+            );
+        }
+        return;
+    }
+    let title = decision.map(|d| d.title).unwrap_or_default();
     let frame = json!({ "type": "grant_extras", "bot_id": remote, "extras": grant.extras,
-                        "decision": title });
+                        "decision": title, "decided_at": grant.decided_at.to_rfc3339() });
     match app.peers.request(&grant.peer_id, frame).await {
         Ok(result) => applied(app, grant, &there, &name, &result),
         // Offline, restarting or no answer: try again, and say so once.
