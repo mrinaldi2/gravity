@@ -184,9 +184,11 @@ fn only_a_loopback_daemon_asked_to_negotiate_may_negotiate() {
 
 #[test]
 fn reads_the_version_out_of_a_health_response() {
+    let health_version = |r: &str| health_field(r, "version");
     let ok = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n\
-              {\"status\":\"ok\",\"version\":\"0.9.0\"}";
+              {\"status\":\"ok\",\"version\":\"0.9.0\",\"binary_sha256\":\"abc\"}";
     assert_eq!(health_version(ok).as_deref(), Some("0.9.0"));
+    assert_eq!(health_field(ok, "binary_sha256").as_deref(), Some("abc"));
 
     assert_eq!(health_version("HTTP/1.1 404 Not Found\r\n\r\n"), None);
     assert_eq!(health_version("SSH-2.0-OpenSSH_9.0\r\n"), None);

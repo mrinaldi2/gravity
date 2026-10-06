@@ -713,9 +713,11 @@ runs through the tester the same way.
     - **When it can't check:** a dev build, a build without a Team ID, or Windows releases while they're unsigned. It prints `signature check skipped: <why>` and never skips silently. A failed check stops the install.
   - **Install (H-117 X1).** For an app, the swap is the system job's, never the bot's session. The job runs a copy of this hermesd as `hermesd release apply-app <release> --app <staged bundle> --version <v>`, which:
     1. copies the bundle beside `/Applications/<app>` and checks its signature there again;
-    2. keeps the app it replaces as `<home>/backups/app/<app>`, the one previous app;
+    2. keeps the app it replaces as `<home>/backups/app/<app>`, the one previous app, and remembers that app's bundle hash in its own memory (ARCH-R52 M2);
     3. swaps the new one in and runs its `service install`;
-    4. waits up to 120 s for `/health` to answer with the new version (the boot gate). Otherwise it puts the backup back, runs its `service install` and exits non-zero. The daemon's boot check then records the install as rolled back.
+    4. applies the boot gate: it waits up to 120 s for `/health` to answer with the new binary's `binary_sha256`. The version isn't enough, because an old daemon at the same version would pass (ARCH-R52 M3). If the gate fails, the backup goes back, but only if its bundle hash matches what was kept and its signature checks out. Then its `service install` runs and the job exits non-zero. The daemon's boot check records the install as rolled back.
+    5. If putting the backup back fails too, `service install` runs from `<home>/bin/hermesd` (else from the app in place), and `<home>/run/rollback-failed.json` is left. At boot, the daemon pushes an error notice to the owner and files a Run card that runs `service install` from `/Applications/<app>` (ARCH-R52 S3).
+  - **`/health`** reports `binary_sha256`, the sha256 of the daemon's own binary.
   - **Allowed.** The `install` extra allows `hermesd release install` with no owner prompt.
   - **Hand-off.** `service install` restarts the daemon and every bot, this session included, so it's handed to the system:
     - a one-shot launchd job on macOS (`com.thehermes.release-install.<release>`, `RunAtLoad`, not kept alive);
@@ -729,16 +731,21 @@ runs through the tester the same way.
     - What enforces the gate is the daemon: `install_release`, the approval, the frozen hash and the signature check. Every deploy carries its task and decision ids for the audit trail.
 - **Landing on main (H-117 X2):** DevOps runs `hermesd release land <release> [--commit <sha>] [--branch <b>] [--tag <t>] [--dry-run]` from its checkout. The `release_main` extra allows exactly this command.
   - **Daemon gate.** The command asks the daemon over the local endpoint (`hermes/release_land`). It needs the `release_main` extra, the project's DevOps role, and a release the owner approved (`approved`, `deploying`, `partially_deployed` or `deployed`).
-  - **Commit.** The commit (the branch's tip unless named) must be on `release/desktop-<version>` (unless named).
-  - **Push.** `main` must fast-forward to it; nothing is ever forced, and a diverged main is refused before anything is pushed. Then `main` and the annotated tag (`desktop-v<version>` unless named) are pushed.
+  - **Commit (ARCH-R52 M1).** Only the commit the release's builds record (`source_commit`) lands, and the gate returns it. A release whose builds don't all name it, or that come from different commits, is refused. `--commit` may only restate it. The release branch (`release/desktop-<version>` unless named) must still be at that commit, so code pushed after the builds never lands.
+  - **Push.** `main` must fast-forward to it; nothing is ever forced, and a diverged main is refused before anything is pushed. Then `main` and the annotated tag (`desktop-v<version>` unless named) are pushed. Git runs with hooks off (`core.hooksPath=/dev/null`).
   - **Transport.** Over the remote as configured. When SSH has no key, it goes to GitHub over HTTPS with gh's credential, for that one command; no git config changes.
-  - **Record.** `hermes/release_landed` records a `landed` event, with the commit and tag, on the release.
+  - **Check.** After the push, `git ls-remote` of the project's configured repo (the checkout's origin if none is configured), run outside the checkout without its git config or the user's, must show main and the peeled tag at the commit (ARCH-R52 S1).
+  - **Record.** `hermes/release_landed` records a `landed` event, with the commit and tag, on the release. Any other commit is refused.
   - A raw `git push … main` still goes through the guard, unchanged.
 - **Building the Windows installer (H-117 X3, H-104):** Tester Win runs `hermesd release build-installer <release> [--commit <sha>] [--script <path>] [--output <file>] [--timeout <minutes>]` in its release worktree. The `build_installers` extra allows exactly this command, never the script, which the bot could edit.
-  - **Daemon gate.** `hermes/release_build_installer` needs the extra and an approved release.
-  - **Tree checks.** HEAD must be the release's commit (the release branch's tip unless named), with a clean tree (`git status --porcelain`, untracked files included). The script (`scripts/build-nsis.ps1` unless named) must match its blob at that commit.
-  - **Run.** It runs `powershell -NoProfile -ExecutionPolicy Bypass -File <script>` with a time limit (45 minutes by default).
-  - **Record.** The newest `*-setup.exe` under the NSIS bundle folders (or `--output`) is hashed. `hermes/release_installer_built` records an `installer_built` event `{commit, file, sha256}` for `release publish`.
+  - **Daemon gate.** `hermes/release_build_installer` needs the extra and a package still open for builds (assembling or built), and returns the commit its builds record, if any yet.
+  - **Commit.** It builds that commit (`--commit` may only restate it), else the release branch's tip.
+  - **Fresh worktree (ARCH-R52 S2).** It builds in a fresh `git worktree add --detach` of that commit in a private temp folder, with hooks off. There the tree must be clean, with untracked files and any file marked assume-unchanged or skip-worktree refused, and the script (`scripts/build-nsis.ps1` unless named) must match its blob.
+  - **Run.** It runs `powershell -NoProfile -ExecutionPolicy Bypass -File <script>` with a time limit (45 minutes by default). The newest `*-setup.exe` it makes (or `--output`) is copied to `<checkout>/target/release-installers/`, and the temp worktree is removed.
+  - **Record.** The installer is hashed, and `hermes/release_installer_built` records an `installer_built` event `{commit, file, sha256}` for `release publish`. Any commit but the recorded one is refused.
+- **Source commits (ARCH-R52 M1):** `release_attach_build` and `release_publish` take `source_commit` (40 lowercase hex). `hermesd release publish` sends `--source-commit`, or the checkout's HEAD when the tree is clean.
+  - The commit is stored with the build (migration 031), shown in the release JSON, and folded into the frozen hash when present.
+  - Every build of a release must come from one commit; a build from another is refused.
 - **Grants from linked computers (ARCH-R51):** `bot_grants {bot_id}` (read) answers `{type: "bot_grants", grants: [{at, from, extras, decision}]}`. These are the extras rulings on a linked computer granted the bot here, newest first, and the app lists them under the bot's extras.
 - **Serving builds (H-020 §6.6):** `release_publish {release_id, file, platform?, version?, bundle_id?}` (DevOps with the Publish extra; `hermesd release publish <release> <file>` calls it with the bot's token) copies a build into the served directory, `[releases] dir` (default `<home>/releases`), at `<release_id>/<platform>/<file>`.
   - The file must be an `.ipa`, `.zip`, `.dmg`, `.exe` or `.msi`, and must resolve, symlinks and all, inside `[releases] source_roots` (default: the `<repo>-rel-*` release worktrees in the trusted paths) or the project's artifacts. A hard-linked file is refused, and the file is hashed and copied from one open handle. Inside the served directory, symlinks are refused; copies are staged beside it, never in it.

@@ -134,11 +134,24 @@ async fn an_action_for_the_pc_runs_there_once_as_shown() {
     let run = json!({"type": "owner_action_run", "id": id, "sha256": sha});
     let started = app.request(run.clone()).await;
     assert_eq!(started["action"]["state"], "running", "{started}");
-    // Output streams to the Mac's clients as it runs on the PC.
-    let output = app
-        .wait_for(|m| m["type"] == "owner_action_output" && m["id"] == json!(id))
-        .await;
-    assert!(output["chunk"].as_str().unwrap().contains("on-the-pc"));
+    // Output streams to the Mac's clients as it runs on the PC, in as many
+    // chunks as the shell writes (WIN-CHK-7): all of them until it's done.
+    let mut streamed = String::new();
+    loop {
+        let m = app
+            .wait_for(|m| {
+                (m["type"] == "owner_action_output" && m["id"] == json!(id))
+                    || (m["type"] == "owner_action_update"
+                        && m["action"]["id"] == json!(id)
+                        && m["action"]["state"] != "running")
+            })
+            .await;
+        if m["type"] == "owner_action_update" {
+            break;
+        }
+        streamed.push_str(m["chunk"].as_str().unwrap_or_default());
+    }
+    assert!(streamed.contains("on-the-pc"), "streamed: {streamed:?}");
     let (mac, win) = (&s.p.mac, &s.p.win);
     wait_until("both copies finish", || {
         Setup::state_on(win, &id) == "succeeded" && Setup::state_on(mac, &id) == "succeeded"

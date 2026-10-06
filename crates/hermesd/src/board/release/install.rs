@@ -29,6 +29,7 @@ use crate::config::Config;
 
 pub mod apply;
 mod handoff;
+pub mod rollback_notice;
 mod signature;
 mod stage;
 

@@ -125,6 +125,8 @@ pub fn file_sha256(path: &std::path::Path) -> anyhow::Result<String> {
 
 /// At daemon start: ends an install's open pause (see the module docs).
 pub fn on_boot(app: &Arc<AppState>) {
+    // An install whose rollback failed too left word for the owner.
+    crate::board::release::install::rollback_notice::report(app);
     let Ok(Some(q)) = app.db.open_quiesce() else {
         return;
     };

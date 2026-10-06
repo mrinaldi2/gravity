@@ -173,6 +173,16 @@ async fn bind_with_grace(
 /// returning the version it reports. Hand-rolled because this runs before the
 /// app exists and the daemon has no HTTP client of its own.
 pub(crate) fn probe_health(port: u16, timeout: Duration) -> Option<String> {
+    health_field(&health_response(port, timeout)?, "version")
+}
+
+/// The sha256 of the binary the daemon on `port` runs, as `/health` says:
+/// what tells a reinstall's new daemon from the old one (ARCH-R52 M3).
+pub(crate) fn probe_binary(port: u16, timeout: Duration) -> Option<String> {
+    health_field(&health_response(port, timeout)?, "binary_sha256")
+}
+
+fn health_response(port: u16, timeout: Duration) -> Option<String> {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let mut stream = std::net::TcpStream::connect_timeout(&addr, timeout).ok()?;
     stream.set_read_timeout(Some(timeout)).ok()?;
@@ -188,16 +198,16 @@ pub(crate) fn probe_health(port: u16, timeout: Duration) -> Option<String> {
             Ok(n) => response.extend_from_slice(&chunk[..n]),
         }
     }
-    health_version(&String::from_utf8_lossy(&response))
+    Some(String::from_utf8_lossy(&response).into_owned())
 }
 
-/// The `version` a 200 `/health` response reports, if it looks like one.
-fn health_version(response: &str) -> Option<String> {
+/// The string `field` a 200 `/health` response reports, if it looks like one.
+fn health_field(response: &str, field: &str) -> Option<String> {
     let (status, body) = response.split_once("\r\n")?;
     if !status.starts_with("HTTP/1.") || !status.contains(" 200") {
         return None;
     }
-    let (_, rest) = body.split_once("\"version\"")?;
+    let (_, rest) = body.split_once(&format!("\"{field}\""))?;
     let (_, rest) = rest.split_once(':')?;
     let (_, rest) = rest.split_once('"')?;
     let (version, _) = rest.split_once('"')?;

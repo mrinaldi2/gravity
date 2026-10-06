@@ -1,6 +1,8 @@
 //! When the pause can't clear what holds the home, the daemon files one
 //! owner Run card that stops exactly those processes (H-117 R4); once the
-//! owner runs it, the install's retry finds the home clear.
+//! owner runs it, the install's retry finds the home clear. Unix: the test's
+//! holder is `/bin/sleep` (WIN-CHK-7).
+#![cfg(unix)]
 
 mod common;
 

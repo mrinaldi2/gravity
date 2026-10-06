@@ -80,8 +80,12 @@ fn release_in(conn: &Connection, id: &str) -> rusqlite::Result<Option<Release>> 
         .collect::<Result<_, _>>()?;
     release.builds = conn
         .prepare(
-            "SELECT platform, version, artifact, url, install_url, sha256, built_at, source_commit
-             FROM release_build WHERE release_id = ?1 ORDER BY platform",
+            "SELECT b.platform, b.version, b.artifact, b.url, b.install_url, b.sha256, b.built_at,
+                    c.source_commit
+             FROM release_build b
+             LEFT JOIN release_build_commit c
+                    ON c.release_id = b.release_id AND c.platform = b.platform
+             WHERE b.release_id = ?1 ORDER BY b.platform",
         )?
         .query_map(params![id], |r| {
             Ok(ReleaseBuild {
@@ -215,12 +219,12 @@ impl BoardTx<'_> {
     pub fn set_release_build(&self, release_id: &str, b: &ReleaseBuild) -> anyhow::Result<()> {
         self.conn.execute(
             "INSERT INTO release_build(release_id, platform, version, artifact, url, install_url,
-                                       sha256, built_at, source_commit)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                                       sha256, built_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(release_id, platform) DO UPDATE SET version = excluded.version,
                  artifact = excluded.artifact, url = excluded.url,
                  install_url = excluded.install_url, sha256 = excluded.sha256,
-                 built_at = excluded.built_at, source_commit = excluded.source_commit",
+                 built_at = excluded.built_at",
             params![
                 release_id,
                 b.platform,
@@ -229,10 +233,21 @@ impl BoardTx<'_> {
                 b.url,
                 b.install_url,
                 b.sha256,
-                ts(b.built_at),
-                b.source_commit
+                ts(b.built_at)
             ],
         )?;
+        // A replaced build keeps no commit it didn't name (ARCH-R52 M1).
+        self.conn.execute(
+            "DELETE FROM release_build_commit WHERE release_id = ?1 AND platform = ?2",
+            params![release_id, b.platform],
+        )?;
+        if let Some(commit) = &b.source_commit {
+            self.conn.execute(
+                "INSERT INTO release_build_commit(release_id, platform, source_commit)
+                 VALUES (?1, ?2, ?3)",
+                params![release_id, b.platform, commit],
+            )?;
+        }
         Ok(())
     }
 

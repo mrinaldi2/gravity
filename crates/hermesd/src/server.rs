@@ -15,7 +15,20 @@ use crate::scheduler::Scheduler;
 
 mod port;
 
-pub(crate) use port::probe_health;
+pub(crate) use port::{probe_binary, probe_health};
+
+/// The sha256 of this daemon's own binary, read once: `/health` reports it
+/// so an install's boot gate can tell the new daemon from the old one even
+/// at the same version (ARCH-R52 M3).
+fn binary_sha256() -> Option<&'static str> {
+    static SHA: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    SHA.get_or_init(|| {
+        std::env::current_exe()
+            .ok()
+            .and_then(|exe| crate::quiesce::file_sha256(&exe).ok())
+    })
+    .as_deref()
+}
 pub use port::{bind, port_policy, BoundServer, PortPolicy};
 use port::{wait_for_configured_port, PORT_RECLAIM_INTERVAL};
 
@@ -35,6 +48,7 @@ async fn health(State(app): State<Arc<AppState>>) -> impl IntoResponse {
     Json(json!({
         "status": if db_healthy { "ok" } else { "degraded" },
         "version": crate::app::DAEMON_VERSION,
+        "binary_sha256": binary_sha256(),
         "identity": crate::bus_auth::app_identity::identity(),
         "stale_build": app.stale_build(),
         "db_healthy": db_healthy,
