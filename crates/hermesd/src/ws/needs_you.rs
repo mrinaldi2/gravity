@@ -100,6 +100,37 @@ pub(crate) fn home_needs_you(
     })
 }
 
+/// The rows about this computer's own bots (H-135): each bot working
+/// off-board (G4), and one row listing the routines that name no card (G5),
+/// while the project has a board. Not sent to a linked computer: each one
+/// adds its own.
+pub(crate) fn local_rows(app: &AppState, project_id: &str) -> anyhow::Result<Vec<Value>> {
+    let mut rows = Vec::new();
+    if !crate::mcp::has_board(app, project_id) {
+        return Ok(rows);
+    }
+    let mut cardless = Vec::new();
+    for bot in app.db.list_bots(Some(project_id))? {
+        if bot.peer_id.is_some() {
+            continue;
+        }
+        if let Some(since) = app.off_board.flagged_since(&bot.id) {
+            rows.push(json!({
+                "kind": "off_board", "bot_id": bot.id, "name": bot.name, "since": since,
+            }));
+        }
+        for routine in app.db.list_routines(Some(&bot.id))? {
+            if app.db.routine_card(&routine.id)?.is_none() {
+                cardless.push(json!({ "id": routine.id, "name": routine.name, "bot_id": bot.id }));
+            }
+        }
+    }
+    if !cardless.is_empty() {
+        rows.push(json!({ "kind": "routines_without_card", "routines": cardless }));
+    }
+    Ok(rows)
+}
+
 /// Open and settled decisions of the project, newest first.
 pub(crate) fn project_decisions(app: &AppState, project_id: &str) -> anyhow::Result<Vec<Decision>> {
     app.db.list_decisions(&DecisionFilter {

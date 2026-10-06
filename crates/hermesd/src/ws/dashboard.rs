@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use chrono::{Duration, Utc};
 use serde_json::{json, Value};
 
-use super::needs_you::home_needs_you;
+use super::needs_you::{home_needs_you, local_rows};
 use super::Conn;
 use crate::board::model::{ColumnCategory, ItemCard};
 
@@ -57,7 +57,8 @@ impl Conn {
         let home_peer = (!local)
             .then(|| self.app.board_mirror.home_peer(project_id))
             .flatten();
-        let needs = home_needs_you(&self.app, project_id, since, |r| self.release_json(r))?;
+        let mut needs = home_needs_you(&self.app, project_id, since, |r| self.release_json(r))?;
+        needs.rows.extend(local_rows(&self.app, project_id)?);
 
         let strip: Vec<Value> = columns
             .iter()

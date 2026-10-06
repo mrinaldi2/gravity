@@ -63,6 +63,22 @@ type Row =
       /** Why, and what to change in hermesd.toml. */
       readonly reason: string;
     }
+  | {
+      /** A bot on this computer working with no task on the board (H-135 G4). */
+      readonly kind: "off_board";
+      readonly bot_id: string;
+      readonly name: string;
+      readonly since: string;
+    }
+  | {
+      /** This computer's routines that name no board card (H-135 G5). */
+      readonly kind: "routines_without_card";
+      readonly routines: readonly {
+        readonly id: string;
+        readonly name: string;
+        readonly bot_id: string;
+      }[];
+    }
   /** In Needs you on daemons before 0.16.2; shown beside it here. */
   | ({ readonly kind: "wip_override" } & WipOverride);
 

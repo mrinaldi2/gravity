@@ -376,4 +376,24 @@ describe("DashboardView", () => {
       vi.useRealTimers();
     }
   });
+
+  it("lists bots working off-board and routines with no card, last (H-135)", async () => {
+    const offBoard: NeedsYouRow = {
+      kind: "off_board",
+      bot_id: "dd",
+      name: "Desktop Dev",
+      since: "2026-10-06T09:00:00Z",
+    };
+    const cardless: NeedsYouRow = {
+      kind: "routines_without_card",
+      routines: [{ id: "r1", name: "nightly", bot_id: "dd" }],
+    };
+    setup(dashboard({ needs_you: [offBoard, cardless, ...dashboard().needs_you] }));
+    const needs = await screen.findByRole("region", { name: "Needs you · 6" });
+    const rows = within(needs).getAllByRole("listitem");
+    expect(rows[4]).toHaveTextContent("Desktop Dev is working with no task on the board");
+    expect(rows[5]).toHaveTextContent("1 routine with no card on the board");
+    expect(rows[5]).toHaveTextContent("nightly (Desktop Dev)");
+    expect(within(rows[4]).queryByRole("button")).toBeNull();
+  });
 });

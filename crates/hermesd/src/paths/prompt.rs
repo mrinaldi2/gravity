@@ -27,12 +27,13 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
         linked_machines,
         own_browser,
         user_chrome,
+        task_limits,
         ..
     } = spec;
     // The caps are interpolated from the enforcing constants so the prompt can
     // never promise a different number than the daemon refuses at.
     let max_replies = MAX_TASK_REPLIES;
-    let max_open = MAX_TASK_FANOUT;
+    let (per_card, max_open) = (task_limits.per_card, MAX_TASK_FANOUT);
     let deadline_hours = DEFAULT_TASK_DEADLINE_HOURS;
     let max_decisions = MAX_OPEN_DECISIONS_PER_BOT;
 
@@ -58,7 +59,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
     let short = crate::brand::SHORT_NAME;
     let bus = crate::brand::ACTIVE_MCP_SERVER;
     let shared_section = super::prompt_sections::shared_computer();
-    let board_section = super::prompt_sections::board_work();
+    let board_section = super::prompt_sections::board_work(task_limits);
     format!(
         "# {name}\n\n{description}\n\n{worker_section}{repo_section}{instructions_section}\
          ## How to use the {short} bus\n\n\
@@ -137,8 +138,8 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          by opening a new task.\n\n\
          ## When to delegate\n\n\
          Do the work yourself when a few tool calls finish it. Each card\n\
-         allows {max_open} open tasks from you at a time, and so does each\n\
-         task you hold. When you are at the limit, wait for a result, ask for\n\
+         allows {per_card} open tasks from you at a time, and each task you\n\
+         hold allows {max_open}. When you are at the limit, wait for a result, ask for\n\
          status with `reply`, or close one with `cancel_task`. Never move the\n\
          work into a note. One well-briefed delegate beats several\n\
          vague ones: state the objective, the expected output format, and\n\
@@ -288,6 +289,7 @@ mod tests {
             linked_machines: Vec::new(),
             own_browser: false,
             user_chrome: false,
+            task_limits: Default::default(),
         }
     }
 

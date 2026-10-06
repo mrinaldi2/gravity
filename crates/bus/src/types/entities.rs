@@ -270,6 +270,11 @@ pub const DEFAULT_TASK_DEADLINE_HOURS: i64 = 24;
 /// Maximum inbound message body size accepted from bots or events.
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 
+/// Maximum body of a note a bot sends (H-135 G3): a note is a short FYI,
+/// and work goes out as a task on a card. Enforced at the sending daemon
+/// only; the daemon's own notices, the owner and peer deliveries are exempt.
+pub const MAX_NOTE_BYTES: usize = 800;
+
 /// Maximum decisions one bot may have open at once. A routine that raises on
 /// every run would otherwise bury the owner's inbox, and the point of the
 /// registry is that the inbox stays answerable.

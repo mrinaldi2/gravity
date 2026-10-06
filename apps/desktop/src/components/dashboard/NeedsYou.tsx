@@ -49,6 +49,8 @@ const ORDER: Readonly<Record<Shown["kind"], number>> = {
   decision: 1,
   relayed: 2,
   p0: 3,
+  off_board: 4,
+  routines_without_card: 5,
 };
 
 /** "bot:<id>", "user", "device:…": who made a move, in words. */
@@ -193,6 +195,30 @@ function servingRow(r: Extract<Shown, { readonly kind: "serving_off" }>): RowVie
   return { glyph: "⚠", tone: "bad", title: r.title, meta: r.reason, verb: "Fix it" };
 }
 
+/** A bot working with no task on the board (H-135 G4): the lead was told. */
+function offBoardRow(r: Extract<Shown, { readonly kind: "off_board" }>): RowViewProps {
+  return {
+    glyph: "⚠",
+    tone: "bad",
+    title: `${r.name} is working with no task on the board`,
+    meta: `Since ${when(r.since)} · give it a card or stop the work`,
+    verb: "Check",
+  };
+}
+
+/** Routines whose runs name no card (H-135 G5), listed once. */
+function cardlessRow(
+  r: Extract<Shown, { readonly kind: "routines_without_card" }>,
+  props: NeedsYouProps,
+): RowViewProps {
+  return {
+    glyph: "↻",
+    title: `${plural(r.routines.length, "routine")} with no card on the board`,
+    meta: r.routines.map((x) => `${x.name} (${props.botName(x.bot_id)})`).join(" · "),
+    verb: "Check",
+  };
+}
+
 function rowProps(r: Shown, props: NeedsYouProps, onReviewRelayed: () => void): RowViewProps {
   switch (r.kind) {
     case "serving_off":
@@ -205,6 +231,10 @@ function rowProps(r: Shown, props: NeedsYouProps, onReviewRelayed: () => void): 
       return relayedRow(r, props, onReviewRelayed);
     case "p0":
       return p0Row(r, props);
+    case "off_board":
+      return offBoardRow(r);
+    case "routines_without_card":
+      return cardlessRow(r, props);
   }
 }
 
@@ -216,6 +246,10 @@ function rowKey(r: Shown): string {
       return `relayed-${r.elsewhere ?? "here"}`;
     case "serving_off":
       return `serving-${r.elsewhere ?? "here"}`;
+    case "off_board":
+      return `off-board-${r.bot_id}`;
+    case "routines_without_card":
+      return `cardless-${r.elsewhere ?? "here"}`;
     default:
       return `${r.kind}-${r.id}`;
   }

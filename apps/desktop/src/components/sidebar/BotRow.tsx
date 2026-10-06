@@ -71,6 +71,14 @@ export default function BotRow({
                 Worker
               </span>
             ) : null}
+            {bot.off_board_since ? (
+              <span
+                className="bot-row-tag bot-row-offboard"
+                title="Working for 10 minutes or more with no task on the board"
+              >
+                Working off-board
+              </span>
+            ) : null}
             {activity !== undefined ? (
               <span className="bot-row-time">{fmtShortTime(activity.at)}</span>
             ) : null}

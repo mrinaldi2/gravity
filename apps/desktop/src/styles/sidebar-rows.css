@@ -180,6 +180,10 @@
   white-space: nowrap;
 }
 
+.bot-row-offboard {
+  color: var(--amber);
+}
+
 .bot-row-time {
   flex: none;
   font-size: 11px;
