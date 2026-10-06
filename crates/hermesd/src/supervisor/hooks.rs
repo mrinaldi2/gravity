@@ -72,7 +72,11 @@ impl Supervisor {
             tracing::debug!(bot_id, message = text, "idle notification, state unchanged");
             return;
         }
-        self.set_state(bot_id, BotState::WaitingForApproval, "notification");
+        self.set_state(
+            bot_id,
+            BotState::WaitingForApproval,
+            super::APPROVAL_NOTIFICATION,
+        );
         // Claude Code's own wording never reaches the owner (ux-glossary
         // rule 9): the client names the bot and, when known, the tool.
         let tool = requested_tool(text);

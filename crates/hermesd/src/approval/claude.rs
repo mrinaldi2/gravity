@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 
 use crate::app::AppState;
 
-use super::{decide, Answer, Decision};
+use super::{decide, terminal_asks, Answer, Decision};
 
 /// POST /hook/permission — answers with the hook output that decides the
 /// prompt, or an empty body to leave the prompt to the terminal.
@@ -43,16 +43,18 @@ pub(crate) async fn permission_output(
     body: &Value,
 ) -> Option<Value> {
     let tool = body["tool_name"].as_str().unwrap_or("a tool").to_string();
-    Some(
-        match decide(app, bot_id, &tool, &body["tool_input"], None).await? {
-            Decision::Answered(Answer::AllowOnce, _) => allow(None),
-            Decision::Answered(Answer::AllowSession, _) => allow(Some(session_rules(&tool, body))),
-            Decision::Answered(Answer::Deny, reason) => {
-                deny(reason.as_deref().unwrap_or("The owner denied this."))
-            }
-            Decision::Expired => deny("The owner did not answer this permission prompt in time."),
-        },
-    )
+    let Some(decision) = decide(app, bot_id, &tool, &body["tool_input"], None).await else {
+        terminal_asks(app, bot_id, &tool, &body["tool_input"]);
+        return None;
+    };
+    Some(match decision {
+        Decision::Answered(Answer::AllowOnce, _) => allow(None),
+        Decision::Answered(Answer::AllowSession, _) => allow(Some(session_rules(&tool, body))),
+        Decision::Answered(Answer::Deny, reason) => {
+            deny(reason.as_deref().unwrap_or("The owner denied this."))
+        }
+        Decision::Expired => deny("The owner did not answer this permission prompt in time."),
+    })
 }
 
 fn allow(updated_permissions: Option<Vec<Value>>) -> Value {

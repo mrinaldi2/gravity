@@ -54,7 +54,9 @@ const ORDER: Readonly<Record<Shown["kind"], number>> = {
   permission_prompt: 1,
   p0: 3,
   owner_question: 4,
-  bot_waiting: 5,
+  // Weighed as an ordinary decision by the daemon, a bot stopped on its
+  // terminal's permission prompt included (H-172).
+  bot_waiting: 1,
   off_board: 6,
   routines_without_card: 7,
 };

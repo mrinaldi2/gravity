@@ -17,6 +17,7 @@ mod legacy;
 mod rows;
 #[cfg(test)]
 mod tests;
+mod waiting;
 
 pub(crate) use legacy::{needs_you, routines_without_card};
 pub(crate) use rows::{rows, Scope};
