@@ -271,18 +271,19 @@ pub(super) fn call(
         }
         "install_release" => {
             let req: c::InstallRelease = decode("InstallRelease", args, project)?;
-            deploy::install(app, &me, &req.release_id)
+            let mut answer = deploy::install(app, &me, &req.release_id)?;
+            with_command(&mut answer);
+            Ok(answer)
         }
         "install_quiesce" => {
             let req: c::InstallQuiesce = decode("InstallQuiesce", args, project)?;
-            crate::quiesce::tool::call(
-                app,
-                &me,
-                req.action.trim(),
-                &req.release_id,
-                req.version.as_deref(),
-                req.binary_sha256.as_deref(),
-            )
+            let ask = crate::quiesce::tool::Ask {
+                action: req.action.trim(),
+                release_id: &req.release_id,
+                version: req.version.as_deref(),
+                binary_sha256: req.binary_sha256.as_deref(),
+            };
+            crate::quiesce::tool::call(app, &me, &ask)
         }
         "deploy_confirm" => {
             let req: c::DeployConfirm = decode("DeployConfirm", args, project)?;
@@ -304,6 +305,22 @@ pub(super) fn call(
         }
         other => anyhow::bail!("unknown tool: {other}"),
     }
+}
+
+/// `install_release` also says how to run the install on this computer:
+/// this daemon's binary by its exact path, which the install extra allows
+/// without a prompt (H-166).
+/// The release id is the gate's own, never the caller's text.
+pub(super) fn with_command(answer: &mut Value) {
+    let Some(id) = answer["release_id"].as_str().filter(|id| {
+        id.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    }) else {
+        return;
+    };
+    let binary = crate::bot_permissions::this_binary();
+    let args = format!("release install {id}");
+    answer["command"] = json!(crate::bot_permissions::hermesd_command(&binary, &args));
 }
 
 /// The contract's how-to-test steps as stored: `[{item_id?, platform, steps}]`.

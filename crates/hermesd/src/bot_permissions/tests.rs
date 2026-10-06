@@ -8,6 +8,7 @@ use super::*;
 
 mod bypass_table;
 mod guard_cases;
+mod guard_install;
 mod guard_targets;
 #[cfg(windows)]
 mod guard_windows;
@@ -25,6 +26,7 @@ fn input_as(profile: PermissionProfile, extras: &[PermissionExtra], devops: bool
         project_name: "Hermes",
         home: Path::new("/Users/me/.gravity"),
         workspace: Path::new("/Users/me/.gravity/projects/p/bots/devops/workspace"),
+        hermesd: Path::new(APP_HERMESD),
         artifacts: Some(Path::new("/Users/me/.gravity/projects/p/artifacts")),
         trusted_paths: &[PathBuf::from("/Users/me/Developer")],
         served: &[PathBuf::from("/Users/me/.gravity/releases")],
@@ -35,6 +37,34 @@ fn input_as(profile: PermissionProfile, extras: &[PermissionExtra], devops: bool
         extra_environment: &[],
         interim: None,
     })
+}
+
+const APP_HERMESD: &str = "/Applications/The Hermes.app/Contents/MacOS/hermesd";
+
+/// H-166: the install and quiesce extras allow this daemon's own binary by
+/// its exact path, the way a bot quotes it; never a bare `hermesd`, which
+/// is whatever the bot's PATH finds first. Standard grants no extras.
+#[test]
+fn install_and_quiesce_allow_this_binary_by_its_exact_path() {
+    let extras = [PermissionExtra::Install, PermissionExtra::Quiesce];
+    let allow = rules(&input(PermissionProfile::Trusted, &extras), "allow");
+    for sub in ["release install", "quiesce"] {
+        let exact = format!("Bash(\"{APP_HERMESD}\" {sub} *)");
+        assert!(allow.contains(&exact), "{sub}: {allow:?}");
+        assert_eq!(
+            format!("Bash({} *)", hermesd_command(Path::new(APP_HERMESD), sub)),
+            exact,
+            "the command a bot is told to run is the one allowed"
+        );
+    }
+    assert!(
+        !allow.iter().any(|r| r.contains("(hermesd ") || r.contains("(& hermesd ")),
+        "no bare hermesd: {allow:?}"
+    );
+    let without = rules(&input(PermissionProfile::Trusted, &[]), "allow");
+    assert!(!without.iter().any(|r| r.contains("hermesd")), "{without:?}");
+    let standard = rules(&input(PermissionProfile::Standard, &extras), "allow");
+    assert!(!standard.iter().any(|r| r.contains("hermesd")), "{standard:?}");
 }
 
 /// B8 (H-020 §2.6 b): only DevOps runs installers or `service install` by
@@ -212,6 +242,7 @@ fn the_interim_settings_are_folded_in_and_not_passed_twice() {
             project_name: "Hermes",
             home: Path::new("/Users/me/.gravity"),
             workspace: Path::new("/w"),
+            hermesd: Path::new("/bin/hermesd"),
             artifacts: None,
             trusted_paths: &[],
             served: &[],
@@ -285,6 +316,7 @@ fn the_owners_trust_lines_survive_removing_the_interim_argument() {
             project_name: "Hermes",
             home: &home,
             workspace: Path::new("/w"),
+            hermesd: Path::new("/bin/hermesd"),
             artifacts: None,
             trusted_paths: &[],
             served: &[],
@@ -308,21 +340,19 @@ fn rule_paths_are_absolute_on_both_platforms() {
     assert_eq!(rule_path(Path::new(r"C:\Users\me\x")), "//c/Users/me/x");
 }
 
-/// H-117 Q4: the quiesce extra allows exactly `hermesd quiesce`, and only
-/// when granted; the daemon checks the extra, role and release again.
+/// H-117 Q4: the quiesce extra allows exactly this binary's `quiesce`
+/// (H-166: by its path), and only when granted; the daemon checks the
+/// extra, role and release again.
 #[test]
 fn the_quiesce_extra_allows_only_hermesd_quiesce() {
     let without = rules(&input(PermissionProfile::Trusted, &[]), "allow");
-    assert!(!without.iter().any(|r| r.contains("hermesd quiesce")));
+    assert!(!without.iter().any(|r| r.contains("quiesce")));
     let with = rules(
         &input(PermissionProfile::Trusted, &[PermissionExtra::Quiesce]),
         "allow",
     );
-    let added: Vec<&String> = with.iter().filter(|r| !without.contains(r)).collect();
-    assert_eq!(
-        added,
-        ["Bash(hermesd quiesce *)", "PowerShell(hermesd quiesce *)"]
-    );
+    let added: Vec<String> = with.into_iter().filter(|r| !without.contains(r)).collect();
+    assert_eq!(added, super::exact::rules(Path::new(APP_HERMESD), "quiesce"));
 }
 
 /// H-117 X2, X3: `release_main` allows exactly the daemon-checked land, and

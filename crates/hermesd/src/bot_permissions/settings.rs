@@ -18,6 +18,9 @@ pub struct SettingsInput<'a> {
     /// The daemon's home (`~/.gravity`).
     pub home: &'a Path,
     pub workspace: &'a Path,
+    /// This daemon's own binary: the install and quiesce extras allow it,
+    /// by this exact path, and nothing else named `hermesd` (H-166).
+    pub hermesd: &'a Path,
     pub artifacts: Option<&'a Path>,
     /// Folders outside the bot's own that it works in (`~/Developer`, …).
     pub trusted_paths: &'a [std::path::PathBuf],
@@ -63,7 +66,7 @@ pub fn generate(input: &SettingsInput<'_>) -> Value {
     if input.profile != PermissionProfile::Standard {
         allow.extend(TRUSTED_ALLOW.iter().map(|r| (*r).to_string()));
         for extra in input.extras {
-            allow.extend(extra_allow(*extra, input.workspace));
+            allow.extend(extra_allow(*extra, input.workspace, input.hermesd));
         }
     }
     if !input.extras.contains(&PermissionExtra::DaemonRestart) {
@@ -289,7 +292,7 @@ fn artifacts_allow(artifacts: Option<&Path>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn extra_allow(extra: PermissionExtra, workspace: &Path) -> Vec<String> {
+fn extra_allow(extra: PermissionExtra, workspace: &Path, hermesd: &Path) -> Vec<String> {
     match extra {
         PermissionExtra::Publish => {
             // As Git Bash spells the command on Windows: `/`, never `\`.
@@ -324,17 +327,11 @@ fn extra_allow(extra: PermissionExtra, workspace: &Path) -> Vec<String> {
             "PowerShell(hermesd release build-installer *)".to_string(),
         ],
         // The daemon checks the extra, the role and the release again (H-117).
-        PermissionExtra::Quiesce => vec![
-            "Bash(hermesd quiesce *)".to_string(),
-            "PowerShell(hermesd quiesce *)".to_string(),
-        ],
+        PermissionExtra::Quiesce => super::exact::rules(hermesd, "quiesce"),
         PermissionExtra::Install => {
             // The supported install, with no owner prompt; the daemon checks
             // the gate and swaps the app from its own job (H-117 X1).
-            let mut rules = vec![
-                "Bash(hermesd release install *)".to_string(),
-                "PowerShell(hermesd release install *)".to_string(),
-            ];
+            let mut rules = super::exact::rules(hermesd, "release install");
             if cfg!(windows) {
                 rules.extend([
                     "PowerShell(Start-Process msiexec *)".to_string(),

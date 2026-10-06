@@ -13,12 +13,14 @@ use std::sync::Once;
 use bus::{PermissionExtra, PermissionProfile};
 use serde_json::Value;
 
+mod exact;
 pub mod guard;
 mod settings;
 mod shell;
 #[cfg(test)]
 mod tests;
 
+pub use exact::{command as hermesd_command, this_binary};
 pub use settings::{generate, mode, rule_path, SettingsInput};
 
 /// The generated settings file's name, in the bot's directory.
@@ -195,6 +197,7 @@ impl BotStart<'_> {
             project_name: self.project_name,
             home: &self.cfg.home,
             workspace: self.workspace,
+            hermesd: &this_binary(),
             artifacts: self.artifacts,
             trusted_paths: &trusted,
             served: &self.served_dirs(),

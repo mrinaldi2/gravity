@@ -216,6 +216,10 @@ pub(super) fn shared_computer() -> String {
          idle, clean your build output.\n\
          - Do not stop or restart the {short} daemon or anything that serves the\n\
          whole team, unless your instructions make that your job.\n\
+         - A VM (colima, lima) can hold the {short} folder and block a release\n\
+         install. While an install is pending on this computer you can't start\n\
+         one or a VR run: the command is refused and says so. Stop any VM you\n\
+         started as soon as you are done with it.\n\
          - When an action is blocked by your permissions, do not retry a\n\
          reworded version of it. Report what you needed and why.\n\n"
     )

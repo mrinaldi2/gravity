@@ -122,6 +122,7 @@ fn a_moved_home_keeps_its_locks_on_the_renamed_config() {
         project_name: "Hermes",
         home: Path::new("/Users/me/.thehermes"),
         workspace: Path::new("/Users/me/.thehermes/projects/p/bots/dev/workspace"),
+        hermesd: Path::new("/bin/hermesd"),
         artifacts: None,
         trusted_paths: &[],
         served: &[],
