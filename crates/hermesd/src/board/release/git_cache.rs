@@ -116,3 +116,22 @@ pub fn resolve(cache: &Path, reference: &str) -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
         .filter(|c| !c.is_empty())
 }
+
+/// When `commit` was committed (its committer date), if the cache has it.
+pub fn commit_time(cache: &Path, commit: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    let out = git(
+        cache,
+        &[
+            "show",
+            "-s",
+            "--format=%ct",
+            &format!("{commit}^{{commit}}"),
+        ],
+    )
+    .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let secs = String::from_utf8_lossy(&out.stdout).trim().parse().ok()?;
+    chrono::DateTime::from_timestamp(secs, 0)
+}
