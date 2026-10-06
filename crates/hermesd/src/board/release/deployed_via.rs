@@ -5,13 +5,19 @@
 //!
 //! `release_deployed_via {release_id, via_release_id}` (DevOps) closes it:
 //! - the old package is approved and has no deployment open;
-//! - the via package is deployed (or itself closed this way, for a chain);
+//! - the via package is deployed (or itself closed this way, for a chain),
+//!   and was created after the old one: a respin is never closed through
+//!   the package it respins (CE-018 M1);
 //! - the via package contains the old one: the old package's commit is the
 //!   via's or in its history, checked in the daemon's own copy of the
 //!   repository. The old commit is the one it recorded, or for a package from
 //!   before commits were recorded, its release branch
 //!   `release/desktop-<version>` (or tag `desktop-v<version>`) (CE-015 M1).
-//!   Nothing else counts: with neither, it is refused;
+//!   Nothing else counts: with neither, it is refused. The via commit is
+//!   likewise the one it recorded, or for a package whose builds record
+//!   none, its own release branch or tag (H-146); with neither, it is
+//!   refused. A branch or tag moves, so the commit it names must be no newer
+//!   than the via package's submit, or it is refused (CE-018 M2);
 //! - its post-install acceptance criteria are ticked (H-116).
 //!
 //! Then it records a `deployed_via` event, invents no deployment, marks the
@@ -20,6 +26,7 @@
 use std::sync::Arc;
 
 use bus::now;
+use chrono::{DateTime, Utc};
 use serde_json::json;
 
 use crate::app::AppState;
@@ -40,6 +47,12 @@ struct Basis {
     rule: &'static str,
     /// The branch or tag the old commit was read from, for `release_branch`.
     reference: Option<String>,
+    /// The branch or tag the via commit was read from, when it recorded none.
+    via_reference: Option<String>,
+    /// For `via_reference`: its commit's time and the via package's submit,
+    /// the first no later than the second (CE-018 M2).
+    via_commit_at: Option<DateTime<Utc>>,
+    via_submitted_at: Option<DateTime<Utc>>,
     old: String,
     via: String,
 }
@@ -68,7 +81,8 @@ pub fn deployed_via(
         post_install_checked(t, &old)?;
         let detail = json!({
             "via_release_id": via.id, "basis": basis.rule, "reference": basis.reference,
-            "commit": basis.old, "via_commit": basis.via,
+            "commit": basis.old, "via_commit": basis.via, "via_reference": basis.via_reference,
+            "via_commit_at": basis.via_commit_at, "via_submitted_at": basis.via_submitted_at,
         });
         let event = ReleaseEvent {
             release_id: old.id.clone(),
@@ -127,7 +141,21 @@ fn check_states(old: &Release, via: &Release) -> anyhow::Result<()> {
             via.status.as_str()
         )));
     }
+    // A respin is created after the package it respins, and its fixes land
+    // on that package's release branch (CE-018 M1).
+    if via.created_at <= old.created_at {
+        return Err(conflict(format!(
+            "release {} isn't later than {}; only a later package closes it",
+            via.name, old.name
+        )));
+    }
     Ok(())
+}
+
+/// When the via package was submitted: its freeze, else its last build.
+fn submitted_at(via: &Release) -> Option<DateTime<Utc>> {
+    via.frozen_at
+        .or_else(|| via.builds.iter().map(|b| b.built_at).max())
 }
 
 /// Whether, and how, `via` contains `old`: its commit in the via commit's
@@ -138,13 +166,7 @@ fn contained(
     old: &Release,
     via: &Release,
 ) -> anyhow::Result<Basis> {
-    let via_commit = recorded_commit(via)?.ok_or_else(|| {
-        forbidden(format!(
-            "release {} records no source commit, so it can't be shown to contain {}; \
-             record its source commit, or ask the owner",
-            via.name, old.name
-        ))
-    })?;
+    let via_recorded = recorded_commit(via)?;
     let recorded = recorded_commit(old)?;
     let url = app
         .db
@@ -152,6 +174,38 @@ fn contained(
         .map(|r| r.url)
         .ok_or_else(|| forbidden("the project has no repository set, so history can't be read"))?;
     let cache = git_cache::refresh(&app.cfg.home, project, &url)?;
+    let (via_reference, via_commit, via_commit_at, via_submitted_at) = match via_recorded {
+        Some(commit) => (None, commit, None, None),
+        // Its builds were attached without a commit (H-146): its own release
+        // branch or tag, as for the old package.
+        None => {
+            let (reference, commit) = release_ref(&cache, via).ok_or_else(|| {
+                forbidden(format!(
+                    "can't show {} contains {}: {} records no source commit and has no \
+                     release branch or tag; record its source commit, or ask the owner",
+                    via.name, old.name, via.name
+                ))
+            })?;
+            // The ref may have moved since: a commit newer than the
+            // package's submit isn't what it shipped (CE-018 M2).
+            let at = git_cache::commit_time(&cache, &commit);
+            let submitted = submitted_at(via);
+            match (at, submitted) {
+                (Some(at), Some(submitted)) if at <= submitted => {}
+                _ => {
+                    let name = reference
+                        .trim_start_matches("refs/heads/")
+                        .trim_start_matches("refs/tags/");
+                    return Err(forbidden(format!(
+                        "{name} has moved since {} was submitted; record its source commit, \
+                         or ask the owner",
+                        via.name
+                    )));
+                }
+            }
+            (Some(reference), commit, at, submitted)
+        }
+    };
     let (rule, reference, commit) = match recorded {
         Some(commit) => ("ancestry", None, commit),
         // Recorded before commits were (CE-015 M1): its release branch or
@@ -178,6 +232,9 @@ fn contained(
         Ok(Basis {
             rule,
             reference,
+            via_reference,
+            via_commit_at,
+            via_submitted_at,
             old: commit,
             via: via_commit,
         })
@@ -193,14 +250,14 @@ fn contained(
     }
 }
 
-/// The old package's release branch or tag and its commit:
+/// A package's release branch or tag and its commit:
 /// `release/desktop-<v>`, then `desktop-v<v>`, for its display version and
 /// then its name.
-fn release_ref(cache: &std::path::Path, old: &Release) -> Option<(String, String)> {
-    let versions = old
+fn release_ref(cache: &std::path::Path, release: &Release) -> Option<(String, String)> {
+    let versions = release
         .display_version
         .iter()
-        .chain(std::iter::once(&old.name))
+        .chain(std::iter::once(&release.name))
         .map(|v| v.trim().trim_start_matches('v').to_string())
         .filter(|v| !v.is_empty());
     for version in versions {
