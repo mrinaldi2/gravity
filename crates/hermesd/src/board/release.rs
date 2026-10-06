@@ -34,6 +34,7 @@ pub mod lifecycle;
 pub mod machines;
 pub mod model;
 pub mod package;
+pub mod plan;
 pub mod post_install;
 pub mod publish;
 pub mod rule;

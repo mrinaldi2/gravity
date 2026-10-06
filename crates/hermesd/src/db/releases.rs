@@ -59,6 +59,8 @@ fn release_row(r: &Row<'_>) -> rusqlite::Result<Release> {
         events: Vec::new(),
         post_install: Vec::new(),
         targets: Default::default(),
+        plan: Vec::new(),
+        tests_required: Vec::new(),
     })
 }
 
@@ -138,6 +140,7 @@ fn release_in(conn: &Connection, id: &str) -> rusqlite::Result<Option<Release>> 
     release.events = super::release_life::events_in(conn, id)?;
     release.post_install = super::release_life::post_install_in(conn, id)?;
     release.targets = super::release_machines::targets_in(conn, id)?;
+    super::release_plans::complete(conn, &mut release)?;
     Ok(Some(release))
 }
 
@@ -257,6 +260,11 @@ impl BoardTx<'_> {
 
     /// Change a package's status, taking its next version.
     pub fn set_release_status(&self, id: &str, status: ReleaseStatus) -> anyhow::Result<()> {
+        // Planned is a `release_plan` row over `assembling` (H-137).
+        anyhow::ensure!(
+            status != ReleaseStatus::Planned,
+            "plan_release marks a plan"
+        );
         self.conn.execute(
             "UPDATE release SET status = ?2, version = version + 1, updated_at = ?3 WHERE id = ?1",
             params![id, to_text(&status), ts(now())],

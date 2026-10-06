@@ -62,6 +62,7 @@ mod projects;
 mod quiesce;
 mod release_life;
 mod release_machines;
+mod release_plans;
 mod releases;
 #[cfg(test)]
 mod releases_tests;

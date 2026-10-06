@@ -9,7 +9,7 @@ use crate::board::model::{text_enum, TextValue};
 text_enum!(
     /// Where a package is in its life (H-020 §6, the final set).
     ReleaseStatus {
-        Assembling => "assembling", Built => "built", AwaitingOwner => "awaiting_owner",
+        Planned => "planned", Assembling => "assembling", Built => "built", AwaitingOwner => "awaiting_owner",
         Held => "held", Repackaging => "repackaging", Superseded => "superseded",
         Approved => "approved", Deploying => "deploying", Paused => "paused",
         PartiallyDeployed => "partially_deployed", Deployed => "deployed",
@@ -25,6 +25,12 @@ impl ReleaseStatus {
     /// Still being put together by DevOps: items and builds may change.
     pub fn is_assembling(self) -> bool {
         matches!(self, ReleaseStatus::Assembling | ReleaseStatus::Built)
+    }
+
+    /// Not yet submitted: planned, assembling or built. Its text can be
+    /// edited and it can be cancelled.
+    pub fn is_unsubmitted(self) -> bool {
+        self == ReleaseStatus::Planned || self.is_assembling()
     }
 
     /// Over: its items are free to join another package.
@@ -44,6 +50,22 @@ pub struct ReleaseItem {
     pub item_id: String,
     pub verdict: Verdict,
     pub owner_note: Option<String>,
+}
+
+/// Where one of a package's items stands on the board now (H-137): what the
+/// owner reads to see how far a release is. Live, never frozen or hashed.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlanItem {
+    pub item_id: String,
+    pub title: String,
+    pub column_key: String,
+    pub category: String,
+    pub assignee: Option<String>,
+    pub blocked: bool,
+    pub ac_checked: u32,
+    pub ac_total: u32,
+    /// In Verify or past it: what assembling the package waits for.
+    pub ready: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -145,6 +167,10 @@ pub struct Release {
     /// The computers it was tested on and deploys to, frozen at submit
     /// (ARCH-R55 M1); empty for a package not submitted, or submitted before.
     pub targets: ReleaseTargets,
+    /// Each item's live status (H-137), in the order of `items`.
+    pub plan: Vec<PlanItem>,
+    /// The computers it must pass on: frozen at submit, else as now.
+    pub tests_required: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -233,6 +259,34 @@ impl Release {
             "tested_set_by": self.targets.tested_set_by,
             "deploys_to": self.targets.deploys_to,
             "deploys_set_by": self.targets.deploys_set_by,
+            "plan": self.plan.iter().map(|p| json!({
+                "item_id": p.item_id, "title": p.title, "column_key": p.column_key,
+                "category": p.category, "assignee": p.assignee, "blocked": p.blocked,
+                "ac_checked": p.ac_checked, "ac_total": p.ac_total, "ready": p.ready,
+            })).collect::<Vec<_>>(),
+            "readiness": self.readiness(),
+        })
+    }
+
+    /// How far the package is (H-137): items in Verify or past it, the
+    /// platforms built, and the required computers that passed.
+    pub fn readiness(&self) -> Value {
+        let passed: Vec<&str> = self
+            .tests_required
+            .iter()
+            .filter(|m| {
+                self.tests
+                    .iter()
+                    .any(|t| t.machine.eq_ignore_ascii_case(m) && t.result == "pass")
+            })
+            .map(String::as_str)
+            .collect();
+        json!({
+            "items_total": self.plan.len(),
+            "items_ready": self.plan.iter().filter(|p| p.ready).count(),
+            "builds": self.builds.iter().map(|b| b.platform.as_str()).collect::<Vec<_>>(),
+            "tests_required": self.tests_required,
+            "tests_passed": passed,
         })
     }
 }
