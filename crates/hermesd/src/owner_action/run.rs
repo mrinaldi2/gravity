@@ -11,7 +11,6 @@
 
 use std::path::Path;
 use std::process::Stdio;
-use std::sync::OnceLock;
 use std::time::Duration;
 
 use base64::Engine;
@@ -29,14 +28,13 @@ pub struct Ran {
     pub output: String,
 }
 
-/// The owner's login `PATH`, read once from their login shell.
+/// The owner's login `PATH`, read once from their login shell (Unix; on
+/// Windows the environment is inherited).
+#[cfg(unix)]
 fn login_path() -> &'static str {
-    static PATH: OnceLock<String> = OnceLock::new();
+    static PATH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     PATH.get_or_init(|| {
         let fallback = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
-        if cfg!(windows) {
-            return std::env::var("PATH").unwrap_or_default();
-        }
         std::process::Command::new("/bin/zsh")
             .args(["-l", "-c", "printf %s \"$PATH\""])
             .stdin(Stdio::null())

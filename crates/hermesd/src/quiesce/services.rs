@@ -312,7 +312,16 @@ mod tests {
 
     #[test]
     fn a_service_is_stopped_only_while_it_runs_and_holds_the_home() {
-        let mut spec = QuiesceConfig::default().services[0].clone();
+        // Its own spec: Windows ships no default services (WIN-CHK-6).
+        let mut spec = ServiceSpec {
+            name: "lima".into(),
+            detect: "limactl list".into(),
+            running_match: "Running".into(),
+            holder_match: vec!["limactl".into()],
+            stop: "limactl stop default".into(),
+            start: "limactl start default".into(),
+            always: false,
+        };
         let lima = [holder("limactl")];
         let editor = [holder("Code Helper")];
         // running × holding × always

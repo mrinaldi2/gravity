@@ -56,6 +56,10 @@ async fn setup() -> Setup {
     }
 }
 
+/// A shell the "PC" (this same test machine) runs: the target refuses a
+/// shell its OS doesn't have.
+const SHELL: &str = if cfg!(windows) { "powershell" } else { "zsh" };
+
 impl Setup {
     async fn propose_raw(&mut self, content: &str) -> Value {
         let cwd = self.dir.path().display().to_string();
@@ -63,7 +67,7 @@ impl Setup {
             .call_raw(
                 "propose_owner_action",
                 json!({"content": content, "reason": "stop the VM on the PC", "cwd": cwd,
-                       "target_machine": "win", "shell": "zsh"}),
+                       "target_machine": "win", "shell": SHELL}),
             )
             .await
     }
@@ -71,7 +75,9 @@ impl Setup {
     async fn propose(&mut self, content: &str) -> Value {
         let raw = self.propose_raw(content).await;
         let text = raw["content"][0]["text"].as_str().expect("text");
-        serde_json::from_str::<Value>(text).expect("json")["owner_action"].clone()
+        let parsed: Value =
+            serde_json::from_str(text).unwrap_or_else(|e| panic!("not a proposal ({e}): {raw}"));
+        parsed["owner_action"].clone()
     }
 
     /// The owner's app on the Mac, by device credential with approve.
