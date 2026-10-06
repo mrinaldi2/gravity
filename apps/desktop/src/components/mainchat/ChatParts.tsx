@@ -2,7 +2,7 @@
 // thread's messages; and the composer with its To picker and the report it
 // answers, quoted.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactElement } from "react";
 import type { Bot, Project } from "../../protocol/entities";
 import type { OwnerThread, ThreadMessage } from "../../protocol/gen/hermes/home/v1/home_pb";
@@ -74,11 +74,20 @@ function ToPicker(props: {
   readonly projects: readonly Project[];
   readonly botId: string | null;
   readonly onPick: (botId: string) => void;
+  readonly fresh: number;
 }): ReactElement {
+  const select = useRef<HTMLSelectElement | null>(null);
+  useEffect(() => {
+    // Each "New message" puts the owner here, to pick who it is for.
+    if (props.fresh > 0) {
+      select.current?.focus();
+    }
+  }, [props.fresh]);
   return (
     <label className="mc-to">
       To:
       <select
+        ref={select}
         aria-label="To"
         value={props.botId ?? ""}
         onChange={(event) => {
@@ -124,6 +133,8 @@ export interface ComposerProps {
   readonly onPick: (botId: string) => void;
   readonly onClearQuote: () => void;
   readonly onSend: (text: string) => Promise<boolean>;
+  /** Counts "New message" presses: each focuses the To picker. */
+  readonly fresh: number;
 }
 
 export function Composer(props: ComposerProps): ReactElement {
@@ -153,6 +164,7 @@ export function Composer(props: ComposerProps): ReactElement {
         projects={props.projects}
         botId={props.botId}
         onPick={props.onPick}
+        fresh={props.fresh}
       />
       {props.quote === null ? null : (
         <div className="mc-quote">

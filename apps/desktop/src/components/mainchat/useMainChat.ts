@@ -10,17 +10,21 @@ interface MainChatState {
   readonly botId: string | null;
   /** The report being answered, quoted above the message. */
   readonly quote: string | null;
+  /** Counts "New message" presses; each one puts focus on the To picker. */
+  readonly fresh: number;
 }
 
 export interface MainChatApi extends MainChatState {
   /** Opens on a bot, or on whoever it was last on. */
   readonly openOn: (botId?: string, quote?: string) => void;
   readonly pick: (botId: string) => void;
+  /** An empty message to no one yet, for a bot the owner hasn't talked to. */
+  readonly startNew: () => void;
   readonly clearQuote: () => void;
   readonly close: () => void;
 }
 
-const CLOSED: MainChatState = { open: false, botId: null, quote: null };
+const CLOSED: MainChatState = { open: false, botId: null, quote: null, fresh: 0 };
 
 /**
  * ⌘J toggles the panel. `fallbackBot` is who "To" starts on when the owner
@@ -32,6 +36,7 @@ export function useMainChat(fallbackBot: () => string | null): MainChatApi {
   const openOn = useCallback(
     (botId?: string, quote?: string): void => {
       setState((current) => ({
+        ...current,
         open: true,
         botId: botId ?? current.botId ?? fallbackBot(),
         quote: quote ?? null,
@@ -67,6 +72,15 @@ export function useMainChat(fallbackBot: () => string | null): MainChatApi {
     openOn,
     pick: useCallback((botId: string): void => {
       setState((current) => ({ ...current, botId, quote: null }));
+    }, []),
+    startNew: useCallback((): void => {
+      setState((current) => ({
+        ...current,
+        open: true,
+        botId: null,
+        quote: null,
+        fresh: current.fresh + 1,
+      }));
     }, []),
     clearQuote: useCallback((): void => {
       setState((current) => ({ ...current, quote: null }));

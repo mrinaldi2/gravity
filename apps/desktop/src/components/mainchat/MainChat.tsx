@@ -132,6 +132,14 @@ export default function MainChat(props: MainChatProps): ReactElement | null {
             ✕
           </button>
         </div>
+        <button
+          type="button"
+          className="mc-new"
+          aria-label="New message: pick who to write to"
+          onClick={chat.startNew}
+        >
+          <span aria-hidden="true">＋</span> New message
+        </button>
         {props.threads.map((thread) => {
           const id = thread.bot?.botId ?? "";
           return (
@@ -177,6 +185,7 @@ export default function MainChat(props: MainChatProps): ReactElement | null {
           quote={chat.quote}
           blocked={blockedReason(props.connected, props.canControl)}
           onPick={chat.pick}
+          fresh={chat.fresh}
           onClearQuote={chat.clearQuote}
           onSend={send}
         />

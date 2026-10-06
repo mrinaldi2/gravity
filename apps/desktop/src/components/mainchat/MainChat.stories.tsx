@@ -11,12 +11,15 @@ import { useMainChat } from "./useMainChat";
 const noop = (): void => {};
 const lead = (): string => "b1";
 
-function Panel(props: { readonly quote?: string }): ReactElement {
+function Panel(props: { readonly quote?: string; readonly fresh?: boolean }): ReactElement {
   const chat = useMainChat(lead);
-  const { openOn } = chat;
+  const { openOn, startNew } = chat;
   useEffect(() => {
     openOn("b2", props.quote);
-  }, [openOn, props.quote]);
+    if (props.fresh === true) {
+      startNew();
+    }
+  }, [openOn, startNew, props.quote, props.fresh]);
   const client = new FakeDaemon().onRequest("owner_thread_get", () => ({
     type: "owner_thread",
     req_id: "1",
@@ -46,3 +49,6 @@ export const Thread: Story = () => <Panel />;
 
 /** Answering a report: it is quoted above the message. */
 export const Replying: Story = () => <Panel quote="Should Resume now also restart the services?" />;
+
+/** "＋ New message": nobody picked yet, the To picker waiting (H-157). */
+export const NewMessage: Story = () => <Panel fresh />;
