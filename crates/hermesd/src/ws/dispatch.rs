@@ -114,7 +114,52 @@ pub(super) fn required_cap(kind: &str) -> Capability {
     }
 }
 
+/// What a panic carried, for the log.
+fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|s| (*s).to_string())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "non-text panic".to_string())
+}
+
 impl Conn {
+    /// One JSON request, a panic in its handler contained (H-167). Before,
+    /// a panic ended this connection's task with the socket still open, so
+    /// the client waited forever on that request and every later one: the
+    /// 0.17.0 home showed no projects and no bot opened. Now the request
+    /// answers `internal`, the panic is logged with its type, and the
+    /// connection goes on.
+    pub(super) fn handle(&mut self, req: &Value) {
+        let guarded = std::panic::AssertUnwindSafe(|| self.dispatch(req));
+        if let Err(panic) = std::panic::catch_unwind(guarded) {
+            let kind = req.get("type").and_then(Value::as_str).unwrap_or("");
+            let req_id = req.get("req_id").cloned().unwrap_or(Value::Null);
+            tracing::error!(
+                kind,
+                panic = %panic_text(panic.as_ref()),
+                "a request's handler panicked; the connection goes on"
+            );
+            self.reply_err(
+                &req_id,
+                "internal",
+                &format!("the service failed on '{kind}'; it's in the service log"),
+            );
+        }
+    }
+
+    /// A binary frame, its handler's panic contained like `handle`'s.
+    pub(super) fn handle_binary(&mut self, bytes: &[u8]) {
+        let guarded = std::panic::AssertUnwindSafe(|| self.binary_frame(bytes));
+        if let Err(panic) = std::panic::catch_unwind(guarded) {
+            tracing::error!(
+                kind = "binary",
+                panic = %panic_text(panic.as_ref()),
+                "a binary request's handler panicked; the connection goes on"
+            );
+        }
+    }
+
     pub(super) fn dispatch(&mut self, req: &Value) {
         let req_id = req.get("req_id").cloned().unwrap_or(Value::Null);
         let kind = req.get("type").and_then(|t| t.as_str()).unwrap_or("");

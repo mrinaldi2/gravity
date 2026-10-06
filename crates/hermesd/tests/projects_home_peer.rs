@@ -122,6 +122,66 @@ async fn the_mac_counts_the_pcs_rows_once_and_keeps_them_while_it_is_away() {
     assert!(source.as_of.is_some(), "the data's age");
 }
 
+/// H-167: the 0.17.0 home on the Mac died on a bot's "Done → next": the
+/// redactor panicked on the arrow, the panic ended the owner's connection
+/// task, and that request and every later one went unanswered. Text in any
+/// script, on either computer, with the PC then away (as a 0.16.4 or
+/// offline peer is): every request on the owner's connection answers.
+#[tokio::test]
+async fn non_ascii_text_and_a_pc_away_leave_the_home_answering() {
+    let mut b = board().await;
+    let (mac, win) = (b.p.mac.app.clone(), b.p.win.app.clone());
+    b.tester
+        .call(
+            "raise_decision",
+            json!({"title": "Ship → now? 日本語 😀 café", "body": "→ pick one"}),
+        )
+        .await;
+    let mac_app = b.mac_app.clone();
+    wait_until("the Mac counts the PC's decision", || {
+        decisions(&row(&overview(&mac), &mac_app)) == 1
+    })
+    .await;
+
+    let owner = &mut b.p.mac_client;
+    let reply = owner.request(json!({"type": "projects_overview"})).await;
+    assert_eq!(reply["type"], "projects_overview", "{reply}");
+    assert!(
+        reply["overview"]["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["project_id"] == mac_app),
+        "{reply}"
+    );
+    let rows = owner
+        .request(json!({"type": "attention_rows", "project_id": mac_app}))
+        .await;
+    assert!(
+        rows.to_string().contains("Ship → now? 日本語 😀 café"),
+        "{rows}"
+    );
+
+    // The PC goes away; the home still answers, and so does what follows.
+    let win_peer_id = b.p.win_peer_id.clone();
+    win.db.revoke_peer(&win_peer_id).unwrap();
+    win.peers.disconnect(&win_peer_id);
+    let mac_peer_id = b.p.mac_peer_id.clone();
+    wait_until("the Mac sees the PC away", || {
+        !mac.peers.is_online(&mac_peer_id)
+    })
+    .await;
+    let reply = owner.request(json!({"type": "projects_overview"})).await;
+    assert_eq!(reply["type"], "projects_overview", "{reply}");
+    let bots = owner
+        .request(json!({"type": "list_bots", "project_id": mac_app}))
+        .await;
+    assert!(
+        bots["bots"].as_array().is_some_and(|b| !b.is_empty()),
+        "{bots}"
+    );
+}
+
 #[tokio::test]
 async fn a_peer_answers_only_for_projects_linked_with_the_caller() {
     let mut b = board().await;

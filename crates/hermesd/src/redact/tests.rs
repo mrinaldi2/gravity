@@ -151,3 +151,87 @@ fn leaves_ordinary_commands_alone() {
         assert_eq!(secrets(text), text);
     }
 }
+
+/// H-167: a word holding a multi-byte character (`→`, `é`, emoji) used to
+/// panic, cutting `word[i..]` inside the character; the 0.17.0 home died on
+/// a bot's "Done → next". Text around a token is kept, the token masked.
+#[test]
+fn non_ascii_words_pass_and_tokens_beside_them_are_masked() {
+    for text in [
+        "Done → next",
+        "café",
+        "日本語のテスト",
+        "e\u{301}clair",
+        "🚀 shipped",
+        "→",
+    ] {
+        assert_eq!(secrets(text), text);
+    }
+    let token = "ghp_0123456789abcdefghij0123456789abcd";
+    assert_eq!(secrets(&format!("→{token}")), "→ghp_***");
+    assert_eq!(secrets(&format!("clé={token} ok")), "clé=ghp_*** ok");
+}
+
+/// Any text at all: random words drawn from multi-byte characters (CJK,
+/// emoji, combining marks, `→`) mixed with the ASCII the redactor looks for
+/// (token prefixes, `=`, `:`, `://`, `@`, quotes). It never panics, and
+/// never makes up a character: what it keeps is the input's, a masked
+/// value aside.
+#[test]
+fn random_utf8_never_panics() {
+    use rand::{Rng, SeedableRng};
+    const PIECES: &[&str] = &[
+        "→",
+        "é",
+        "e\u{301}",
+        "中",
+        "文",
+        "😀",
+        "👩‍💻",
+        "Ω",
+        "ß",
+        "İ",
+        "\u{200d}",
+        "ñ",
+        "ghp_",
+        "sk-",
+        "AKIA",
+        "github_pat_",
+        "=",
+        ":",
+        "://",
+        "@",
+        "\"",
+        "'",
+        "?",
+        "&",
+        ";",
+        "a",
+        "Z",
+        "0",
+        "9",
+        "_",
+        "-",
+        " ",
+        "\n",
+        "password=",
+        "Bearer ",
+        "--token ",
+        "https://u:p@h/",
+    ];
+    let mut rng = rand::rngs::StdRng::seed_from_u64(167);
+    for _ in 0..20_000 {
+        let len = rng.gen_range(0..24);
+        let text: String = (0..len)
+            .map(|_| PIECES[rng.gen_range(0..PIECES.len())])
+            .collect();
+        let masked = secrets(&text);
+        assert!(
+            masked
+                .chars()
+                .filter(|c| !c.is_ascii())
+                .all(|c| text.contains(c)),
+            "{text:?} -> {masked:?}"
+        );
+    }
+}
