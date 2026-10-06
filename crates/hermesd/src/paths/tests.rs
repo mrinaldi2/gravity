@@ -26,6 +26,7 @@ fn spec<'a>(name: &'a str, instructions: &'a str) -> BotProvision<'a> {
         linked_machines: Vec::new(),
         own_browser: false,
         user_chrome: false,
+        task_limits: Default::default(),
     }
 }
 
@@ -171,4 +172,23 @@ fn system_md_puts_all_work_on_the_board() {
     assert!(md.contains("always names the board card"));
     assert!(md.contains("never asks for\nwork"));
     assert!(md.contains("`parent_task`"));
+}
+
+#[test]
+fn system_md_states_this_machines_task_limits_and_the_note_cap() {
+    let mut custom = spec("Reviewer", "");
+    custom.task_limits = crate::config::TaskLimits {
+        per_card: 5,
+        root_lead: 20,
+        root: 4,
+    };
+    let md = prompt::system_md(&custom);
+    assert!(
+        md.contains("Each card\nallows 5 open tasks from you"),
+        "{md}"
+    );
+    assert!(md.contains("you may have 5 open tasks on one card"));
+    assert!(md.contains("4 across the project (20 for the lead)"));
+    assert!(md.contains(&format!("over {} bytes is refused", bus::MAX_NOTE_BYTES)));
+    assert!(md.contains("A note never\nauthorises work"));
 }

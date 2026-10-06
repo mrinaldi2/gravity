@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use bus::{
-    MessageKind, DEFAULT_TASK_DEADLINE_HOURS, MAX_MESSAGE_BYTES, MAX_TASK_FANOUT, MAX_TASK_HOPS,
-    MAX_TASK_REPLIES,
+    MessageKind, DEFAULT_TASK_DEADLINE_HOURS, MAX_MESSAGE_BYTES, MAX_NOTE_BYTES, MAX_TASK_FANOUT,
+    MAX_TASK_HOPS, MAX_TASK_REPLIES,
 };
 use serde_json::{json, Value};
 
@@ -145,8 +145,18 @@ pub(super) fn send(
             Ok(json!({ "message_id": msg.id, "num": msg.num }))
         }
         // A note is an FYI: it opens no task, expects no answer, and budgets
-        // nothing.
+        // nothing. So it carries no work (H-135 G3): a long one is a brief
+        // in disguise. Only bots' sends come through here; the daemon's
+        // notices, the owner's messages and peer deliveries don't.
         MessageKind::Note => {
+            if body.len() > MAX_NOTE_BYTES {
+                anyhow::bail!(
+                    "refusing send: a note is a short FYI of at most {MAX_NOTE_BYTES} bytes \
+                     (this one is {}) — if this is work, send kind 'task' with \
+                     `item`; put long content in an artifact and send its path",
+                    body.len()
+                );
+            }
             let sender = bot_sender(&me);
             let mut dm = Dm::new(&target.id, &sender, kind, body);
             dm.ref_message_id = ref_id;

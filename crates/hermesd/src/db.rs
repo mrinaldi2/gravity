@@ -54,6 +54,7 @@ mod decisions_list;
 mod decisions_tests;
 mod deliveries;
 mod devices;
+mod guardrails;
 mod meetings;
 pub mod metrics;
 mod overview;

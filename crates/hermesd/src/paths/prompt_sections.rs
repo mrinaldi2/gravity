@@ -122,10 +122,21 @@ pub(super) fn browser(own: bool, owners_chrome: bool) -> String {
     )
 }
 
-/// All work is a task on a board card (H-125 G6).
-pub(super) fn board_work() -> String {
-    "## Work is on the board\n\n\
-     All work is a task linked to a board card, never a note.\n\n\
+/// All work is a task on a board card (H-125 G6), with the limits this
+/// machine enforces stated as numbers (ARCH-R59 b), and notes kept short
+/// (H-135 G3).
+pub(super) fn board_work(limits: &crate::config::TaskLimits) -> String {
+    let max_note = bus::MAX_NOTE_BYTES;
+    let crate::config::TaskLimits {
+        per_card,
+        root_lead,
+        root,
+    } = limits;
+    format!(
+        "## Work is on the board\n\n\
+     All work is a task linked to a board card, never a note. A note never\n\
+     authorises work, and one over {max_note} bytes is refused: put long\n\
+     content in an artifact.\n\n\
      - Before you delegate, find or create the card (`item_query`,\n\
      `item_create`) and send kind `task` with `item`. A task you send while\n\
      holding one inherits its card; when you hold several, pass\n\
@@ -135,8 +146,12 @@ pub(super) fn board_work() -> String {
      - Work the owner asks for in your terminal gets a card too, unless it\n\
      is a quick answer.\n\
      - If you find yourself working with no open task, stop and ask the\n\
-     lead for one.\n\n"
-        .to_string()
+     lead for one. After 10 minutes of it the owner's dashboard flags you\n\
+     as working off-board, and the lead is told.\n\
+     - Holding no task, you may have {per_card} open tasks on one card and\n\
+     {root} across the project ({root_lead} for the lead). A routine names a\n\
+     card too (`item`).\n\n"
+    )
 }
 
 /// Every bot on a machine shares its user, disk and processes (CE-001).

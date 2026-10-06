@@ -27,16 +27,17 @@ use super::tasks::describe_tasks;
 pub(super) const NEEDS_CARD: &str = "refusing send: every task needs a board card — pass \
      `item` (find one with item_query, or create one with item_create if none fits)";
 
-/// A `send_message` of kind task naming a card on a board that lives on a
-/// peer: the card is checked at its home before the send runs. `None` for
-/// every other call.
+/// A `send_message` of kind task, or a routine (H-135 G5), naming a card on
+/// a board that lives on a peer: the card is checked at its home before the
+/// call runs. `None` for every other call.
 pub(super) async fn intercept(
     app: &Arc<AppState>,
     bot_id: &str,
     name: &str,
     args: &Value,
 ) -> Option<anyhow::Result<Value>> {
-    if name != "send_message" || args.get("kind").and_then(Value::as_str) != Some("task") {
+    let task = name == "send_message" && args.get("kind").and_then(Value::as_str) == Some("task");
+    if !task && name != "create_routine" && name != "update_routine" {
         return None;
     }
     let id = item_text(args)?;
@@ -44,9 +45,14 @@ pub(super) async fn intercept(
     if !off_home(app, &me.project_id) {
         return None;
     }
-    Some(match check_at_home(app, &me, id).await {
-        Ok(()) => super::tools::send(app, bot_id, args, Some(id.to_string())),
-        Err(e) => Err(e),
+    if let Err(e) = check_at_home(app, &me, id).await {
+        return Some(Err(e));
+    }
+    let checked = Some(id.to_string());
+    Some(match name {
+        "create_routine" => super::routines::create_routine_for(app, bot_id, args, checked),
+        "update_routine" => super::routines::update_routine_for(app, bot_id, args, checked),
+        _ => super::tools::send(app, bot_id, args, checked),
     })
 }
 
@@ -66,11 +72,12 @@ fn off_home(app: &AppState, project_id: &str) -> bool {
 }
 
 /// This project has a board, here or at a linked home this daemon has
-/// heard from, so its tasks name cards. A project with neither keeps the
-/// budgets it had before.
-fn has_board(app: &AppState, project_id: &str) -> bool {
+/// heard from (remembered across restarts, ARCH-R59 a), so its tasks name
+/// cards. A project with neither keeps the budgets it had before.
+pub(crate) fn has_board(app: &AppState, project_id: &str) -> bool {
     !matches!(app.db.board_settings(project_id), Ok(None))
         || app.board_mirror.home_peer(project_id).is_some()
+        || app.db.board_home(project_id).ok().flatten().is_some()
 }
 
 /// The `item` a task names, checked: it exists on the project's board and

@@ -61,6 +61,11 @@ pub async fn fetch(app: &AppState, link: &ProjectLink) {
             });
             let mut feed = app.board.writer();
             app.board_mirror.set(&link.project_id, &link.peer_id, board);
+            // Kept across restarts (ARCH-R59 a): an empty mirror must not
+            // read as "no board" and let tasks go out without a card.
+            if let Err(e) = app.db.set_board_home(&link.project_id, &link.peer_id) {
+                tracing::warn!(error = %e, "can't record the board's home");
+            }
             feed.publish(Change {
                 project_id: &link.project_id,
                 kind: ChangeKind::SettingsChanged,
@@ -72,6 +77,7 @@ pub async fn fetch(app: &AppState, link: &ProjectLink) {
         // The peer holds no board for it (any more).
         Err(PeerError::Refused { code, .. }) if code == "no_board" || code == "not_linked" => {
             app.board_mirror.forget(&link.project_id, &link.peer_id);
+            let _ = app.db.forget_board_home(&link.project_id, &link.peer_id);
         }
         // Offline or failing: keep what was last seen.
         Err(e) => tracing::debug!(peer_id = %link.peer_id, error = %e, "board fetch failed"),

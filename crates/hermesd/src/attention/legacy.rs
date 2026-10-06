@@ -65,6 +65,32 @@ pub(crate) fn dashboard_rows(built: &[Built], all_kinds: bool) -> Vec<Value> {
         .collect()
 }
 
+/// One row listing this computer's routines that name no card (H-135 G5),
+/// while the project has a board. Shown on this computer's dashboard only,
+/// for information: it is not an attention row, so it isn't counted, and a
+/// linked computer lists its own.
+pub(crate) fn routines_without_card(
+    app: &AppState,
+    project_id: &str,
+) -> anyhow::Result<Option<Value>> {
+    if !crate::mcp::has_board(app, project_id) {
+        return Ok(None);
+    }
+    let mut cardless = Vec::new();
+    for bot in app.db.list_bots(Some(project_id))? {
+        if bot.is_linked() {
+            continue;
+        }
+        for routine in app.db.list_routines(Some(&bot.id))? {
+            if app.db.routine_card(&routine.id)?.is_none() {
+                cardless.push(json!({ "id": routine.id, "name": routine.name, "bot_id": bot.id }));
+            }
+        }
+    }
+    Ok((!cardless.is_empty())
+        .then(|| json!({ "kind": "routines_without_card", "routines": cardless })))
+}
+
 /// The bot that relayed a ruling: `owner-via-bot:<id>`.
 fn relayed_by(decision: &Decision) -> Option<&str> {
     decision

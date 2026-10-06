@@ -56,6 +56,7 @@ const ORDER: Readonly<Record<Shown["kind"], number>> = {
   owner_question: 4,
   bot_waiting: 5,
   off_board: 6,
+  routines_without_card: 7,
 };
 
 /** "bot:<id>", "user", "device:…": who made a move, in words. */
@@ -200,6 +201,19 @@ function servingRow(r: Extract<Shown, { readonly kind: "serving_off" }>): RowVie
   return { glyph: "⚠", tone: "bad", title: r.title, meta: r.reason, verb: "Fix it" };
 }
 
+/** Routines whose runs name no card (H-135 G5), listed once. */
+function cardlessRow(
+  r: Extract<Shown, { readonly kind: "routines_without_card" }>,
+  props: NeedsYouProps,
+): RowViewProps {
+  return {
+    glyph: "↻",
+    title: `${plural(r.routines.length, "routine")} with no card on the board`,
+    meta: r.routines.map((x) => `${x.name} (${props.botName(x.bot_id)})`).join(" · "),
+    verb: "Check",
+  };
+}
+
 function rowProps(
   r: Shown,
   props: NeedsYouProps,
@@ -216,6 +230,8 @@ function rowProps(
       return relayedRow(r, props, onReviewRelayed);
     case "p0":
       return p0Row(r, props);
+    case "routines_without_card":
+      return cardlessRow(r, props);
     default:
       return attentionRow(r, props);
   }
@@ -229,6 +245,8 @@ function rowKey(r: Shown): string {
       return `relayed-${r.elsewhere ?? "here"}`;
     case "serving_off":
       return `serving-${r.elsewhere ?? "here"}`;
+    case "routines_without_card":
+      return `cardless-${r.elsewhere ?? "here"}`;
     default:
       return `${r.kind}-${r.id}`;
   }

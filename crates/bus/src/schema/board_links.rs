@@ -79,3 +79,20 @@ CREATE TABLE IF NOT EXISTS worker_card (
     card_id   TEXT NOT NULL
 );
 "#;
+
+/// Guardrails part 2 (H-135). `routine_card` names the card a routine's runs
+/// are for (G5), by the board home's id, so no key to `item`.
+/// `board_home` remembers which peer holds a linked project's board
+/// (ARCH-R59 a), so a restart with an empty mirror still knows the project
+/// has a board and keeps requiring cards. Tables of their own, so it runs
+/// again safely.
+pub(super) const MIGRATION_GUARDRAILS_2: &str = r#"
+CREATE TABLE IF NOT EXISTS routine_card (
+    routine_id TEXT PRIMARY KEY,
+    card_id    TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS board_home (
+    project_id TEXT PRIMARY KEY,
+    peer_id    TEXT NOT NULL
+);
+"#;

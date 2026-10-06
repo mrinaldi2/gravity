@@ -18,7 +18,7 @@ mod rows;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use legacy::needs_you;
+pub(crate) use legacy::{needs_you, routines_without_card};
 pub(crate) use rows::{rows, Scope};
 
 /// Each kind's weight in the score (H-128 §1). A product choice, kept in one

@@ -156,6 +156,9 @@ pub struct BotProvision<'a> {
     /// whether it may also drive the owner's Chrome.
     pub own_browser: bool,
     pub user_chrome: bool,
+    /// The task limits this machine enforces for the project, stated in
+    /// the prompt as numbers (ARCH-R59 b).
+    pub task_limits: crate::config::TaskLimits,
 }
 
 /// Create the bot's directory tree: `bot.json`, `system.md`, `mcp.json`, and a

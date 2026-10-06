@@ -93,6 +93,11 @@ export interface Bot {
   readonly permission_extras?: readonly PermissionExtra[];
   /** A temporary worker, archived once its one task closes. */
   readonly temporary?: boolean;
+  /**
+   * Since when it has been working with no task on the board (H-135 G4);
+   * null or absent while it is on the board, and from older daemons.
+   */
+  readonly off_board_since?: string | null;
   readonly created_at: string;
 }
 

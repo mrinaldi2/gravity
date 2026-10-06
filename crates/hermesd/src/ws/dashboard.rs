@@ -59,9 +59,15 @@ impl Conn {
         // The kinds added with the projects home (H-128) go to a client that
         // asks for them; an older one would not know how to show them.
         let all_kinds = req["all_kinds"].as_bool().unwrap_or(false);
-        let needs = crate::attention::needs_you(&self.app, project_id, since, all_kinds, &|r| {
-            self.release_json(r)
-        })?;
+        let mut needs =
+            crate::attention::needs_you(&self.app, project_id, since, all_kinds, &|r| {
+                self.release_json(r)
+            })?;
+        // This computer's routines with no card (H-135 G5): here only, and
+        // not sent to a linked computer.
+        needs.rows.extend(crate::attention::routines_without_card(
+            &self.app, project_id,
+        )?);
 
         let strip: Vec<Value> = columns
             .iter()

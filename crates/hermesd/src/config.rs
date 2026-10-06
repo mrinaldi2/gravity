@@ -88,7 +88,8 @@ pub struct Config {
     /// bots fill their cap can still fan work out; spawns past it wait in a
     /// queue until a worker finishes.
     pub max_workers_per_project: usize,
-    /// How many tasks a bot may hold open per card and in all (H-125).
+    /// How many tasks a bot may hold open per card and in all (H-125). Per
+    /// computer: not synced to linked machines (ARCH-R59 c).
     pub tasks: TaskLimitsConfig,
     /// How long, in seconds, a permission prompt waits for an answer from the
     /// app before it is denied. Capped below the hook's own timeout.

@@ -4,6 +4,12 @@
 //! one budget of three for the lead's entire project. A nested task keeps
 //! `MAX_TASK_FANOUT` per incoming task.
 //!
+//! Set per computer (ARCH-R59 c): each daemon reads `[tasks]` from its own
+//! `hermesd.toml` and enforces it on the bots it runs, so a linked project
+//! can have different limits on each machine. Nothing syncs them; set the
+//! same values on every computer to keep one budget. Each bot's prompt
+//! states the numbers its own machine enforces.
+//!
 //! ```toml
 //! [tasks]
 //! per_card = 3
