@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { FakeDaemon } from "../../test/fakeDaemon";
@@ -34,7 +34,12 @@ describe("LinkedChat", () => {
     const bot = fx.bot({ peer: { id: "peer-1", name: "win-pc", online: false } });
     render(<LinkedChat client={client} bot={bot} connected writeBlocked={null} />);
 
-    expect(await screen.findByText("build it")).toBeInTheDocument();
+    // The conversation loads in two round trips; under a loaded full run
+    // they can outlast findByText's 1 s (H-042). Wait for both requests,
+    // then for what they render.
+    const asked = () => client.requests.map((r) => r.body.type);
+    await waitFor(() => expect(asked()).toContain("list_messages"), { timeout: 10_000 });
+    expect(await screen.findByText("build it", {}, { timeout: 10_000 })).toBeInTheDocument();
     expect(screen.getByText(/runs on win-pc \(offline\)/)).toBeInTheDocument();
     expect(screen.getByText("lead")).toBeInTheDocument();
 
@@ -49,7 +54,7 @@ describe("LinkedChat", () => {
         }),
       });
     });
-    expect(await screen.findByText("on it")).toBeInTheDocument();
+    expect(await screen.findByText("on it", {}, { timeout: 10_000 })).toBeInTheDocument();
 
     await userEvent.type(screen.getByRole("textbox", { name: "Message" }), "status?{Enter}");
     expect(client.requests.at(-1)?.body).toEqual({
@@ -57,5 +62,5 @@ describe("LinkedChat", () => {
       to_bot_id: "b1",
       body: "status?",
     });
-  });
+  }, 20_000);
 });
