@@ -58,6 +58,7 @@ const READ_ONLY: &[&str] = &[
     "owner_action_get",
     "meeting_list",
     "meeting_get",
+    "metrics_get",
 ];
 
 /// Requests that exercise the owner's ruling authority.
@@ -196,6 +197,7 @@ impl Conn {
             "meeting_contribute" => self.meeting_contribute(&req_id, req),
             "action_update" => self.action_update(&req_id, req),
             "action_promote" => self.action_promote(&req_id, req),
+            "metrics_get" => self.metrics_get(&req_id, req),
             "release_rule" => self.release_rule(&req_id, req),
             "release_hold" => self.release_hold(&req_id, req),
             "release_unhold" => self.release_unhold(&req_id, req),

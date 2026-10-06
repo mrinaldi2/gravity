@@ -904,6 +904,21 @@ A bot proposes an exact command for the owner to run; only the owner runs it.
 - **`meetings`:** one row per meeting series, `{series, next_at, collecting, last_held}`: `next_at` is when its routine next starts it (null while disabled), `collecting` the meeting taking contributions now, `last_held` the last one closed. Ad-hoc meetings still collecting follow, with `series` null. Meetings are summaries (see below). Empty off the board's home.
 - **`action_items`:** the open ones, soonest due first, each with `meeting_name` and `overdue`.
 
+### Flow metrics (B11)
+
+`metrics_get {project_id, range}` (read). `range` is `week` (7 days, the default) or `4w` (28 days). It answers `{type: "metrics", metrics, note}`, computed from the board's history. Items brought in by the backlog import never count.
+
+`metrics` holds:
+- **`throughput`:** items that reached Done in the range. `weekly` is the count per week for the last 8 weeks, oldest first.
+- **`cycle`:** `{p50, p85, count}` in seconds, from an item's first entry into Doing to Done, for the items done in the range (nearest-rank percentiles).
+- **`by_column`:** each in-progress column (Doing through Deploying), with `p50`/`p85`/`count` of the time items spent in it, for stints that ended in the range.
+- **`daily`:** one point per day, `{at, wip, columns: {key: count}}`: where every item stood at the end of the day. `wip` counts Doing through Deploying. This is the cumulative-flow series.
+- **`reworked`, `past_doing`, `rework_rate`:** items sent back to Doing in the range, over the items that went past Doing in it.
+- **`aging`:** the five open in-progress items longest in their current column, `{id, title, column_key, age}`.
+- **`expired_tasks`**, **`days`**, and **`since`**.
+
+Without a board, `metrics` is null. Off the board's home, the daemon asks the home (peer request `metrics_get {project_id, days}`) and answers once it has. If the home can't be reached, `metrics` is null and `note` names it.
+
 ## Meetings
 
 Meetings live with the board, on its home (H-017 §1.5, H-020 §4, H-102). A **series** (`standup`, `refinement`, `demo`, `retro` or `adhoc`) owns a routine: creating or changing one upserts the routine with the facilitator as its bot, the series' cron and time zone, and a prompt telling it to run the meeting. A new facilitator gets a new routine; disabling the series disables it. Each run, the facilitator calls `meeting_start`. That opens an occurrence (`MTG-<date>-<type>`, collecting), freezes `inputs_snapshot` (the board's columns with counts, Doing, blocked and stale items, the open action items) and sends each attendee bot one note. Attendees `meeting_contribute`, the facilitator (or the lead) records `action_add`s and `meeting_close`s it as held, with outputs by section and a summary of at most ten lines, or skipped with a reason. Open action items carry over: `meeting_get` lists those of the series' earlier meetings as `carried_over`. `action_promote` (lead) turns one into a chore in the board's Inbox, linked to its meeting (link kind `meeting`), and sets the action's `item_id`. Attendees and action owners are bot ids, or `owner`.

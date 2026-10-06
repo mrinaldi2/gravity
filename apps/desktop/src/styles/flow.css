@@ -1,0 +1,202 @@
+/* The dashboard's Flow widget (B11): single-series charts in the accent
+   colour, thin bars with rounded data ends, recessive text. */
+
+.flow-controls {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+  align-items: center;
+}
+
+.flow-range {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.flow-range button {
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.flow-range button[aria-pressed="true"] {
+  color: var(--text-strong);
+  background: var(--bg-hover);
+}
+
+.flow-range button:focus-visible,
+.flow-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.flow-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (width <= 900px) {
+  .flow-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.flow-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.flow-stat-label,
+.flow-stat-note {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.flow-stat-value {
+  font-size: 18px;
+  color: var(--text-strong);
+}
+
+/* Vertical bars: the 8-week sparkline and in progress per day. */
+.flow-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 40px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-bars li {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  height: 100%;
+  min-width: 3px;
+}
+
+.flow-bars .flow-bar {
+  width: 100%;
+  min-height: 1px;
+  border-radius: 4px 4px 0 0;
+}
+
+.flow-bar {
+  display: block;
+  background: var(--accent);
+}
+
+.flow-charts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+@media (width <= 900px) {
+  .flow-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.flow-charts h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+
+.flow-columns,
+.flow-aging {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Name and value on one line, the bar full width beneath. */
+.flow-columns li {
+  display: grid;
+  grid-template-areas:
+    "name value"
+    "bar bar";
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  font-size: 12px;
+}
+
+.flow-column-name {
+  grid-area: name;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-column-value {
+  grid-area: value;
+  color: var(--text-dim);
+}
+
+/* Horizontal bars: cycle time by column, p50 against the longest p85. */
+.flow-hbar {
+  grid-area: bar;
+  height: 6px;
+}
+
+.flow-hbar .flow-bar {
+  height: 100%;
+  min-width: 1px;
+  border-radius: 0 4px 4px 0;
+}
+
+.flow-aging li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.flow-link {
+  overflow: hidden;
+  padding: 0;
+  color: var(--text);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.flow-tables {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  font-size: 12px;
+}
+
+.flow-tables caption {
+  margin-bottom: 4px;
+  color: var(--text-dim);
+  text-align: left;
+}
+
+.flow-tables th,
+.flow-tables td {
+  padding: 2px 12px 2px 0;
+  font-weight: 400;
+  text-align: left;
+}

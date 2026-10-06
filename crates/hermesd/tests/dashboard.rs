@@ -4,53 +4,16 @@
 
 mod common;
 
+use common::board::{new_item, walk};
 use common::releases::releases;
 use common::tasks::project_with_bots;
 use common::*;
 use hermesd::actor::Actor;
-use hermesd::board::model::{ItemType, Platform, Priority};
-use hermesd::db::{Db, MoveTo, NewItem, Write};
+use hermesd::board::model::Priority;
 use serde_json::{json, Value};
 
 const OWNER: Actor<'static> = Actor::User;
 const BACKLOG: &str = include_str!("fixtures/board_import_backlog.md");
-
-fn new_item(db: &Db, project: &str, title: &str, priority: Priority) -> (String, u64) {
-    let item = db
-        .create_item(
-            &NewItem {
-                project_id: project,
-                item_type: ItemType::Feature,
-                title,
-                description: "",
-                platforms: &[Platform::Daemon],
-                size: None,
-                priority,
-                labels: &[],
-                parent_id: None,
-                acceptance_criteria: &[],
-            },
-            &OWNER,
-        )
-        .unwrap();
-    (item.id, item.version)
-}
-
-/// Moves without guards, as history: the counts read only the events.
-fn walk(db: &Db, id: &str, columns: &[&str], note: Option<&str>) {
-    for column in columns {
-        let version = db.get_item(id).unwrap().unwrap().version;
-        let to = MoveTo {
-            column,
-            note,
-            ..MoveTo::default()
-        };
-        assert!(matches!(
-            db.move_item(id, version, &to, &OWNER).unwrap(),
-            Write::Done(_)
-        ));
-    }
-}
 
 async fn dashboard(owner: &mut WsClient, project: &str) -> Value {
     let reply = owner

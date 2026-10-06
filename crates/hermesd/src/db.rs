@@ -53,6 +53,7 @@ mod decisions_tests;
 mod deliveries;
 mod devices;
 mod meetings;
+pub mod metrics;
 mod owner_actions;
 mod peers;
 mod permissions;

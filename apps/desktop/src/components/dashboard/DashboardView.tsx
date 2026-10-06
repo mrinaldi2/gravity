@@ -17,10 +17,12 @@ import { botNamer, useItemTitles } from "../releases/ReleasesView";
 import { useReleaseActions } from "../releases/useReleases";
 import OwnerActionList from "../ownerActions/OwnerActionList";
 import DashboardItem from "./DashboardItem";
+import FlowWidget from "./FlowWidget";
 import NeedsYou from "./NeedsYou";
 import { useConfirmRelayed } from "./useConfirmRelayed";
 import { useDashboard } from "./useDashboard";
 import { useDashboardDrawers } from "./useDashboardDrawers";
+import { useMetrics } from "./useMetrics";
 import { ActionItemsWidget, MeetingsWidget } from "./MeetingWidgets";
 import { useActionItems } from "./useActionItems";
 import { BoardWidget, ReleasesWidget, TeamWidget } from "./Widgets";
@@ -93,6 +95,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const relayed = useConfirmRelayed(client, project.id, props.addToast, refresh);
   const actionItems = useActionItems(client, project.id, props.addToast, refresh);
   const { reviewing, openItem, openReview, showItem, close: closeDrawer } = useDashboardDrawers();
+  const metrics = useMetrics(client, project.id, connected);
 
   if (dashboard === null) {
     return (
@@ -170,6 +173,11 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             onDrop={(id) => void actionItems.setStatus(id, "dropped")}
             onPromote={(id) => void actionItems.promote(id)}
             onItem={showItem}
+          />
+          <FlowWidget
+            state={metrics}
+            columnName={(key) => columns.get(key) ?? key}
+            onBoard={openBoard}
           />
         </div>
       </div>

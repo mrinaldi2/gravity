@@ -7,6 +7,7 @@ import type { MeetingRequestBody } from "./meetings";
 import type { OwnerActionRequestBody } from "./ownerActions";
 import type { QuiesceRequestBody } from "./quiesce";
 import type { DecisionRequestBody } from "./decisionRequests";
+import type { MetricsRequestBody } from "./metrics";
 import type { ReleaseRequestBody } from "./releases";
 import type {
   BotRuntime,
@@ -25,6 +26,7 @@ export type ClientRequestBody =
   | MeetingRequestBody
   | QuiesceRequestBody
   | OwnerActionRequestBody
+  | MetricsRequestBody
   | {
       readonly type: "hello";
       readonly protocol_version: number;
