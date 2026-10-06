@@ -47,28 +47,27 @@ pub(super) fn received(
     Ok(())
 }
 
-/// Record the release a forwarded deploy or rollback task is for (H-158),
-/// but only from the project's board home, where releases live (ARCH-R63
-/// S1). From any other peer the claim is ignored, and the task stays subject
-/// to G4 as any other.
-pub(super) fn received_release(
+/// The release a forwarded deploy or rollback task is for (H-158), but only
+/// from the project's board home, where releases live (ARCH-R63 S1). From any
+/// other peer the claim is ignored, and the task stays subject to G4 as any
+/// other. The receiver stores it with the task, in one transaction (H-181).
+pub(super) fn accepted_release<'a>(
     app: &Arc<AppState>,
     peer: &Peer,
     to: &Bot,
-    task_id: &str,
-    release: Option<&str>,
-) -> anyhow::Result<()> {
+    release: Option<&'a str>,
+) -> anyhow::Result<Option<&'a str>> {
     let Some(release) = release else {
-        return Ok(());
+        return Ok(None);
     };
     if !from_board_home(&app.db, &peer.id, &to.project_id)? {
         tracing::info!(
-            peer = %peer.name, bot = %to.name, task = %task_id, release,
+            peer = %peer.name, bot = %to.name, release,
             "task names a release but its peer is not the board home: ignored"
         );
-        return Ok(());
+        return Ok(None);
     }
-    app.db.set_task_release(task_id, release)
+    Ok(Some(release))
 }
 
 fn from_board_home(db: &Db, peer_id: &str, project_id: &str) -> anyhow::Result<bool> {

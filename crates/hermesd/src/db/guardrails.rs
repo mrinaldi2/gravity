@@ -197,4 +197,47 @@ mod tests {
         assert_eq!(db.task_release(&kept).unwrap().as_deref(), Some("r1"));
         assert_eq!(db.task_card(&kept).unwrap().as_deref(), Some("H-1"));
     }
+
+    /// H-181: a forwarded deploy task and its release commit together. Once
+    /// the task is visible its release is too, and if the release can't be
+    /// written the task isn't either.
+    #[test]
+    fn a_task_and_its_release_commit_together() {
+        let (db, bot) = setup();
+        let conv = db.dm_conversation(&bot.id).unwrap().unwrap();
+        let msg = |body: &str| {
+            db.insert_message(
+                &conv.id,
+                &user_sender(),
+                MessageKind::Task,
+                body,
+                None,
+                None,
+            )
+            .unwrap()
+            .id
+        };
+        let task = db
+            .create_task_with_release(&msg("deploy"), None, &bot.id, None, 1, "", Some("r1"))
+            .unwrap();
+        assert_eq!(db.task_release(&task.id).unwrap().as_deref(), Some("r1"));
+        let plain = db
+            .create_task_with_release(&msg("plain"), None, &bot.id, None, 1, "", None)
+            .unwrap();
+        assert_eq!(db.task_release(&plain.id).unwrap(), None);
+
+        // The release row fails to write: the task rolls back with it.
+        db.lock()
+            .execute_batch("ALTER TABLE task_release RENAME TO task_release_gone")
+            .unwrap();
+        let before = db.open_tasks_for(&bot.id).unwrap().len();
+        assert!(db
+            .create_task_with_release(&msg("lost"), None, &bot.id, None, 1, "", Some("r2"))
+            .is_err());
+        assert_eq!(
+            db.open_tasks_for(&bot.id).unwrap().len(),
+            before,
+            "no task alone"
+        );
+    }
 }
