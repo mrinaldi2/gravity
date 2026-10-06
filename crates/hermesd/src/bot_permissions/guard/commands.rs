@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use super::paths::Scope;
-use super::{cargo, full, git, targets, GuardContext};
+use super::{cargo, daemon_cli, full, git, targets, GuardContext};
 use crate::bot_permissions::shell::{self, Words};
 
 /// Why the line must not run, or `None`.
@@ -133,6 +133,14 @@ fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
     let args = positional(rest);
     if ctx.full {
         if let Some(reason) = full::only(name, rest, &args, scope) {
+            return Some(reason);
+        }
+    }
+    if let Some(reason) = daemon_cli::redirected(words, at, scope) {
+        return Some(reason);
+    }
+    if starts_vm(name, &args) {
+        if let Some(reason) = crate::quiesce::pending::blocking(&ctx.home) {
             return Some(reason);
         }
     }
@@ -283,6 +291,17 @@ fn xargs(rest: &[String], scope: &Scope, ctx: &GuardContext) -> Option<String> {
         "`xargs {program}` would act on what the line lists, which includes {} outside your own folders",
         target.display()
     ))
+}
+
+/// `colima start`, `limactl start` or the VR run (`scripts/vr-ci.sh`, as is
+/// or through a shell): what a pending install must not meet (H-166).
+fn starts_vm(name: &str, args: &[String]) -> bool {
+    let vr = |word: &str| word.ends_with("vr-ci.sh");
+    match name {
+        "colima" | "limactl" => args.first().is_some_and(|a| a == "start"),
+        "sh" | "bash" | "zsh" => args.first().is_some_and(|a| vr(a)),
+        other => vr(other),
+    }
 }
 
 fn simctl(rest: &[String]) -> Option<String> {

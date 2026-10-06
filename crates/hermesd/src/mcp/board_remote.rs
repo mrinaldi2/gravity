@@ -39,7 +39,35 @@ pub(super) async fn intercept(
     // The known home first; the others answer that they hold no board.
     let home = app.board_mirror.home_peer(&bot.project_id);
     links.sort_by_key(|link| Some(&link.peer_id) != home.as_ref());
-    for link in &links {
+    if name == "install_quiesce" {
+        return Some(quiesce_here(app, &bot, &links, args).await);
+    }
+    if let Some(mut result) = forward(app, &bot, &links, name, args).await {
+        // How to run it here, with this computer's own binary.
+        if let (Ok(answer), "install_release") = (&mut result, name) {
+            super::releases::with_command(answer);
+        }
+        return Some(result);
+    }
+    Some(match app.board_mirror.get(&bot.project_id) {
+        Some(board) => offline(app, &bot, &board, name, args),
+        None => Err(anyhow::anyhow!(
+            "this project's board lives on a linked computer that can't be reached, or \
+             hasn't been started yet; try again later"
+        )),
+    })
+}
+
+/// `name` run on the board's home as the bot's stand-in, or `None` when no
+/// linked computer holds the board or can be reached.
+async fn forward(
+    app: &Arc<AppState>,
+    bot: &Bot,
+    links: &[bus::ProjectLink],
+    name: &str,
+    args: &Value,
+) -> Option<anyhow::Result<Value>> {
+    for link in links {
         let frame = json!({
             "type": "board_call", "project_id": link.project_id,
             "bot_id": bot.id, "tool": name, "args": args,
@@ -58,13 +86,40 @@ pub(super) async fn intercept(
             Err(e) => return Some(Err(anyhow::anyhow!("{e}"))),
         }
     }
-    Some(match app.board_mirror.get(&bot.project_id) {
-        Some(board) => offline(app, &bot, &board, name, args),
-        None => Err(anyhow::anyhow!(
-            "this project's board lives on a linked computer that can't be reached, or \
-             hasn't been started yet; try again later"
-        )),
-    })
+    None
+}
+
+/// `install_quiesce` pauses the computer the install runs on, this one
+/// (H-166): the home only checks the deploy task, as `install_release`
+/// does, and never pauses itself for another computer's install.
+async fn quiesce_here(
+    app: &Arc<AppState>,
+    bot: &Bot,
+    links: &[bus::ProjectLink],
+    args: &Value,
+) -> anyhow::Result<Value> {
+    let text = |key: &str| args[key].as_str().map(str::trim).filter(|s| !s.is_empty());
+    let ask = crate::quiesce::tool::Ask {
+        action: text("action").unwrap_or_default(),
+        release_id: text("release_id").unwrap_or_default(),
+        version: text("version"),
+        binary_sha256: text("binary_sha256"),
+    };
+    let answer = if ask.action == "status" {
+        Value::Null
+    } else {
+        crate::quiesce::tool::may_pause(app, bot)?;
+        let gate = json!({ "release_id": ask.release_id });
+        forward(app, bot, links, "install_release", &gate)
+            .await
+            .unwrap_or_else(|| {
+                Err(anyhow::anyhow!(
+                    "the board's home can't be reached to check your deploy task; try again \
+                     when it's back"
+                ))
+            })?
+    };
+    crate::quiesce::tool::run(app, bot, &ask, &|| Ok(answer.clone()))
 }
 
 /// The home is unreachable: reads from the last snapshot, writes refused.

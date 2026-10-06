@@ -64,11 +64,15 @@ async fn pausing_every_project_takes_the_extra_the_role_and_the_release() {
         .unwrap();
     let refused = r.bots[2].call_raw("install_quiesce", start.clone()).await;
     assert!(error_text(&refused).contains("install extra"), "{refused}");
-    // DevOps with the extra holds no deploy task for it.
+    // DevOps with the extra, for a release installing on another computer
+    // (this one isn't named "mac"): not its pause to take (H-166).
     db.set_bot_permission_extras(&r.pair.ids[1], &[PermissionExtra::Quiesce])
         .unwrap();
     let refused = r.bots[1].call_raw("install_quiesce", start.clone()).await;
-    assert!(error_text(&refused).contains("deploy task"), "{refused}");
+    assert!(
+        error_text(&refused).contains("no deployment under way"),
+        "{refused}"
+    );
 
     // Extra, install and the task: every project pauses, but the tester.
     db.set_bot_permission_extras(
@@ -96,6 +100,46 @@ async fn pausing_every_project_takes_the_extra_the_role_and_the_release() {
         .await;
     assert_eq!(resumed["resumed"]["outcome"], "aborted", "{resumed}");
     assert!(db.open_quiesce().unwrap().is_none());
+}
+
+/// H-166: the release's DevOps pauses this computer with its quiesce extra
+/// when the release is installing here, without holding the deploy task.
+#[tokio::test]
+async fn devops_pauses_this_computer_for_a_release_installing_here() {
+    let mut r = releases(1).await;
+    let id = deployed(&mut r).await;
+    let db = &r.pair.d.app.db;
+    let devops = r.pair.ids[1].clone();
+    db.set_bot_permission_extras(&devops, &[PermissionExtra::Quiesce])
+        .unwrap();
+    r.bots[0]
+        .call("machine_name_set", json!({"name": "mac"}))
+        .await;
+    let start = json!({"release_id": id, "action": "start"});
+    let started = r.bots[1].call("install_quiesce", start.clone()).await;
+    assert_eq!(started["proceed"], true, "{started}");
+    assert_eq!(started["quiesce"]["exempt_bot"], json!(devops));
+    assert_eq!(started["quiesce"]["version"], "0.17.0");
+    let resumed = r.bots[1]
+        .call(
+            "install_quiesce",
+            json!({"release_id": id, "action": "resume"}),
+        )
+        .await;
+    assert_eq!(resumed["resumed"]["outcome"], "aborted", "{resumed}");
+
+    // Once the deployment is done, there is nothing here to pause for.
+    r.bots[2]
+        .call(
+            "deploy_confirm",
+            json!({"release_id": id, "machine": "mac", "result": "ok", "smoke": "pass"}),
+        )
+        .await;
+    let refused = r.bots[1].call_raw("install_quiesce", start).await;
+    assert!(
+        error_text(&refused).contains("no deployment under way"),
+        "{refused}"
+    );
 }
 
 fn install_of(version: Option<&'static str>) -> PauseRequest<'static> {

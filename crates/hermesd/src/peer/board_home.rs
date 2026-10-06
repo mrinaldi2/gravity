@@ -48,6 +48,16 @@ pub(super) fn serve_call(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> any
             .ok_or_else(|| anyhow::anyhow!("'{name}' is required"))
     };
     let (bot_id, tool) = (field("bot_id")?, field("tool")?);
+    // A pause stops this computer's projects: never for another computer's
+    // install. Newer peers pause themselves and ask here only for the gate
+    // (H-166).
+    if tool == "install_quiesce" {
+        return Err(refuse(
+            "forbidden",
+            "the board's home doesn't pause itself for another computer's install; update \
+             The Hermes on the installing computer",
+        ));
+    }
     let stand_in = app
         .db
         .linked_bot(&peer.id, bot_id, &link.project_id)?

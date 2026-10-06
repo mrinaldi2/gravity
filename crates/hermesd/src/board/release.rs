@@ -39,6 +39,7 @@ pub mod package;
 pub mod plan;
 pub mod post_install;
 pub mod publish;
+pub mod quiesce_gate;
 pub mod rule;
 pub mod serve;
 #[cfg(test)]

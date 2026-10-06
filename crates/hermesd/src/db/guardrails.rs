@@ -90,6 +90,25 @@ impl Db {
             .flatten())
     }
 
+    /// An install under way here (H-166): a bot on this computer holds an
+    /// open deploy or rollback task. The release and the bot's name.
+    pub fn install_task_here(&self) -> anyhow::Result<Option<(String, String)>> {
+        Ok(self
+            .lock()
+            .query_row(
+                "SELECT coalesce(tr.release_id, rd.release_id), b.name
+                 FROM task t JOIN bot b ON b.id = t.to_bot_id
+                 LEFT JOIN task_release tr ON tr.task_id = t.id
+                 LEFT JOIN release_deployment rd ON rd.task_id = t.id
+                 WHERE t.state = 'open' AND b.peer_id IS NULL
+                   AND coalesce(tr.release_id, rd.release_id) IS NOT NULL
+                 ORDER BY t.created_at LIMIT 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?)
+    }
+
     /// The message with this number, as an envelope names it.
     pub fn message_by_num(&self, num: i64) -> anyhow::Result<Option<Message>> {
         let id: Option<String> = self

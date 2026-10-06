@@ -760,7 +760,10 @@ runs through the tester the same way.
     4. applies the boot gate: it waits up to 120 s for `/health` to answer with the new binary's `binary_sha256`. The version isn't enough, because an old daemon at the same version would pass (ARCH-R52 M3). If the gate fails, the backup goes back, but only if its bundle hash matches what was kept and its signature checks out. Then its `service install` runs and the job exits non-zero. The daemon's boot check records the install as rolled back.
     5. If putting the backup back fails too, `service install` runs from `<home>/bin/hermesd` (else from the app in place), and `<home>/run/rollback-failed.json` is left. At boot, the daemon pushes an error notice to the owner and files a Run card that runs `service install` from `/Applications/<app>` (ARCH-R52 S3).
   - **`/health`** reports `binary_sha256`, the sha256 of the daemon's own binary.
-  - **Allowed.** The `install` extra allows `hermesd release install` with no owner prompt.
+  - **Allowed.** The `install` extra allows `hermesd release install` with no owner prompt (H-166).
+    - The rule names this daemon's own binary by its exact path, in each way a bot quotes it, for example `Bash("/Applications/The Hermes.app/Contents/MacOS/hermesd" release install *)`. Bots have no `hermesd` on their PATH, so a rule for a bare `hermesd` never matched, and the classifier refused the install. A bare name would also allow whatever `hermesd` comes first on the bot's PATH.
+    - Only the arguments after the subcommand are a wildcard. A path holding `*`, a parenthesis or a quote gets no rule.
+    - `install_release` answers with `command`: the exact line to run on the caller's own computer. Off-home, the command uses that computer's binary, not the home's.
   - **Hand-off.** `service install` restarts the daemon and every bot, this session included, so it's handed to the system:
     - a one-shot launchd job on macOS (`com.thehermes.release-install.<release>`, `RunAtLoad`, not kept alive);
     - a one-time scheduled task on Windows, which runs the setup with `/S`; the setup's own hook installs the service;
@@ -850,11 +853,20 @@ start = "brew services start colima"
 ```
 
 **Installing (Q4).** The pause is the installing bot's to ask for, on its own computer only. It is the MCP tool `install_quiesce {release_id, action: start|status|resume, version?}`, also run as `hermesd quiesce start|status|resume <release>` over the local endpoint, which knows the bot by its process. The daemon allows it only when all of these hold:
-- the bot holds the `quiesce` extra, granted once by the owner ("Pause all projects for an install"; it allows `hermesd quiesce *`);
+- the bot holds the `quiesce` extra, granted once by the owner ("Pause all projects for an install"; it allows this binary's `quiesce` by its exact path, as for `release install`);
 - it is the project's DevOps, or holds the `install` extra;
-- it holds an open deploy task for an approved release, the same gate as `install_release`.
+- it holds an open deploy task for an approved release, the same gate as `install_release`, or (H-166) it is the project's DevOps and the release has a deployment or rollback under way on this computer (by its machine name).
 
-A refusal says which of these is missing. `start` pauses with the caller as `exempt_bot`, reaps and answers `{quiesce, report, proceed}`. Its report is recorded on the release as a `quiesce` event, and each lead gets a note.
+A refusal says which of these is missing.
+
+**Where the board lives on another computer (H-166).**
+- The tester's own daemon handles `install_quiesce`. It checks the bot's extras there, asks the home for the gate (`install_release` as the stand-in), and then pauses its own computer.
+- The home refuses a forwarded `install_quiesce` ("doesn't pause itself for another computer's install"). An older peer that still forwards the tool gets that refusal, not a pause of the home.
+
+**Install pending (H-166).** While a bot on this computer holds an open deploy or rollback task, or a pause is open, the daemon refreshes `<home>/run/install-pending.json` (`{why, release_id}`) every 15 s, and removes it when neither holds.
+- The guard refuses `colima start`, `limactl start` and a VR run (`vr-ci.sh`) while the file is fresh, saying why. A VM sharing the home blocks the install.
+- A file older than 2 minutes means the daemon stopped refreshing it, and is ignored.
+- Bots learn this from the shared-computer section of their prompt. `start` pauses with the caller as `exempt_bot`, reaps and answers `{quiesce, report, proceed}`. Its report is recorded on the release as a `quiesce` event, and each lead gets a note.
 
 `hermesd release install <release>` runs `start` itself before it stages anything:
 - **Something still holds the home** (`proceed` false): it prints the holders and stops.
