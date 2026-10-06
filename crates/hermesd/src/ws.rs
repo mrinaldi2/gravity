@@ -344,6 +344,9 @@ fn handshake(
     // the desktop app by its signature, a CLI command by the owner's card.
     let owner_token = app.secrets.verify_client(token);
     let via_ticket = !owner_token && app.owner.redeem(token);
+    if owner_token {
+        app.owner.note_client_token();
+    }
     let (caps, device_id) = if owner_token || via_ticket {
         (
             vec![Capability::Read, Capability::Control, Capability::Approve],

@@ -10,7 +10,7 @@ use super::owner::Peer;
 pub use super::owner_macos::{is_owner_app, peer_audit_token};
 
 #[cfg(windows)]
-pub use windows::{app_dir, is_owner_app};
+pub use windows::{app_dir, image_path, is_owner_app};
 
 /// Linux has no desktop app: no process is the owner's.
 #[cfg(not(any(target_os = "macos", windows)))]
@@ -91,7 +91,7 @@ mod windows {
         program_files().map(|root| root.join(WINDOWS_APP_FOLDER))
     }
 
-    fn image_path(pid: u32) -> Option<PathBuf> {
+    pub fn image_path(pid: u32) -> Option<PathBuf> {
         // SAFETY: no pointers; a non-null result is ours to close.
         let raw = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
         if raw.is_null() {
