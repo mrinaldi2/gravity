@@ -5,8 +5,9 @@
 mod common;
 
 use bus::contract::home::AttentionKind;
-use bus::{BotState, MAX_NOTE_BYTES};
+use bus::{BotState, DeliveryState, MAX_NOTE_BYTES};
 use chrono::{Duration, Utc};
+use common::peers::wait_until;
 use common::tasks::{error_text, project_with_bots};
 use common::team::{item, team};
 use common::McpClient;
@@ -56,6 +57,7 @@ async fn a_long_note_is_refused_and_a_short_one_passes() {
 async fn a_bot_working_off_board_is_flagged_once_and_cleared() {
     let (pair, mut bots, project) = team(&["Team Lead", "dev"]).await;
     let app = pair.d.app.clone();
+    let lead = pair.ids[0].clone();
     let dev = pair.ids[1].clone();
     let t0 = Utc::now();
     app.supervisor.set_state(&dev, BotState::Working, "test");
@@ -67,6 +69,15 @@ async fn a_bot_working_off_board_is_flagged_once_and_cleared() {
     hermesd::offboard::sweep(&app, t0 + Duration::minutes(10)).unwrap();
     assert_eq!(app.off_board.flagged_since(&dev), Some(t0));
     hermesd::offboard::sweep(&app, t0 + Duration::minutes(20)).unwrap();
+    // The note reaches the inbox only once the delivery loop delivers it.
+    wait_until("the lead's note is delivered", || {
+        app.db
+            .list_deliveries(Some(&lead), None)
+            .unwrap()
+            .iter()
+            .all(|d| !matches!(d.state, DeliveryState::Queued | DeliveryState::Leased))
+    })
+    .await;
     let notes = system_notes(&mut bots[0], "no task on the board").await;
     assert_eq!(notes.len(), 1, "one note per episode: {notes:?}");
 
