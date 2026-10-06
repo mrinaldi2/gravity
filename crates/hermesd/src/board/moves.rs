@@ -13,6 +13,10 @@ use super::model::{BoardColumn, Item, Unmet};
 /// release package.
 pub const CLOSED_WITHOUT_RELEASE: &str = "closed by the owner without a release";
 
+/// The note on the close of a spike or a chore without code (H-154),
+/// followed by the outcome it closed on.
+pub const CLOSED_ON_OUTCOME: &str = "closed on its outcome";
+
 pub struct MoveRequest<'a> {
     pub id: &'a str,
     pub to: &'a str,
@@ -89,7 +93,12 @@ pub fn item_move(db: &Db, req: &MoveRequest<'_>, actor: &Actor<'_>) -> anyhow::R
         let rule = guards::rule(item.category, to.category);
         let over = guards::over_limit(&item, to, &ctx).is_some() && who != Who::Daemon;
         let escape = guards::closes_without_release(&item, &mv, &who, &ctx);
-        let note = note(rule, &mv, over, escape);
+        // A spike or a chore closed on its outcome names it in the history
+        // (H-154): the newest artifact linked, which the guard required.
+        let outcome = (rule == Rule::Finish && !escape)
+            .then(|| guards::outcome_link(&ctx))
+            .flatten();
+        let note = note(rule, &mv, over, escape, outcome);
         let first = guards::is_return(rule);
         Ok(
             match t.move_item(
@@ -113,10 +122,19 @@ pub fn item_move(db: &Db, req: &MoveRequest<'_>, actor: &Actor<'_>) -> anyhow::R
 /// What the move's history event says: the reason, the review verdict, any
 /// WIP override (automatic for returned work, H-017 rev 2.1 §1.3) and an
 /// owner's close without a release (ARCH-R22 F1).
-fn note(rule: Rule, mv: &Move<'_>, over: bool, escape: bool) -> Option<String> {
+fn note(
+    rule: Rule,
+    mv: &Move<'_>,
+    over: bool,
+    escape: bool,
+    outcome: Option<&str>,
+) -> Option<String> {
     let mut parts = Vec::new();
     if escape {
         parts.push(CLOSED_WITHOUT_RELEASE.to_string());
+    }
+    if let Some(outcome) = outcome {
+        parts.push(format!("{CLOSED_ON_OUTCOME}: {outcome}"));
     }
     if let Some(reason) = mv.reason.map(str::trim).filter(|r| !r.is_empty()) {
         parts.push(reason.to_string());

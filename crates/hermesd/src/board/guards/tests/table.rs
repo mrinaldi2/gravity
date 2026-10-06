@@ -240,11 +240,11 @@ const ROWS: &[Row] = &[
         expect: &["move.daemon_only"],
     },
     Row {
-        rule: "Doing/Review/Verify → Done: spike or non-code chore, outcome linked",
+        rule: "Doing/Review/Verify → Done: spike or non-code chore, outcome linked, lead or another reviewer",
         from: Cat::Review,
         to: Cat::Done,
         ok: |c| {
-            c.who = bot("dev", &[Role::Dev]);
+            c.who = bot("lead", LEAD);
             c.item.item_type = ItemType::Chore;
             c.ctx.links.push(link(LinkKind::Artifact, "dev"));
         },

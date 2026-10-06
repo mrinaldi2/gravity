@@ -92,13 +92,36 @@ pub(super) fn conditions(
     }
 }
 
+/// A spike, or a chore, that has never had a branch or PR linked: the work
+/// that closes on its outcome rather than in a release (H-154). Code linked
+/// once, even since unlinked or before a retype, keeps the release path
+/// (ARCH-R62 M1).
+pub(super) fn closes_on_outcome(item: &Item, ctx: &Context) -> bool {
+    let had_code = ctx.ever_had_code || ctx.has_link(&[LinkKind::Branch, LinkKind::Pr]);
+    matches!(item.item_type, ItemType::Spike | ItemType::Chore) && !had_code
+}
+
+/// Inbox/Ready → Done for work that closes on its outcome: not a release
+/// matter, so it is told how to get there rather than "daemon only".
+pub(super) fn closes_too_early(item: &Item, mv: &Move<'_>, ctx: &Context) -> bool {
+    mv.to.category == Cat::Done
+        && matches!(item.category, Cat::Inbox | Cat::Ready)
+        && closes_on_outcome(item, ctx)
+}
+
+pub(super) fn not_started() -> Unmet {
+    unmet(
+        "done.not_started",
+        "A spike or a chore without code reaches Done from Doing, Review or Verify.",
+        Some("Move it to Verify with its outcome linked; the lead or a reviewer closes it."),
+    )
+}
+
 /// Doing/Review/Verify → Done: a spike, or a chore without code, with its
 /// outcome linked.
 pub(super) fn finish(item: &Item, ctx: &Context) -> Vec<Unmet> {
     let mut out = Vec::new();
-    let chore_without_code =
-        item.item_type == ItemType::Chore && !ctx.has_link(&[LinkKind::Branch, LinkKind::Pr]);
-    if item.item_type != ItemType::Spike && !chore_without_code {
+    if !closes_on_outcome(item, ctx) {
         out.push(unmet(
             "done.flow",
             "Only spikes and chores without code skip the release.",

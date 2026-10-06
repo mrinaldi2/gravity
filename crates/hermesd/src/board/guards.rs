@@ -102,12 +102,26 @@ pub struct Context {
     /// The bots holding an open task linked to the item, from the lead or
     /// the owner.
     pub task_holders: Vec<String>,
+    /// A branch or PR was linked at some point, as the item's history says,
+    /// even if it has since been unlinked (ARCH-R62 M1): such work takes the
+    /// release path whatever its type is now.
+    pub ever_had_code: bool,
 }
 
 impl Context {
     fn has_link(&self, kinds: &[LinkKind]) -> bool {
         self.links.iter().any(|l| kinds.contains(&l.kind))
     }
+}
+
+/// The outcome a spike or a chore without code closes on: its newest
+/// artifact link (H-154).
+pub fn outcome_link(ctx: &Context) -> Option<&str> {
+    ctx.links
+        .iter()
+        .filter(|l| l.kind == LinkKind::Artifact)
+        .max_by_key(|l| l.at)
+        .map(|l| l.target.as_str())
 }
 
 /// A requested move.
@@ -216,6 +230,9 @@ pub fn evaluate(item: &Item, mv: &Move<'_>, who: &Who, ctx: &Context) -> Vec<Unm
         return Vec::new();
     }
     let rule = rule(item.category, mv.to.category);
+    if rule == Rule::Release && conditions::closes_too_early(item, mv, ctx) {
+        return vec![conditions::not_started()];
+    }
     if rule == Rule::Release {
         return vec![unmet(
             "move.daemon_only",
@@ -265,9 +282,11 @@ fn refused(rule: Rule, item: &Item, who: &Who, ctx: &Context) -> Option<&'static
         ),
         Rule::Package => (who.has(Role::Devops), "DevOps"),
         Rule::Reject => (who.leads() || who.verifies(item), "a tester or the lead"),
+        // A spike or a chore without code closes on someone else's word
+        // (H-154, ARCH-R62 M2): the lead or a reviewer, never the one who did it.
         Rule::Finish => (
-            assignee || who.reviews(item, ctx),
-            "the assignee or a reviewer",
+            (who.leads() || who.reviews(item, ctx)) && !assignee,
+            "the lead or a reviewer who isn't the assignee",
         ),
         Rule::Release | Rule::Unlisted => (false, "the owner"),
     };
