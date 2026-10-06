@@ -108,6 +108,8 @@ pub fn spawn_workers(app: &Arc<AppState>) {
     crate::quiesce::spawn_deadman(app.clone());
     crate::peer::mirror::spawn(app.clone());
     crate::peer::spawn_board_relay(app.clone());
+    // Grants for linked computers still waiting from before this start (H-163).
+    crate::decisions::grants_peer::spawn_sweep(app.clone());
     crate::overview::spawn(app.clone());
     crate::peer::spawn_dialers(app);
 

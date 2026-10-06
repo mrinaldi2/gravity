@@ -16,6 +16,11 @@ use crate::events::Push;
 /// artifacts is the slowest frame there is, and a tailnet hop is fast.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// A request whose link went away before the answer: worth sending again.
+pub const LINK_CLOSED: &str = "peer link closed";
+/// A request the peer never answered in time: worth sending again.
+pub const NO_ANSWER: &str = "peer did not answer";
+
 /// Why a request to a peer did not produce a result.
 #[derive(Debug)]
 pub enum PeerError {
@@ -145,10 +150,10 @@ impl PeerHub {
         }
         let response = match tokio::time::timeout(REQUEST_TIMEOUT, rx).await {
             Ok(Ok(response)) => response,
-            Ok(Err(_)) => return Err(PeerError::Rejected("peer link closed".to_string())),
+            Ok(Err(_)) => return Err(PeerError::Rejected(LINK_CLOSED.to_string())),
             Err(_) => {
                 lock_pending(&pending).remove(&req_id);
-                return Err(PeerError::Rejected("peer did not answer".to_string()));
+                return Err(PeerError::Rejected(NO_ANSWER.to_string()));
             }
         };
         if response.get("ok").and_then(Value::as_bool) == Some(true) {
@@ -211,6 +216,13 @@ impl PeerHub {
         tokio::spawn(super::browser::link_up(app.clone(), peer_id.clone()));
         tokio::spawn(super::board::link_up(app.clone(), peer_id.clone()));
         tokio::spawn(crate::overview::link_up(app.clone(), peer_id.clone()));
+        {
+            // Grants that waited for this computer (H-163).
+            let (app, peer_id) = (app.clone(), peer_id.clone());
+            tokio::spawn(async move {
+                crate::decisions::grants_peer::deliver(&app, Some(&peer_id)).await;
+            });
+        }
 
         // Events are applied in the order they were sent: a roster, then a
         // newer one, must not land the other way round.

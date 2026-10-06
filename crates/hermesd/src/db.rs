@@ -18,6 +18,7 @@ pub use decisions_edit::DecisionEdit;
 pub use decisions_list::DecisionFilter;
 pub use overview::LatestSummary;
 pub use owner_threads::{Asked, OwnerQuestion};
+pub use peer_grants::{GrantEnd, GrantRuling, PeerGrant};
 pub use quiesce::{NewQuiesce, Quiesce};
 pub use release_life::NewReleaseTest;
 pub use releases::NewRelease;
@@ -62,6 +63,7 @@ mod owner_actions;
 mod owner_threads;
 #[cfg(test)]
 mod owner_threads_tests;
+mod peer_grants;
 mod peers;
 mod permissions;
 mod project_links;
