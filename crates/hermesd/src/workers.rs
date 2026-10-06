@@ -271,7 +271,15 @@ fn salvaged(app: &Arc<AppState>, bot: &bus::Bot) -> bool {
         }
         if matches!(saved, repo::Salvaged::Failed(_)) {
             Workers::set(&app.workers.salvage_failed).insert(bot.id.clone());
-        } else if let Err(error) = std::fs::write(&marker, "") {
+        } else if let Err(error) = marker
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("no workspace"))
+            .and_then(|dir| {
+                // Through no link the worker left at the name (H-182).
+                let name = std::path::Path::new(SALVAGED_MARKER);
+                crate::paths::no_follow::create_new(dir, name, b"").map(drop)
+            })
+        {
             tracing::warn!(bot_id = %bot.id, %error, "could not mark a worker salvaged");
         }
         Workers::set(&app.workers.salvaging).remove(&bot.id);

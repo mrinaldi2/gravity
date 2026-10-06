@@ -144,6 +144,9 @@ fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
     if let Some(reason) = reads_tree(name, rest, &args, scope, ctx) {
         return Some(reason);
     }
+    if let Some(reason) = super::links::check(name, &args, scope, ctx) {
+        return Some(reason);
+    }
     let targets: Vec<String> = match name {
         "sh" | "bash" | "zsh" | "dash" | "ksh" => {
             let script = rest

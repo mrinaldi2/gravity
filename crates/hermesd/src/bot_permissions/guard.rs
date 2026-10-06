@@ -46,6 +46,7 @@ mod cargo_alias;
 mod commands;
 mod full;
 mod git;
+mod links;
 mod path_key;
 pub(super) mod paths;
 mod served;

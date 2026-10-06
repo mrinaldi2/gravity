@@ -54,7 +54,9 @@ exit 0
 "#,
         wait = crate::approval::HOOK_TIMEOUT_SECS - 10
     );
-    std::fs::write(&script, body)?;
+    // Through no link the bot planted at `.claude` or the script (H-182).
+    let rel = script.strip_prefix(workspace)?;
+    super::no_follow::write(workspace, rel, body.as_bytes())?;
     let events = [
         "SessionStart",
         "UserPromptSubmit",
