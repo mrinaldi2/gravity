@@ -58,13 +58,21 @@ fn install_and_quiesce_allow_this_binary_by_its_exact_path() {
         );
     }
     assert!(
-        !allow.iter().any(|r| r.contains("(hermesd ") || r.contains("(& hermesd ")),
+        !allow
+            .iter()
+            .any(|r| r.contains("(hermesd ") || r.contains("(& hermesd ")),
         "no bare hermesd: {allow:?}"
     );
     let without = rules(&input(PermissionProfile::Trusted, &[]), "allow");
-    assert!(!without.iter().any(|r| r.contains("hermesd")), "{without:?}");
+    assert!(
+        !without.iter().any(|r| r.contains("hermesd")),
+        "{without:?}"
+    );
     let standard = rules(&input(PermissionProfile::Standard, &extras), "allow");
-    assert!(!standard.iter().any(|r| r.contains("hermesd")), "{standard:?}");
+    assert!(
+        !standard.iter().any(|r| r.contains("hermesd")),
+        "{standard:?}"
+    );
 }
 
 /// B8 (H-020 §2.6 b): only DevOps runs installers or `service install` by
@@ -352,7 +360,10 @@ fn the_quiesce_extra_allows_only_hermesd_quiesce() {
         "allow",
     );
     let added: Vec<String> = with.into_iter().filter(|r| !without.contains(r)).collect();
-    assert_eq!(added, super::exact::rules(Path::new(APP_HERMESD), "quiesce"));
+    assert_eq!(
+        added,
+        super::exact::rules(Path::new(APP_HERMESD), "quiesce")
+    );
 }
 
 /// H-117 X2, X3: `release_main` allows exactly the daemon-checked land, and

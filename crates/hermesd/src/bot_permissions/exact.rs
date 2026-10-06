@@ -33,7 +33,11 @@ pub(super) fn rules(hermesd: &Path, sub: &str) -> Vec<String> {
         // Git Bash spells it with `/`; PowerShell calls a quoted path with `&`.
         let slashed = path.replace('\\', "/");
         rules.push(format!("Bash(\"{slashed}\" {sub} *)"));
-        rules.extend(spellings.iter().map(|p| format!("PowerShell(& {p} {sub} *)")));
+        rules.extend(
+            spellings
+                .iter()
+                .map(|p| format!("PowerShell(& {p} {sub} *)")),
+        );
     }
     rules
 }
@@ -89,7 +93,12 @@ mod tests {
 
     #[test]
     fn a_path_a_rule_would_read_as_a_pattern_gets_no_rule() {
-        for odd in ["/opt/*/hermesd", "/opt/a(b)/hermesd", "/opt/it's/hermesd", ""] {
+        for odd in [
+            "/opt/*/hermesd",
+            "/opt/a(b)/hermesd",
+            "/opt/it's/hermesd",
+            "",
+        ] {
             assert!(rules(Path::new(odd), "quiesce").is_empty(), "{odd}");
         }
     }

@@ -16,8 +16,15 @@ use super::{deploy, load, machines, Caller};
 
 /// The release's builds for this computer's open deployment, as
 /// `install_release` answers them, when `me` is the project's DevOps.
-pub fn devops_here(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow::Result<Value> {
-    me.require(Role::Devops, "pause this computer for an install it doesn't hold")?;
+pub fn devops_here(
+    app: &Arc<AppState>,
+    me: &Caller<'_>,
+    release_id: &str,
+) -> anyhow::Result<Value> {
+    me.require(
+        Role::Devops,
+        "pause this computer for an install it doesn't hold",
+    )?;
     let (release, here) = app.db.board_read(|t| {
         Ok((
             load(t, &me.bot.project_id, release_id)?,

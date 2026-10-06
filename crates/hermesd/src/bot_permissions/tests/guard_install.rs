@@ -43,7 +43,10 @@ fn a_pending_install_refuses_vms_and_vr_runs_only() {
     std::fs::write(&flag, r#"{"why":"Tester is installing a release"}"#).unwrap();
     for command in starts {
         let why = call(command).unwrap_or_default();
-        assert!(why.contains("Tester is installing a release"), "{command}: {why}");
+        assert!(
+            why.contains("Tester is installing a release"),
+            "{command}: {why}"
+        );
     }
     for command in ["colima stop", "colima status", "cargo test", "git status"] {
         assert_eq!(call(command), None, "{command}");

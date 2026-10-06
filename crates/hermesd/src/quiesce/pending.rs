@@ -108,6 +108,10 @@ mod tests {
             .open(&file)
             .and_then(|f| f.set_modified(old))
             .expect("age it");
-        assert_eq!(blocking(dir.path()), None, "a daemon that stopped refreshing");
+        assert_eq!(
+            blocking(dir.path()),
+            None,
+            "a daemon that stopped refreshing"
+        );
     }
 }

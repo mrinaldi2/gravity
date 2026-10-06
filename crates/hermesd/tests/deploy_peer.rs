@@ -32,15 +32,27 @@ async fn the_pcs_tester_pauses_the_pc_not_the_boards_home() {
     .await;
     // Its own computer's extras, as the owner grants them there.
     win.db
-        .set_bot_permission_extras(&tester, &[PermissionExtra::Install, PermissionExtra::Quiesce])
+        .set_bot_permission_extras(
+            &tester,
+            &[PermissionExtra::Install, PermissionExtra::Quiesce],
+        )
         .unwrap();
 
-    let builds = b.tester.call("install_release", json!({"release_id": id})).await;
+    let builds = b
+        .tester
+        .call("install_release", json!({"release_id": id}))
+        .await;
     let command = builds["command"].as_str().unwrap_or_default();
-    assert!(command.ends_with(&format!(" release install {id}")), "{builds}");
+    assert!(
+        command.ends_with(&format!(" release install {id}")),
+        "{builds}"
+    );
     let started = b
         .tester
-        .call("install_quiesce", json!({"release_id": id, "action": "start"}))
+        .call(
+            "install_quiesce",
+            json!({"release_id": id, "action": "start"}),
+        )
         .await;
     assert_eq!(started["quiesce"]["exempt_bot"], json!(tester), "{started}");
     assert_eq!(started["quiesce"]["reason"], "install of 0.16.0");
@@ -53,12 +65,18 @@ async fn the_pcs_tester_pauses_the_pc_not_the_boards_home() {
                        "bot_id": tester, "tool": "install_quiesce",
                        "args": {"release_id": id, "action": "start"}});
     let refused = win.peers.request(&link.peer_id, frame).await;
-    assert!(format!("{refused:?}").contains("doesn't pause itself"), "{refused:?}");
+    assert!(
+        format!("{refused:?}").contains("doesn't pause itself"),
+        "{refused:?}"
+    );
     assert!(mac.db.open_quiesce().unwrap().is_none());
 
     let resumed = b
         .tester
-        .call("install_quiesce", json!({"release_id": id, "action": "resume"}))
+        .call(
+            "install_quiesce",
+            json!({"release_id": id, "action": "resume"}),
+        )
         .await;
     assert_eq!(resumed["resumed"]["outcome"], "aborted", "{resumed}");
 }
