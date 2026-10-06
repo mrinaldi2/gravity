@@ -139,6 +139,18 @@ pub struct Release {
     pub deployments: Vec<ReleaseDeployment>,
     /// Its own events and those of packages that succeeded it.
     pub events: Vec<ReleaseEvent>,
+    /// Its items' criteria proven only after install (ARCH-R53 S1): what the
+    /// owner approves unproven.
+    pub post_install: Vec<PostInstallAc>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PostInstallAc {
+    pub item_id: String,
+    pub index: u32,
+    pub text: String,
+    pub checked: bool,
+    pub checked_by: Option<String>,
 }
 
 impl Release {
@@ -200,6 +212,10 @@ impl Release {
                 "started_at": d.started_at, "at": d.at,
             })).collect::<Vec<_>>(),
             "events": self.events.iter().map(ReleaseEvent::to_json).collect::<Vec<_>>(),
+            "post_install": self.post_install.iter().map(|a| json!({
+                "item_id": a.item_id, "index": a.index, "text": a.text,
+                "checked": a.checked, "checked_by": a.checked_by,
+            })).collect::<Vec<_>>(),
         })
     }
 }

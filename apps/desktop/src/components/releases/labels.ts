@@ -59,6 +59,12 @@ export function eventLine(event: ReleaseEvent, botName: BotName): string {
     const what = `${who} cancelled ${event.release_name}, the package that was going to replace this one.`;
     return event.note ? `${what} Their note: “${event.note}”.` : what;
   }
+  if (event.kind === "lead_ticked") {
+    const d = event.detail ?? {};
+    const verb = d.passed === false ? "marked failed" : "ticked";
+    const what = `${who} ${verb} “${d.text ?? "a criterion"}” on ${d.item_id ?? "an item"} on the lead's own evidence.`;
+    return event.note ? `${what} Evidence: “${event.note}”.` : what;
+  }
   const what = `${who}: ${event.kind} ${event.release_name}`;
   return event.note ? `${what}: ${event.note}` : what;
 }

@@ -33,6 +33,7 @@ pub mod land;
 pub mod lifecycle;
 pub mod model;
 pub mod package;
+pub mod post_install;
 pub mod publish;
 pub mod rule;
 pub mod serve;

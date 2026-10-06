@@ -9,6 +9,21 @@
   color: var(--text-dim);
 }
 
+.release-post-install {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.release-post-install p {
+  margin: 0 0 2px;
+}
+
+.release-post-install ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .releases-view {
   display: grid;
   grid-template-columns: 300px 1fr;

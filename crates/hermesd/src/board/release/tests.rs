@@ -66,6 +66,7 @@ fn release() -> Release {
         tests: Vec::new(),
         deployments: Vec::new(),
         events: Vec::new(),
+        post_install: Vec::new(),
     }
 }
 

@@ -295,6 +295,49 @@ describe("ReleaseReview", () => {
     ).toBeInTheDocument();
   });
 
+  it("lists what is approved unproven, and a lead's own-evidence tick", () => {
+    setup(
+      release({
+        status: "deploying",
+        post_install: [
+          {
+            item_id: "H-017",
+            index: 1,
+            text: "survives a reboot",
+            checked: false,
+            checked_by: null,
+          },
+          {
+            item_id: "H-020",
+            index: 0,
+            text: "installs per machine",
+            checked: true,
+            checked_by: "bot:tester",
+          },
+        ],
+        events: [
+          {
+            release_id: "rel-1",
+            release_name: "0.16.0",
+            related_id: null,
+            kind: "lead_ticked",
+            actor: "ops",
+            note: "CI run 812",
+            detail: { item_id: "H-017", text: "survives a reboot", passed: true },
+            at: "2026-10-05T11:00:00Z",
+          },
+        ],
+      }),
+    );
+    const unproven = screen.getByRole("region", { name: "Checked after install" });
+    expect(unproven).toHaveTextContent("so you approve these unproven");
+    expect(unproven).toHaveTextContent("Not checked yet: H-017 survives a reboot");
+    expect(unproven).toHaveTextContent("Checked: H-020 installs per machine · Tester");
+    expect(screen.getByRole("list", { name: "What happened" })).toHaveTextContent(
+      "DevOps ticked “survives a reboot” on H-017 on the lead's own evidence. Evidence: “CI run 812”.",
+    );
+  });
+
   it("words each item's ruling as the choice was made: included or left out", async () => {
     const { user } = setup(
       release({

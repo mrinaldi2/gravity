@@ -57,6 +57,7 @@ fn release_row(r: &Row<'_>) -> rusqlite::Result<Release> {
         tests: Vec::new(),
         deployments: Vec::new(),
         events: Vec::new(),
+        post_install: Vec::new(),
     })
 }
 
@@ -134,6 +135,7 @@ fn release_in(conn: &Connection, id: &str) -> rusqlite::Result<Option<Release>> 
         })?
         .collect::<Result<_, _>>()?;
     release.events = super::release_life::events_in(conn, id)?;
+    release.post_install = super::release_life::post_install_in(conn, id)?;
     Ok(Some(release))
 }
 

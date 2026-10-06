@@ -16,6 +16,7 @@ use crate::board::model::{
     ColumnCategory, Item, ItemType, LinkKind, Platform, Priority, Size, Unmet,
 };
 use crate::board::moves::load_in;
+use crate::board::release::post_install;
 use crate::db::{BoardTx, ItemEdit, NewItem, Write};
 
 use super::board::{bot_id, conflict, item_out, out, own_item, published, refused, written, Me};
@@ -292,13 +293,15 @@ fn check_ac(app: &Arc<AppState>, me: &Me, req: c::ItemCheckAc) -> anyhow::Result
     let passed = c::VerificationResult::try_from(req.result) == Ok(c::VerificationResult::Pass);
     let actor = me.actor();
     let evidence = req.evidence.as_deref().map(str::trim);
-    // The lead's evidence goes on the item as a comment, in the same write.
+    // The lead's evidence goes on the item as a comment and into its open
+    // packages' history, in the same write (ARCH-R53 S2).
     let lead_check = Cell::new(false);
+    let proved_post_install = Cell::new(false);
     let guard = |item: &Item, who: &Who| {
         lead_check.set(guards::needs_evidence(item, who));
         guards::check_ac(item, who, evidence)
     };
-    guarded(app, me, &req.id, req.expected_version, guard, |t| {
+    let reply = guarded(app, me, &req.id, req.expected_version, guard, |t| {
         let write = t.check_ac(
             &req.id,
             req.expected_version,
@@ -314,29 +317,37 @@ fn check_ac(app: &Arc<AppState>, me: &Me, req: c::ItemCheckAc) -> anyhow::Result
                 req.index + 1
             );
             t.add_item_comment(&req.id, &body, None, &actor)?;
+            post_install::record_lead_tick(t, &req.id, req.index, passed, evidence, &me.bot.id)?;
+        }
+        if let Write::Done(item) = &write {
+            proved_post_install.set(
+                passed
+                    && item
+                        .acceptance_criteria
+                        .iter()
+                        .any(|a| a.idx == req.index && a.post_install),
+            );
         }
         Ok(write)
-    })
+    })?;
+    if proved_post_install.get() {
+        post_install::tell_when_proven(app, &crate::mcp::bot_sender(&me.bot), &req.id)?;
+    }
+    Ok(reply)
 }
 
 fn flag_ac(app: &Arc<AppState>, me: &Me, req: c::ItemFlagAc) -> anyhow::Result<Value> {
     let actor = me.actor();
-    guarded(
-        app,
-        me,
-        &req.id,
-        req.expected_version,
-        guards::flag_ac,
-        |t| {
-            t.flag_ac(
-                &req.id,
-                req.expected_version,
-                req.index,
-                req.post_install,
-                &actor,
-            )
-        },
-    )
+    let guard = |item: &Item, who: &Who| guards::flag_ac(item, who, req.post_install);
+    guarded(app, me, &req.id, req.expected_version, guard, |t| {
+        t.flag_ac(
+            &req.id,
+            req.expected_version,
+            req.index,
+            req.post_install,
+            &actor,
+        )
+    })
 }
 
 /// An item_move reply. Into Verify it lists the criteria nobody has ticked,

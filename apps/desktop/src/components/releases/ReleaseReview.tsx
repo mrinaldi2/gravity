@@ -13,6 +13,7 @@ import {
   PauseDialog,
   RejectDialog,
 } from "./ReleaseDialogs";
+import { PostInstall } from "./PostInstall";
 import type { ReturnTo } from "./ReleaseDialogs";
 import { TestSummary } from "./ReleaseSections";
 import type { LeftOut } from "./ReleaseSections";
@@ -127,6 +128,7 @@ export default function ReleaseReview({
       <p className="release-meta">{sourceLine(release, version)}</p>
       <Banner release={release} actions={actions} canControl={canControl} />
       <ReviewEvents release={release} botName={botName} />
+      <PostInstall release={release} botName={botName} />
       <TestSummary release={release} botName={botName} />
       <ReviewTabs
         release={release}

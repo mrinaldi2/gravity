@@ -32,10 +32,19 @@ pub fn needs_evidence(item: &Item, who: &Who) -> bool {
 }
 
 /// Flagging an acceptance criterion post-install (H-116): the lead (or the
-/// owner) until the item is done; its assignee until it reaches Verify.
-pub fn flag_ac(item: &Item, who: &Who) -> Vec<Unmet> {
+/// owner) until the item is done; its assignee until it reaches Verify. Past
+/// Verify the item is in a submitted package, which skipped its flagged
+/// criteria, so the flag can't be cleared there (ARCH-R53 M1).
+pub fn flag_ac(item: &Item, who: &Who, post_install: bool) -> Vec<Unmet> {
     if matches!(item.category, Cat::Done | Cat::Cancelled) {
         return vec![unmet("ac.locked", "It is closed.", None)];
+    }
+    if !post_install && matches!(item.category, Cat::Approval | Cat::Deploying) {
+        return vec![unmet(
+            "ac.post_install_locked",
+            "It is in a submitted package, which skipped this criterion as post-install.",
+            Some("Tick it with item_check_ac once it is installed."),
+        )];
     }
     let early = !matches!(item.category, Cat::Verify | Cat::Approval | Cat::Deploying);
     if who.leads() || (early && who.is(item.assignee.as_deref())) {

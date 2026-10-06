@@ -7,7 +7,7 @@ mod common;
 
 use common::board::version;
 use common::releases::{releases, rule};
-use common::tasks::error_text;
+use common::tasks::{drain_until, error_text};
 use common::team::{get, item, team, OWNER};
 use common::WsClient;
 use hermesd::db::{ItemEdit, Write};
@@ -74,6 +74,13 @@ async fn a_post_install_criterion_skips_submit_and_holds_done() {
         .call("release_submit", json!({"release_id": id}))
         .await["release"]
         .clone();
+    // The owner sees what is approved unproven (S1).
+    assert_eq!(
+        release["post_install"],
+        json!([{"item_id": item, "index": 1, "text": "survives a reboot",
+                "checked": false, "checked_by": null}]),
+        "{release}"
+    );
     let mut owner = WsClient::connect(&r.pair.d).await;
     rule(
         &mut owner,
@@ -99,15 +106,40 @@ async fn a_post_install_criterion_skips_submit_and_holds_done() {
     );
     assert_eq!(r.column(&item), "deploying");
 
-    let tester = &mut r.bots[2];
-    let current = get(tester, &item).await;
-    tester
+    // In a submitted package the flag stays (ARCH-R53 M1).
+    let lead = &mut r.bots[0];
+    let current = get(lead, &item).await;
+    let raw = lead
+        .call_raw(
+            "item_flag_ac",
+            json!({"id": item, "expected_version": version(&current), "index": 1,
+                   "post_install": false}),
+        )
+        .await;
+    assert!(error_text(&raw).contains("ac.post_install_locked"), "{raw}");
+
+    // The lead ticks it on its own evidence: the package's history says so
+    // (S2), and the tester holding the deploy is told to confirm again (S3).
+    let checked = lead
         .call(
             "item_check_ac",
             json!({"id": item, "expected_version": version(&current), "index": 1,
-                   "result": "pass", "machine": "mac"}),
+                   "result": "pass", "evidence": "rebooted mac, still serving"}),
         )
         .await;
+    assert_eq!(checked["item"]["acceptance_criteria"][1]["checked"], true);
+    let told = drain_until(&mut r.bots[2], "send it again").await;
+    assert!(!told.is_empty());
+    let got = r.bots[1]
+        .call("release_get", json!({"release_id": id}))
+        .await;
+    let events = got["release"]["events"].as_array().expect("events");
+    let tick = events
+        .iter()
+        .find(|e| e["kind"] == "lead_ticked")
+        .unwrap_or_else(|| panic!("{got}"));
+    assert_eq!(tick["note"], "rebooted mac, still serving");
+    assert_eq!(tick["detail"]["text"], "survives a reboot");
     let done = r.bots[2].call("deploy_confirm", confirm).await;
     assert_eq!(done["release"]["status"], "deployed", "{done}");
     assert_eq!(r.column(&item), "done");

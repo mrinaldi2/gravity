@@ -6,7 +6,7 @@ use bus::{new_id, now};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 
-use crate::board::release::model::{ReleaseEvent, ReleaseStatus};
+use crate::board::release::model::{PostInstallAc, ReleaseEvent, ReleaseStatus};
 
 use super::board::{from_json, parse_at};
 use super::board_tx::BoardTx;
@@ -190,4 +190,25 @@ impl BoardTx<'_> {
         )?;
         Ok(())
     }
+}
+
+/// The package's items' post-install criteria, in item then criterion order.
+pub(super) fn post_install_in(conn: &Connection, id: &str) -> rusqlite::Result<Vec<PostInstallAc>> {
+    conn.prepare(
+        "SELECT a.item_id, a.idx, a.text, a.checked, a.checked_by
+         FROM release_item ri
+         JOIN item_ac a ON a.item_id = ri.item_id
+         JOIN item_ac_post_install p ON p.item_id = a.item_id AND p.text = a.text
+         WHERE ri.release_id = ?1 ORDER BY a.item_id, a.idx",
+    )?
+    .query_map(params![id], |r| {
+        Ok(PostInstallAc {
+            item_id: r.get(0)?,
+            index: r.get(1)?,
+            text: r.get(2)?,
+            checked: r.get(3)?,
+            checked_by: r.get(4)?,
+        })
+    })?
+    .collect()
 }

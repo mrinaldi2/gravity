@@ -31,7 +31,22 @@ export interface ReleaseEvent {
   /** A bot id, `owner` or `device:<id>`. */
   readonly actor: string;
   readonly note: string | null;
+  /** What the kind carries; `lead_ticked`: the item and criterion. */
+  readonly detail?: {
+    readonly item_id?: string;
+    readonly text?: string;
+    readonly passed?: boolean;
+  };
   readonly at: string;
+}
+
+/** A criterion of a packaged item proven only after install (H-116). */
+interface PostInstallCriterion {
+  readonly item_id: string;
+  readonly index: number;
+  readonly text: string;
+  readonly checked: boolean;
+  readonly checked_by: string | null;
 }
 
 type Verdict = "pending" | "ship" | "hold" | "rework";
@@ -108,6 +123,8 @@ export interface Release {
   readonly deployments: readonly ReleaseDeployment[];
   /** Its own events and those of packages that would have succeeded it. */
   readonly events: readonly ReleaseEvent[];
+  /** Its items' post-install criteria: what the owner approves unproven. */
+  readonly post_install?: readonly PostInstallCriterion[];
   /** Whether this connection may rule on it (the approve grant, on its home). */
   readonly can_rule?: boolean;
   /** When it can't: the computer where the owner can. */
