@@ -121,6 +121,7 @@ fn the_plan_is_not_part_of_the_frozen_hash() {
         item_id: "H-1".into(),
         title: "One".into(),
         column_key: "done".into(),
+        column_name: "Done".into(),
         category: "done".into(),
         assignee: None,
         blocked: false,

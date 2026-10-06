@@ -59,6 +59,8 @@ pub struct PlanItem {
     pub item_id: String,
     pub title: String,
     pub column_key: String,
+    /// The board's own name for the column, e.g. "Awaiting owner".
+    pub column_name: String,
     pub category: String,
     pub assignee: Option<String>,
     pub blocked: bool,
@@ -261,6 +263,7 @@ impl Release {
             "deploys_set_by": self.targets.deploys_set_by,
             "plan": self.plan.iter().map(|p| json!({
                 "item_id": p.item_id, "title": p.title, "column_key": p.column_key,
+                "column_name": p.column_name,
                 "category": p.category, "assignee": p.assignee, "blocked": p.blocked,
                 "ac_checked": p.ac_checked, "ac_total": p.ac_total, "ready": p.ready,
             })).collect::<Vec<_>>(),

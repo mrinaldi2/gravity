@@ -107,6 +107,8 @@ export interface PlanItem {
   readonly item_id: string;
   readonly title: string;
   readonly column_key: string;
+  /** The board's own name for the column, e.g. "Awaiting owner". */
+  readonly column_name?: string;
   /** The column's category: `doing`, `verify`, `done`… */
   readonly category: string;
   /** The assignee's bot id. */

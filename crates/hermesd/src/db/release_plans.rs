@@ -27,6 +27,7 @@ pub(super) fn complete(conn: &Connection, release: &mut Release) -> rusqlite::Re
             plan.push(PlanItem {
                 item_id: item.id.clone(),
                 title: item.title.clone(),
+                column_name: column_name(conn, &release.project_id, &item.column_key)?,
                 column_key: item.column_key.clone(),
                 category: item.category.as_str().to_string(),
                 assignee: item.assignee.clone(),
@@ -52,6 +53,18 @@ pub fn is_ready(category: ColumnCategory) -> bool {
             | ColumnCategory::Deploying
             | ColumnCategory::Done
     )
+}
+
+/// The board's name for a column, or its key when the board has none.
+fn column_name(conn: &Connection, project_id: &str, key: &str) -> rusqlite::Result<String> {
+    Ok(conn
+        .query_row(
+            "SELECT name FROM board_column WHERE project_id = ?1 AND key = ?2",
+            params![project_id, key],
+            |r| r.get(0),
+        )
+        .optional()?
+        .unwrap_or_else(|| key.to_string()))
 }
 
 fn is_planned(conn: &Connection, release_id: &str) -> rusqlite::Result<bool> {
