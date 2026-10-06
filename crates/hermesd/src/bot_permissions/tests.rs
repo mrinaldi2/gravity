@@ -323,3 +323,32 @@ fn the_quiesce_extra_allows_only_hermesd_quiesce() {
         ["Bash(hermesd quiesce *)", "PowerShell(hermesd quiesce *)"]
     );
 }
+
+/// H-117 X2, X3: `release_main` allows exactly the daemon-checked land, and
+/// `build_installers` exactly the command, never the script it runs.
+#[test]
+fn landing_and_building_installers_allow_only_their_commands() {
+    let without = rules(&input(PermissionProfile::Trusted, &[]), "allow");
+    let added = |extra| {
+        let with = rules(&input(PermissionProfile::Trusted, &[extra]), "allow");
+        with.into_iter()
+            .filter(|r| !without.contains(r))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        added(PermissionExtra::ReleaseMain),
+        [
+            "Bash(hermesd release land *)",
+            "PowerShell(hermesd release land *)"
+        ]
+    );
+    let build = added(PermissionExtra::BuildInstallers);
+    assert_eq!(
+        build,
+        [
+            "Bash(hermesd release build-installer *)",
+            "PowerShell(hermesd release build-installer *)"
+        ]
+    );
+    assert!(!build.iter().any(|r| r.contains("build-nsis")));
+}

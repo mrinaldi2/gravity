@@ -55,16 +55,20 @@ pub enum PermissionExtra {
     /// Pause every project on this computer for an install (H-117). The
     /// daemon also requires DevOps or `install`, and an approved release.
     Quiesce,
+    /// Build the Windows installer with `hermesd release build-installer`,
+    /// which runs the repo's own script only as committed (H-117 X3, H-104).
+    BuildInstallers,
 }
 
 impl PermissionExtra {
-    pub const ALL: [PermissionExtra; 6] = [
+    pub const ALL: [PermissionExtra; 7] = [
         Self::Publish,
         Self::DaemonRestart,
         Self::AppRestart,
         Self::Install,
         Self::ReleaseMain,
         Self::Quiesce,
+        Self::BuildInstallers,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -75,6 +79,7 @@ impl PermissionExtra {
             Self::Install => "install",
             Self::ReleaseMain => "release_main",
             Self::Quiesce => "quiesce",
+            Self::BuildInstallers => "build_installers",
         }
     }
 

@@ -9,7 +9,8 @@ use crate::config::Config;
 
 const USAGE: &str = "usage:
   hermesd release publish <release> <file> [--platform <p>] [--version <v>] [--bundle-id <id>]
-  hermesd release install <release> [--dry-run]";
+  hermesd release install <release> [--dry-run | --status]
+  hermesd release land <release> [--commit <sha>] [--branch <b>] [--tag <t>] [--dry-run]";
 
 const FLAGS: [&str; 3] = ["--platform", "--version", "--bundle-id"];
 
@@ -20,6 +21,8 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
         Some("install") => return super::install::run(cfg, &args[1..]).await,
         // The install job's app swap, never a bot's session (H-117 X1).
         Some("apply-app") => return super::install::apply::run(cfg, &args[1..]),
+        // DevOps lands an approved release on main and tags it (X2).
+        Some("land") => return super::land::run(cfg, &args[1..]).await,
         _ => anyhow::bail!("{USAGE}"),
     }
     let (positional, flags) = split(&args[1..])?;

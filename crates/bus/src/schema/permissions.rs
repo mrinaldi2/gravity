@@ -37,15 +37,16 @@ DROP TABLE bot_permission_extra;
 ALTER TABLE bot_permission_extra_new RENAME TO bot_permission_extra;
 "#;
 
-/// `quiesce` (H-117) joins the extras the same way `release_main` did: SQLite
-/// can't alter a CHECK, so the table is rebuilt with one that names every
-/// extra, keeping every row. Safe to run again, as the one above.
+/// `quiesce` and `build_installers` (H-117) join the extras the same way
+/// `release_main` did: SQLite can't alter a CHECK, so the table is rebuilt
+/// with one that names every extra, keeping every row. Safe to run again,
+/// as the one above.
 pub(super) const MIGRATION_PERMISSION_EXTRAS_QUIESCE: &str = r#"
 DROP TABLE IF EXISTS bot_permission_extra_new;
 CREATE TABLE bot_permission_extra_new (
     bot_id TEXT NOT NULL REFERENCES bot(id),
     extra  TEXT NOT NULL CHECK(extra IN ('publish', 'daemon_restart', 'app_restart', 'install',
-                                         'release_main', 'quiesce')),
+                                         'release_main', 'quiesce', 'build_installers')),
     PRIMARY KEY (bot_id, extra)
 );
 INSERT OR IGNORE INTO bot_permission_extra_new(bot_id, extra) SELECT bot_id, extra FROM bot_permission_extra;

@@ -159,7 +159,11 @@ pub(super) async fn serve_connection<S>(
         };
         let reply = match super::hook::serve(&app, bot_id, &request).await {
             Some(reply) => Some(reply),
-            None => crate::mcp::rpc_response(&app, bot_id, &request).await,
+            // `hermesd release land` / `build-installer` (H-117 X2, X3).
+            None => match crate::board::release::gates::serve(&app, bot_id, &request) {
+                Some(reply) => Some(reply),
+                None => crate::mcp::rpc_response(&app, bot_id, &request).await,
+            },
         };
         if let Some(reply) = reply {
             if send(&mut writer, &reply).await.is_err() {

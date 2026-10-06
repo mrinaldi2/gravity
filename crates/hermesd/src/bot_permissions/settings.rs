@@ -310,8 +310,19 @@ fn extra_allow(extra: PermissionExtra, workspace: &Path) -> Vec<String> {
             "Bash(scripts/dev.sh *)".to_string(),
             "Bash(./scripts/dev.sh *)".to_string(),
         ],
-        // Lifts the main denies above; nothing to allow without review.
-        PermissionExtra::ReleaseMain => Vec::new(),
+        // Lifts the main denies above. The one push to main allowed without
+        // review is the daemon-checked land (H-117 X2): approved release,
+        // fast-forward only, never force.
+        PermissionExtra::ReleaseMain => vec![
+            "Bash(hermesd release land *)".to_string(),
+            "PowerShell(hermesd release land *)".to_string(),
+        ],
+        // Only the command, which runs the script as committed; never the
+        // script itself, which the bot could edit (H-117 X3, H-104).
+        PermissionExtra::BuildInstallers => vec![
+            "Bash(hermesd release build-installer *)".to_string(),
+            "PowerShell(hermesd release build-installer *)".to_string(),
+        ],
         // The daemon checks the extra, the role and the release again (H-117).
         PermissionExtra::Quiesce => vec![
             "Bash(hermesd quiesce *)".to_string(),
