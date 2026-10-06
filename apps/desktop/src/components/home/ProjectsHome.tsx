@@ -130,12 +130,13 @@ export default function ProjectsHome(props: ProjectsHomeProps): ReactElement {
             />
           </div>
         ) : null}
-        {overview.error !== null && !overview.loaded ? (
+        {overview.failed ? (
           <p className="home-error" role="alert">
-            Couldn't load the projects: {overview.error}
+            Couldn't load what each project needs ({overview.error}). Here is the plain list: open a
+            project to reach its bots.
           </p>
         ) : null}
-        {overview.legacy && overview.rows.length > 0 ? (
+        {overview.legacy && !overview.failed && overview.rows.length > 0 ? (
           <p className="home-legacy">
             This computer runs an older Hermes service, so projects show without their counts.
             Update it to see what needs you.

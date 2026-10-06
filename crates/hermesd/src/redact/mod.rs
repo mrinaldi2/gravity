@@ -264,9 +264,12 @@ fn mask_token_prefixes(word: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         let at_boundary = i == 0 || !bytes[i - 1].is_ascii_alphanumeric();
+        // Bytes, not `word[i..]`: `i` may fall inside a multi-byte character
+        // (`→`), and slicing there panics (H-167). Every prefix and token
+        // byte is ASCII, so the slices taken below stay on char boundaries.
         let prefix = TOKEN_PREFIXES
             .iter()
-            .find(|p| at_boundary && word[i..].starts_with(*p));
+            .find(|p| at_boundary && bytes[i..].starts_with(p.as_bytes()));
         if let Some(prefix) = prefix {
             let body = i + prefix.len();
             let end = bytes[body..]

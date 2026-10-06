@@ -6,6 +6,7 @@ import * as fx from "../../test/fixtures";
 import { HOME_NOW, overviewJson } from "../../test/homeFixtures";
 import type { AddToast } from "../../app/useToasts";
 import ProjectsHome from "./ProjectsHome";
+import { OVERVIEW_WAIT_MS } from "./useProjectsOverview";
 
 function cardAt(cards: readonly HTMLElement[], index: number): HTMLElement {
   const card = cards[index];
@@ -148,5 +149,43 @@ describe("ProjectsHome", () => {
     const card = screen.getByRole("article", { name: "Acme" });
     expect(within(card).getByText("Update needed for full info")).toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: /^Pin/ })).not.toBeInTheDocument();
+  });
+
+  // H-167: the 0.17.0 home stayed empty when the overview failed or never
+  // answered. Every project stays on the home, and opens.
+  it("shows the plain list, and says why, when the overview fails", async () => {
+    const user = userEvent.setup();
+    const daemon = daemonWithOverview().onRequest("projects_overview", () => {
+      throw new Error("the service failed on 'projects_overview'");
+    });
+    const onOpenProject = vi.fn<(projectId: string) => void>();
+    renderHome(daemon, onOpenProject);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /Couldn't load what each project needs \(the service failed on 'projects_overview'\)/,
+    );
+    expect(screen.queryByText(/older Hermes service/)).not.toBeInTheDocument();
+    const card = screen.getByRole("article", { name: "Acme" });
+    await user.click(within(card).getByRole("button", { name: "Open project" }));
+    expect(onOpenProject).toHaveBeenCalledWith("p1");
+  });
+
+  it("shows the plain list when the overview doesn't answer in time", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const daemon = daemonWithOverview();
+      const request = daemon.request.bind(daemon);
+      vi.spyOn(daemon, "request").mockImplementation((body, replyType) =>
+        body.type === "projects_overview" ? new Promise(() => {}) : request(body, replyType),
+      );
+      renderHome(daemon);
+      expect(screen.queryByRole("article", { name: "Acme" })).not.toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(OVERVIEW_WAIT_MS);
+      });
+      expect(screen.getByRole("alert")).toHaveTextContent(/didn't answer in time/);
+      expect(screen.getByRole("article", { name: "Acme" })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

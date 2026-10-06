@@ -1,7 +1,9 @@
 // The projects home's data (H-133 U1): one `projects_overview`, read again
 // when the service says a project changed. A daemon from before H-130 has no
 // such read, so the home builds plain rows from the project and bot lists and
-// marks them "Update needed for full info" (H-128 R2.1).
+// marks them "Update needed for full info" (H-128 R2.1). The same plain rows
+// stand in when the read fails or doesn't answer in time (H-167), so every
+// project, and through it every bot, stays reachable.
 
 import { create } from "@bufbuild/protobuf";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -21,10 +23,30 @@ export interface ProjectsOverviewState {
   readonly sources: readonly Source[];
   /** True when the daemon predates the overview: rows are built here, without counts. */
   readonly legacy: boolean;
+  /** True when the overview failed or didn't answer: the rows are the plain list. */
+  readonly failed: boolean;
   /** Why the last read failed, while nothing has loaded. */
   readonly error: string | null;
   readonly loaded: boolean;
   readonly pin: (projectId: string, pinned: boolean) => Promise<void>;
+}
+
+/** How long the home waits on the overview before it shows the plain list. */
+export const OVERVIEW_WAIT_MS = 8000;
+
+/** `reply`, or a failure once `ms` pass without one. */
+async function inTime<T>(reply: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error("The service didn't answer in time"));
+    }, ms);
+  });
+  try {
+    return await Promise.race([reply, late]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Rows for a daemon without `projects_overview`: names and bot counts only. */
@@ -57,7 +79,10 @@ export function useProjectsOverview(
       return;
     }
     try {
-      const reply = await client.request({ type: "projects_overview" }, "projects_overview");
+      const reply = await inTime(
+        client.request({ type: "projects_overview" }, "projects_overview"),
+        OVERVIEW_WAIT_MS,
+      );
       const overview = decodeOverview(reply.overview);
       setRows(overview.rows);
       setSources(overview.sources);
@@ -83,9 +108,20 @@ export function useProjectsOverview(
 
   const fallback = useMemo(() => legacyRows(projects, bots), [projects, bots]);
   if (!supported) {
-    return { rows: fallback, sources: [], legacy: true, error: null, loaded: true, pin };
+    return {
+      rows: fallback,
+      sources: [],
+      legacy: true,
+      failed: false,
+      error: null,
+      loaded: true,
+      pin,
+    };
   }
-  return { rows, sources, legacy: false, error, loaded, pin };
+  if (error !== null && !loaded) {
+    return { rows: fallback, sources: [], legacy: true, failed: true, error, loaded: true, pin };
+  }
+  return { rows, sources, legacy: false, failed: false, error, loaded, pin };
 }
 
 /**

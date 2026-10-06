@@ -242,11 +242,11 @@ async fn handle_socket(app: Arc<AppState>, socket: WebSocket, peer: Option<std::
                 let Ok(req) = serde_json::from_str::<Value>(&text) else {
                     continue;
                 };
-                conn.dispatch(&req);
+                conn.handle(&req);
             }
             WsMessage::Binary(bytes) => {
                 if bytes.len() <= MAX_FRAME_BYTES {
-                    conn.binary_frame(&bytes);
+                    conn.handle_binary(&bytes);
                 }
             }
             WsMessage::Close(_) => break,
