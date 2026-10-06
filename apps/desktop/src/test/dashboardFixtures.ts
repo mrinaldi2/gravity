@@ -142,13 +142,20 @@ export const MIRRORED_BOARD: BoardSummary = {
 };
 
 /** The busy dashboard as a linked computer sees it: the home's rows (all but
- *  the P0, which the mirror holds) to act on there. */
+ *  the P0, which the mirror holds) to act on there, and no meetings. */
 export function offHome(over: Partial<Dashboard> = {}): Dashboard {
   const rows: NeedsYou[] = [];
   for (const row of dashboard().needs_you) {
     rows.push(row.kind === "p0" ? row : { ...row, elsewhere: "mac" });
   }
-  return dashboard({ home: "mac", board: MIRRORED_BOARD, needs_you: rows, ...over });
+  return dashboard({
+    home: "mac",
+    board: MIRRORED_BOARD,
+    needs_you: rows,
+    meetings: [],
+    action_items: [],
+    ...over,
+  });
 }
 
 /** A fresh project: nothing waits, no board, no release, no meetings. */

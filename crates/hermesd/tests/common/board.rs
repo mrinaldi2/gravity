@@ -12,6 +12,10 @@ use prost::Message;
 use serde_json::json;
 use tokio_tungstenite::tungstenite::Message as WsMsg;
 
+use hermesd::actor::Actor;
+use hermesd::board::model::{ItemType, Platform, Priority};
+use hermesd::db::{Db, MoveTo, NewItem, Write};
+
 use super::{TestDaemon, WsClient};
 
 /// Send one board request and wait for the envelope answering it, skipping
@@ -125,5 +129,43 @@ pub fn version(item: &serde_json::Value) -> u64 {
     match &item["version"] {
         serde_json::Value::String(s) => s.parse().expect("version"),
         v => v.as_u64().expect("version"),
+    }
+}
+
+/// A new item of `project`, created by the owner.
+pub fn new_item(db: &Db, project: &str, title: &str, priority: Priority) -> (String, u64) {
+    let item = db
+        .create_item(
+            &NewItem {
+                project_id: project,
+                item_type: ItemType::Feature,
+                title,
+                description: "",
+                platforms: &[Platform::Daemon],
+                size: None,
+                priority,
+                labels: &[],
+                parent_id: None,
+                acceptance_criteria: &[],
+            },
+            &Actor::User,
+        )
+        .unwrap();
+    (item.id, item.version)
+}
+
+/// Moves without guards, as history: the counts read only the events.
+pub fn walk(db: &Db, id: &str, columns: &[&str], note: Option<&str>) {
+    for column in columns {
+        let version = db.get_item(id).unwrap().unwrap().version;
+        let to = MoveTo {
+            column,
+            note,
+            ..MoveTo::default()
+        };
+        assert!(matches!(
+            db.move_item(id, version, &to, &Actor::User).unwrap(),
+            Write::Done(_)
+        ));
     }
 }

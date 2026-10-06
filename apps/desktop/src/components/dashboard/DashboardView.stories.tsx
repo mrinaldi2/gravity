@@ -3,6 +3,8 @@ import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
 import type { Dashboard } from "../../protocol/dashboard";
+import type { FlowMetrics } from "../../protocol/metrics";
+import { flowMetrics } from "../../test/flowFixtures";
 import {
   DASH_BOTS,
   MIRRORED_BOARD,
@@ -21,13 +23,23 @@ const noop = (): void => {};
 const noToast: AddToast = () => {};
 const botName = (id: string): string => DASH_BOTS.find((b) => b.id === id)?.name ?? "a bot";
 
-function Window({ data }: { readonly data: Dashboard }): ReactElement {
+const WEEK = { metrics: flowMetrics(), note: null };
+
+function Window({
+  data,
+  flow = WEEK,
+}: {
+  readonly data: Dashboard;
+  readonly flow?: { readonly metrics: FlowMetrics | null; readonly note: string | null };
+}): ReactElement {
   const hermes = project({ id: "p1", name: "The Hermes" });
-  const client = new FakeDaemon().onRequest("dashboard_get", () => ({
-    type: "dashboard",
-    req_id: "1",
-    dashboard: data,
-  }));
+  const client = new FakeDaemon()
+    .onRequest("dashboard_get", () => ({
+      type: "dashboard",
+      req_id: "1",
+      dashboard: data,
+    }))
+    .onRequest("metrics_get", () => ({ type: "metrics", req_id: "2", ...flow }));
   // The header counts the same bots the Team widget lists (UX-010 QA).
   const bots = data.team.map((row) => row.bot);
   return (
@@ -63,6 +75,8 @@ export const HomeAway: Story = () => (
       releases: [],
       needs_you: [],
       wip_overrides: [],
+      meetings: [],
+      action_items: [],
       needs_you_note: "Can't reach mac right now, so this may not be everything that needs you.",
     })}
   />
@@ -86,7 +100,9 @@ export const RelayedReview: Story = () => {
   );
 };
 /** A new project: every widget's empty state. */
-export const Quiet: Story = () => <Window data={quietDashboard()} />;
+export const Quiet: Story = () => (
+  <Window data={quietDashboard()} flow={{ metrics: null, note: null }} />
+);
 /** On imac or win-pc: the board as mirrored from its home. */
 export const Mirrored: Story = () => (
   <Window
@@ -94,6 +110,8 @@ export const Mirrored: Story = () => (
       home: "mac",
       needs_you: [],
       releases: [],
+      meetings: [],
+      action_items: [],
       board: MIRRORED_BOARD,
     })}
   />

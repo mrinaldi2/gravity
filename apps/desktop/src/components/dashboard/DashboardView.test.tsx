@@ -339,7 +339,11 @@ describe("DashboardView", () => {
       screen.getByText("No release yet. DevOps packages items once they pass Verify."),
     ).toBeInTheDocument();
     expect(screen.getByText("No bots in this project yet.")).toBeInTheDocument();
-    expect(screen.getByText("No meetings set up. The lead sets up a series.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "No meetings set up yet. Your lead bot schedules the regular ones, such as the stand-up and the retro.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("No open action items.")).toBeInTheDocument();
   });
 

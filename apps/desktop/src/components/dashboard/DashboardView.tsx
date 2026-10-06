@@ -17,11 +17,13 @@ import { botNamer, useItemTitles } from "../releases/ReleasesView";
 import { useReleaseActions } from "../releases/useReleases";
 import OwnerActionList from "../ownerActions/OwnerActionList";
 import DashboardItem from "./DashboardItem";
+import FlowWidget from "./FlowWidget";
 import NeedsYou from "./NeedsYou";
 import { useConfirmRelayed } from "./useConfirmRelayed";
 import { useDashboard } from "./useDashboard";
 import { useDashboardDrawers } from "./useDashboardDrawers";
-import { ActionItemsWidget, MeetingsWidget } from "./MeetingWidgets";
+import { useMetrics } from "./useMetrics";
+import { ActionItemsWidget, MeetingsWidget, offHomeOf } from "./MeetingWidgets";
 import { useActionItems } from "./useActionItems";
 import { BoardWidget, ReleasesWidget, TeamWidget } from "./Widgets";
 
@@ -93,6 +95,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const relayed = useConfirmRelayed(client, project.id, props.addToast, refresh);
   const actionItems = useActionItems(client, project.id, props.addToast, refresh);
   const { reviewing, openItem, openReview, showItem, close: closeDrawer } = useDashboardDrawers();
+  const metrics = useMetrics(client, project.id, connected);
 
   if (dashboard === null) {
     return (
@@ -117,6 +120,8 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const botName = (id: string): string => named(id) ?? "a bot";
   const columns = new Map(dashboard.board?.columns.map((c) => [c.key, c.name]) ?? []);
   const openBoard = (): void => props.onOpenTab("board");
+  const offHome = offHomeOf(dashboard);
+  const leadName = named(project.lead_bot_id ?? "") ?? null;
   return (
     <div className="dash">
       <div className="dash-scroll">
@@ -161,15 +166,21 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             onOpen={() => props.onOpenTab("releases")}
           />
           <TeamWidget team={dashboard.team} bots={bots} onOpenBot={props.onOpenBot} />
-          <MeetingsWidget rows={dashboard.meetings} />
+          <MeetingsWidget rows={dashboard.meetings} leadName={leadName} offHome={offHome} />
           <ActionItemsWidget
             actions={dashboard.action_items}
+            offHome={offHome}
             botName={botName}
             canControl={connected && props.canControl}
             onDone={(id) => void actionItems.setStatus(id, "done")}
             onDrop={(id) => void actionItems.setStatus(id, "dropped")}
             onPromote={(id) => void actionItems.promote(id)}
             onItem={showItem}
+          />
+          <FlowWidget
+            state={metrics}
+            columnName={(key) => columns.get(key) ?? key}
+            onBoard={openBoard}
           />
         </div>
       </div>
