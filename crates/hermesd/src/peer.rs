@@ -19,6 +19,8 @@ mod inbound;
 pub mod links;
 pub mod mirror;
 pub mod owner_actions;
+#[cfg(test)]
+mod panic_tests;
 mod receive;
 pub mod remote_bots;
 mod roster;

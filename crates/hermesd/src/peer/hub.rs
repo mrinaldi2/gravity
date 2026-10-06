@@ -6,10 +6,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use futures::FutureExt;
 use serde_json::{json, Value};
 use tokio::sync::{mpsc, oneshot, Notify};
 
 use crate::app::AppState;
+use crate::contain;
 use crate::events::Push;
 
 /// How long a request waits for the peer's response. A forwarded message with
@@ -231,50 +233,58 @@ impl PeerHub {
             let (app, peer_id) = (app.clone(), peer_id.clone());
             tokio::task::spawn_blocking(move || {
                 for frame in ordered {
-                    super::inbound::event(&app, &peer_id, &frame);
+                    // One event that panics must not end the feed: every
+                    // later roster, board event or terminal frame would be
+                    // dropped until the link reconnected (H-170).
+                    let kind = frame_kind(&frame);
+                    contain::run(
+                        &kind,
+                        || super::inbound::event(&app, &peer_id, &frame),
+                        || (),
+                    );
                 }
             });
         }
 
-        loop {
-            let frame = tokio::select! {
-                frame = inbound.recv() => frame,
-                _ = closed.notified() => None,
-            };
-            let Some(frame) = frame else {
-                break;
-            };
-            if frame.get("type").and_then(Value::as_str) == Some("response") {
-                let id = frame.get("req_id").and_then(Value::as_u64);
-                if let Some(tx) = id.and_then(|id| lock_pending(&pending).remove(&id)) {
-                    let _ = tx.send(frame);
-                }
-                continue;
-            }
-            // An event: news from the peer, answered by nothing.
-            if frame.get("req_id").is_none() {
-                let _ = events.send(frame);
-                continue;
-            }
-            // Handled off the read loop, so one slow request (a result with
-            // artifacts to write) does not hold up the responses behind it.
-            let app = app.clone();
-            let peer_id = peer_id.clone();
-            let out = out.clone();
-            tokio::task::spawn_blocking(move || {
-                let req_id = frame.get("req_id").cloned().unwrap_or(Value::Null);
-                let response = match super::inbound::handle(&app, &peer_id, &frame) {
-                    Ok(result) => json!({
-                        "type": "response", "req_id": req_id, "ok": true, "result": result
-                    }),
-                    Err(e) => json!({
-                        "type": "response", "req_id": req_id, "ok": false,
-                        "error": format!("{e:#}"),
-                        "code": e.downcast_ref::<super::Refusal>().map(|r| r.code)
-                    }),
+        // The read loop's own panic is contained too: the cleanup below must
+        // run, or the link would stay listed and its socket open (H-170).
+        let read = async {
+            loop {
+                let frame = tokio::select! {
+                    frame = inbound.recv() => frame,
+                    _ = closed.notified() => None,
                 };
-                let _ = out.send(response);
-            });
+                let Some(frame) = frame else {
+                    break;
+                };
+                if frame.get("type").and_then(Value::as_str) == Some("response") {
+                    let id = frame.get("req_id").and_then(Value::as_u64);
+                    if let Some(tx) = id.and_then(|id| lock_pending(&pending).remove(&id)) {
+                        let _ = tx.send(frame);
+                    }
+                    continue;
+                }
+                // An event: news from the peer, answered by nothing.
+                if frame.get("req_id").is_none() {
+                    let _ = events.send(frame);
+                    continue;
+                }
+                // Handled off the read loop, so one slow request (a result with
+                // artifacts to write) does not hold up the responses behind it.
+                let app = app.clone();
+                let peer_id = peer_id.clone();
+                let out = out.clone();
+                tokio::task::spawn_blocking(move || {
+                    let _ = out.send(answer(&app, &peer_id, &frame));
+                });
+            }
+        };
+        if let Err(panic) = std::panic::AssertUnwindSafe(read).catch_unwind().await {
+            tracing::error!(
+                peer_id,
+                panic = %contain::panic_text(panic.as_ref()),
+                "a peer link's read loop panicked; closing the link"
+            );
         }
 
         let mut links = self.lock();
@@ -298,6 +308,39 @@ impl PeerHub {
         }
         tracing::info!(peer_id, "peer link down");
     }
+}
+
+/// The response to one request from a peer. A handler that panics answers
+/// `internal` under the request's own `req_id`, read before it runs, so the
+/// asking computer is not left waiting until it gives up (H-170).
+pub(super) fn answer(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> Value {
+    let req_id = frame.get("req_id").cloned().unwrap_or(Value::Null);
+    let kind = frame_kind(frame);
+    let handled = contain::run(
+        &kind,
+        || Some(super::inbound::handle(app, peer_id, frame)),
+        || None,
+    );
+    match handled {
+        Some(Ok(result)) => json!({
+            "type": "response", "req_id": req_id, "ok": true, "result": result
+        }),
+        Some(Err(e)) => json!({
+            "type": "response", "req_id": req_id, "ok": false,
+            "error": format!("{e:#}"),
+            "code": e.downcast_ref::<super::Refusal>().map(|r| r.code)
+        }),
+        None => json!({
+            "type": "response", "req_id": req_id, "ok": false,
+            "error": contain::internal_message(&kind), "code": "internal"
+        }),
+    }
+}
+
+/// A peer frame's type, for the log.
+fn frame_kind(frame: &Value) -> String {
+    let kind = frame.get("type").and_then(Value::as_str).unwrap_or("");
+    format!("peer:{kind}")
 }
 
 /// A stand-in's state is whether its machine is reachable, worked out when a

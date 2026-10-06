@@ -57,6 +57,12 @@ project, bad arguments, an envelope a client may not send) is answered with an
 `Error` body: `forbidden`, `not_found`, `no_board`, `invalid_request` or
 `internal`.
 
+A request whose handler fails unexpectedly (a panic in the daemon) is answered
+`internal` under its own `req_id`, JSON or binary, whether its handler answers
+at once or later; the connection goes on serving. A connection the daemon can
+no longer serve is closed, never left open and silent, so a client reconnects
+(H-170). Requests from a linked computer get the same `internal` answer.
+
 The board (`proto/hermes/board/v1/requests.proto`, H-020 §1.5) is the first
 typed surface:
 

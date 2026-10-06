@@ -16,6 +16,7 @@ pub mod bus_auth;
 pub mod channel;
 pub mod chat;
 pub mod config;
+pub mod contain;
 pub mod db;
 pub mod decisions;
 pub mod delivery;
