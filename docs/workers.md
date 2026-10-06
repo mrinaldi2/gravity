@@ -91,6 +91,26 @@ instead.
    (`CARGO_TARGET_DIR=<home>/cache/worker-target`), deleted once the last
    worker has retired (H-109).
 
+Every other bot session, and workers elsewhere, build into the bot's own
+Cargo target, `CARGO_TARGET_DIR=<bot dir>/cargo-target`, beside its workspace
+(H-029). All of a bot's worktrees share it, and Cargo's lock serialises their
+builds. A `CARGO_TARGET_DIR` in the bot's own settings `env` still wins. The
+folder is the bot's own, so its guard lets it remove or clean it. Deleting the
+bot removes it, because it is build output, while the workspace is kept.
+
+The guard reads every target a `cargo` line names, for every subcommand that
+builds or cleans (CE-013): `--target-dir`, `--out-dir`, `--artifact-dir`,
+`install --root`, `--config build.target-dir=…`, `CARGO_TARGET_DIR` /
+`CARGO_BUILD_TARGET_DIR` (prefix, `env`, `export`), and a `.cargo/config.toml`
+above where it runs. Each must be the bot's own. One it can't resolve, such
+as a variable it doesn't know, a substitution or a `--config` file, is refused.
+
+Release builds never trust `$CARGO_TARGET_DIR`. `scripts/prepare-sidecar.sh`
+(a build without `HERMES_DEV_BUILD`, or with `HERMES_RELEASE_BUILD=1`) and
+`prepare-sidecar.ps1`/`build-nsis.ps1` (`HERMES_RELEASE_BUILD=1`) build into
+the checkout's own `target/` and copy from it in the same step. A dev build
+uses the session's target. `scripts/dev.sh` runs the daemon from it.
+
 If the parent is deleted, its queued spawns are dropped and its running
 workers' tasks are cancelled. If the owner deletes a running worker, its task
 is cancelled and the spawn closes as `cancelled`.

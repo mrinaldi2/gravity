@@ -310,7 +310,7 @@ pub fn confirm(
 
 /// Nothing reaches Done with a post-install criterion unticked (H-116): the
 /// last good deploy is refused, and kept for later, until they are ticked.
-fn post_install_checked(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<()> {
+pub(super) fn post_install_checked(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<()> {
     let mut open = Vec::new();
     for ri in &release.items {
         let Some(item) = t.item(&ri.item_id)? else {

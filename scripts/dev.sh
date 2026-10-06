@@ -48,7 +48,8 @@ HERMES_DEV_BUILD=1 cargo build -p hermesd --manifest-path "$ROOT/Cargo.toml"
 # holds the strict port against the next run.
 set -m
 
-"$ROOT/target/debug/hermesd" > "$GRAVITY_HOME/dev.log" 2>&1 &
+# Cargo builds into $CARGO_TARGET_DIR when set: a bot's own target (H-029).
+"${CARGO_TARGET_DIR:-$ROOT/target}/debug/hermesd" > "$GRAVITY_HOME/dev.log" 2>&1 &
 GRAVITY_PID=$!
 CLIENT_PID=""
 

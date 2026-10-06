@@ -5,6 +5,10 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 mod overridden;
+mod task_limits;
+
+pub use overridden::{home_notice, home_override_var};
+pub use task_limits::{TaskLimits, TaskLimitsConfig};
 
 #[cfg(test)]
 pub(crate) use overridden::overridden as env_home_overrides;
@@ -84,6 +88,8 @@ pub struct Config {
     /// bots fill their cap can still fan work out; spawns past it wait in a
     /// queue until a worker finishes.
     pub max_workers_per_project: usize,
+    /// How many tasks a bot may hold open per card and in all (H-125).
+    pub tasks: TaskLimitsConfig,
     /// How long, in seconds, a permission prompt waits for an answer from the
     /// app before it is denied. Capped below the hook's own timeout.
     pub permission_timeout_seconds: u64,
@@ -220,6 +226,7 @@ impl Default for Config {
             classic_renderer: true,
             max_bots_per_project: 12,
             max_workers_per_project: bus::DEFAULT_MAX_WORKERS_PER_PROJECT,
+            tasks: TaskLimitsConfig::default(),
             permission_timeout_seconds: 600,
             resume_after_restart: true,
             delivery: DeliveryConfig::default(),
@@ -248,28 +255,6 @@ pub fn home_is_overridden() -> bool {
             .as_deref(),
         &dirs_home(),
     )
-}
-
-/// The home variable that overrides the default home, by name, if one does.
-pub fn home_override_var() -> Option<String> {
-    if !home_is_overridden() {
-        return None;
-    }
-    [
-        crate::brand::env_name("HOME"),
-        crate::brand::legacy_env_name("HOME"),
-    ]
-    .into_iter()
-    .find(|name| std::env::var_os(name).is_some())
-}
-
-/// `Home: <path>`, naming the variable that chose it, so an operator sees
-/// which home a command is about to act on before it does.
-pub fn home_notice(home: &Path, override_var: Option<&str>) -> String {
-    match override_var {
-        Some(var) => format!("Home: {} (overridden by {var})", home.display()),
-        None => format!("Home: {}", home.display()),
-    }
 }
 
 /// The home the daemon uses: the variable's home when it overrides, else the

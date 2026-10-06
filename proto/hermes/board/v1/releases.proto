@@ -36,6 +36,39 @@ message ReleaseCreate {
   optional string from = 6;
 }
 
+// Lead or DevOps: plan a release as soon as its contents are decided (H-137).
+// Its items may be in any open column; each one's live status shows in the
+// release, with how many are ready. Nothing is built or frozen until it is
+// assembled (ReleaseAssemble).
+message ReleasePlan {
+  string project_id = 1;
+  // Unique in the project, e.g. "0.17.0".
+  string name = 2;
+  // The version the owner sees, e.g. "0.17.0".
+  optional string display_version = 3;
+  // Item ids, e.g. "H-137"; each open and in no other open package.
+  repeated string items = 4;
+  optional string changelog = 5;
+}
+
+// Lead or DevOps: add items to a release or take them out before it is
+// submitted, recorded as a release event. A planned release takes any open
+// item; one being assembled takes items in Verify only, and none once it has
+// a build or a test result.
+message ReleaseItems {
+  string release_id = 1;
+  repeated string add = 2;
+  repeated string remove = 3;
+  // Why the scope changed; the owner reads it.
+  optional string reason = 4;
+}
+
+// Lead or DevOps: a planned release becomes one being assembled, once every
+// item is in Verify. From there: attach builds, test, submit.
+message ReleaseAssemble {
+  string release_id = 1;
+}
+
 // One platform's steps for trying a package, shown to the owner.
 message HowToTest {
   // The item the steps are for, when they are for one.
@@ -65,7 +98,8 @@ message ReleaseUpdate {
 // the current builds.
 message ReleaseTest {
   string release_id = 1;
-  // The computer you tested on; leave it out (or "") when you test on one.
+  // The computer you tested on; leave it empty when you test on one. A plain
+  // string, as shipped: the tool takes it as optional (H-115).
   string machine = 2;
   // The sha256 of the build you tested.
   string build_sha256 = 3;
@@ -202,4 +236,13 @@ message ReleaseMachinesSet {
 message MachineNameSet {
   string project_id = 1;
   string name = 2;
+}
+
+// DevOps: close an approved package that a later, deployed release contains
+// (H-121): its commit is in the later one's history (or, recorded before
+// commits were, the later one builds every platform it built). No
+// deployment is invented; its items go to Done.
+message ReleaseDeployedVia {
+  string release_id = 1;
+  string via_release_id = 2;
 }

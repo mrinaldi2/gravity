@@ -160,6 +160,7 @@ pub(super) fn receive(
             &linked.id,
         )?;
         app.db.map_peer_task(&peer.id, &spec.id, &task.id)?;
+        super::task_card::received(app, &to, linked, &task.id, spec.item_id.as_deref())?;
         task_id = Some(task.id);
     }
     app.db.map_peer_message(&peer.id, &frame.id, &msg.id)?;

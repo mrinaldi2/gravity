@@ -60,3 +60,22 @@ CREATE TABLE IF NOT EXISTS item_ac_post_install (
     PRIMARY KEY (item_id, text)
 );
 "#;
+
+/// Every task names a board card (H-125 G1). `task_card` holds the card a
+/// task is for, by the board home's id: no foreign key to `item`, because
+/// on a machine that is not the board's home (B9) the card is not in the
+/// local table, and a task forwarded by a peer carries its card in the frame
+/// (ARCH-R57 M2). A task linked here has `task.item_id`, which counts as its
+/// card too. `worker_card` holds a spawn's card until its task exists, as
+/// `worker_item` does for a local item. Tables of their own, so it runs
+/// again safely; `task_card` has no key to `task` so retention can prune.
+pub(super) const MIGRATION_TASK_CARDS: &str = r#"
+CREATE TABLE IF NOT EXISTS task_card (
+    task_id TEXT PRIMARY KEY,
+    card_id TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS worker_card (
+    worker_id TEXT PRIMARY KEY REFERENCES worker(id),
+    card_id   TEXT NOT NULL
+);
+"#;

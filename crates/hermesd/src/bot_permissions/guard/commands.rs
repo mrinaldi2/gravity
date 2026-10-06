@@ -4,12 +4,15 @@
 use std::path::Path;
 
 use super::paths::Scope;
-use super::{full, git, targets, GuardContext};
+use super::{cargo, full, git, targets, GuardContext};
 use crate::bot_permissions::shell::{self, Words};
 
 /// Why the line must not run, or `None`.
 pub(super) fn line(line: &str, scope: &mut Scope, ctx: &GuardContext) -> Option<String> {
     scope.substitutes |= line.contains("$(") || line.contains('`');
+    if let Some(reason) = cargo::computed_target(line, scope.substitutes) {
+        return Some(reason);
+    }
     let commands = shell::commands(line);
     // What an `xargs` later on the line may be fed: every path it names.
     for words in &commands {
@@ -158,6 +161,11 @@ fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
         "simctl" => return simctl(rest),
         "find" => return find(rest, scope, ctx),
         "xargs" => return xargs(rest, scope, ctx),
+        "cargo" => return cargo::check(words, at, scope, ctx),
+        // `cargo-clippy clippy …`: a subcommand's own binary (CE-013).
+        bin if bin.len() > 6 && bin.starts_with("cargo-") => {
+            return cargo::check_binary(words, at, &bin[6..], scope, ctx)
+        }
         _ => targets::of(name, rest, &args),
     };
     let target = targets

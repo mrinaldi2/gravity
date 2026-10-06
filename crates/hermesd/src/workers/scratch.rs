@@ -35,7 +35,11 @@ pub fn shared_target(home: &Path) -> PathBuf {
 
 /// `session_env` for a bot about to start.
 pub fn bot_env(home: &Path, bot: &bus::Bot) -> Vec<(String, String)> {
-    session_env(home, Path::new(&bot.workspace_path), bot.temporary)
+    let workspace = Path::new(&bot.workspace_path);
+    let mut env = session_env(home, workspace, bot.temporary);
+    // Its own Cargo target, unless it shares the workers' one (H-029).
+    super::target::with_bot_target(&mut env, workspace);
+    env
 }
 
 /// The variables a worker's session starts with; none for a permanent bot.

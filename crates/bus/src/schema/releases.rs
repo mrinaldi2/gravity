@@ -158,3 +158,15 @@ CREATE TABLE IF NOT EXISTS daemon_name (
     name TEXT NOT NULL
 );
 "#;
+
+/// A package planned before its items are done (H-137, owner ruling
+/// 91890778): the row marks it `planned`. Its `release.status` stays
+/// `assembling` underneath, so the status CHECK needs no table rebuild; the
+/// row goes when the package is assembled. Safe to run again.
+pub(super) const MIGRATION_RELEASE_PLANS: &str = r#"
+CREATE TABLE IF NOT EXISTS release_plan (
+    release_id TEXT PRIMARY KEY,
+    planned_by TEXT NOT NULL,
+    planned_at TEXT NOT NULL
+);
+"#;
