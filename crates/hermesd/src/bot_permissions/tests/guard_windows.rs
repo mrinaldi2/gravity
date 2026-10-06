@@ -264,8 +264,13 @@ fn device_paths_other_than_drive_and_unc_are_refused() {
             "{device}"
         );
     }
-    assert_eq!(
-        call("Bash", json!({ "command": r"echo hi > \\.\nul" })),
-        None
-    );
+    // Quoted, as bash needs it: unquoted, `\\.\nul` reaches the command as
+    // `\.nul`, a file in the current folder, which bash would create.
+    for null in [r"'\\.\nul'", "nul", "/dev/null"] {
+        assert_eq!(
+            call("Bash", json!({ "command": format!("echo hi > {null}") })),
+            None,
+            "{null}"
+        );
+    }
 }
