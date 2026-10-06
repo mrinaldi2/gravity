@@ -78,7 +78,7 @@ mod tests {
         };
         let db = Db::open(&home.join("bus.sqlite")).expect("db");
         let project = db.create_project("p", "p").expect("project");
-        let workspace = home.join("p/bots/alice/workspace");
+        let workspace = home.join("projects/p/bots/alice/workspace");
         let bot = db
             .create_bot(
                 &project.id,
