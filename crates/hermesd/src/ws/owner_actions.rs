@@ -200,9 +200,9 @@ impl Conn {
             + Send
             + 'static,
     ) {
-        let (app, out, req_id) = (self.app.clone(), self.out.clone(), req_id.clone());
-        tokio::spawn(async move {
-            let reply = match work.await {
+        let app = self.app.clone();
+        self.spawn_reply(req_id, move |req_id| async move {
+            match work.await {
                 Ok(a) => json!({ "type": "owner_action", "req_id": req_id,
                                  "action": owner_action::view(&app, &a) }),
                 Err(e) => {
@@ -211,8 +211,7 @@ impl Conn {
                     json!({ "type": "error", "req_id": req_id, "code": code,
                             "message": e.to_string() })
                 }
-            };
-            let _ = out.send(reply);
+            }
         });
     }
 

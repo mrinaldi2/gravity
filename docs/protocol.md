@@ -57,6 +57,12 @@ project, bad arguments, an envelope a client may not send) is answered with an
 `Error` body: `forbidden`, `not_found`, `no_board`, `invalid_request` or
 `internal`.
 
+A request whose handler fails unexpectedly (a panic in the daemon) is answered
+`internal` under its own `req_id`, JSON or binary, whether its handler answers
+at once or later; the connection goes on serving. A connection the daemon can
+no longer serve is closed, never left open and silent, so a client reconnects
+(H-170). Requests from a linked computer get the same `internal` answer.
+
 The board (`proto/hermes/board/v1/requests.proto`, H-020 §1.5) is the first
 typed surface:
 
@@ -484,6 +490,7 @@ The owner is known by their app's code identity or by an OK from them in the app
   - The card's `origin` (also its `input`) carries separate fields (UX-014): `command` (no pid), `pid`, `process` (the pid's executable name), `launched_from` (the nearest ancestor that is an app or terminal: Terminal, iTerm2, Code, claude…), `cwd` (read from the OS; the client's `cwd` only where the OS can't tell, i.e. Windows) and `bot` (the name of the bot whose workspace holds `cwd`). A field that can't be read is left out. The client composes every line and never shows `summary`.
   - The app answers these cards with `allow_once` ("Allow this command") or `deny` (no reason); it offers no "Allow for session" and no single-key shortcuts for a terminal command.
 - **Tickets:** single use, valid for 60 s. A ticket is passed as the `token` in WS `hello` and grants the same capabilities as the client token.
+- **Observability (H-165):** the daemon logs `owner ticket granted` and `owner ticket redeemed` at info, with `via` (`app`, `cli`), the grantee's `pid` and `exe` path, and the compiled `team` on a grant; a hello on `client.token` logs `owner connected with client.token, not a ticket`. No line carries a ticket or a token. `/health` counts, since the daemon started, `owner_tickets_granted`, `owner_tickets_redeemed` and `client_token_fallbacks` (owner hellos on `client.token`).
 - **Refusals:** error `-32002`.
   - A caller inside a bot session is always refused: "a bot can't act as the owner" for `owner_ticket`, "Commands that act as the owner can't run from a bot's session." for `owner_request`.
   - Other refusals: "not the owner's app"; for `owner_request`, which the CLI prints as is, "You denied this command in The Hermes. It did not run.", "No answer in The Hermes, so the command did not run." and "Open The Hermes on this computer to allow this command, then run it again." (no app is connected to show the card).

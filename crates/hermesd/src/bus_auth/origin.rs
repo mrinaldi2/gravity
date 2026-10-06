@@ -130,6 +130,29 @@ pub fn name_of(pid: u32) -> Option<String> {
     Some(String::from_utf8_lossy(&buffer[..len]).into_owned())
 }
 
+/// A process's full executable path, for the owner-ticket logs (H-165).
+#[cfg(target_os = "macos")]
+pub fn exe_path(pid: u32) -> Option<PathBuf> {
+    let pid = i32::try_from(pid).ok()?;
+    let mut buffer = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+    // SAFETY: the buffer is writable for its full length.
+    let len = unsafe { libc::proc_pidpath(pid, buffer.as_mut_ptr().cast(), buffer.len() as u32) };
+    let len = usize::try_from(len).ok().filter(|&n| n > 0)?;
+    Some(PathBuf::from(
+        String::from_utf8_lossy(&buffer[..len]).into_owned(),
+    ))
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn exe_path(pid: u32) -> Option<PathBuf> {
+    std::fs::read_link(format!("/proc/{pid}/exe")).ok()
+}
+
+#[cfg(windows)]
+pub fn exe_path(pid: u32) -> Option<PathBuf> {
+    super::owner_os::image_path(pid)
+}
+
 #[cfg(target_os = "macos")]
 fn cwd_of(pid: u32) -> Option<PathBuf> {
     let pid = i32::try_from(pid).ok()?;

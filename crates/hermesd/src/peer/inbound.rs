@@ -51,9 +51,16 @@ pub(super) fn handle(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> anyho
             let received = super::receive::receive(app, &peer, message)?;
             Ok(serde_json::to_value(received)?)
         }
+        #[cfg(test)]
+        "test_panic" => panic!("a test peer handler panicked"),
         other => anyhow::bail!("unknown peer request '{other}'"),
     }
 }
+
+/// Test events applied, to show the event feed outlives one that panicked.
+#[cfg(test)]
+pub(super) static TEST_EVENTS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
 
 /// News a peer sends without asking anything back.
 pub(super) fn event(app: &Arc<AppState>, peer_id: &str, frame: &Value) {
@@ -77,6 +84,12 @@ pub(super) fn event(app: &Arc<AppState>, peer_id: &str, frame: &Value) {
         "owner_action_output" => super::owner_actions::receive_output(app, peer_id, frame),
         "project_attention_changed" => crate::overview::receive_changed(app, peer_id),
         "owner_thread_updated" => crate::owner_threads::receive_updated(app, peer_id, frame),
+        #[cfg(test)]
+        "test_panic" => panic!("a test peer event panicked"),
+        #[cfg(test)]
+        "test_count" => {
+            TEST_EVENTS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
         _ => {}
     }
 }

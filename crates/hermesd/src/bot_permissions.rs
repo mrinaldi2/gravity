@@ -196,6 +196,7 @@ impl BotStart<'_> {
             extras: self.extras,
             project_name: self.project_name,
             home: &self.cfg.home,
+            user_home: &self.cfg.user_home,
             workspace: self.workspace,
             hermesd: &this_binary(),
             artifacts: self.artifacts,

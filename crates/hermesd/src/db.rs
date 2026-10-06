@@ -277,6 +277,10 @@ impl Db {
                 [],
             )?;
             tx.execute(
+                "DELETE FROM task_release WHERE task_id NOT IN (SELECT id FROM task)",
+                [],
+            )?;
+            tx.execute(
                 "UPDATE message SET ref_message_id = NULL WHERE ref_message_id IN
                    (SELECT id FROM message WHERE created_at < ?1
                     AND id NOT IN (SELECT message_id FROM delivery)

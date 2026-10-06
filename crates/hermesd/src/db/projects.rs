@@ -47,6 +47,20 @@ impl Db {
         Ok(p)
     }
 
+    /// Inserts a project inside a transaction, then panics with the
+    /// connection's lock held, as a handler failing mid-write would.
+    #[cfg(test)]
+    pub fn panic_mid_write(&self, name: &str) {
+        let mut conn = self.lock();
+        let tx = conn.transaction().expect("a transaction");
+        tx.execute(
+            "INSERT INTO project(id, name, dir_name, created_at) VALUES (?1, ?2, ?2, ?3)",
+            params![new_id(), name, ts(now())],
+        )
+        .expect("the insert");
+        panic!("a test handler panicked mid-write");
+    }
+
     /// Name the bot that must know about every decision raised here.
     ///
     /// Not a gate: the lead cannot answer for the owner. It exists because a

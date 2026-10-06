@@ -151,19 +151,19 @@ pub(super) fn receive(
         let (Some(spec), Some(linked)) = (&frame.task, &linked) else {
             anyhow::bail!("a task needs a task frame and a bot sender");
         };
-        let task = app.db.create_task(
+        let release =
+            super::task_card::accepted_release(app, peer, &to, spec.release_id.as_deref())?;
+        let task = app.db.create_task_with_release(
             &msg.id,
             Some(&linked.id),
             &to.id,
             spec.deadline_at,
             spec.hop_count,
             &linked.id,
+            release,
         )?;
         app.db.map_peer_task(&peer.id, &spec.id, &task.id)?;
         super::task_card::received(app, &to, linked, &task.id, spec.item_id.as_deref())?;
-        if let Some(release_id) = &spec.release_id {
-            app.db.set_task_release(&task.id, release_id)?;
-        }
         task_id = Some(task.id);
     }
     app.db.map_peer_message(&peer.id, &frame.id, &msg.id)?;

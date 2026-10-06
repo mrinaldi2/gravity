@@ -7,6 +7,7 @@ use super::guard::decide;
 use super::*;
 
 mod bypass_table;
+mod exact_rules;
 mod guard_cases;
 mod guard_install;
 mod guard_links;
@@ -20,12 +21,17 @@ pub(super) fn input(profile: PermissionProfile, extras: &[PermissionExtra]) -> V
     input_as(profile, extras, false)
 }
 
-fn input_as(profile: PermissionProfile, extras: &[PermissionExtra], devops: bool) -> Value {
+pub(super) fn input_as(
+    profile: PermissionProfile,
+    extras: &[PermissionExtra],
+    devops: bool,
+) -> Value {
     generate(&SettingsInput {
         profile,
         extras,
         project_name: "Hermes",
         home: Path::new("/Users/me/.gravity"),
+        user_home: Path::new("/Users/me"),
         workspace: Path::new("/Users/me/.gravity/projects/p/bots/devops/workspace"),
         hermesd: Path::new(APP_HERMESD),
         artifacts: Some(Path::new("/Users/me/.gravity/projects/p/artifacts")),
@@ -40,7 +46,7 @@ fn input_as(profile: PermissionProfile, extras: &[PermissionExtra], devops: bool
     })
 }
 
-const APP_HERMESD: &str = "/Applications/The Hermes.app/Contents/MacOS/hermesd";
+pub(super) const APP_HERMESD: &str = "/Applications/The Hermes.app/Contents/MacOS/hermesd";
 
 /// H-166: the install and quiesce extras allow this daemon's own binary by
 /// its exact path, the way a bot quotes it; never a bare `hermesd`, which
@@ -175,7 +181,7 @@ fn trusted_adds_routine_work_and_extras_add_their_powers() {
     assert!(allow.contains(
         &"Bash(/Users/me/.gravity/projects/p/bots/devops/workspace/serve/publish.sh *)".to_string()
     ));
-    assert!(allow.contains(&"Bash(hermesd release publish *)".to_string()));
+    assert!(allow.contains(&format!("Bash(\"{APP_HERMESD}\" release publish *)")));
     let deny = rules(&devops, "deny");
     assert!(deny.contains(
         &"Edit(//Users/me/.gravity/projects/p/bots/devops/workspace/serve/publish.sh)".to_string()
@@ -250,6 +256,7 @@ fn the_interim_settings_are_folded_in_and_not_passed_twice() {
             extras: &[],
             project_name: "Hermes",
             home: Path::new("/Users/me/.gravity"),
+            user_home: Path::new("/Users/me"),
             workspace: Path::new("/w"),
             hermesd: Path::new("/bin/hermesd"),
             artifacts: None,
@@ -324,6 +331,7 @@ fn the_owners_trust_lines_survive_removing_the_interim_argument() {
             extras: &[],
             project_name: "Hermes",
             home: &home,
+            user_home: Path::new("/Users/me"),
             workspace: Path::new("/w"),
             hermesd: Path::new("/bin/hermesd"),
             artifacts: None,
@@ -365,33 +373,4 @@ fn the_quiesce_extra_allows_only_hermesd_quiesce() {
         added,
         super::exact::rules(Path::new(APP_HERMESD), "quiesce")
     );
-}
-
-/// H-117 X2, X3: `release_main` allows exactly the daemon-checked land, and
-/// `build_installers` exactly the command, never the script it runs.
-#[test]
-fn landing_and_building_installers_allow_only_their_commands() {
-    let without = rules(&input(PermissionProfile::Trusted, &[]), "allow");
-    let added = |extra| {
-        let with = rules(&input(PermissionProfile::Trusted, &[extra]), "allow");
-        with.into_iter()
-            .filter(|r| !without.contains(r))
-            .collect::<Vec<_>>()
-    };
-    assert_eq!(
-        added(PermissionExtra::ReleaseMain),
-        [
-            "Bash(hermesd release land *)",
-            "PowerShell(hermesd release land *)"
-        ]
-    );
-    let build = added(PermissionExtra::BuildInstallers);
-    assert_eq!(
-        build,
-        [
-            "Bash(hermesd release build-installer *)",
-            "PowerShell(hermesd release build-installer *)"
-        ]
-    );
-    assert!(!build.iter().any(|r| r.contains("build-nsis")));
 }

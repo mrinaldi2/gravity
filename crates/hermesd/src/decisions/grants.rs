@@ -148,7 +148,7 @@ pub fn apply(app: &Arc<AppState>, decision: &Decision) {
     let body = format!("Applied this ruling's grants. {}.", lines.join("; "));
     if let Err(e) =
         app.db
-            .insert_decision_comment(&decision.id, bus::CommentAuthorKind::User, None, &body)
+            .insert_decision_comment(&decision.id, bus::CommentAuthorKind::System, None, &body)
     {
         tracing::warn!(error = %e, "could not note the applied grants");
     }

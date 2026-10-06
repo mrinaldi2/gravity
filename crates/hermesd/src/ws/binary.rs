@@ -15,6 +15,32 @@ pub(super) enum Frame {
     Refused(Vec<u8>),
 }
 
+impl Frame {
+    /// The request's id, for an answer when its handler fails.
+    pub(super) fn req_id(&self) -> u64 {
+        match self {
+            Frame::Board(req_id, _) | Frame::Home(req_id, _) => *req_id,
+            Frame::Refused(_) => 0,
+        }
+    }
+
+    /// What is asked, for the log: `board:ItemGet`, `home:ProjectsOverview`.
+    pub(super) fn kind(&self) -> String {
+        match self {
+            Frame::Board(_, r) => kind("board", r.request.as_ref()),
+            Frame::Home(_, r) => kind("home", r.request.as_ref()),
+            Frame::Refused(_) => "refused".to_string(),
+        }
+    }
+}
+
+/// A request's surface and its variant's name, taken from its `Debug` form.
+fn kind(surface: &str, request: Option<&impl std::fmt::Debug>) -> String {
+    let variant = request.map(|r| format!("{r:?}")).unwrap_or_default();
+    let name = variant.split(['(', ' ', '{']).next().unwrap_or("");
+    format!("{surface}:{name}")
+}
+
 pub(super) fn decode(frame: &[u8]) -> Frame {
     let (req_id, message) = match Envelope::decode(frame) {
         Err(e) => (0, format!("not a protobuf Envelope: {e}")),

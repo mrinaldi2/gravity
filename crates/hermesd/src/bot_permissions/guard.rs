@@ -24,7 +24,10 @@
 //!   bot's own folders;
 //! - a Write, Edit or destructive command into the served release builds,
 //!   for every bot, DevOps included: only the daemon writes there (CE-010
-//!   M3). Reading them stays allowed.
+//!   M3). Reading them stays allowed. The same holds for the daemon's own
+//!   state in `<home>/run` (CE-023 M1);
+//! - `hermesd release install|quiesce` pointed at another config or home
+//!   (CE-023 F1).
 //!
 //! Hooks run in every permission mode, so this is the boundary that still
 //! holds in Full. It is a parser, not a sandbox: a script file can still
@@ -44,6 +47,7 @@ use serde_json::{json, Value};
 mod cargo;
 mod cargo_alias;
 mod commands;
+mod daemon_cli;
 mod full;
 mod git;
 mod links;
@@ -116,6 +120,12 @@ pub fn decide(input: &Value, ctx: &GuardContext) -> Option<String> {
                 return Some(format!(
                     "{path} is in the served release builds, which only the daemon writes; \
                      publish with `hermesd release publish`"
+                ));
+            }
+            if let Some(path) = ctx.run_word(file, &scope) {
+                return Some(format!(
+                    "{path} is the daemon's own state, which only the daemon writes; \
+                     leave it alone"
                 ));
             }
             // In Full nothing reviews a write to a shell rc or a launch agent.

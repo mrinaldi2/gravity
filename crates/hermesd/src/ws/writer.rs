@@ -8,7 +8,7 @@ use serde_json::Value;
 use tokio::sync::{mpsc, watch};
 
 /// Writes a connection's outbound traffic until `out` closes or the socket
-/// fails: replies and pushes in order, a ping every `ping_every`, and browser
+/// fails, then closes the socket: replies and pushes in order, a ping every `ping_every`, and browser
 /// frames from the newest-wins slot only when nothing else is waiting. At
 /// most one frame is ever being written, so a slow link skips frames and the
 /// rest of the traffic waits behind one frame at most. Binary protobuf
@@ -50,6 +50,9 @@ pub(super) async fn write_out<S>(
             break;
         }
     }
+    // A close frame, so the client sees the connection end at once and
+    // reconnects (H-170).
+    let _ = sink.close().await;
 }
 
 #[cfg(test)]
