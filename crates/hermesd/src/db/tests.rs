@@ -1,6 +1,6 @@
 use super::*;
 
-fn user_sender() -> Sender {
+pub(super) fn user_sender() -> Sender {
     Sender {
         kind: SenderKind::User,
         bot_id: None,

@@ -119,6 +119,9 @@ impl Db {
 
 #[cfg(test)]
 mod tests {
+    use bus::{MessageKind, TaskState};
+
+    use crate::db::tests::{setup, user_sender};
     use crate::db::Db;
 
     #[test]
@@ -136,5 +139,43 @@ mod tests {
         assert!(db.board_home("p1").expect("get").is_some());
         db.forget_board_home("p1", "peer-a").expect("forget");
         assert_eq!(db.board_home("p1").expect("get"), None);
+    }
+
+    /// ARCH-R63 S2: retention takes a pruned task's release with it, as it
+    /// does its card; a kept task keeps both.
+    #[test]
+    fn retention_prunes_a_tasks_release_with_the_task() {
+        let (db, bot) = setup();
+        let conv = db.dm_conversation(&bot.id).unwrap().unwrap();
+        let task = |body: &str| {
+            let msg = db
+                .insert_message(
+                    &conv.id,
+                    &user_sender(),
+                    MessageKind::Task,
+                    body,
+                    None,
+                    None,
+                )
+                .unwrap();
+            let task = db.create_task(&msg.id, None, &bot.id, None, 1, "").unwrap();
+            db.set_task_card(&task.id, "H-1").unwrap();
+            db.set_task_release(&task.id, "r1").unwrap();
+            task.id
+        };
+        let (old, kept) = (task("old"), task("kept"));
+        db.try_close_task(&old, TaskState::Done).unwrap();
+        db.lock()
+            .execute(
+                "UPDATE task SET created_at = '2000-01-01T00:00:00Z' WHERE id = ?1",
+                rusqlite::params![old],
+            )
+            .unwrap();
+        db.prune(1, 1, 1, 1).unwrap();
+        assert!(db.get_task(&old).unwrap().is_none(), "the task went");
+        assert_eq!(db.task_card(&old).unwrap(), None);
+        assert_eq!(db.task_release(&old).unwrap(), None, "and its release");
+        assert_eq!(db.task_release(&kept).unwrap().as_deref(), Some("r1"));
+        assert_eq!(db.task_card(&kept).unwrap().as_deref(), Some("H-1"));
     }
 }

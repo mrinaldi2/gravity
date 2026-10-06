@@ -271,7 +271,9 @@ The receiver handles it in one transaction:
    `peer_task` maps the two task ids. `item_id` names the task's card
    (H-125); `release_id` is set on a release's deploy or rollback task
    (H-158), which the receiver keeps in `task_release` so G4 counts the task
-   as on the board there too. Both are optional: an older peer sends neither
+   as on the board there too. Only the project's board home, where releases
+   live, may name one (ARCH-R63 S1): from any other peer the receiver logs
+   and ignores it, and the task stays subject to G4. Both are optional: an older peer sends neither
    and ignores them. A `closes_task` frame flips the mapped
    local task (`try_close_task`) before inserting the `done` or cancel note,
    exactly as the local tool would.
