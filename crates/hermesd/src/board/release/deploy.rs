@@ -16,8 +16,8 @@ use crate::decisions::authority::is_relayed;
 use crate::decisions::{conflict, forbidden, invalid};
 use crate::messaging::{self, Dm};
 
+use super::machines;
 use super::model::{DeployAction, DeployResult, Release, ReleaseStatus, Smoke, Verdict};
-use super::package::required_machines;
 use super::{check_frozen, daemon_move, load, publish_moves, publish_touched, testers_on, Caller};
 
 /// The gate, checked at call time (H-020 §2.4): a settled, unrelayed owner
@@ -341,7 +341,9 @@ fn all_done(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<bool> {
             d.machine == m && d.action == DeployAction::Deploy && d.result == Some(DeployResult::Ok)
         })
     };
-    let required = required_machines(t, release)?;
+    // Every tester's computer unless the owner narrowed it, as frozen at
+    // submit (ARCH-R55 M1).
+    let required = machines::deploys_to(t, release)?;
     if required.is_empty() {
         // No machine is configured or has a tester: every machine it went to.
         let deploys: Vec<_> = release

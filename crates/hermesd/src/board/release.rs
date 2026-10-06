@@ -117,6 +117,17 @@ pub fn frozen_hash(release: &Release) -> String {
             t.machine, t.build_sha256, t.result
         ));
     }
+    // The frozen computer sets (ARCH-R55 M1); none on older packages, so
+    // their hash stays.
+    let targets = &release.targets;
+    for (kind, machines) in [
+        ("test", &targets.tested_on),
+        ("deploy", &targets.deploys_to),
+    ] {
+        for m in machines {
+            h.update(format!("target\0{kind}\0{m}\n"));
+        }
+    }
     hex::encode(h.finalize())
 }
 

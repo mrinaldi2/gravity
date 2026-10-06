@@ -54,6 +54,28 @@ export function sourceLine(release: Release, version: string): string {
   return `Built from ${String(commit).slice(0, 7)} on release/desktop-${version.replace(/^v/u, "")}`;
 }
 
+/** Who narrowed a frozen set, if anyone. */
+function chosenBy(who: string | null | undefined): string {
+  if (who === "lead") {
+    return " (chosen by the lead)";
+  }
+  return who === "owner" ? " (chosen by you)" : "";
+}
+
+/**
+ * The computers frozen into the package at submit (ARCH-R55): where it was
+ * tested, who narrowed that, and where it goes. Null before submit.
+ */
+export function targetsLine(release: Release): string | null {
+  const tested = release.tested_on ?? [];
+  const deploys = release.deploys_to ?? [];
+  if (tested.length === 0 && deploys.length === 0) {
+    return null;
+  }
+  const by = chosenBy;
+  return `Tested on ${tested.join(", ")}${by(release.tested_set_by)} · Goes to ${deploys.join(", ")}${by(release.deploys_set_by)}`;
+}
+
 function approval(release: Release, leftOut: ReadonlyMap<string, LeftOut>): ItemVerdict[] {
   return release.items.map((i) => {
     const out = leftOut.get(i.item_id);
@@ -126,6 +148,7 @@ export default function ReleaseReview({
         {release.supersedes ? " · replaces an earlier package" : ""}
       </p>
       <p className="release-meta">{sourceLine(release, version)}</p>
+      {targetsLine(release) ? <p className="release-meta">{targetsLine(release)}</p> : null}
       <Banner release={release} actions={actions} canControl={canControl} />
       <ReviewEvents release={release} botName={botName} />
       <PostInstall release={release} botName={botName} />

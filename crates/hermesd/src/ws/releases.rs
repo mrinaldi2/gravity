@@ -134,22 +134,32 @@ impl Conn {
         Ok(())
     }
 
-    /// `{project_id, machines: [..]}`, approve; empty goes back to every
-    /// tester's computer.
+    /// `{project_id, machines?: [..], machine_name?}`, approve. The owner's
+    /// list narrows deploys too (ARCH-R55 M1); empty goes back to every
+    /// tester's computer. `machine_name` names this computer (S1).
     pub(super) fn release_machines_set(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let project_id = Self::str_field(req, "project_id")?;
         self.on_home(project_id)?;
-        let list: Vec<String> = req
-            .get("machines")
-            .and_then(Value::as_array)
-            .ok_or_else(|| invalid("'machines' is a list of computer names"))?
-            .iter()
-            .map(|m| m.as_str().unwrap_or_default().to_string())
-            .collect();
-        let view = self
-            .app
-            .db
-            .board_tx(|t| machines::set(t, project_id, &list))?;
+        let list: Option<Vec<String>> = match req.get("machines") {
+            None => None,
+            Some(v) => Some(
+                v.as_array()
+                    .ok_or_else(|| invalid("'machines' is a list of computer names"))?
+                    .iter()
+                    .map(|m| m.as_str().unwrap_or_default().to_string())
+                    .collect(),
+            ),
+        };
+        let name = req.get("machine_name").and_then(Value::as_str);
+        let view = self.app.db.board_tx(|t| {
+            if let Some(name) = name {
+                machines::set_name(t, name)?;
+            }
+            match &list {
+                Some(list) => machines::set(t, project_id, list, machines::SetBy::Owner),
+                None => machines::view(t, project_id),
+            }
+        })?;
         self.send(json!({ "type": "release_machines", "req_id": req_id, "machines": view }));
         Ok(())
     }

@@ -19,10 +19,10 @@ use super::{load, Caller};
 /// Results a machine reports for a package.
 pub const TEST_RESULTS: &[&str] = &["pass", "fail", "blocked"];
 
-/// The computers a package must pass on and deploy to (H-115): the list the
-/// owner or lead set, or every tester's computer (see [`machines`]).
+/// The computers a package must pass on (H-115): frozen at submit, else the
+/// list the owner or lead set, or every tester's computer (see [`machines`]).
 pub fn required_machines(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<Vec<String>> {
-    machines::required(t, &release.project_id)
+    machines::tested_on(t, release)
 }
 
 fn item_platforms(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<Vec<Platform>> {
@@ -191,6 +191,19 @@ pub fn record_test(
         let platforms = machine_platforms(t, &release, result.machine)?;
         if !platforms.iter().any(|p| build_is_for(&build.platform, *p)) {
             let names: Vec<&str> = platforms.iter().map(|p| p.as_str()).collect();
+            // No build of the package is for this computer at all (S3).
+            let any = release
+                .builds
+                .iter()
+                .any(|b| platforms.iter().any(|p| build_is_for(&b.platform, *p)));
+            if !any && !names.is_empty() {
+                return Err(invalid(format!(
+                    "release {} has no build for {} on {}; DevOps attaches one first",
+                    release.name,
+                    names.join(", "),
+                    result.machine
+                )));
+            }
             return Err(invalid(format!(
                 "that sha256 is the {} build; {} tests {} for this release",
                 build.platform,

@@ -16,7 +16,7 @@ import {
 } from "../../test/releaseFixtures";
 import { actionToastSpy } from "../../test/spies";
 import { fmtTimestamp } from "../../util";
-import ReleaseReview, { sourceLine } from "./ReleaseReview";
+import ReleaseReview, { sourceLine, targetsLine } from "./ReleaseReview";
 import { UNDO_MS } from "./useDelayedSend";
 
 import { useReleaseActions } from "./useReleases";
@@ -375,5 +375,20 @@ describe("the commit a release was built from", () => {
     expect(sourceLine(unnamed, "0.16.0")).toMatch(/not recorded for every build/u);
     const split = release({ builds: [{ ...mac, source_commit: "f".repeat(40) }, win] });
     expect(sourceLine(split, "0.16.0")).toMatch(/more than one commit/u);
+  });
+});
+
+describe("the computers frozen into a package", () => {
+  it("says where it was tested, who chose that, and where it goes", () => {
+    expect(targetsLine(release())).toBeNull();
+    const narrowed = release({
+      tested_on: ["imac"],
+      tested_set_by: "lead",
+      deploys_to: ["imac", "mac"],
+      deploys_set_by: null,
+    });
+    expect(targetsLine(narrowed)).toBe("Tested on imac (chosen by the lead) · Goes to imac, mac");
+    setup(narrowed);
+    expect(screen.getByText(/Tested on imac/u)).toBeInTheDocument();
   });
 });

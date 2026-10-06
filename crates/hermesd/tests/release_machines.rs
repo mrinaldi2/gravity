@@ -23,7 +23,8 @@ struct Gate {
 }
 
 async fn gate() -> Gate {
-    let (pair, bots) = project_with_bots(&["Team Lead", "DevOps", "Tester", "Tester iMac"]).await;
+    let (pair, mut bots) =
+        project_with_bots(&["Team Lead", "DevOps", "Tester", "Tester iMac"]).await;
     let db = &pair.d.app.db;
     let project = db.get_bot(&pair.ids[0]).unwrap().unwrap().project_id;
     db.ensure_board(&project, &db.daemon_id().unwrap(), Some("H"))
@@ -61,6 +62,10 @@ async fn gate() -> Gate {
     };
     db.move_item(&item.id, item.version, &to, &Actor::User)
         .unwrap();
+    // This computer's name for its testers, as the lead sets it (ARCH-R55 S1).
+    bots[0]
+        .call("machine_name_set", json!({"name": "mac"}))
+        .await;
     Gate {
         pair,
         project,
@@ -103,21 +108,26 @@ async fn every_testers_computer_must_pass_before_submit() {
     let mut g = gate().await;
     let id = package(&mut g).await;
     let seen = g.bots[0].call("release_machines", json!({})).await;
-    assert_eq!(seen["required"], json!(["imac", "this computer"]), "{seen}");
+    assert_eq!(seen["machine_name"], "mac", "{seen}");
+    assert_eq!(seen["required"], json!(["imac", "mac"]), "{seen}");
 
     // The tester here reports without naming a machine: this computer.
     let here = g.bots[2].call("release_test", pass(&id, None)).await;
     let tests = here["release"]["tests"].as_array().unwrap();
-    assert_eq!(tests[0]["machine"], "this computer");
+    assert_eq!(tests[0]["machine"], "mac");
     // A tester reports only for its own computer.
     let raw = g.bots[3]
-        .call_raw("release_test", pass(&id, Some("this computer")))
+        .call_raw("release_test", pass(&id, Some("mac")))
         .await;
     assert!(error_text(&raw).contains("you test on imac"), "{raw}");
     let raw = g.bots[0].call_raw("release_test", pass(&id, None)).await;
     assert!(error_text(&raw).contains("board role"), "{raw}");
+    let raw = g.bots[0]
+        .call_raw("machine_name_set", json!({"name": "  "}))
+        .await;
+    assert!(error_text(&raw).contains("machine_name"), "{raw}");
 
-    // Submit waits for imac, then goes.
+    // Submit waits for imac, then goes, freezing both sets (M1).
     let raw = g.bots[1]
         .call_raw("release_submit", json!({"release_id": id}))
         .await;
@@ -128,19 +138,25 @@ async fn every_testers_computer_must_pass_before_submit() {
     let submitted = g.bots[1]
         .call("release_submit", json!({"release_id": id}))
         .await;
-    assert_eq!(submitted["release"]["status"], "awaiting_owner");
+    let release = &submitted["release"];
+    assert_eq!(release["status"], "awaiting_owner");
+    assert_eq!(release["tested_on"], json!(["imac", "mac"]));
+    assert_eq!(release["deploys_to"], json!(["imac", "mac"]));
 }
 
+/// ARCH-R55 M1: the lead's list narrows testing, never deploys; a package
+/// keeps the sets it froze, and counts as deployed only once every tester's
+/// computer has it.
 #[tokio::test]
-async fn the_lead_and_the_owner_set_the_computers() {
+async fn a_lead_narrows_testing_but_every_computer_gets_the_release() {
     let mut g = gate().await;
     let id = package(&mut g).await;
-
-    // The lead narrows it to imac; a computer no tester is on is refused.
     let set = g.bots[0]
         .call("release_machines_set", json!({"machines": ["imac"]}))
         .await;
     assert_eq!(set["required"], json!(["imac"]), "{set}");
+    assert_eq!(set["deploys_to"], json!(["imac", "mac"]), "{set}");
+    assert_eq!(set["set_by"], "lead");
     let raw = g.bots[0]
         .call_raw("release_machines_set", json!({"machines": ["win-pc"]}))
         .await;
@@ -156,27 +172,83 @@ async fn the_lead_and_the_owner_set_the_computers() {
     let submitted = g.bots[1]
         .call("release_submit", json!({"release_id": id}))
         .await;
-    assert_eq!(submitted["release"]["status"], "awaiting_owner");
+    let release = submitted["release"].clone();
+    assert_eq!(release["tested_on"], json!(["imac"]));
+    assert_eq!(release["tested_set_by"], "lead");
+    assert_eq!(release["deploys_to"], json!(["imac", "mac"]));
 
-    // The owner sees and sets them in the Releases view; approve only.
+    // Edits after submit are for the next package.
+    g.bots[0]
+        .call("release_machines_set", json!({"machines": []}))
+        .await;
+    let again = g.bots[1]
+        .call("release_get", json!({"release_id": id}))
+        .await;
+    assert_eq!(again["release"]["tested_on"], json!(["imac"]), "{again}");
+
+    // Approved and deployed to imac only: not deployed yet.
+    let d = &g.pair.d;
+    let mut owner = WsClient::connect(d).await;
+    let ruled = owner
+        .request(json!({"type": "release_rule", "release_id": id,
+                        "verdicts": [{"item_id": g.item, "verdict": "ship"}],
+                        "expected_version": again["release"]["version"]}))
+        .await;
+    assert_eq!(ruled["release"]["status"], "approved", "{ruled}");
+    for (machine, tester) in [("imac", 3), ("mac", 2)] {
+        g.bots[1]
+            .call(
+                "release_deploy",
+                json!({"release_id": id, "machine": machine}),
+            )
+            .await;
+        let confirmed = g.bots[tester]
+            .call(
+                "deploy_confirm",
+                json!({"release_id": id, "machine": machine, "result": "ok", "smoke": "pass"}),
+            )
+            .await;
+        let status = &confirmed["release"]["status"];
+        if machine == "imac" {
+            assert_ne!(status, "deployed", "mac still runs the old version");
+        } else {
+            assert_eq!(status, "deployed", "{confirmed}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn the_owner_narrows_deploys_and_names_this_computer() {
+    let g = gate().await;
     let d = &g.pair.d;
     let mut owner = WsClient::connect(d).await;
     let seen = owner
         .request(json!({"type": "release_machines", "project_id": g.project}))
         .await;
-    assert_eq!(seen["machines"]["set"], json!(["imac"]), "{seen}");
-    let testers = seen["machines"]["testers"].as_array().unwrap();
-    assert_eq!(testers.len(), 2, "{seen}");
-    let reset = owner
+    assert_eq!(
+        seen["machines"]["testers"].as_array().unwrap().len(),
+        2,
+        "{seen}"
+    );
+    let set = owner
         .request(
             json!({"type": "release_machines_set", "project_id": g.project,
-                        "machines": []}),
+                        "machines": ["imac"]}),
         )
         .await;
+    assert_eq!(set["machines"]["deploys_to"], json!(["imac"]), "{set}");
+    assert_eq!(set["machines"]["set_by"], "owner");
+    let renamed = owner
+        .request(
+            json!({"type": "release_machines_set", "project_id": g.project,
+                        "machine_name": "macbook"}),
+        )
+        .await;
+    assert_eq!(renamed["machines"]["machine_name"], "macbook", "{renamed}");
     assert_eq!(
-        reset["machines"]["required"],
-        json!(["imac", "this computer"]),
-        "{reset}"
+        renamed["machines"]["set"],
+        json!(["imac"]),
+        "the list stays"
     );
     let device = owner
         .request(json!({"type": "create_device", "name": "tablet",

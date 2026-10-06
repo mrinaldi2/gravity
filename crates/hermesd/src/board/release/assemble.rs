@@ -14,6 +14,7 @@ use crate::db::{BoardTx, NewRelease};
 use crate::decisions::service::{raise, RaiseRequest};
 use crate::decisions::{conflict, invalid};
 
+use super::machines;
 use super::model::{Release, ReleaseBuild, ReleaseStatus};
 use super::package::{check_tested, decision_body};
 use super::{daemon_move, frozen_hash, load, publish_moves, publish_touched, Caller};
@@ -189,6 +190,10 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
                 release.status.as_str()
             )));
         }
+        // The computers it is tested on and deployed to, as of now, frozen
+        // into the package (ARCH-R55 M1): later edits are for the next one.
+        t.set_release_targets(&release.id, &machines::targets_now(t, project)?)?;
+        let release = t.release(&release.id)?.expect("loaded");
         check_tested(t, &release)?;
         let before = predecessor(t, &release)?;
         let approval = t

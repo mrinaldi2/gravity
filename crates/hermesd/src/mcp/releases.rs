@@ -34,6 +34,7 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
     tool("release_test", "ReleaseTest", Audience::Tester),
     tool("release_machines", "ReleaseMachines", Audience::Everyone),
     tool("release_machines_set", "ReleaseMachinesSet", Audience::Lead),
+    tool("machine_name_set", "MachineNameSet", Audience::Lead),
     shared(
         "release_submit",
         "ReleaseSubmit",
@@ -166,8 +167,18 @@ pub(super) fn call(
         "release_machines_set" => {
             let req: c::ReleaseMachinesSet = decode("ReleaseMachinesSet", args, project)?;
             me.require(Role::Lead, "set the computers a release is tested on")?;
+            // A lead's list narrows testing only; deploys still reach every
+            // tester's computer (ARCH-R55 M1).
             app.db
-                .board_tx(|t| machines::set(t, project, &req.machines))
+                .board_tx(|t| machines::set(t, project, &req.machines, machines::SetBy::Lead))
+        }
+        "machine_name_set" => {
+            let req: c::MachineNameSet = decode("MachineNameSet", args, project)?;
+            me.require(Role::Lead, "name this computer")?;
+            app.db.board_tx(|t| {
+                machines::set_name(t, &req.name)?;
+                machines::view(t, project)
+            })
         }
         "release_pause" => {
             let req: c::ReleasePause = decode("ReleasePause", args, project)?;

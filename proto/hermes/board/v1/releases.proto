@@ -195,3 +195,11 @@ message ReleaseMachinesSet {
   string project_id = 1;
   repeated string machines = 2;
 }
+
+// Lead: name this computer for its testers (ARCH-R55 S1). It is what a
+// tester here tests on unless its role names a machine; not a linked
+// computer's name.
+message MachineNameSet {
+  string project_id = 1;
+  string name = 2;
+}

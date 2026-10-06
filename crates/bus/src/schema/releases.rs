@@ -129,12 +129,32 @@ CREATE TABLE IF NOT EXISTS release_build_commit (
 );
 "#;
 
-/// The computers a release must be tested on before it is submitted (H-115),
-/// as the owner or lead set them. None set: every tester's computer.
+/// The computers a release is tested on and deployed to (H-115, ARCH-R55).
+/// - `release_machine`: the list the owner or lead set (none: every
+///   tester's computer), and in `release_machine_setter` who set it; only
+///   the owner's list narrows deploys too.
+/// - `release_target`: both sets as frozen into a package at submit.
+/// - `daemon_name`: this computer's name for its testers, which a daemon
+///   otherwise doesn't know (the default is the host's name).
 pub(super) const MIGRATION_RELEASE_MACHINES: &str = r#"
 CREATE TABLE IF NOT EXISTS release_machine (
     project_id TEXT NOT NULL REFERENCES project(id),
     machine    TEXT NOT NULL,
     PRIMARY KEY (project_id, machine)
+);
+CREATE TABLE IF NOT EXISTS release_machine_setter (
+    project_id TEXT PRIMARY KEY REFERENCES project(id),
+    set_by     TEXT NOT NULL CHECK(set_by IN ('owner', 'lead'))
+);
+CREATE TABLE IF NOT EXISTS release_target (
+    release_id TEXT NOT NULL,
+    machine    TEXT NOT NULL,
+    kind       TEXT NOT NULL CHECK(kind IN ('test', 'deploy')),
+    set_by     TEXT,
+    PRIMARY KEY (release_id, machine, kind)
+);
+CREATE TABLE IF NOT EXISTS daemon_name (
+    id   INTEGER PRIMARY KEY CHECK(id = 1),
+    name TEXT NOT NULL
 );
 "#;

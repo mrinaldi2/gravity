@@ -125,6 +125,14 @@ export interface Release {
   readonly events: readonly ReleaseEvent[];
   /** Its items' post-install criteria: what the owner approves unproven. */
   readonly post_install?: readonly PostInstallCriterion[];
+  /** The computers it was tested on, frozen at submit (ARCH-R55); empty before. */
+  readonly tested_on?: readonly string[];
+  /** `owner` or `lead` when they narrowed it; null: every tester's computer. */
+  readonly tested_set_by?: string | null;
+  /** The computers it must reach before it counts as deployed. */
+  readonly deploys_to?: readonly string[];
+  /** `owner` when the owner narrowed it; null: every tester's computer. */
+  readonly deploys_set_by?: string | null;
   /** Whether this connection may rule on it (the approve grant, on its home). */
   readonly can_rule?: boolean;
   /** When it can't: the computer where the owner can. */
@@ -160,17 +168,25 @@ export type ReleaseRequestBody =
   | {
       readonly type: "release_machines_set";
       readonly project_id: string;
-      /** Empty: every tester's computer again. */
-      readonly machines: readonly string[];
+      /** Empty: every tester's computer again. The owner's list narrows deploys too. */
+      readonly machines?: readonly string[];
+      /** This computer's name for its testers. */
+      readonly machine_name?: string;
     };
 
 /** The computers a package must pass on before it is submitted (H-115). */
 export interface ReleaseMachines {
   readonly project_id: string;
+  /** This computer's name for its testers (ARCH-R55). */
+  readonly machine_name?: string;
   /** What submit waits for: `set`, or every tester's computer. */
   readonly required: readonly string[];
+  /** Where a package goes: the owner's list, or every tester's computer. */
+  readonly deploys_to?: readonly string[];
   /** What the owner or lead chose; empty means every tester's computer. */
   readonly set: readonly string[];
+  /** Who chose it: `owner` or `lead`. */
+  readonly set_by?: string | null;
   /** Each tester and the computer it tests on. */
   readonly testers: readonly { readonly bot_id: string; readonly machine: string }[];
 }

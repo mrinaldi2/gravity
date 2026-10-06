@@ -142,6 +142,19 @@ pub struct Release {
     /// Its items' criteria proven only after install (ARCH-R53 S1): what the
     /// owner approves unproven.
     pub post_install: Vec<PostInstallAc>,
+    /// The computers it was tested on and deploys to, frozen at submit
+    /// (ARCH-R55 M1); empty for a package not submitted, or submitted before.
+    pub targets: ReleaseTargets,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ReleaseTargets {
+    pub tested_on: Vec<String>,
+    /// `owner` or `lead` when they narrowed it; `None`: every tester.
+    pub tested_set_by: Option<String>,
+    pub deploys_to: Vec<String>,
+    /// `owner` when the owner narrowed it; `None`: every tester.
+    pub deploys_set_by: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -216,6 +229,10 @@ impl Release {
                 "item_id": a.item_id, "index": a.index, "text": a.text,
                 "checked": a.checked, "checked_by": a.checked_by,
             })).collect::<Vec<_>>(),
+            "tested_on": self.targets.tested_on,
+            "tested_set_by": self.targets.tested_set_by,
+            "deploys_to": self.targets.deploys_to,
+            "deploys_set_by": self.targets.deploys_set_by,
         })
     }
 }

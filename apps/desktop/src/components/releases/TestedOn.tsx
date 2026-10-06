@@ -36,6 +36,17 @@ function computers(m: ReleaseMachines, botName: BotName): [string, string][] {
   return rows.sort(([a], [b]) => a.localeCompare(b));
 }
 
+/** What a package needs, and where it goes (ARCH-R55: only your list narrows deploys). */
+function hint(m: ReleaseMachines, chosen: boolean): string {
+  if (!chosen) {
+    return "Each package needs a pass on every tester's computer, and goes to all of them.";
+  }
+  if (m.set_by === "lead") {
+    return "The lead chose where packages are tested; they still go to every tester's computer.";
+  }
+  return "Each package is tested on, and goes to, the computers you chose.";
+}
+
 export default function TestedOn(props: TestedOnProps): ReactElement | null {
   const { client, projectId, addToast } = props;
   const [machines, setMachines] = useState<ReleaseMachines | null>(null);
@@ -84,11 +95,7 @@ export default function TestedOn(props: TestedOnProps): ReactElement | null {
         <p className="release-hint">No tester yet: give a bot the tester role.</p>
       ) : (
         <>
-          <p className="release-hint">
-            {chosen
-              ? "Each package needs a pass on the computers you chose."
-              : "Each package needs a pass on every tester's computer."}
-          </p>
+          <p className="release-hint">{hint(machines, chosen)}</p>
           <ul>
             {all.map(([machine, names]) => (
               <li key={machine}>
@@ -107,6 +114,9 @@ export default function TestedOn(props: TestedOnProps): ReactElement | null {
               </li>
             ))}
           </ul>
+          {machines.machine_name ? (
+            <p className="release-hint">This computer is called {machines.machine_name}.</p>
+          ) : null}
           {chosen && props.canApprove ? (
             <button type="button" className="btn btn-small" onClick={() => void save([])}>
               Use every tester's computer
