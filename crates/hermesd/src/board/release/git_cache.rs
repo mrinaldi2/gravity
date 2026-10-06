@@ -98,3 +98,21 @@ pub fn contains(cache: &Path, descendant: &str, ancestor: &str) -> anyhow::Resul
         }
     }
 }
+
+/// The commit a ref names in the cache, if it names one.
+pub fn resolve(cache: &Path, reference: &str) -> Option<String> {
+    let out = git(
+        cache,
+        &[
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("{reference}^{{commit}}"),
+        ],
+    )
+    .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|c| !c.is_empty())
+}

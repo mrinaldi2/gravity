@@ -162,17 +162,54 @@ async fn a_chain_of_approved_packages_closes_through_the_deployed_one() {
     );
 }
 
+/// CE-015 M1: a package from before source commits were recorded closes
+/// only when its release branch (or tag) is in the via commit's history;
+/// what it built proves nothing.
 #[tokio::test]
-async fn a_package_without_a_commit_closes_only_through_a_newer_one_with_its_platforms() {
-    let mut r = releases(3).await;
+async fn a_package_without_a_commit_closes_only_through_its_release_branch() {
+    let mut r = releases(6).await;
+    let repo = tempfile::tempdir().unwrap();
+    let [a, _b, c, d] = history(repo.path());
+    git(repo.path(), &["branch", "release/desktop-0.16.2", &a]);
+    git(repo.path(), &["tag", "desktop-v0.16.3", &a]);
+    git(repo.path(), &["branch", "release/desktop-0.15.9", &d]);
+    r.pair
+        .d
+        .app
+        .db
+        .set_project_repo(
+            &r.project,
+            Some(&bus::ProjectRepo {
+                url: repo.path().display().to_string(),
+                branch: "main".into(),
+            }),
+        )
+        .unwrap();
     let mut owner = WsClient::connect(&r.pair.d).await;
     let items = r.items.clone();
     let old = approved(&mut r, &mut owner, "0.16.2", &items[0], None).await;
-    let open = approved(&mut r, &mut owner, "0.16.2-b", &items[1], None).await;
-    let newer = approved(&mut r, &mut owner, "0.16.4", &items[2], None).await;
+    let tagged = approved(&mut r, &mut owner, "0.16.3", &items[1], None).await;
+    let side = approved(&mut r, &mut owner, "0.15.9", &items[2], None).await;
+    let unbranched = approved(&mut r, &mut owner, "0.14.0", &items[3], None).await;
+    let open = approved(&mut r, &mut owner, "0.16.2-b", &items[4], None).await;
+    let newer = approved(&mut r, &mut owner, "0.16.4", &items[5], Some(&c)).await;
     deploy(&mut r, newer["id"].as_str().unwrap()).await;
 
-    // A deployment still open on it: refused, and nothing recorded.
+    // (b) Its branch isn't in the via commit's history: refused, left put.
+    let raw = r.bots[1]
+        .call_raw("release_deployed_via", via(&side, &newer))
+        .await;
+    assert!(error_text(&raw).contains("doesn't contain"), "{raw}");
+    assert_eq!(r.column(&items[2]), "deploying", "left where it was");
+    // (c) No branch or tag at all: refused.
+    let raw = r.bots[1]
+        .call_raw("release_deployed_via", via(&unbranched, &newer))
+        .await;
+    assert!(
+        error_text(&raw).contains("no release branch or tag"),
+        "{raw}"
+    );
+    // A deployment still open on it: refused.
     r.bots[1]
         .call(
             "release_deploy",
@@ -223,24 +260,27 @@ async fn a_package_without_a_commit_closes_only_through_a_newer_one_with_its_pla
     )
     .unwrap();
 
-    let closed = r.bots[1]
-        .call("release_deployed_via", via(&old, &newer))
-        .await["release"]
-        .clone();
-    assert_eq!(closed["status"], "deployed", "{closed}");
-    let basis = closed["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|e| e["kind"] == "deployed_via")
-        .map(|e| e["detail"]["basis"].clone());
-    assert_eq!(basis, Some(json!("platforms")));
-    // An older package can't stand in for a newer one.
-    let raw = r.bots[1]
-        .call_raw("release_deployed_via", via(&newer, &old))
-        .await;
-    assert!(
-        error_text(&raw).is_empty() || error_text(&raw).contains("approved"),
-        "{raw}"
-    );
+    // (a) Its release branch, and a release tag, are in the via history.
+    for (package, reference) in [
+        (&old, "refs/heads/release/desktop-0.16.2"),
+        (&tagged, "refs/tags/desktop-v0.16.3"),
+    ] {
+        let closed = r.bots[1]
+            .call("release_deployed_via", via(package, &newer))
+            .await["release"]
+            .clone();
+        assert_eq!(closed["status"], "deployed", "{closed}");
+        let detail = closed["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["kind"] == "deployed_via")
+            .map(|e| e["detail"].clone())
+            .expect("event");
+        assert_eq!(detail["basis"], "release_branch", "{detail}");
+        assert_eq!(detail["reference"], reference, "{detail}");
+        assert_eq!(detail["commit"], a.as_str());
+    }
+    assert_eq!(r.column(&items[0]), "done");
+    assert_eq!(r.column(&items[1]), "done");
 }

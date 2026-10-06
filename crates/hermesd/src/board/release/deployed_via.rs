@@ -6,11 +6,12 @@
 //! `release_deployed_via {release_id, via_release_id}` (DevOps) closes it:
 //! - the old package is approved and has no deployment open;
 //! - the via package is deployed (or itself closed this way, for a chain);
-//! - the via package contains the old one: the old package's recorded
-//!   source commit is the via's or in its history, checked in the daemon's
-//!   own copy of the repository. A package from before commits were recorded
-//!   is contained when the via package is newer and builds every platform it
-//!   built;
+//! - the via package contains the old one: the old package's commit is the
+//!   via's or in its history, checked in the daemon's own copy of the
+//!   repository. The old commit is the one it recorded, or for a package from
+//!   before commits were recorded, its release branch
+//!   `release/desktop-<version>` (or tag `desktop-v<version>`) (CE-015 M1).
+//!   Nothing else counts: with neither, it is refused;
 //! - its post-install acceptance criteria are ticked (H-116).
 //!
 //! Then it records a `deployed_via` event, invents no deployment, marks the
@@ -31,14 +32,16 @@ use super::git_cache;
 use super::model::{Release, ReleaseEvent, ReleaseStatus};
 use super::{daemon_move, load, publish_moves, Caller};
 
-/// How the via package was shown to contain the old one.
+/// How the via package was shown to contain the old one: the old commit is
+/// in the via commit's history.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Basis {
-    /// The old commit is in the via commit's history.
-    Ancestry { old: String, via: String },
-    /// No commit recorded on the old package: the newer via package builds
-    /// every platform it built.
-    Platforms,
+struct Basis {
+    /// `ancestry` (the commit it recorded) or `release_branch`.
+    rule: &'static str,
+    /// The branch or tag the old commit was read from, for `release_branch`.
+    reference: Option<String>,
+    old: String,
+    via: String,
 }
 
 pub fn deployed_via(
@@ -63,16 +66,10 @@ pub fn deployed_via(
         let via = load(t, project, via_id)?;
         check_states(&old, &via)?;
         post_install_checked(t, &old)?;
-        let detail = match &basis {
-            Basis::Ancestry {
-                old: commit,
-                via: via_commit,
-            } => json!({
-                "via_release_id": via.id, "basis": "ancestry",
-                "commit": commit, "via_commit": via_commit,
-            }),
-            Basis::Platforms => json!({ "via_release_id": via.id, "basis": "platforms" }),
-        };
+        let detail = json!({
+            "via_release_id": via.id, "basis": basis.rule, "reference": basis.reference,
+            "commit": basis.old, "via_commit": basis.via,
+        });
         let event = ReleaseEvent {
             release_id: old.id.clone(),
             release_name: old.name.clone(),
@@ -133,34 +130,43 @@ fn check_states(old: &Release, via: &Release) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Whether, and how, `via` contains `old`.
+/// Whether, and how, `via` contains `old`: its commit in the via commit's
+/// history, read in the daemon's own copy of the repository.
 fn contained(
     app: &Arc<AppState>,
     project: &str,
     old: &Release,
     via: &Release,
 ) -> anyhow::Result<Basis> {
-    let Some(commit) = recorded_commit(old)? else {
-        return by_platforms(old, via);
-    };
     let via_commit = recorded_commit(via)?.ok_or_else(|| {
         forbidden(format!(
-            "release {} records no source commit, so it can't be shown to contain {}",
+            "release {} records no source commit, so it can't be shown to contain {}; \
+             record its source commit, or ask the owner",
             via.name, old.name
         ))
     })?;
-    if via_commit == commit {
-        return Ok(Basis::Ancestry {
-            old: commit,
-            via: via_commit,
-        });
-    }
+    let recorded = recorded_commit(old)?;
     let url = app
         .db
         .project_repo(project)?
         .map(|r| r.url)
         .ok_or_else(|| forbidden("the project has no repository set, so history can't be read"))?;
     let cache = git_cache::refresh(&app.cfg.home, project, &url)?;
+    let (rule, reference, commit) = match recorded {
+        Some(commit) => ("ancestry", None, commit),
+        // Recorded before commits were (CE-015 M1): its release branch or
+        // tag, never a guess from what it built.
+        None => {
+            let (reference, commit) = release_ref(&cache, old).ok_or_else(|| {
+                forbidden(format!(
+                    "can't show {} is contained in {}: it records no source commit and has no \
+                     release branch or tag; record its source commit, or ask the owner",
+                    old.name, via.name
+                ))
+            })?;
+            ("release_branch", Some(reference), commit)
+        }
+    };
     for c in [&commit, &via_commit] {
         if !git_cache::has(&cache, c) {
             return Err(forbidden(format!(
@@ -169,43 +175,43 @@ fn contained(
         }
     }
     if git_cache::contains(&cache, &via_commit, &commit)? {
-        Ok(Basis::Ancestry {
+        Ok(Basis {
+            rule,
+            reference,
             old: commit,
             via: via_commit,
         })
     } else {
         Err(forbidden(format!(
-            "release {} ({}) doesn't contain {}'s commit {}",
+            "release {} ({}) doesn't contain {}'s commit {}{}",
             via.name,
             &via_commit[..via_commit.len().min(12)],
             old.name,
-            &commit[..commit.len().min(12)]
+            &commit[..commit.len().min(12)],
+            reference.map_or_else(String::new, |r| format!(" ({r})"))
         )))
     }
 }
 
-/// A package from before source commits were recorded: contained when the
-/// via package is newer and builds every platform it built.
-fn by_platforms(old: &Release, via: &Release) -> anyhow::Result<Basis> {
-    if via.created_at <= old.created_at {
-        return Err(forbidden(format!(
-            "release {} records no source commit, and {} is not newer",
-            old.name, via.name
-        )));
-    }
-    let missing: Vec<&str> = old
-        .builds
+/// The old package's release branch or tag and its commit:
+/// `release/desktop-<v>`, then `desktop-v<v>`, for its display version and
+/// then its name.
+fn release_ref(cache: &std::path::Path, old: &Release) -> Option<(String, String)> {
+    let versions = old
+        .display_version
         .iter()
-        .map(|b| b.platform.as_str())
-        .filter(|p| !via.builds.iter().any(|v| v.platform == *p))
-        .collect();
-    if !missing.is_empty() {
-        return Err(forbidden(format!(
-            "release {} records no source commit, and {} has no {} build to replace it",
-            old.name,
-            via.name,
-            missing.join(", ")
-        )));
+        .chain(std::iter::once(&old.name))
+        .map(|v| v.trim().trim_start_matches('v').to_string())
+        .filter(|v| !v.is_empty());
+    for version in versions {
+        for reference in [
+            format!("refs/heads/release/desktop-{version}"),
+            format!("refs/tags/desktop-v{version}"),
+        ] {
+            if let Some(commit) = git_cache::resolve(cache, &reference) {
+                return Some((reference, commit));
+            }
+        }
     }
-    Ok(Basis::Platforms)
+    None
 }
