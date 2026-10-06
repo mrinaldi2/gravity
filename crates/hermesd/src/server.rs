@@ -65,6 +65,14 @@ async fn health(State(app): State<Arc<AppState>>) -> impl IntoResponse {
 
 /// Spawn the supervision loop, delivery worker, and scheduler.
 pub fn spawn_workers(app: &Arc<AppState>) {
+    // Scratch mode (H-171): the database and the WebSocket only. Nothing
+    // starts a bot, dials or answers a peer, runs a routine, delivers a
+    // message, runs a worker or writes into a bot's folder.
+    if app.cfg.scratch {
+        tokio::spawn(crate::activity::watch(app.clone()));
+        tokio::spawn(crate::chat::watch(app.clone()));
+        return;
+    }
     // Bots provisioned before instructions moved out of `CLAUDE.md` still have
     // a `system.md` without them. Regenerating on boot migrates those in place;
     // the write is content-guarded, so it is a no-op once every bot is current.

@@ -20,6 +20,9 @@ pub fn start_run(
     id: &str,
     sha256: &str,
 ) -> anyhow::Result<OwnerAction> {
+    if app.cfg.scratch {
+        return Err(invalid("a scratch daemon runs no command (H-171)"));
+    }
     let a = load(app, None, id)?;
     if a.proposal.target_machine != app.db.daemon_id()? {
         return Err(invalid("that action runs on another computer"));

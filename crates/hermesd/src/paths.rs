@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 
+mod own;
 mod prompt;
 mod prompt_sections;
 #[cfg(test)]
@@ -38,6 +39,7 @@ mod unix_hooks;
 #[cfg(windows)]
 mod windows_hooks;
 
+pub use own::own_workspace;
 pub use prompt::system_md;
 pub use trust::{claude_config_path, trust_workspace, ConfigLocked};
 

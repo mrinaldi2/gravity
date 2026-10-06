@@ -46,6 +46,10 @@ pub struct Config {
     /// where only the allowlisted `/mcp` URL reaches bots at all. Ignored for
     /// direct launches, which always fail on a collision.
     pub negotiate_port: bool,
+    /// Scratch mode for repros and rehearsals (H-171): no bot starts, no peer
+    /// link, no routines, deliveries or workers, no bot-folder writes, no git
+    /// push. Set by `--scratch` or `HERMES_SCRATCH=1`.
+    pub scratch: bool,
     /// `pty` (each bot's saved CLI) or `double` (deterministic test runtime).
     pub runtime: RuntimeKind,
     pub claude_bin: String,
@@ -214,6 +218,7 @@ impl Default for Config {
             port: 49777,
             configured_port: 49777,
             negotiate_port: true,
+            scratch: false,
             runtime: RuntimeKind::Pty,
             claude_bin: "claude".to_string(),
             claude_args: Vec::new(),

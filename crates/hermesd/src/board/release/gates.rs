@@ -151,6 +151,11 @@ fn gate(
     release_id: &str,
     extra: PermissionExtra,
 ) -> anyhow::Result<Release> {
+    // Landing pushes to main and building ships installers: never from a
+    // scratch daemon (H-171).
+    if app.cfg.scratch {
+        return Err(forbidden("a scratch daemon lands and builds nothing"));
+    }
     let stored = Stored::load(&app.db, bot)?;
     if !stored.extras.contains(&extra) {
         return Err(forbidden(format!(

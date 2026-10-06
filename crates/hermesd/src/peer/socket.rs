@@ -32,6 +32,10 @@ pub async fn peer_handler(
     State(app): State<Arc<AppState>>,
     upgrade: WebSocketUpgrade,
 ) -> axum::response::Response {
+    // A scratch daemon links with no computer (H-171).
+    if app.cfg.scratch {
+        return axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response();
+    }
     upgrade
         .max_message_size(MAX_PEER_FRAME_BYTES)
         .max_frame_size(MAX_PEER_FRAME_BYTES)
@@ -141,6 +145,10 @@ pub fn spawn_dialers(app: &Arc<AppState>) {
 
 /// Keeps a link open to one peer until it is revoked.
 pub fn spawn_dialer(app: Arc<AppState>, peer_id: String) {
+    if app.cfg.scratch {
+        tracing::info!(peer = %peer_id, "scratch mode: no peer is dialed");
+        return;
+    }
     tokio::spawn(async move {
         let mut wait = MIN_REDIAL;
         loop {

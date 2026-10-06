@@ -73,7 +73,10 @@ impl Fixture {
 
     /// A bot whose workspace does not exist, so no trust step runs.
     fn bot(&self, name: &str, runtime: bus::BotRuntime) -> String {
-        let workspace = self.home.path().join(format!("p/bots/{name}/workspace"));
+        let workspace = self
+            .home
+            .path()
+            .join(format!("projects/p/bots/{name}/workspace"));
         self.db
             .create_bot_with_runtime(
                 &self.project_id,
@@ -327,7 +330,9 @@ async fn a_hung_start_stops_holding_its_slot_after_the_warmup() {
     let ids: Vec<String> = ["hung", "next"]
         .iter()
         .map(|name| {
-            let workspace = home.path().join(format!("p/bots/{name}/workspace"));
+            let workspace = home
+                .path()
+                .join(format!("projects/p/bots/{name}/workspace"));
             db.create_bot(
                 &project_id,
                 name,

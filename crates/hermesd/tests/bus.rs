@@ -179,9 +179,20 @@ async fn bus_survives_daemon_restart_with_pending_delivery() {
         let db = Db::open(&cfg.db_path()).expect("db");
         let app = AppState::new(cfg.clone(), db).expect("app");
         let project = app.db.create_project("p", "p").expect("project");
+        // In this home, where the daemon starts bots (H-171).
+        let workspace = cfg.projects_dir().join("p/bots/alice/workspace");
         let bot = app
             .db
-            .create_bot(&project.id, "alice", "", "", "", "/tmp/x", "alice", None)
+            .create_bot(
+                &project.id,
+                "alice",
+                "",
+                "",
+                "",
+                workspace.to_str().unwrap(),
+                "alice",
+                None,
+            )
             .expect("bot");
         let conv = app.db.dm_conversation(&bot.id).expect("conv").expect("dm");
         let msg = app

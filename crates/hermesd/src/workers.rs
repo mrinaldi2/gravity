@@ -246,7 +246,10 @@ pub async fn reconcile(app: &Arc<AppState>) -> anyhow::Result<()> {
 /// what it left unpushed has finished. Otherwise saving is started, or is
 /// still running, and the worker waits.
 fn salvaged(app: &Arc<AppState>, bot: &bus::Bot) -> bool {
-    let workspace = std::path::PathBuf::from(&bot.workspace_path);
+    // A folder outside this home isn't ours to save from or delete (H-171).
+    let Some(workspace) = crate::paths::own_workspace(&app.cfg, bot) else {
+        return true;
+    };
     let marker = workspace.join(SALVAGED_MARKER);
     let Some(checkout) = repo::checkout_of(&workspace) else {
         return true;
