@@ -15,11 +15,6 @@ pub(super) fn of(name: &str, rest: &[String], args: &[String]) -> Vec<String> {
             .map(str::to_string)
             .collect(),
         "sed" | "gsed" => in_place(rest, name == "sed"),
-        // `cargo clean` deletes the target it is given: a bot's own only
-        // (H-029). Without one it cleans the bot's own `CARGO_TARGET_DIR`.
-        "cargo" if rest.first().is_some_and(|w| w == "clean") => {
-            output(rest, &["--target-dir"], &[])
-        }
         "chmod" | "chown" | "chgrp" | "xattr" | "chflags" => args.iter().skip(1).cloned().collect(),
         "curl" => output(
             rest,
