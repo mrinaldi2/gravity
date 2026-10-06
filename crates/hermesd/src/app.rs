@@ -65,6 +65,8 @@ pub struct AppState {
     pub peers: crate::peer::PeerHub,
     /// Bots' conversations read from their transcripts, for the chat pane.
     pub chat: crate::chat::ChatStore,
+    /// Bots working with no task on the board (H-135 G4).
+    pub off_board: crate::offboard::OffBoard,
     /// Permission prompts waiting on the owner's answer.
     pub approvals: crate::approval::Approvals,
     /// Bot browsers being watched, one shared stream each.
@@ -130,6 +132,7 @@ impl AppState {
             auto_compact,
             peers: crate::peer::PeerHub::default(),
             chat: crate::chat::ChatStore::default(),
+            off_board: Default::default(),
             approvals: crate::approval::Approvals::default(),
             browsers: crate::browser::streams::BrowserStreams::default(),
             workers: crate::workers::Workers::default(),

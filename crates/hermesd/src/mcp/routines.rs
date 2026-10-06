@@ -11,12 +11,47 @@ use crate::events::Push;
 use crate::routine_validation::{checked_limits, checked_routine_fields, checked_signal_payload};
 use crate::scheduler::{emit_signal as emit, EmitSignal};
 
-use super::{caller, validate_trigger};
+use super::{caller, task_card, validate_trigger};
+
+/// Every routine names a card where the project has a board (H-135 G5).
+const ROUTINE_NEEDS_CARD: &str = "every routine needs a board card — pass `item` (a \
+     recurring job can use a standing card, such as 'Ops: nightly checks'; create one with \
+     item_create if none fits)";
+
+/// The card a routine names, checked: `checked` when the board's home on a
+/// peer already checked it (`task_card::intercept`), else on this board.
+fn routine_item(
+    app: &Arc<AppState>,
+    me: &bus::Bot,
+    args: &Value,
+    checked: Option<String>,
+) -> anyhow::Result<Option<String>> {
+    if checked.is_some() {
+        return Ok(checked);
+    }
+    match args
+        .get("item")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+    {
+        Some(id) => task_card::local_item(app, me, id).map(Some),
+        None => Ok(None),
+    }
+}
 
 pub(super) fn create_routine(
     app: &Arc<AppState>,
     bot_id: &str,
     args: &Value,
+) -> anyhow::Result<Value> {
+    create_routine_for(app, bot_id, args, None)
+}
+
+pub(super) fn create_routine_for(
+    app: &Arc<AppState>,
+    bot_id: &str,
+    args: &Value,
+    checked: Option<String>,
 ) -> anyhow::Result<Value> {
     let me = caller(app, bot_id)?;
     let name = args
@@ -36,6 +71,10 @@ pub(super) fn create_routine(
     checked_routine_fields(Some(name), Some(prompt))?;
     let limits = checked_limits(args)?;
     validate_trigger(&app.db, &me.project_id, &me.id, &trigger)?;
+    let card = routine_item(app, &me, args, checked)?;
+    if card.is_none() && task_card::has_board(app, &me.project_id) {
+        anyhow::bail!("{ROUTINE_NEEDS_CARD}");
+    }
     let policy = args
         .get("busy_policy")
         .and_then(|v| v.as_str())
@@ -52,17 +91,31 @@ pub(super) fn create_routine(
         app.db
             .update_routine(&routine.id, None, None, None, None, limits)?;
     }
+    app.db.set_routine_card(&routine.id, card.as_deref())?;
     app.events.push(Push::notice(
         "info",
         "Routine created",
         format!("Bot {} scheduled routine \"{}\".", me.name, name),
     ));
-    Ok(json!({ "id": routine.id, "enabled": true }))
+    Ok(json!({ "id": routine.id, "enabled": true, "item": card }))
 }
 
 pub(super) fn list_routines(app: &Arc<AppState>, bot_id: &str) -> anyhow::Result<Value> {
-    let routines = app.db.list_routines(Some(bot_id))?;
-    Ok(serde_json::to_value(json!({ "routines": routines }))?)
+    let routines = app
+        .db
+        .list_routines(Some(bot_id))?
+        .into_iter()
+        .map(|r| with_card(app, r))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    Ok(json!({ "routines": routines }))
+}
+
+/// A routine as a bot reads it, with the card its runs are for.
+fn with_card(app: &AppState, routine: bus::Routine) -> anyhow::Result<Value> {
+    let item = app.db.routine_card(&routine.id)?;
+    let mut value = serde_json::to_value(routine)?;
+    value["item"] = json!(item);
+    Ok(value)
 }
 
 /// Resolve a routine the caller owns; bots may only touch their own routines.
@@ -100,8 +153,18 @@ pub(super) fn update_routine(
     bot_id: &str,
     args: &Value,
 ) -> anyhow::Result<Value> {
+    update_routine_for(app, bot_id, args, None)
+}
+
+pub(super) fn update_routine_for(
+    app: &Arc<AppState>,
+    bot_id: &str,
+    args: &Value,
+    checked: Option<String>,
+) -> anyhow::Result<Value> {
     let me = caller(app, bot_id)?;
     let routine = my_routine(app, bot_id, args)?;
+    let card = routine_item(app, &me, args, checked)?;
     let name = args.get("name").and_then(|v| v.as_str());
     let prompt = args.get("prompt").and_then(|v| v.as_str());
     checked_routine_fields(name, prompt)?;
@@ -128,12 +191,16 @@ pub(super) fn update_routine(
         && trigger.is_none()
         && policy.is_none()
         && limits.max_duration_seconds.is_none()
-        && limits.max_attempts.is_none();
+        && limits.max_attempts.is_none()
+        && card.is_none();
     if nothing {
         anyhow::bail!(
             "nothing to update: pass name, trigger, prompt, busy_policy, \
-             max_duration_seconds or max_attempts"
+             max_duration_seconds, max_attempts or item"
         );
+    }
+    if card.is_some() {
+        app.db.set_routine_card(&routine.id, card.as_deref())?;
     }
     app.db
         .update_routine(&routine.id, name, trigger.as_ref(), prompt, policy, limits)?;
@@ -147,7 +214,7 @@ pub(super) fn update_routine(
         .db
         .get_routine(&routine.id)?
         .ok_or_else(|| anyhow::anyhow!("routine not found"))?;
-    Ok(serde_json::to_value(updated)?)
+    with_card(app, updated)
 }
 
 pub(super) fn delete_routine(

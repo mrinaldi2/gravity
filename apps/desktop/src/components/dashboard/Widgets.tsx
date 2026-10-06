@@ -205,6 +205,14 @@ export function TeamWidget(props: {
                       <span className={`dot dot-${bot.state}`} aria-hidden="true" />
                       {BOT_STATE_LABEL[bot.state] ?? bot.state}
                     </span>
+                    {bot.off_board_since ? (
+                      <span
+                        className="dash-offboard"
+                        title="Working for 10 minutes or more with no task on the board"
+                      >
+                        Working off-board
+                      </span>
+                    ) : null}
                   </span>
                   <span className="dash-row-meta">
                     {work}

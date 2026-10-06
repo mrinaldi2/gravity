@@ -196,6 +196,7 @@ pub(crate) fn drop_link(
     }
     app.db.unexpose_project(project_id, peer_id)?;
     app.board_mirror.forget(project_id, peer_id);
+    app.db.forget_board_home(project_id, peer_id)?;
     for bot in app.db.stand_ins(project_id, peer_id)? {
         roster::archive_stand_in(app, &bot.id, "project unlinked")?;
     }

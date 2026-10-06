@@ -31,6 +31,7 @@ mod schema_decisions;
 mod selfmgmt;
 mod tags;
 mod task_card;
+pub(crate) use task_card::has_board;
 pub(crate) mod tasks;
 mod tools;
 mod workers;

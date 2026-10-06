@@ -101,6 +101,8 @@ pub(crate) fn bot_view(app: &AppState, bot: &bus::Bot) -> Value {
         "state": state.as_str(),
         "state_reason": reason,
         "unread_count": unread,
+        // Working with no task on the board (H-135 G4): the bot's badge.
+        "off_board_since": app.off_board.flagged_since(&bot.id),
         "workspace_path": bot.workspace_path,
         "dir_name": bot.dir_name,
         "created_by_bot_id": bot.created_by_bot_id,

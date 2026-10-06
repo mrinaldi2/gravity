@@ -202,6 +202,10 @@ impl Db {
         let mut conn = self.lock();
         let tx = conn.transaction()?;
         tx.execute("DELETE FROM routine_run WHERE routine_id = ?1", params![id])?;
+        tx.execute(
+            "DELETE FROM routine_card WHERE routine_id = ?1",
+            params![id],
+        )?;
         tx.execute("DELETE FROM routine WHERE id = ?1", params![id])?;
         tx.commit()?;
         Ok(())

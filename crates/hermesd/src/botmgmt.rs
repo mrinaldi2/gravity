@@ -116,6 +116,7 @@ pub(super) fn provision_spec<'a>(
         linked_machines: linked_machines(app, &project.id),
         own_browser: app.cfg.browser.enabled,
         user_chrome: bot.user_chrome,
+        task_limits: app.cfg.tasks.for_project(&project.name),
     }
 }
 

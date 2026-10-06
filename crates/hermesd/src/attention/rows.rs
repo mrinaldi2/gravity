@@ -117,6 +117,7 @@ pub(crate) fn rows(
         owner_actions(app, &mut b)?;
         prompts_and_waiting(app, &mut b)?;
         owner_questions(app, &mut b)?;
+        off_board(app, &mut b)?;
     }
     Ok(b.out)
 }
@@ -355,6 +356,35 @@ fn owner_questions(app: &AppState, b: &mut Builder<'_>) -> anyhow::Result<()> {
             target: Some(target),
         };
         b.push(part, weight(AttentionKind::OwnerQuestion), None);
+    }
+    Ok(())
+}
+
+/// The project's bots here working off-board for 10 minutes or more
+/// (H-135 G4), while the project has a board. Stand-ins are flagged on
+/// their own computer.
+fn off_board(app: &AppState, b: &mut Builder<'_>) -> anyhow::Result<()> {
+    if !crate::mcp::has_board(app, b.project_id) {
+        return Ok(());
+    }
+    let mut bots = app.db.list_bots(Some(b.project_id))?;
+    bots.sort_by(|x, y| x.name.cmp(&y.name));
+    for bot in bots.iter().filter(|bot| !bot.is_linked()) {
+        let Some(since) = app.off_board.flagged_since(&bot.id) else {
+            continue;
+        };
+        let part = Part {
+            kind: AttentionKind::OffBoard,
+            target_id: bot.id.clone(),
+            title: format!("{} is working with no task on the board", bot.name),
+            created_at: since,
+            target: Some(Target::Bot(BotRef {
+                daemon_id: b.me.clone(),
+                bot_id: bot.id.clone(),
+                name: bot.name.clone(),
+            })),
+        };
+        b.push(part, weight(AttentionKind::OffBoard), None);
     }
     Ok(())
 }

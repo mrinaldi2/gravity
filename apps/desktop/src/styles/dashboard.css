@@ -280,6 +280,13 @@
   color: var(--text-dim);
 }
 
+/* A bot working with no task on the board (H-135 G4). */
+.dash-offboard {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--amber);
+}
+
 .dash-tone-bad {
   color: var(--red);
 }

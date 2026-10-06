@@ -19,6 +19,7 @@ fn spec<'a>(instructions: &'a str) -> BotProvision<'a> {
         linked_machines: Vec::new(),
         own_browser: false,
         user_chrome: false,
+        task_limits: Default::default(),
     }
 }
 

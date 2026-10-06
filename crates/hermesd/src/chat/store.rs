@@ -95,15 +95,15 @@ impl ChatStore {
     /// What started the bot's last turn, when that turn never ended: the
     /// session stopped mid-turn. Read before the session is started again.
     pub fn interrupted(&self, app: &AppState, bot: &Bot) -> anyhow::Result<Option<Trigger>> {
+        Ok(self.open_turn(app, bot)?.map(|turn| turn.trigger))
+    }
+
+    /// The bot's last turn while it hasn't ended: what it is doing now.
+    pub fn open_turn(&self, app: &AppState, bot: &Bot) -> anyhow::Result<Option<ChatTurn>> {
         self.refresh(app, bot)?;
         let (chat, _) = self.entry(app, bot)?;
         let chat = lock(&chat);
-        Ok(chat
-            .builder
-            .turns
-            .last()
-            .filter(|turn| turn.open)
-            .map(|turn| turn.trigger.clone()))
+        Ok(chat.builder.turns.last().filter(|turn| turn.open).cloned())
     }
 
     /// Reads the bot's command and write logs, brought up to date.
