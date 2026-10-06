@@ -13,7 +13,7 @@ use bus::contract::home::{
 };
 use bus::contract::wire::{envelope::Body, Envelope};
 use bus::BotState;
-use common::board::{new_item, next_envelope, send_raw};
+use common::board::{new_item, next_envelope, send_raw, walk};
 use common::peers::{project, wait_until};
 use common::tasks::project_with_bots;
 use common::*;
@@ -69,10 +69,17 @@ async fn each_project_has_a_row_counting_what_its_needs_you_lists() {
     assert_eq!(busy_row["bots"], 2);
     assert_eq!(busy_row["members"][0]["daemon_id"], me);
     assert_eq!(busy_row["rank"], Value::Null, "rank 0 is proto3's default");
+    // The card's extras (H-144): who waits for the owner, the board's counts.
+    assert_eq!(busy_row["bots_waiting"], 1, "{busy_row}");
+    assert!(busy_row.get("doing_total").is_none(), "nothing in Doing");
+    let inbox = &busy_row["columns"][0];
+    assert_eq!(inbox["category"], "inbox", "{busy_row}");
+    assert_eq!(inbox["count"], 1, "{busy_row}");
     // A project without a board has no home and nothing in Doing (D2 d).
     let calm_row = row(&o, &calm);
     assert!(calm_row.get("board_home").is_none(), "{calm_row}");
     assert!(calm_row.get("doing").is_none(), "{calm_row}");
+    assert!(calm_row.get("columns").is_none(), "{calm_row}");
     assert_eq!(calm_row["rank"], 1, "the busy project ranks first (D2 b)");
     assert_eq!(o["total"]["count"], 3);
     assert!(o["as_of"].is_string());
@@ -118,6 +125,44 @@ async fn each_project_has_a_row_counting_what_its_needs_you_lists() {
     assert_eq!(kinds, ["decision", "p0"]);
     let all = owner.request(dashboard(true)).await;
     assert_eq!(all["dashboard"]["needs_you"].as_array().unwrap().len(), 3);
+}
+
+/// Doing lists three cards and counts them all; each column counts its
+/// cards, in board order (H-144).
+#[tokio::test]
+async fn a_row_counts_every_column_and_all_of_doing() {
+    let (pair, _bots) = project_with_bots(&["Lead"]).await;
+    let db = &pair.d.app.db;
+    let project_id = db.get_bot(&pair.ids[0]).unwrap().unwrap().project_id;
+    db.ensure_board(&project_id, &db.daemon_id().unwrap(), Some("H"))
+        .unwrap();
+    for n in 0..4 {
+        let (id, _) = new_item(db, &project_id, &format!("Doing {n}"), Priority::P2);
+        walk(db, &id, &["doing"], None);
+    }
+    let (id, _) = new_item(db, &project_id, "Checked", Priority::P2);
+    walk(db, &id, &["doing", "review", "verify"], None);
+    new_item(db, &project_id, "Fresh", Priority::P2);
+    let mut owner = WsClient::connect(&pair.d).await;
+
+    let o = overview(&mut owner).await;
+    let r = row(&o, &project_id);
+    assert_eq!(r["doing"].as_array().unwrap().len(), 3, "{r}");
+    assert_eq!(r["doing_total"], 4, "{r}");
+    let counts: Vec<(&str, u64)> = r["columns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| {
+            (
+                c["key"].as_str().unwrap(),
+                c.get("count").map_or(0, |n| n.as_u64().unwrap()),
+            )
+        })
+        .filter(|(_, n)| *n > 0)
+        .collect();
+    assert_eq!(counts, [("inbox", 1), ("doing", 4), ("verify", 1)], "{r}");
+    assert_eq!(r["columns"][0]["name"], "Inbox", "{r}");
 }
 
 #[tokio::test]

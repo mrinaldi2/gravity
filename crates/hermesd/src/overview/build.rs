@@ -4,17 +4,16 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use bus::contract::board as c;
 use bus::contract::home::{
-    project_attention::Part, source::State, AttentionSummary, DoingBrief, Member, ProjectRow,
-    ProjectsOverview, Source,
+    project_attention::Part, source::State, AttentionSummary, ColumnCount, DoingBrief, Member,
+    ProjectRow, ProjectsOverview, Source,
 };
 use bus::Peer;
 
 use super::PeerEntry;
 use crate::app::AppState;
 use crate::attention::{self, cut, key, timestamp};
-use crate::board::model::{ColumnCategory, ItemCard};
+use crate::board::model::{BoardColumn, ColumnCategory, ItemCard};
 use crate::db::Db;
 
 /// The most Doing cards a row lists.
@@ -131,6 +130,7 @@ fn row(
         .iter()
         .filter_map(|p| p.last_activity_at)
         .max_by_key(|t| (t.seconds, t.nanos));
+    let board = board(app, &project.id)?;
     Ok(ProjectRow {
         project_id: project.id.clone(),
         name: Db::display_project_name(project),
@@ -138,7 +138,7 @@ fn row(
         board_home: board_home(app, &project.id)?,
         current_release: home.and_then(|p| p.current_release.clone()),
         open_tasks: db.project_open_tasks(&project.id)?,
-        doing: doing(app, &project.id)?,
+        doing: doing(app, board.as_ref())?,
         bots: u32::try_from(bots.len()).unwrap_or(u32::MAX),
         bots_working: parts.iter().map(|p| p.bots_working).sum(),
         attention: Some(summary),
@@ -149,6 +149,11 @@ fn row(
         rank: 0,
         latest_summary: home.and_then(|p| p.latest_summary.clone()),
         legacy: false,
+        columns: board.as_ref().map(columns).unwrap_or_default(),
+        doing_total: board.as_ref().map_or(0, |b| {
+            u32::try_from(b.in_category(ColumnCategory::Doing).count()).unwrap_or(u32::MAX)
+        }),
+        bots_waiting: parts.iter().map(|p| p.bots_waiting).sum(),
     })
 }
 
@@ -167,49 +172,93 @@ fn board_home(app: &AppState, project_id: &str) -> anyhow::Result<String> {
         .unwrap_or_default())
 }
 
-/// Up to three Doing cards, in board order: the board's here, or its
-/// mirror off-home (B9).
-fn doing(app: &AppState, project_id: &str) -> anyhow::Result<Vec<DoingBrief>> {
+/// A project's columns and cards: the board's here, or its mirror off-home
+/// (B9).
+struct Board {
+    columns: Vec<BoardColumn>,
+    cards: Vec<ItemCard>,
+}
+
+impl Board {
+    /// The cards in columns of `category`, in board order.
+    fn in_category(&self, category: ColumnCategory) -> impl Iterator<Item = &ItemCard> {
+        let keys: Vec<&str> = self
+            .columns
+            .iter()
+            .filter(|c| c.category == category)
+            .map(|c| c.key.as_str())
+            .collect();
+        self.cards
+            .iter()
+            .filter(move |c| keys.contains(&c.column_key.as_str()))
+    }
+}
+
+fn board(app: &AppState, project_id: &str) -> anyhow::Result<Option<Board>> {
     let db = &app.db;
-    let (doing_keys, cards): (Vec<String>, Vec<ItemCard>) =
-        if db.board_settings(project_id)?.is_some() {
-            let keys = db
-                .board_columns(project_id)?
-                .into_iter()
-                .filter(|c| c.category == ColumnCategory::Doing)
-                .map(|c| c.key)
-                .collect();
-            (keys, db.board_cards(project_id)?)
-        } else if let Some(board) = app.board_mirror.get(project_id) {
-            let keys = board
-                .snapshot
-                .columns
-                .iter()
-                .filter(|c| c.category() == c::ColumnCategory::Doing)
-                .map(|c| c.key.clone())
-                .collect();
-            let cards = board
-                .snapshot
-                .cards
-                .into_iter()
-                .filter_map(|c| c.try_into().ok())
-                .collect();
-            (keys, cards)
-        } else {
-            return Ok(Vec::new());
-        };
-    cards
+    if db.board_settings(project_id)?.is_some() {
+        return Ok(Some(Board {
+            columns: db.board_columns(project_id)?,
+            cards: db.board_cards(project_id)?,
+        }));
+    }
+    let Some(board) = app.board_mirror.get(project_id) else {
+        return Ok(None);
+    };
+    Ok(Some(Board {
+        columns: board
+            .snapshot
+            .columns
+            .into_iter()
+            .filter_map(|c| c.try_into().ok())
+            .collect(),
+        cards: board
+            .snapshot
+            .cards
+            .into_iter()
+            .filter_map(|c| c.try_into().ok())
+            .collect(),
+    }))
+}
+
+/// Every column with its card count, in board order.
+fn columns(board: &Board) -> Vec<ColumnCount> {
+    let mut columns: Vec<&BoardColumn> = board.columns.iter().collect();
+    columns.sort_by_key(|c| c.ord);
+    columns
         .into_iter()
-        .filter(|c| doing_keys.contains(&c.column_key))
+        .map(|column| ColumnCount {
+            key: column.key.clone(),
+            name: column.name.clone(),
+            category: column.category.as_str().to_string(),
+            count: u32::try_from(
+                board
+                    .cards
+                    .iter()
+                    .filter(|c| c.column_key == column.key)
+                    .count(),
+            )
+            .unwrap_or(u32::MAX),
+        })
+        .collect()
+}
+
+/// Up to three Doing cards, in board order.
+fn doing(app: &AppState, board: Option<&Board>) -> anyhow::Result<Vec<DoingBrief>> {
+    let Some(board) = board else {
+        return Ok(Vec::new());
+    };
+    board
+        .in_category(ColumnCategory::Doing)
         .take(DOING_SHOWN)
         .map(|card| {
-            let assignee = card.assignee.unwrap_or_default();
-            let name = match db.get_bot(&assignee)? {
+            let assignee = card.assignee.clone().unwrap_or_default();
+            let name = match app.db.get_bot(&assignee)? {
                 Some(bot) => Db::display_name(&bot),
                 None => assignee.clone(),
             };
             Ok(DoingBrief {
-                item_id: card.id,
+                item_id: card.id.clone(),
                 title: cut(&card.title, DOING_TITLE_MAX),
                 assignee_name: name,
                 assignee_bot_id: assignee,

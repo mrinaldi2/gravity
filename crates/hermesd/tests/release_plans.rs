@@ -95,6 +95,19 @@ async fn a_planned_release_shows_its_items_live_and_waits_for_verify() {
     assert_eq!(row["ac_checked"], 0);
     assert_eq!(row["title"], "Still in progress");
     assert_eq!(planned["events"][0]["kind"], "planned");
+    // The projects home card shows the same progress (H-144).
+    let mut owner = WsClient::connect(&r.pair.d).await;
+    let reply = owner.request(json!({"type": "projects_overview"})).await;
+    let brief = reply["overview"]["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["project_id"] == r.project.as_str())
+        .map(|row| row["current_release"].clone())
+        .unwrap_or_default();
+    assert_eq!(brief["state"], "planned", "{reply}");
+    assert_eq!(brief["items_total"], 2, "{brief}");
+    assert_eq!(brief["items_ready"], 1, "{brief}");
 
     // Nothing is built, assembled or submitted while an item isn't ready.
     let build = r.bots[1]
