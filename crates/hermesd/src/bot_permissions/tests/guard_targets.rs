@@ -151,3 +151,17 @@ fn cargo_aliases_and_subcommand_binaries_are_followed() {
         assert_eq!(call(command), None, "{command}");
     }
 }
+
+/// CE-015 M2, on any OS: a device path other than a drive or UNC one is
+/// refused whatever it names, and the bot's own target in drive form is not.
+#[test]
+fn device_paths_are_refused_drive_paths_are_not() {
+    for command in [
+        r"cat '\\?\Volume{0a1b2c3d}\Users\me\x'",
+        r"cargo build --target-dir '\\?\GLOBALROOT\Device\HarddiskVolume3\x'",
+        r"rm -rf '\\.\PhysicalDrive0'",
+    ] {
+        assert!(bash(command).is_some(), "{command}");
+    }
+    assert_eq!(bash(&format!("cargo build --target-dir {OWN}")), None);
+}

@@ -144,10 +144,11 @@ fn braces(word: &str) -> Option<(&str, &str, &str)> {
         .then(|| (&word[..open], options, &word[close + 1..]))
 }
 
-/// A Windows verbatim path (`\\?\C:\…`, `\\?\UNC\server\share\…`, or the
-/// same with `/`) in its plain spelling. Its `?` would otherwise read as a
-/// wildcard everywhere paths are matched, protected ones included
-/// (WIN-CHK-11, WIN-CHK-12).
+/// A Windows verbatim drive or UNC path (`\\?\C:\…`, `\\?\UNC\server\…`, or
+/// the same with `/`) in its plain spelling. Its `?` would otherwise read as
+/// a wildcard everywhere paths are matched, protected ones included
+/// (WIN-CHK-11, WIN-CHK-12). Any other device path stays as written, and
+/// [`is_device_path`] refuses it (CE-015 M2).
 pub(super) fn plain_verbatim(path: String) -> String {
     for unc in [r"\\?\UNC\", "//?/UNC/"] {
         if let Some(rest) = path.strip_prefix(unc) {
@@ -156,10 +157,28 @@ pub(super) fn plain_verbatim(path: String) -> String {
     }
     for verbatim in [r"\\?\", "//?/"] {
         if let Some(rest) = path.strip_prefix(verbatim) {
-            return rest.to_string();
+            let mut chars = rest.chars();
+            let drive = chars.next().is_some_and(|c| c.is_ascii_alphabetic())
+                && chars.next() == Some(':')
+                && matches!(chars.next(), None | Some('\\' | '/'));
+            if drive {
+                return rest.to_string();
+            }
         }
     }
     path
+}
+
+/// A Windows device path other than a drive or UNC one, as left by
+/// [`plain_verbatim`]: `\\?\Volume{…}\…`, `\\?\GLOBALROOT\…`, `\\.\…`.
+/// Through one, any file opens without its usual spelling, so no folder or
+/// protected path can be matched against it; it is refused (CE-015 M2).
+pub(super) fn is_device_path(path: &str) -> bool {
+    // `\\.\nul` is the null device, which writes nowhere.
+    !super::path_key::is_null_device(path)
+        && [r"\\?\", "//?/", r"\\.\", "//./"]
+            .iter()
+            .any(|p| path.starts_with(p))
 }
 
 #[cfg(test)]
@@ -176,5 +195,18 @@ mod verbatim_tests {
         assert_eq!(plain("//?/C:/Users/me/x"), "C:/Users/me/x");
         assert_eq!(plain(r"\\?\UNC\server\share\x"), r"\\server\share\x");
         assert_eq!(plain("/a/?/b"), "/a/?/b", "only the prefix");
+        // Other device paths stay, and are refused (CE-015 M2).
+        for device in [
+            r"\\?\Volume{0a1b2c3d-0000-0000-0000-000000000000}\Users\me\x",
+            r"\\?\GLOBALROOT\Device\HarddiskVolume3\Users\me\x",
+            r"\\.\C:\Users\me\x",
+            r"\\.\PhysicalDrive0",
+            "//?/Volume{0a1b}/x",
+        ] {
+            assert_eq!(plain(device), device);
+            assert!(super::is_device_path(device), "{device}");
+        }
+        assert!(!super::is_device_path(r"C:\Users\me\x"));
+        assert!(!super::is_device_path(r"\\server\share\x"));
     }
 }

@@ -194,6 +194,10 @@ impl GuardContext {
         let words = Self::alternatives(word, scope, 4);
         let found = words.iter().flat_map(|w| pieces(w)).find_map(|piece| {
             let expanded = self.expand(piece, scope);
+            // A device path may name any file, a protected one included.
+            if super::words::is_device_path(&expanded) {
+                return Some(expanded);
+            }
             self.candidates(&expanded, scope)
                 .iter()
                 .find_map(|p| self.is_protected(p))
@@ -300,6 +304,10 @@ impl GuardContext {
         // Resolved, Windows would read `/dev/null` as `C:\dev\null`.
         if is_null_device(&expanded) {
             return Ok(());
+        }
+        // A device path is never one of the bot's own folders (CE-015 M2).
+        if super::words::is_device_path(&expanded) {
+            return Err(PathBuf::from(&expanded));
         }
         if let Some(at) = expanded.find(WILD) {
             let (prefix, wild) = expanded.split_at(at);

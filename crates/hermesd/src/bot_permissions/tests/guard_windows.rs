@@ -218,3 +218,54 @@ fn a_bot_cleans_its_own_cargo_target_on_windows() {
     assert!(call(format!("cargo clean --target-dir {others}")).is_some());
     assert!(call(format!("rm -rf '{}'", others.replace('/', "\\"))).is_some());
 }
+
+/// CE-015 M2: only drive and UNC verbatim paths are read plainly. A volume,
+/// GLOBALROOT or `\\.\` device path can open any file under another name, so
+/// it is refused for reading and writing; the null device stays allowed.
+#[test]
+fn device_paths_other_than_drive_and_unc_are_refused() {
+    let home = PathBuf::from(r"C:\Users\me\.thehermes");
+    let ctx = GuardContext {
+        home: home.clone(),
+        user_home: PathBuf::from(r"C:\Users\me"),
+        writable: vec![home.join(r"projects\p\bots\dev")],
+        worktrees: Vec::new(),
+        bot_slug: Some("dev".into()),
+        releases: false,
+        allow_main: false,
+        full: false,
+        served: Vec::new(),
+    };
+    let call = |tool: &str, input: serde_json::Value| {
+        decide(
+            &json!({ "tool_name": tool, "tool_input": input,
+                     "cwd": home.join(r"projects\p\bots\dev\workspace") }),
+            &ctx,
+        )
+    };
+    let protected = home.join("secrets").join("x").display().to_string();
+    let tail = protected.trim_start_matches("C:");
+    for device in [
+        format!(r"\\?\Volume{{0a1b2c3d-0000-0000-0000-000000000000}}{tail}"),
+        format!(r"\\?\GLOBALROOT\Device\HarddiskVolume3{tail}"),
+        format!(r"\\.\C:{tail}"),
+        format!("//?/Volume{{0a1b}}{}", tail.replace('\\', "/")),
+    ] {
+        assert!(
+            call("Bash", json!({ "command": format!("cat '{device}'") })).is_some(),
+            "{device}"
+        );
+        assert!(
+            call("Read", json!({ "file_path": device })).is_some(),
+            "{device}"
+        );
+        assert!(
+            call("Write", json!({ "file_path": device, "content": "x" })).is_some(),
+            "{device}"
+        );
+    }
+    assert_eq!(
+        call("Bash", json!({ "command": r"echo hi > \\.\nul" })),
+        None
+    );
+}
