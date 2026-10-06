@@ -68,6 +68,8 @@ fn release() -> Release {
         events: Vec::new(),
         post_install: Vec::new(),
         targets: Default::default(),
+        plan: Vec::new(),
+        tests_required: Vec::new(),
     }
 }
 
@@ -106,4 +108,26 @@ fn the_hash_pins_items_builds_and_tests_not_verdicts_or_order() {
     let mut unsubmitted = release();
     unsubmitted.frozen_hash = None;
     assert!(check_frozen(&unsubmitted).is_err());
+}
+
+/// The live plan never enters the frozen hash (H-137): an item moving on
+/// the board can't make an approved package look changed.
+#[test]
+fn the_plan_is_not_part_of_the_frozen_hash() {
+    use super::model::PlanItem;
+    let before = frozen_hash(&release());
+    let mut moved = release();
+    moved.plan = vec![PlanItem {
+        item_id: "H-1".into(),
+        title: "One".into(),
+        column_key: "done".into(),
+        category: "done".into(),
+        assignee: None,
+        blocked: false,
+        ac_checked: 1,
+        ac_total: 1,
+        ready: true,
+    }];
+    moved.tests_required = vec!["mac".into()];
+    assert_eq!(frozen_hash(&moved), before);
 }

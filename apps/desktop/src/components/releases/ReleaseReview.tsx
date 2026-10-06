@@ -14,6 +14,7 @@ import {
   RejectDialog,
 } from "./ReleaseDialogs";
 import { PostInstall } from "./PostInstall";
+import ReleaseProgress from "./ReleaseProgress";
 import type { ReturnTo } from "./ReleaseDialogs";
 import { TestSummary } from "./ReleaseSections";
 import type { LeftOut } from "./ReleaseSections";
@@ -143,13 +144,14 @@ export default function ReleaseReview({
         </span>
       </header>
       <p className="release-meta">
-        Packaged by {botName(release.created_by) ?? "a bot"} ·{" "}
-        <span className="mono">{release.name}</span>
+        {release.status === "planned" ? "Planned" : "Packaged"} by{" "}
+        {botName(release.created_by) ?? "a bot"} · <span className="mono">{release.name}</span>
         {release.supersedes ? " · replaces an earlier package" : ""}
       </p>
       <p className="release-meta">{sourceLine(release, version)}</p>
       {targetsLine(release) ? <p className="release-meta">{targetsLine(release)}</p> : null}
       <Banner release={release} actions={actions} canControl={canControl} />
+      <ReleaseProgress release={release} botName={botName} />
       <ReviewEvents release={release} botName={botName} />
       <PostInstall release={release} botName={botName} />
       <TestSummary release={release} botName={botName} />

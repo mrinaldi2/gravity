@@ -3,6 +3,7 @@
 // them and pauses their rollout; DevOps and testers use MCP tools instead.
 
 export type ReleaseStatus =
+  | "planned"
   | "assembling"
   | "built"
   | "awaiting_owner"
@@ -36,6 +37,10 @@ export interface ReleaseEvent {
     readonly item_id?: string;
     readonly text?: string;
     readonly passed?: boolean;
+    /** `planned`: its items; `items_changed`: what was added and taken out. */
+    readonly items?: readonly string[];
+    readonly added?: readonly string[];
+    readonly removed?: readonly string[];
   };
   readonly at: string;
 }
@@ -97,6 +102,33 @@ interface HowToTest {
   readonly steps: readonly string[];
 }
 
+/** Where one of a package's items stands on the board now (H-137). */
+export interface PlanItem {
+  readonly item_id: string;
+  readonly title: string;
+  readonly column_key: string;
+  /** The column's category: `doing`, `verify`, `done`… */
+  readonly category: string;
+  /** The assignee's bot id. */
+  readonly assignee: string | null;
+  readonly blocked: boolean;
+  readonly ac_checked: number;
+  readonly ac_total: number;
+  /** In Verify or past it. */
+  readonly ready: boolean;
+}
+
+/** How far a package is (H-137). */
+interface Readiness {
+  readonly items_total: number;
+  readonly items_ready: number;
+  /** The platforms with a build attached. */
+  readonly builds: readonly string[];
+  /** The computers it must pass on, and those that passed. */
+  readonly tests_required: readonly string[];
+  readonly tests_passed: readonly string[];
+}
+
 export interface Release {
   readonly id: string;
   readonly project_id: string;
@@ -133,6 +165,9 @@ export interface Release {
   readonly deploys_to?: readonly string[];
   /** `owner` when the owner narrowed it; null: every tester's computer. */
   readonly deploys_set_by?: string | null;
+  /** Each item's live status, from daemons with planned releases (H-137). */
+  readonly plan?: readonly PlanItem[];
+  readonly readiness?: Readiness;
   /** Whether this connection may rule on it (the approve grant, on its home). */
   readonly can_rule?: boolean;
   /** When it can't: the computer where the owner can. */

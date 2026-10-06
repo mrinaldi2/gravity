@@ -12,6 +12,7 @@ import { isCurrent, releaseTitle, statusLabel } from "./labels";
 import type { BotName } from "./labels";
 import ReleaseReview from "./ReleaseReview";
 import TestedOn from "./TestedOn";
+import { anyInProgress, useLiveProgress } from "./useLiveProgress";
 import { useProjectReleases, useReleaseActions } from "./useReleases";
 
 export interface ReleasesViewProps {
@@ -65,7 +66,13 @@ export default function ReleasesView({
   canControl,
   addToast,
 }: ReleasesViewProps): ReactElement {
-  const { releases, loaded, replace } = useProjectReleases(client, connected, project.id, addToast);
+  const { releases, loaded, replace, reload } = useProjectReleases(
+    client,
+    connected,
+    project.id,
+    addToast,
+  );
+  useLiveProgress(client, project.id, connected && anyInProgress(releases), reload);
   const actions = useReleaseActions(client, addToast, replace);
   const titles = useItemTitles(client, project.id, releases.length > 0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -85,7 +92,10 @@ export default function ReleasesView({
           <span aria-hidden="true">{label.glyph}</span>
           <span className="release-list-name">{releaseTitle(r)}</span>
           <span className="release-meta">
-            {r.items.length} item{r.items.length === 1 ? "" : "s"} · {label.word}
+            {r.status === "planned" && r.readiness
+              ? `${r.readiness.items_ready}/${r.readiness.items_total} ready`
+              : `${r.items.length} item${r.items.length === 1 ? "" : "s"}`}{" "}
+            · {label.word}
           </span>
         </button>
       </li>
@@ -97,7 +107,10 @@ export default function ReleasesView({
       <div className="empty-pane">
         <div className="empty-state">
           <h1>No release yet</h1>
-          <p>DevOps packages the items in Verify; each package shows up here for you to test.</p>
+          <p>
+            The lead plans each release as soon as its contents are decided; it shows up here with
+            every item&apos;s progress, then for you to test.
+          </p>
         </div>
       </div>
     );
