@@ -1,6 +1,8 @@
-//! Guardrails part 2 (H-135): the card a routine's runs are for (G5), and
-//! which peer holds a linked project's board (ARCH-R59 a).
+//! Guardrails part 2 (H-135): the card a routine's runs are for (G5),
+//! which peer holds a linked project's board (ARCH-R59 a), and which tasks
+//! count as on the board (ARCH-R61).
 
+use bus::Message;
 use rusqlite::{params, OptionalExtension};
 
 use super::Db;
@@ -51,6 +53,34 @@ impl Db {
             params![project_id, peer_id],
         )?;
         Ok(())
+    }
+
+    /// Whether a task is on the board: it names a card, or it is a release's
+    /// deploy or rollback, which the release itself accounts for (ARCH-R61
+    /// M2).
+    pub fn task_on_board(&self, task_id: &str) -> anyhow::Result<bool> {
+        if self.task_card(task_id)?.is_some() {
+            return Ok(true);
+        }
+        Ok(self.lock().query_row(
+            "SELECT EXISTS(SELECT 1 FROM release_deployment WHERE task_id = ?1)",
+            params![task_id],
+            |r| r.get(0),
+        )?)
+    }
+
+    /// The message with this number, as an envelope names it.
+    pub fn message_by_num(&self, num: i64) -> anyhow::Result<Option<Message>> {
+        let id: Option<String> = self
+            .lock()
+            .query_row("SELECT id FROM message WHERE num = ?1", params![num], |r| {
+                r.get(0)
+            })
+            .optional()?;
+        match id {
+            Some(id) => self.get_message(&id),
+            None => Ok(None),
+        }
     }
 
     /// The peer last known to hold the project's board.

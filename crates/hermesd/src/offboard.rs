@@ -4,8 +4,10 @@
 //! bot, and one note to the project's lead per episode. When the bot is the
 //! lead, the row is all (ARCH-R57 S-c).
 //!
-//! - On-board: the bot holds an open task with a card, or its turn is a run
-//!   of a routine that names one (G5).
+//! - On-board: the bot holds an open task with a card, its turn answers a
+//!   carded task (a task it was given, or a `done` or `reply` on one it
+//!   delegated: ARCH-R61 M1), or its turn is a run of a routine that names
+//!   one (G5). A release's deploy and rollback tasks count as carded (M2).
 //! - Exempt: a turn the owner started. A conversation needs no card until it
 //!   becomes work (owner ruling 06ac8d95): once the turn changes files,
 //!   builds, delegates or hands back an artifact, it counts again.
@@ -31,6 +33,8 @@ use crate::messaging::{self, daemon_sender, Dm};
 pub const OFF_BOARD_MINUTES: i64 = 10;
 /// How often the bots are looked at.
 const SWEEP_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+/// How far back a reply's references are followed to the task they are on.
+const MAX_REF_HOPS: usize = 8;
 /// Commands that make an owner's conversation a build.
 const BUILD_COMMANDS: &[&str] = &[
     "cargo build",
@@ -110,16 +114,57 @@ fn off_board(app: &AppState, bot: &Bot) -> anyhow::Result<bool> {
         return Ok(false);
     }
     for task in app.db.open_tasks_for(&bot.id)? {
-        if app.db.task_card(&task.id)?.is_some() {
+        if app.db.task_on_board(&task.id)? {
             return Ok(false);
         }
     }
     let turn = app.chat.open_turn(app, bot).unwrap_or_default();
-    let routine_card = match turn.as_ref().map(|t| &t.trigger) {
+    let on_card = match turn.as_ref().map(|t| &t.trigger) {
         Some(Trigger::Routine { name, .. }) => routine_has_card(app, bot, name)?,
+        Some(Trigger::Bus { num, task_id, .. }) => {
+            bus_turn_on_board(app, &bot.id, *num, task_id.as_deref())?
+        }
         _ => false,
     };
-    Ok(counts(turn.as_ref(), routine_card))
+    Ok(counts(turn.as_ref(), on_card))
+}
+
+/// Whether a bus turn's trigger belongs to a carded task: a task the bot
+/// was given, or a `done` or `reply` on a task between it and another bot.
+/// A lead reading results of the tasks it delegated is on the board.
+pub fn bus_turn_on_board(
+    app: &AppState,
+    bot_id: &str,
+    num: i64,
+    task_id: Option<&str>,
+) -> anyhow::Result<bool> {
+    if let Some(task_id) = task_id {
+        if app.db.task_on_board(task_id)? {
+            return Ok(true);
+        }
+    }
+    let Some(msg) = app.db.message_by_num(num)? else {
+        return Ok(false);
+    };
+    if !matches!(msg.kind, MessageKind::Done | MessageKind::Reply) {
+        return Ok(false);
+    }
+    // A result references the task's first message; a reply may reference
+    // an earlier reply instead, so the chain is followed a few steps.
+    let mut next = msg.ref_message_id;
+    for _ in 0..MAX_REF_HOPS {
+        let Some(origin) = next else {
+            break;
+        };
+        for task in app.db.tasks_with_origin(&origin)? {
+            let mine = task.from_bot_id.as_deref() == Some(bot_id) || task.to_bot_id == bot_id;
+            if mine && app.db.task_on_board(&task.id)? {
+                return Ok(true);
+            }
+        }
+        next = app.db.get_message(&origin)?.and_then(|m| m.ref_message_id);
+    }
+    Ok(false)
 }
 
 fn routine_has_card(app: &AppState, bot: &Bot, name: &str) -> anyhow::Result<bool> {
@@ -132,14 +177,15 @@ fn routine_has_card(app: &AppState, bot: &Bot, name: &str) -> anyhow::Result<boo
 }
 
 /// Whether a turn, when its bot holds no task with a card, is off-board
-/// work. A turn not read yet (no transcript) counts.
-pub(crate) fn counts(turn: Option<&ChatTurn>, routine_card: bool) -> bool {
+/// work. A turn not read yet (no transcript) counts. `on_card` says the
+/// turn's routine or bus message belongs to a card.
+pub(crate) fn counts(turn: Option<&ChatTurn>, on_card: bool) -> bool {
     let Some(turn) = turn else {
         return true;
     };
     match &turn.trigger {
         Trigger::Owner { .. } => became_work(turn),
-        Trigger::Routine { .. } => !routine_card,
+        Trigger::Routine { .. } | Trigger::Bus { .. } => !on_card,
         _ => true,
     }
 }

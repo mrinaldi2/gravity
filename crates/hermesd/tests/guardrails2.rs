@@ -186,3 +186,108 @@ async fn a_remembered_board_home_keeps_cards_required() {
         "{raw}"
     );
 }
+
+/// Writes a Claude Code transcript for a bot whose open turn was started by
+/// `envelope`, as delivered over the bus.
+fn bus_turn(pair: &common::tasks::Pair, bot_id: &str, envelope: &str) {
+    let app = &pair.d.app;
+    let bot = app.db.get_bot(bot_id).unwrap().unwrap();
+    let mangled: String = bot
+        .workspace_path
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect();
+    let dir = app.cfg.user_home.join(".claude/projects").join(mangled);
+    std::fs::create_dir_all(&dir).unwrap();
+    let record = json!({"type": "user", "uuid": "turn-1", "sessionId": "s1",
+        "timestamp": Utc::now().to_rfc3339(), "isMeta": true, "origin": {"kind": "peer"},
+        "message": {"content": format!("Another Claude session sent a message:\n{envelope}")}});
+    std::fs::write(dir.join("session.jsonl"), format!("{record}\n")).unwrap();
+}
+
+#[tokio::test]
+async fn a_lead_reading_a_result_of_a_carded_task_is_on_the_board() {
+    let (pair, mut bots, project) = team(&["Team Lead", "dev"]).await;
+    let app = pair.d.app.clone();
+    let lead = pair.ids[0].clone();
+    let card = item(&pair, &project, "ready", None);
+    let sent = bots[0]
+        .call(
+            "send_message",
+            json!({"to": "dev", "kind": "task", "item": card, "body": "this"}),
+        )
+        .await;
+    let task_id = sent["task_id"].as_str().expect("task_id").to_string();
+    let done = bots[1]
+        .call(
+            "complete_task",
+            json!({"task_id": task_id, "result": "Done."}),
+        )
+        .await;
+    let num = done["num"].as_i64().expect("num");
+    // The lead's turn is the `done`; the task it was on is closed, so the
+    // lead holds no open task at all.
+    bus_turn(&pair, &lead, &format!("[msg #{num} from DEV · done] Done."));
+    app.supervisor.set_state(&lead, BotState::Working, "test");
+    assert!(hermesd::offboard::bus_turn_on_board(&app, &lead, num, None).unwrap());
+    let t0 = Utc::now();
+    hermesd::offboard::sweep(&app, t0).unwrap();
+    hermesd::offboard::sweep(&app, t0 + Duration::minutes(15)).unwrap();
+    assert!(app.off_board.flagged_since(&lead).is_none(), "on the board");
+    // A bot that is neither end of the task gains nothing from its result.
+    assert!(!hermesd::offboard::bus_turn_on_board(&app, "nobody", num, None).unwrap());
+}
+
+#[tokio::test]
+async fn a_tester_on_a_deploy_task_is_on_the_board() {
+    use hermesd::board::release::model::DeployAction;
+    use hermesd::messaging::{daemon_sender, send_dm, Dm};
+
+    let mut r = common::releases::releases(1).await;
+    let app = r.pair.d.app.clone();
+    let (devops, tester) = (r.pair.ids[1].clone(), r.pair.ids[2].clone());
+    let created = r.bots[1]
+        .call(
+            "release_create",
+            json!({"name": "0.1.0", "items": [r.items[0]]}),
+        )
+        .await;
+    let release = created["release"]["id"].as_str().unwrap().to_string();
+    // A deploy task carries no card, the way `release_deploy` opens it.
+    let sender = daemon_sender();
+    let msg = send_dm(
+        &app.db,
+        &app.events,
+        Dm::new(&tester, &sender, bus::MessageKind::Task, "Deploy it."),
+    )
+    .unwrap();
+    let task = app
+        .db
+        .create_task(&msg.id, Some(&devops), &tester, None, 1, &devops)
+        .unwrap();
+    app.supervisor.set_state(&tester, BotState::Working, "test");
+    let t0 = Utc::now();
+    hermesd::offboard::sweep(&app, t0).unwrap();
+    hermesd::offboard::sweep(&app, t0 + Duration::minutes(10)).unwrap();
+    assert!(
+        app.off_board.flagged_since(&tester).is_some(),
+        "no card yet"
+    );
+
+    app.db
+        .board_tx(|t| {
+            t.start_deployment(
+                &release,
+                "mac",
+                DeployAction::Deploy,
+                &tester,
+                Some(&task.id),
+            )
+        })
+        .unwrap();
+    hermesd::offboard::sweep(&app, t0 + Duration::minutes(11)).unwrap();
+    assert!(
+        app.off_board.flagged_since(&tester).is_none(),
+        "a deploy task is on the board"
+    );
+}
