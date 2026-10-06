@@ -23,8 +23,10 @@ export type ReplyTo = (botId: string, quote: string) => void;
 
 interface Report {
   readonly key: string;
-  /** Who Reply answers, and whose avatar shows. */
+  /** Who Reply answers. */
   readonly bot: Bot | undefined;
+  /** Whose avatar shows: who said it, when that is known. */
+  readonly face: Bot | undefined;
   /** "Desktop Dev · asks you", "Stand-up minutes · Scrum Master". */
   readonly title: string;
   /** Names the Reply button: "Reply to Desktop Dev". */
@@ -37,8 +39,10 @@ interface Report {
 
 /**
  * The latest summary, named by its meeting and signed by its facilitator, as
- * the Meetings tab signs it (UX-027); "Meeting minutes · <lead>" until the
- * meeting loads.
+ * the Meetings tab signs it (UX-027). Until the meeting loads (it may never,
+ * on an older service or off-home) it is "Meeting minutes · <time>", signed
+ * by no one: the lead didn't necessarily write it (H-157). Reply still
+ * reaches the lead then.
  */
 function summaryReport(
   summary: SummaryBrief,
@@ -46,14 +50,28 @@ function summaryReport(
   bots: readonly Bot[],
   lead: Bot | undefined,
 ): Report {
-  const facilitator = meeting === null ? undefined : bots.find((b) => b.id === meeting.facilitator);
+  if (meeting === null) {
+    return {
+      key: `summary:${summary.meetingId}`,
+      bot: lead,
+      face: undefined,
+      title: "Meeting minutes",
+      who: lead?.name ?? "Lead",
+      text: summary.text,
+      at: summary.at,
+      asks: false,
+      meeting: true,
+    };
+  }
+  const facilitator = bots.find((b) => b.id === meeting.facilitator);
   const bot = facilitator ?? lead;
   const signed =
-    meeting?.facilitator === OWNER ? "You" : (facilitator?.name ?? lead?.name ?? "Lead");
+    meeting.facilitator === OWNER ? "You" : (facilitator?.name ?? lead?.name ?? "Lead");
   return {
     key: `summary:${summary.meetingId}`,
     bot,
-    title: `${meeting === null ? "Meeting minutes" : minutesTitle(meeting)} · ${signed}`,
+    face: bot,
+    title: `${minutesTitle(meeting)} · ${signed}`,
     who: bot?.name ?? signed,
     text: summary.text,
     at: summary.at,
@@ -81,6 +99,7 @@ function reports(props: FromTheTeamProps, lead: Bot | undefined): Report[] {
     out.push({
       key: `thread:${thread.bot?.daemonId}:${thread.bot?.botId}`,
       bot,
+      face: bot,
       title: `${who} · ${asks ? "asks you" : "sent you"}`,
       who,
       text: last.text,
@@ -117,15 +136,15 @@ function ReportRow(props: {
   readonly onOpenMeetings: () => void;
 }): ReactElement {
   const { report, now } = props;
-  const bot = report.bot;
+  const { bot, face } = report;
   return (
     <li className="dash-row team-report">
-      {bot === undefined ? (
+      {face === undefined ? (
         <span className="dash-glyph" aria-hidden="true">
           ●
         </span>
       ) : (
-        <BotAvatar avatar={bot.avatar} name={bot.name} id={bot.id} size="sm" />
+        <BotAvatar avatar={face.avatar} name={face.name} id={face.id} size="sm" />
       )}
       <div className="dash-row-text">
         <span className="dash-row-title">

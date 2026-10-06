@@ -42,8 +42,21 @@ describe("FromTheTeam", () => {
     expect(rows.map((row) => row.querySelector(".dash-row-title")?.textContent)).toEqual([
       expect.stringMatching(/^Desktop Dev · asks you · /),
       expect.stringMatching(/^Team Lead · sent you · /),
-      expect.stringMatching(/^Meeting minutes · Team Lead · /),
+      expect.stringMatching(/^Meeting minutes · .*\d{1,2}:\d{2}/),
     ]);
+  });
+
+  it("signs minutes with no one until their meeting loads, and Reply reaches the lead", async () => {
+    const user = userEvent.setup();
+    const onReply = vi.fn<ReplyTo>();
+    renderFeed(onReply);
+    const summary = screen.getByText(/0\.17\.0 is packaged/).closest("li") as HTMLElement;
+    const title = summary.querySelector(".dash-row-title")?.textContent ?? "";
+    expect(title).toMatch(/^Meeting minutes · .*\d{1,2}:\d{2}/);
+    expect(title).not.toMatch(/Team Lead|Scrum Master|Lead/);
+    expect(summary.querySelector(".dash-glyph")).not.toBeNull();
+    await user.click(within(summary).getByRole("button", { name: "Reply to Team Lead" }));
+    expect(onReply).toHaveBeenCalledWith("b1", "0.17.0 is packaged; installs wait on your ruling.");
   });
 
   it("names the meeting a summary came from and signs it with its facilitator", async () => {

@@ -45,6 +45,25 @@
   background: var(--bg-hover);
 }
 
+/* "＋ New message" (H-157): a row atop the threads, quieter than a thread. */
+.mc-new {
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  text-align: left;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.mc-new:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+
 .mc-thread {
   display: flex;
   flex-direction: column;

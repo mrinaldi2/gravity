@@ -130,4 +130,21 @@ describe("MainChat", () => {
       });
     });
   });
+
+  it("starts a new message from the thread list, in the To picker", async () => {
+    const user = userEvent.setup();
+    render(<Harness client={daemon()} start="b2" quote="Should Resume restart?" />);
+    const threads = screen.getByRole("navigation", { name: "Threads" });
+    await user.click(
+      within(threads).getByRole("button", { name: "New message: pick who to write to" }),
+    );
+    const to = screen.getByRole("combobox", { name: "To" });
+    expect(to).toHaveFocus();
+    expect(to).toHaveValue("");
+    expect(screen.getByText("Pick who to write to.")).toBeInTheDocument();
+    expect(screen.queryByText("Replying to")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Send/ })).toBeDisabled();
+    await user.selectOptions(to, "b1");
+    expect(to).toHaveValue("b1");
+  });
 });
