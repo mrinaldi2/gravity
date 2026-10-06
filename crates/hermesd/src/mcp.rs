@@ -97,10 +97,24 @@ pub(crate) fn on_hook(app: &AppState, bot_id: &str, event: &str, body: &Value) -
     if event.is_empty() {
         return false;
     }
-    // SessionStart reports the session's inbox socket for channel delivery.
-    if let Some(socket) = body.get("socket").and_then(|v| v.as_str()) {
-        let msg_token = body.get("msg_token").and_then(|v| v.as_str());
-        app.supervisor.set_msg_socket(bot_id, socket, msg_token);
+    // SessionStart reports the session's inbox socket for channel delivery,
+    // taken only from the bot's current session (H-041).
+    if let Some(socket) = body
+        .get("socket")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        let roots = app.supervisor.session_roots();
+        let table = crate::bus_auth::os::OsProcessTable;
+        match crate::bus_auth::inbox::check(&roots, &table, bot_id, std::path::Path::new(socket)) {
+            Ok(()) => {
+                let msg_token = body.get("msg_token").and_then(|v| v.as_str());
+                app.supervisor.set_msg_socket(bot_id, socket, msg_token);
+            }
+            Err(refused) => {
+                tracing::warn!(bot_id, socket, %refused, "inbox socket registration refused");
+            }
+        }
     }
     let message = body.get("message").and_then(|v| v.as_str());
     let transcript_path = body.get("transcript_path").and_then(|v| v.as_str());

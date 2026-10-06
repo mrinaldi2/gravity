@@ -204,6 +204,8 @@ struct SupervisorInner {
     before_start: std::sync::OnceLock<StartHook>,
     /// Each live session's root process, by bot (H-044).
     roots: crate::bus_auth::session::SessionRoots,
+    /// Bots the watchdog gave up on, told to the owner in one toast (H-041).
+    gave_up: Mutex<watchdog::GaveUp>,
 }
 
 /// What runs before a bot's session starts: the bot id, and whether the
@@ -230,6 +232,7 @@ impl Supervisor {
                 bots: Mutex::new(HashMap::new()),
                 before_start: std::sync::OnceLock::new(),
                 roots: crate::bus_auth::session::SessionRoots::default(),
+                gave_up: Mutex::new(watchdog::GaveUp::default()),
             }),
         }
     }
