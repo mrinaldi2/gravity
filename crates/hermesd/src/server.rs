@@ -45,6 +45,7 @@ pub fn router(app: Arc<AppState>) -> Router {
 
 async fn health(State(app): State<Arc<AppState>>) -> impl IntoResponse {
     let db_healthy = app.db.delivery_backlog().is_ok();
+    let owner = app.owner.counts();
     Json(json!({
         "status": if db_healthy { "ok" } else { "degraded" },
         "version": crate::app::DAEMON_VERSION,
@@ -54,7 +55,11 @@ async fn health(State(app): State<Arc<AppState>>) -> impl IntoResponse {
         "db_healthy": db_healthy,
         "delivery_backlog": app.db.delivery_backlog().unwrap_or(-1),
         "active_bots": app.supervisor.active_total(),
-        "uptime_seconds": app.started_at.elapsed().as_secs()
+        "uptime_seconds": app.started_at.elapsed().as_secs(),
+        // How the owner connected since start (H-165); counts, no secrets.
+        "owner_tickets_granted": owner.owner_tickets_granted,
+        "owner_tickets_redeemed": owner.owner_tickets_redeemed,
+        "client_token_fallbacks": owner.client_token_fallbacks
     }))
 }
 
