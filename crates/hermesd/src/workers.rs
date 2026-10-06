@@ -32,6 +32,7 @@ mod place;
 pub mod repo;
 pub mod scratch;
 mod spawn;
+pub mod target;
 
 pub use place::place_queued;
 pub use spawn::{cancel, cancel_spawn, spawn, SpawnRequest, MAX_QUEUED_PER_PROJECT};

@@ -9,11 +9,22 @@ try {
     if ($LASTEXITCODE -ne 0 -or !$hostLine) { throw 'Cannot determine Rust host triple' }
     $triple = $hostLine.Substring(6)
     if (!$triple.EndsWith('windows-msvc')) { throw 'Use a native Windows MSVC Rust toolchain' }
-    cargo build --release --locked -p hermesd
+    # Where to build, and then copy from, in this one step (H-029, CE-013
+    # G2). A release (no HERMES_DEV_BUILD, or HERMES_RELEASE_BUILD=1 as
+    # build-nsis.ps1 sets), as in prepare-sidecar.sh, never trusts
+    # $env:CARGO_TARGET_DIR: it builds into this checkout's own target, which
+    # no other bot may write. A dev build uses the session's target.
+    $release = (-not $env:HERMES_DEV_BUILD) -or ($env:HERMES_RELEASE_BUILD -eq '1')
+    $target = if (-not $release -and $env:CARGO_TARGET_DIR) {
+        $env:CARGO_TARGET_DIR
+    } else {
+        Join-Path $repoRoot 'target'
+    }
+    cargo build --release --locked -p hermesd --target-dir $target
     if ($LASTEXITCODE -ne 0) { throw 'Daemon build failed' }
     $destination = Join-Path $repoRoot 'apps/desktop/src-tauri/binaries'
     New-Item -ItemType Directory -Force -Path $destination | Out-Null
-    Copy-Item -LiteralPath (Join-Path $repoRoot 'target/release/hermesd.exe') -Destination (Join-Path $destination "hermesd-$triple.exe")
+    Copy-Item -LiteralPath (Join-Path $target 'release/hermesd.exe') -Destination (Join-Path $destination "hermesd-$triple.exe")
     Write-Output "Staged hermesd-$triple.exe"
 } finally {
     Pop-Location

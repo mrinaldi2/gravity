@@ -211,6 +211,9 @@ async fn powershell_runs_the_encoded_content() {
     let log = tempfile::tempdir().unwrap();
     let mut p = proposal("Write-Output \"quotes 'and' $([char]0x263A)\"; exit 2");
     p.shell = Shell::Powershell;
+    // PowerShell alone can take over 5 s to start on a loaded machine
+    // (H-120); the content exits at once, so this only bounds a hang.
+    p.timeout_s = 60;
     let ran = run::execute(&p, &log.path().join("p.log"), |_| {}).await;
     assert_eq!(
         (ran.state, ran.exit_code),

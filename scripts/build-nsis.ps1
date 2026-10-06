@@ -6,6 +6,10 @@ $ErrorActionPreference = 'Stop'
 # Windows releases are signed.
 Remove-Item Env:THEHERMES_HOME,Env:GRAVITY_HOME,Env:HERMES_TEAM_ID -ErrorAction SilentlyContinue
 $env:HERMES_DEV_BUILD = "1"
+# A release: the daemon and the app build into this checkout's own target,
+# never a long-lived one another bot could have written (H-029, CE-013 G2).
+$env:HERMES_RELEASE_BUILD = "1"
+$env:CARGO_TARGET_DIR = Join-Path (Join-Path $PSScriptRoot '..') 'target'
 Write-Output "HERMES_DEV_BUILD=[$env:HERMES_DEV_BUILD] HERMES_TEAM_ID=[$env:HERMES_TEAM_ID]"
 # cargo from scoop's rustup, when that's where it lives and not on PATH.
 $scoopCargo = Join-Path $env:USERPROFILE 'scoop\persist\rustup\.cargo\bin'

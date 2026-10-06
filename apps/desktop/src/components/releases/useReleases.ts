@@ -93,6 +93,8 @@ export interface ProjectReleases {
   readonly releases: readonly Release[];
   readonly loaded: boolean;
   readonly replace: (release: Release) => void;
+  /** Reads them again, as when a card of an unsubmitted package moves. */
+  readonly reload: () => Promise<void>;
 }
 
 /** A project's packages, newest first, kept current by the actions. */
@@ -125,5 +127,5 @@ export function useProjectReleases(
         : [release, ...all],
     );
   }, []);
-  return { releases, loaded, replace };
+  return { releases, loaded, replace, reload: load };
 }

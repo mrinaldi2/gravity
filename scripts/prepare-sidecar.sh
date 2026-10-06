@@ -26,11 +26,21 @@ case "$TRIPLE" in
     fi
     ;;
 esac
-cargo build --release -p hermesd --manifest-path "$ROOT/Cargo.toml"
+# Where to build, and then copy from, in this one step (H-029, CE-013 G2).
+# A release (no HERMES_DEV_BUILD, or HERMES_RELEASE_BUILD=1) never trusts
+# $CARGO_TARGET_DIR: it builds into this checkout's own target, which no
+# other bot may write, so nothing but this build can be shipped. A dev
+# build uses the bot's own target when the session names one.
+if [ -z "${HERMES_DEV_BUILD:-}" ] || [ -n "${HERMES_RELEASE_BUILD:-}" ]; then
+  TARGET="$ROOT/target"
+else
+  TARGET="${CARGO_TARGET_DIR:-$ROOT/target}"
+fi
+cargo build --release -p hermesd --manifest-path "$ROOT/Cargo.toml" --target-dir "$TARGET"
 
 # The gate asserts on the binary itself, not the build log (H-114): a macOS
 # release must say it is signed with this Team ID.
-IDENTITY="$("$ROOT/target/release/hermesd$EXT" --version | sed -n 's/^identity: //p')"
+IDENTITY="$("$TARGET/release/hermesd$EXT" --version | sed -n 's/^identity: //p')"
 echo "identity: $IDENTITY"
 case "$TRIPLE" in
   *-apple-darwin)
@@ -43,5 +53,5 @@ esac
 
 DEST="$ROOT/apps/desktop/src-tauri/binaries"
 mkdir -p "$DEST"
-cp "$ROOT/target/release/hermesd$EXT" "$DEST/hermesd-$TRIPLE$EXT"
+cp "$TARGET/release/hermesd$EXT" "$DEST/hermesd-$TRIPLE$EXT"
 echo "staged $DEST/hermesd-$TRIPLE$EXT"

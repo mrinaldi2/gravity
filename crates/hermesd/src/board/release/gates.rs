@@ -180,6 +180,9 @@ fn gate(
             release.status.as_str()
         )));
     }
+    if extra == PermissionExtra::BuildInstallers {
+        super::plan::builds_wait(&release)?;
+    }
     if extra == PermissionExtra::BuildInstallers && !release.status.is_assembling() {
         return Err(forbidden(format!(
             "release {} is {}: its builds were frozen when it was submitted",

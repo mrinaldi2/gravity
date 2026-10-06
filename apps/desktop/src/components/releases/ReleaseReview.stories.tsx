@@ -109,6 +109,69 @@ export const SuccessorCancelled: Story = () => (
   />
 );
 
+/** A planned release (H-137): what is left, and each item's live status. */
+export const Planned: Story = () => (
+  <Review
+    value={release({
+      status: "planned",
+      decision_id: null,
+      builds: [],
+      tests: [],
+      // The daemon builds `plan` from `items`, so the Items tab lists the same three.
+      items: ["H-017", "H-020", "H-021"].map((item_id) => ({
+        item_id,
+        verdict: "pending" as const,
+        owner_note: null,
+      })),
+      plan: [
+        {
+          item_id: "H-017",
+          title: "Release packages and the deploy gate",
+          column_key: "approval",
+          column_name: "Awaiting owner",
+          category: "approval",
+          assignee: "ops",
+          blocked: false,
+          ac_checked: 4,
+          ac_total: 4,
+          ready: true,
+        },
+        {
+          item_id: "H-020",
+          title: "Dashboard",
+          column_key: "doing",
+          column_name: "In progress",
+          category: "doing",
+          assignee: "tester",
+          blocked: false,
+          ac_checked: 2,
+          ac_total: 4,
+          ready: false,
+        },
+        {
+          item_id: "H-021",
+          title: "Owner testing",
+          column_key: "ready",
+          column_name: "Ready",
+          category: "ready",
+          assignee: null,
+          blocked: true,
+          ac_checked: 0,
+          ac_total: 0,
+          ready: false,
+        },
+      ],
+      readiness: {
+        items_total: 3,
+        items_ready: 1,
+        builds: [],
+        tests_required: ["mac", "win-pc"],
+        tests_passed: [],
+      },
+    })}
+  />
+);
+
 /** The Releases tab in the project window, with a current package and history. */
 export const Tab: Story = () => {
   const acme = project({ id: "p1", name: "The Hermes" });

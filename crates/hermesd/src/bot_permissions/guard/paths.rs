@@ -191,7 +191,16 @@ impl GuardContext {
 
     /// The protected path a word (or any path-like piece of it) names.
     pub(super) fn protected_word(&self, word: &str, scope: &Scope) -> Option<String> {
-        let words = Self::alternatives(word, scope, 4);
+        // Whole words first: a verbatim drive path is unwrapped, and a device
+        // path refused, before `:` splits the word into pieces (WIN-CHK-13).
+        let words: Vec<String> = Self::alternatives(word, scope, 4)
+            .iter()
+            .map(|w| self.expand(w, scope))
+            .collect();
+        // A device path may name any file, a protected one included.
+        if let Some(device) = words.iter().find(|w| super::words::is_device_path(w)) {
+            return Some(device.clone());
+        }
         let found = words.iter().flat_map(|w| pieces(w)).find_map(|piece| {
             let expanded = self.expand(piece, scope);
             self.candidates(&expanded, scope)
@@ -300,6 +309,10 @@ impl GuardContext {
         // Resolved, Windows would read `/dev/null` as `C:\dev\null`.
         if is_null_device(&expanded) {
             return Ok(());
+        }
+        // A device path is never one of the bot's own folders (CE-015 M2).
+        if super::words::is_device_path(&expanded) {
+            return Err(PathBuf::from(&expanded));
         }
         if let Some(at) = expanded.find(WILD) {
             let (prefix, wild) = expanded.split_at(at);

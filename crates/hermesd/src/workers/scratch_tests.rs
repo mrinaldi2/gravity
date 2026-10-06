@@ -91,6 +91,39 @@ fn only_workers_get_a_scratch_folder_and_windows_ones_a_shared_target() {
     assert!(session_env(&home, &workspace, false).is_empty());
 }
 
+/// H-029: every bot session builds into its own `<bot dir>/cargo-target`;
+/// a Windows worker keeps the machine's shared one (H-109).
+#[test]
+fn a_bot_session_gets_its_own_cargo_target() {
+    let dir = tempfile::tempdir().expect("dir");
+    let home = dir.path().join("home");
+    let db = crate::db::Db::open_in_memory().expect("db");
+    let p = db.create_project("p", "p").expect("project");
+    let bot_dir = home.join("projects/p/bots/dev");
+    let workspace = bot_dir.join("workspace").display().to_string();
+    let bot = db
+        .create_bot(&p.id, "Dev", "", "", "", &workspace, "dev", None)
+        .expect("bot");
+    let target = |env: &[(String, String)]| {
+        env.iter()
+            .find(|(k, _)| k == "CARGO_TARGET_DIR")
+            .map(|(_, v)| v.clone())
+    };
+    let own = bot_dir.join("cargo-target").display().to_string();
+    assert_eq!(target(&bot_env(&home, &bot)), Some(own.clone()));
+
+    let worker = bus::Bot {
+        temporary: true,
+        ..bot
+    };
+    let expected = if shares_target() {
+        shared_target(&home).display().to_string()
+    } else {
+        own
+    };
+    assert_eq!(target(&bot_env(&home, &worker)), Some(expected));
+}
+
 /// A workspace whose `repo/` clones `origin` and has one commit of its own.
 fn workspace_with_unpushed_clone(root: &Path) -> (PathBuf, PathBuf) {
     let origin = root.join("origin");

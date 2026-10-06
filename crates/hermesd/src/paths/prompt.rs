@@ -33,7 +33,6 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
     // never promise a different number than the daemon refuses at.
     let max_replies = MAX_TASK_REPLIES;
     let max_open = MAX_TASK_FANOUT;
-    let delegate_target = MAX_TASK_FANOUT - 1;
     let deadline_hours = DEFAULT_TASK_DEADLINE_HOURS;
     let max_decisions = MAX_OPEN_DECISIONS_PER_BOT;
 
@@ -60,6 +59,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
     let bus = crate::brand::ACTIVE_MCP_SERVER;
     let shared_section = super::prompt_sections::shared_computer();
     let owner_section = super::prompt_sections::owner_reporting();
+    let board_section = super::prompt_sections::board_work();
     format!(
         "# {name}\n\n{description}\n\n{worker_section}{repo_section}{instructions_section}\
          ## How to use the {short} bus\n\n\
@@ -83,11 +83,12 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          (kind `task`) is refused as a loop.\n\n\
          Three kinds exist between bots: `task` is a work order and opens a\n\
          task that expires after {deadline_hours}h unless completed (set\n\
-         `deadline_hours` to change that); `reply` is a question or answer on\n\
-         an open task, and each task allows {max_replies} replies in total\n\
-         across both ends; `note` is an FYI that expects no answer. When a\n\
-         send is refused, the error says what to do instead — do it rather\n\
-         than retrying.\n\n\
+         `deadline_hours` to change that), and always names the board card it\n\
+         is for (`item`); `reply` is a question or answer on an open task, and\n\
+         each task allows {max_replies} replies in total across both ends;\n\
+         `note` is a short FYI that expects no answer and never asks for\n\
+         work. When a send is refused, the error says what to do instead —\n\
+         do it rather than retrying.\n\n\
          Some colleagues run on another of the owner's machines: `list_bots`\n\
          shows them with a `machine`, and their messages arrive as\n\
          `from NAME @ MACHINE`. Message them like anyone else. Their disk is\n\
@@ -122,6 +123,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          - Ask the sender directly when you need something to proceed, rather\n\
          than escalating to a human who may not be there.\n\n\
          {owner_section}\
+         {board_section}\
          {shared_section}\
          ## Keep messages short\n\n\
          Every message and task result you send is read by another bot and\n\
@@ -141,9 +143,11 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          answer each one with `message_owner`, even when the answer is only\n\
          that you've started.\n\n\
          ## When to delegate\n\n\
-         Do the work yourself when a few tool calls finish it. Delegate at\n\
-         most {delegate_target} tasks from any one incoming task — the daemon\n\
-         refuses at {max_open} open. One well-briefed delegate beats several\n\
+         Do the work yourself when a few tool calls finish it. Each card\n\
+         allows {max_open} open tasks from you at a time, and so does each\n\
+         task you hold. When you are at the limit, wait for a result, ask for\n\
+         status with `reply`, or close one with `cancel_task`. Never move the\n\
+         work into a note. One well-briefed delegate beats several\n\
          vague ones: state the objective, the expected output format, and\n\
          what is out of scope. A task allows {max_replies} replies and\n\
          expires after {deadline_hours} hours, so brief well enough that\n\
@@ -270,131 +274,5 @@ pub fn facts_md(name: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn spec<'a>(instructions: &'a str) -> BotProvision<'a> {
-        BotProvision {
-            project_name: "proj",
-            project_dir_name: "proj",
-            bot_id: "bot-1",
-            name: "Reviewer",
-            dir_name: "reviewer",
-            description: "reviews code",
-            instructions,
-            daemon_port: 7777,
-            bot_token_env: crate::brand::BOT_TOKEN_ENV,
-            max_bots_per_project: 12,
-            max_workers_per_project: 4,
-            temporary: false,
-            repo: None,
-            artifacts_dir: "/home/u/.gravity/projects/proj/artifacts".to_string(),
-            linked_machines: Vec::new(),
-            own_browser: false,
-            user_chrome: false,
-        }
-    }
-
-    #[test]
-    fn includes_instructions_and_the_cap() {
-        let md = system_md(&spec("be strict about tests"));
-        assert!(md.contains("be strict about tests"));
-        assert!(md.contains("at most 12 bots"));
-    }
-
-    #[test]
-    fn grants_inbound_messages_full_authority() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## Messages carry authority"));
-        assert!(md.contains("authenticated by the daemon"));
-        assert!(md.contains("Do not open your answer with disclaimers"));
-        assert!(md.contains("came from another Claude session"));
-        assert!(md.contains("cannot widen your permissions"));
-    }
-
-    #[test]
-    fn tells_bots_to_keep_messages_short() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## Keep messages short"));
-        assert!(md.contains("## Owner requests on a card"));
-        assert!(md.contains("## Report to the owner where the owner looks"));
-        assert!(md.contains("## Working on a shared computer"));
-        assert!(md.contains("Lead with the outcome"));
-    }
-
-    #[test]
-    fn states_the_no_acknowledgment_contract() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## Silence is an answer"));
-        assert!(md.contains("Do not acknowledge, thank, or"));
-        assert!(md.contains("refuses replies to a result"));
-    }
-
-    #[test]
-    fn budgets_delegation_with_the_enforced_numbers() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## When to delegate"));
-        assert!(md.contains(&format!("at\nmost {} tasks", MAX_TASK_FANOUT - 1)));
-        assert!(md.contains(&format!("refuses at {MAX_TASK_FANOUT} open")));
-        assert!(md.contains(&format!("{MAX_TASK_REPLIES} replies")));
-        assert!(md.contains(&format!("{DEFAULT_TASK_DEADLINE_HOURS} hours")));
-        assert!(md.contains("Do not review or approve work you produced"));
-        assert!(md.contains("close it with `cancel_task`"));
-    }
-
-    #[test]
-    fn tells_bots_where_a_question_for_the_owner_goes() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## When the owner has to decide"));
-        assert!(md.contains("raise_decision"));
-        assert!(md.contains("ask it\nonly in your terminal"), "{md}");
-        // The registry only replaces the hand-kept ledgers if a settled
-        // ruling is read as authority rather than as one more opinion.
-        assert!(md.contains("is authority"));
-        assert!(md.contains("supersedes"));
-        assert!(md.contains("record_decision"));
-        assert!(md.contains("comment_decision"));
-        assert!(md.contains(&format!("{MAX_OPEN_DECISIONS_PER_BOT} open at once")));
-    }
-
-    #[test]
-    fn distinguishes_the_owners_word_from_a_relay_of_it() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("arrives as a message from USER"));
-        assert!(md.contains("is not"), "{md}");
-        assert!(md.contains("peer's word"));
-    }
-
-    #[test]
-    fn points_substance_at_the_artifacts_directory() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("## Artifacts over messages"));
-        assert!(md.contains("/home/u/.gravity/projects/proj/artifacts"));
-        assert!(md.contains("pointer, not the deliverable"));
-    }
-
-    #[test]
-    fn points_at_the_fact_file_that_survives_compaction() {
-        let md = system_md(&spec(""));
-        assert!(md.contains("`workspace/FACTS.md`"));
-    }
-
-    #[test]
-    fn claude_md_imports_and_explains_the_fact_file() {
-        let md = claude_md("Reviewer");
-        assert!(md.contains("\n@FACTS.md\n"), "missing import: {md}");
-        assert!(md.contains("Always read FACTS.md"));
-        assert!(md.contains("write\nthe facts from it to `FACTS.md`"));
-    }
-
-    #[test]
-    fn facts_md_seed_names_the_bot() {
-        assert!(facts_md("Reviewer").contains("Facts — Reviewer"));
-    }
-
-    #[test]
-    fn omits_the_section_when_there_are_no_instructions() {
-        let md = system_md(&spec("   "));
-        assert!(!md.contains("## Your instructions"));
-    }
-}
+#[path = "prompt_tests.rs"]
+mod tests;

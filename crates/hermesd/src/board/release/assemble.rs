@@ -143,6 +143,7 @@ pub fn attach_build(
     }
     app.db.board_tx(|t| {
         let release = load(t, &me.bot.project_id, release_id)?;
+        super::plan::builds_wait(&release)?;
         if !release.status.is_assembling() {
             return Err(conflict(format!(
                 "release {} is {}; builds change only before it is submitted",

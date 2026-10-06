@@ -48,11 +48,14 @@ pub(super) async fn open(endpoint: &str) -> std::io::Result<Stream> {
     use tokio::net::windows::named_pipe::ClientOptions;
     // ERROR_PIPE_BUSY: every instance is taken for a moment; try again.
     const PIPE_BUSY: i32 = 231;
+    // ERROR_FILE_NOT_FOUND: between taking a client and creating the next
+    // instance, the pipe briefly has none, so its name doesn't exist (H-120).
+    const NOT_FOUND: i32 = 2;
     let mut tries = 0;
     loop {
         match ClientOptions::new().open(endpoint) {
             Ok(pipe) => return Ok(pipe),
-            Err(e) if e.raw_os_error() == Some(PIPE_BUSY) && tries < 50 => {
+            Err(e) if matches!(e.raw_os_error(), Some(PIPE_BUSY | NOT_FOUND)) && tries < 50 => {
                 tries += 1;
                 tokio::time::sleep(std::time::Duration::from_millis(20)).await;
             }

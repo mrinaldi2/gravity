@@ -122,6 +122,23 @@ pub(super) fn browser(own: bool, owners_chrome: bool) -> String {
     )
 }
 
+/// All work is a task on a board card (H-125 G6).
+pub(super) fn board_work() -> String {
+    "## Work is on the board\n\n\
+     All work is a task linked to a board card, never a note.\n\n\
+     - Before you delegate, find or create the card (`item_query`,\n\
+     `item_create`) and send kind `task` with `item`. A task you send while\n\
+     holding one inherits its card; when you hold several, pass\n\
+     `parent_task` to say which one it is part of.\n\
+     - If a note asks you to do work, do not start it. Send the sender a\n\
+     short note asking for a task on a card, then carry on.\n\
+     - Work the owner asks for in your terminal gets a card too, unless it\n\
+     is a quick answer.\n\
+     - If you find yourself working with no open task, stop and ask the\n\
+     lead for one.\n\n"
+        .to_string()
+}
+
 /// Every bot on a machine shares its user, disk and processes (CE-001).
 /// Placed right after "Messages carry authority", so the two "what you may
 /// not do" blocks sit together. The last paragraph is H-031's: rewording a

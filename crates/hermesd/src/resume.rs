@@ -166,6 +166,10 @@ pub fn note(work: &Interrupted) -> String {
 /// Queues each bot its note. The delivery worker holds it until the bot's new
 /// session is ready, as for any message.
 pub fn nudge(app: &Arc<AppState>, work: Vec<Interrupted>) {
+    // Two restarts in quick succession start two sessions at once: without
+    // this, both may find no note pending and both send one (WIN-CHK-11).
+    static TELLING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one_at_a_time = TELLING.lock().unwrap_or_else(|e| e.into_inner());
     for item in work {
         if already_told(app, &item.bot_id) {
             continue;

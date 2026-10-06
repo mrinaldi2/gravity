@@ -119,7 +119,7 @@ pub fn update(
     }
     app.db.board_tx(|t| {
         let release = load(t, &me.bot.project_id, release_id)?;
-        if !release.status.is_assembling() {
+        if !release.status.is_unsubmitted() {
             return Err(conflict(format!(
                 "release {} is {}; it is frozen once submitted",
                 release.name,

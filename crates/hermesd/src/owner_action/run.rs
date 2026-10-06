@@ -186,6 +186,11 @@ pub async fn execute(p: &Proposal, log: &Path, on_chunk: impl Fn(&str)) -> Ran {
         on_chunk(&text);
         output.push_str(&text);
     }
+    // tokio's File writes in the background: without this the log's tail
+    // can be missing when the run is read back (a flake under load).
+    if let Some(f) = file.as_mut() {
+        let _ = f.flush().await;
+    }
     if timed_out {
         #[cfg(unix)]
         kill_all(&child);
