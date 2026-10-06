@@ -130,3 +130,31 @@ CREATE TRIGGER decision_au AFTER UPDATE ON decision BEGIN
     VALUES (new.rowid, new.title, new.body, coalesce(new.ruling_text, ''));
 END;
 "#;
+
+/// Hermes writes on decision threads too (H-173): the grants a ruling
+/// applied, and what a linked computer said about them. Those were stored as
+/// the owner's and read "you". SQLite cannot alter a CHECK, so the table is
+/// rebuilt with a `system` author, keeping every row, and the notes Hermes
+/// already wrote move to it. Safe to run again, as the extras rebuilds are.
+pub(super) const MIGRATION_COMMENT_SYSTEM_AUTHOR: &str = r#"
+DROP TABLE IF EXISTS decision_comment_new;
+CREATE TABLE decision_comment_new (
+    id            TEXT PRIMARY KEY,
+    decision_id   TEXT NOT NULL REFERENCES decision(id),
+    author_kind   TEXT NOT NULL CHECK (author_kind IN ('bot', 'user', 'system')),
+    author_bot_id TEXT REFERENCES bot(id),
+    body          TEXT NOT NULL,
+    created_at    TEXT NOT NULL
+);
+INSERT OR IGNORE INTO decision_comment_new(id, decision_id, author_kind, author_bot_id, body,
+                                           created_at)
+    SELECT id, decision_id, author_kind, author_bot_id, body, created_at FROM decision_comment;
+DROP TABLE decision_comment;
+ALTER TABLE decision_comment_new RENAME TO decision_comment;
+CREATE INDEX IF NOT EXISTS idx_decision_comment ON decision_comment(decision_id, created_at);
+UPDATE decision_comment SET author_kind = 'system'
+ WHERE author_kind = 'user' AND author_bot_id IS NULL
+   AND (body LIKE 'Applied this ruling''s grants. %'
+        OR body LIKE 'Not granted on %: %'
+        OR body LIKE 'Granted on %: % now has %');
+"#;

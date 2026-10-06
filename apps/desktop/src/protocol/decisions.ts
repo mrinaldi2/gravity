@@ -51,7 +51,8 @@ interface DecisionRaisedBy {
   readonly avatar: string;
 }
 
-type CommentAuthorKind = "bot" | "user";
+/** `system` is Hermes itself, e.g. the grants a ruling applied (H-173). */
+type CommentAuthorKind = "bot" | "user" | "system";
 
 export interface DecisionComment {
   readonly id: string;
