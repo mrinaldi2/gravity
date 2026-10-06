@@ -711,7 +711,12 @@ runs through the tester the same way.
     - **macOS:** `codesign --verify --strict --deep` against the app's code requirement, or against the owner's team for a bare hermesd. The copy staged in `/Applications` is checked again before the rename.
     - **Windows:** Authenticode (`Get-AuthenticodeSignature`, which is WinVerifyTrust) must be valid and signed by the `HERMES_WINDOWS_SIGNER` compiled in.
     - **When it can't check:** a dev build, a build without a Team ID, or Windows releases while they're unsigned. It prints `signature check skipped: <why>` and never skips silently. A failed check stops the install.
-  - **Install.** The app goes into `/Applications/<app>` by a rename on one volume.
+  - **Install (H-117 X1).** For an app, the swap is the system job's, never the bot's session. The job runs a copy of this hermesd as `hermesd release apply-app <release> --app <staged bundle> --version <v>`, which:
+    1. copies the bundle beside `/Applications/<app>` and checks its signature there again;
+    2. keeps the app it replaces as `<home>/backups/app/<app>`, the one previous app;
+    3. swaps the new one in and runs its `service install`;
+    4. waits up to 120 s for `/health` to answer with the new version (the boot gate). Otherwise it puts the backup back, runs its `service install` and exits non-zero. The daemon's boot check then records the install as rolled back.
+  - **Allowed.** The `install` extra allows `hermesd release install` with no owner prompt.
   - **Hand-off.** `service install` restarts the daemon and every bot, this session included, so it's handed to the system:
     - a one-shot launchd job on macOS (`com.thehermes.release-install.<release>`, `RunAtLoad`, not kept alive);
     - a one-time scheduled task on Windows, which runs the setup with `/S`; the setup's own hook installs the service;
@@ -722,6 +727,19 @@ runs through the tester the same way.
   - **Deny rules, advisory only.** Every bot but the project's DevOps gets deny rules in its generated Claude Code settings for direct installer and service commands: `hermesd service install/uninstall`, `installer -pkg`, `msiexec`, `xcrun devicectl device install`, `ios-deploy`, and a silent `*-setup.exe /S`.
     - They are **advisory, not a boundary**. They match command text, so a script, an alias, a renamed binary or a Codex-runtime bot gets past them.
     - What enforces the gate is the daemon: `install_release`, the approval, the frozen hash and the signature check. Every deploy carries its task and decision ids for the audit trail.
+- **Landing on main (H-117 X2):** DevOps runs `hermesd release land <release> [--commit <sha>] [--branch <b>] [--tag <t>] [--dry-run]` from its checkout. The `release_main` extra allows exactly this command.
+  - **Daemon gate.** The command asks the daemon over the local endpoint (`hermes/release_land`). It needs the `release_main` extra, the project's DevOps role, and a release the owner approved (`approved`, `deploying`, `partially_deployed` or `deployed`).
+  - **Commit.** The commit (the branch's tip unless named) must be on `release/desktop-<version>` (unless named).
+  - **Push.** `main` must fast-forward to it; nothing is ever forced, and a diverged main is refused before anything is pushed. Then `main` and the annotated tag (`desktop-v<version>` unless named) are pushed.
+  - **Transport.** Over the remote as configured. When SSH has no key, it goes to GitHub over HTTPS with gh's credential, for that one command; no git config changes.
+  - **Record.** `hermes/release_landed` records a `landed` event, with the commit and tag, on the release.
+  - A raw `git push … main` still goes through the guard, unchanged.
+- **Building the Windows installer (H-117 X3, H-104):** Tester Win runs `hermesd release build-installer <release> [--commit <sha>] [--script <path>] [--output <file>] [--timeout <minutes>]` in its release worktree. The `build_installers` extra allows exactly this command, never the script, which the bot could edit.
+  - **Daemon gate.** `hermes/release_build_installer` needs the extra and an approved release.
+  - **Tree checks.** HEAD must be the release's commit (the release branch's tip unless named), with a clean tree (`git status --porcelain`, untracked files included). The script (`scripts/build-nsis.ps1` unless named) must match its blob at that commit.
+  - **Run.** It runs `powershell -NoProfile -ExecutionPolicy Bypass -File <script>` with a time limit (45 minutes by default).
+  - **Record.** The newest `*-setup.exe` under the NSIS bundle folders (or `--output`) is hashed. `hermes/release_installer_built` records an `installer_built` event `{commit, file, sha256}` for `release publish`.
+- **Grants from linked computers (ARCH-R51):** `bot_grants {bot_id}` (read) answers `{type: "bot_grants", grants: [{at, from, extras, decision}]}`. These are the extras rulings on a linked computer granted the bot here, newest first, and the app lists them under the bot's extras.
 - **Serving builds (H-020 §6.6):** `release_publish {release_id, file, platform?, version?, bundle_id?}` (DevOps with the Publish extra; `hermesd release publish <release> <file>` calls it with the bot's token) copies a build into the served directory, `[releases] dir` (default `<home>/releases`), at `<release_id>/<platform>/<file>`.
   - The file must be an `.ipa`, `.zip`, `.dmg`, `.exe` or `.msi`, and must resolve, symlinks and all, inside `[releases] source_roots` (default: the `<repo>-rel-*` release worktrees in the trusted paths) or the project's artifacts. A hard-linked file is refused, and the file is hashed and copied from one open handle. Inside the served directory, symlinks are refused; copies are staged beside it, never in it.
   - The served directory must be a real folder of its own: a symlink, or a folder that is or contains the daemon home, its secrets or `bus.sqlite`, is refused at config load and at every publish. Only the daemon writes there: every bot's guard and settings deny writes to it (CE-010).

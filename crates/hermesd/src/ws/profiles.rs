@@ -8,6 +8,29 @@ use serde_json::{json, Value};
 use super::Conn;
 
 impl Conn {
+    /// `bot_grants {bot_id}`: the extras linked computers granted this bot
+    /// by a ruling there, newest first (ARCH-R51 S1b):
+    /// `{type: "bot_grants", grants: [{at, from, extras, decision}]}`.
+    pub(super) fn bot_grants(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
+        let bot_id = Self::str_field(req, "bot_id")?;
+        let grants: Vec<Value> = self
+            .app
+            .db
+            .bot_grant_audit(bot_id)?
+            .into_iter()
+            .map(|(at, actor, detail)| {
+                let from = actor
+                    .strip_prefix("peer:")
+                    .and_then(|id| self.app.db.get_peer(id).ok().flatten())
+                    .map_or_else(|| "another computer".to_string(), |p| p.name);
+                json!({ "at": at, "from": from, "extras": detail["extras"],
+                        "decision": detail["decision"] })
+            })
+            .collect();
+        self.send(json!({ "type": "bot_grants", "req_id": req_id, "grants": grants }));
+        Ok(())
+    }
+
     /// `set_project_permission_profile {project_id, profile}`.
     pub(super) fn set_project_permission_profile(
         &self,

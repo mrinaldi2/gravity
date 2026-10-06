@@ -97,6 +97,7 @@ const REPLY_TYPES: ReadonlySet<string> = new Set(
     quiesce: true,
     owner_actions: true,
     owner_action: true,
+    bot_grants: true,
   } satisfies Record<ServerReplyType, true>),
 );
 

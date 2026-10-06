@@ -10,7 +10,8 @@ use crate::config::Config;
 const USAGE: &str = "usage:
   hermesd release publish <release> <file> [--platform <p>] [--version <v>] [--bundle-id <id>]
   hermesd release install <release> [--dry-run | --status]
-  hermesd release land <release> [--commit <sha>] [--branch <b>] [--tag <t>] [--dry-run]";
+  hermesd release land <release> [--commit <sha>] [--branch <b>] [--tag <t>] [--dry-run]
+  hermesd release build-installer <release> [--commit <sha>] [--script <path>] [--output <file>]";
 
 const FLAGS: [&str; 3] = ["--platform", "--version", "--bundle-id"];
 
@@ -23,6 +24,8 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
         Some("apply-app") => return super::install::apply::run(cfg, &args[1..]),
         // DevOps lands an approved release on main and tags it (X2).
         Some("land") => return super::land::run(cfg, &args[1..]).await,
+        // Tester Win builds the installer, the script only as committed (X3).
+        Some("build-installer") => return super::build_installer::run(cfg, &args[1..]).await,
         _ => anyhow::bail!("{USAGE}"),
     }
     let (positional, flags) = split(&args[1..])?;

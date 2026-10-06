@@ -11,7 +11,18 @@ export type PermissionExtra =
   | "app_restart"
   | "install"
   | "release_main"
-  | "quiesce";
+  | "quiesce"
+  | "build_installers";
+
+/** Extras a linked computer granted a bot by a ruling there (ARCH-R51). */
+export interface BotGrant {
+  readonly at: string;
+  /** The linked computer's name. */
+  readonly from: string;
+  readonly extras: readonly PermissionExtra[];
+  /** The decision's title, as that computer sent it. */
+  readonly decision: string | null;
+}
 
 export interface Project {
   readonly id: string;

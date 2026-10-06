@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { ReactElement } from "react";
+import { useLoadOnConnect } from "../../hooks/useLoadOnConnect";
 import type { DaemonApi } from "../../protocol/api";
-import type { Bot, NotifyLevel, PermissionExtra } from "../../protocol/entities";
+import type { Bot, BotGrant, NotifyLevel, PermissionExtra } from "../../protocol/entities";
 import { errText } from "../../util";
 
 interface BotPermissionExtrasProps {
@@ -39,7 +40,50 @@ const EXTRAS: readonly {
     label: "Pause all projects for an install",
     help: "Holds every project on this computer still while it installs an approved release, then resumes them. Give it to DevOps and the testers that install.",
   },
+  {
+    id: "build_installers",
+    label: "Build the Windows installer",
+    help: "Runs the repo's installer build for an approved release, only as committed. Give it to Tester Win.",
+  },
 ];
+
+/** The extras rulings on linked computers granted the bot, read on connect. */
+function useGrants(client: DaemonApi, botId: string, connected: boolean): readonly BotGrant[] {
+  const [grants, setGrants] = useState<readonly BotGrant[]>([]);
+  const load = useCallback(async (): Promise<void> => {
+    try {
+      const reply = await client.request({ type: "bot_grants", bot_id: botId }, "bot_grants");
+      setGrants(reply.grants);
+    } catch {
+      // An older daemon keeps no record of them.
+      setGrants([]);
+    }
+  }, [client, botId]);
+  useLoadOnConnect(connected, load);
+  return grants;
+}
+
+function label(extra: PermissionExtra): string {
+  return EXTRAS.find((e) => e.id === extra)?.label ?? extra;
+}
+
+/** "Granted from mac by a ruling: Install builds · 6 Oct, 10:02 · Let …". */
+function GrantList({ grants }: { readonly grants: readonly BotGrant[] }): ReactElement | null {
+  if (grants.length === 0) {
+    return null;
+  }
+  return (
+    <ul className="field-hint bot-grants" aria-label="Granted by rulings on linked computers">
+      {grants.map((g) => (
+        <li key={`${g.at}-${g.from}`}>
+          Granted from {g.from} by a ruling: {g.extras.map(label).join(", ")} ·{" "}
+          {new Date(g.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
+          {g.decision ? ` · ${g.decision}` : ""}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /**
  * Powers one bot gets on top of its project's permission profile (H-031),
@@ -56,6 +100,7 @@ export default function BotPermissionExtras({
   const [saving, setSaving] = useState(false);
   // A refused change stays visible next to the boxes it was about (H-039).
   const [failure, setFailure] = useState<string | null>(null);
+  const grants = useGrants(client, bot.id, connected);
   if (!client.capabilities.includes("permission_profiles") || bot.peer != null) {
     return null;
   }
@@ -101,6 +146,7 @@ export default function BotPermissionExtras({
           {failure}
         </p>
       )}
+      <GrantList grants={grants} />
       <span className="field-hint">
         {owner
           ? "Used in the Trusted and Full profiles (Release to main in every profile). Changing them restarts the bot."

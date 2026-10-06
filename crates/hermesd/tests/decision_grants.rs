@@ -53,6 +53,14 @@ async fn a_linked_bot_gets_its_grant_on_its_own_computer() {
         win.app.db.bot_permission_extras(&windev).unwrap() == vec![PermissionExtra::Install]
     })
     .await;
+    // The PC's owner sees who granted what, from where (ARCH-R51 S1b).
+    let mut pc_owner = WsClient::connect(win).await;
+    let grants = pc_owner
+        .request(json!({"type": "bot_grants", "bot_id": windev}))
+        .await;
+    assert_eq!(grants["grants"][0]["from"], "mac", "{grants}");
+    assert_eq!(grants["grants"][0]["extras"], json!(["install"]));
+    assert_eq!(grants["grants"][0]["decision"], "Let Windev install?");
 }
 
 #[tokio::test]

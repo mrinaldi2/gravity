@@ -28,6 +28,7 @@ import type { WorkerView } from "./workers";
 import type {
   Bot,
   BotActivity,
+  BotGrant,
   BotRevision,
   BotState,
   BusMessage,
@@ -89,6 +90,7 @@ export type ServerReply =
       readonly projects: readonly Project[];
     })
   | (ReplyBase & { readonly type: "bot"; readonly bot: Bot })
+  | (ReplyBase & { readonly type: "bot_grants"; readonly grants: readonly BotGrant[] })
   | (ReplyBase & { readonly type: "bots"; readonly bots: readonly Bot[] })
   | (ReplyBase & {
       readonly type: "bot_activity";

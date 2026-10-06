@@ -205,6 +205,8 @@ export type ClientRequestBody =
       readonly bot_id: string;
       readonly extras: readonly PermissionExtra[];
     }
+  /** The extras linked computers granted the bot by a ruling there. */
+  | { readonly type: "bot_grants"; readonly bot_id: string }
   /** Restarts the session; it picks its conversation back up and is told what it left unfinished. */
   | { readonly type: "restart_bot"; readonly bot_id: string }
   /** Restarts with a fresh conversation; work, memory and tasks are kept. */

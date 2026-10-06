@@ -21,6 +21,7 @@ use crate::decisions::{conflict, forbidden, not_found};
 use model::Release;
 
 pub mod assemble;
+pub mod build_installer;
 pub mod cancel;
 pub mod cli;
 pub mod confine;

@@ -247,4 +247,25 @@ impl Db {
             .collect::<Result<_, _>>()?;
         Ok(rows)
     }
+
+    /// `(at, actor, detail)` of the extras linked computers granted the bot
+    /// (`grant:<bot id>`, ARCH-R51 S1b), newest first.
+    pub fn bot_grant_audit(&self, bot_id: &str) -> anyhow::Result<Vec<(String, String, Value)>> {
+        let conn = self.lock();
+        let rows = conn
+            .prepare(
+                "SELECT at, actor, detail FROM owner_action_audit WHERE action_id = ?1
+                 ORDER BY seq DESC LIMIT 20",
+            )?
+            .query_map(params![format!("grant:{bot_id}")], |r| {
+                let detail: String = r.get(2)?;
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    serde_json::from_str(&detail).unwrap_or_default(),
+                ))
+            })?
+            .collect::<Result<_, _>>()?;
+        Ok(rows)
+    }
 }
