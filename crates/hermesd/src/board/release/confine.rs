@@ -1,10 +1,11 @@
-//! What may be served and what may be published (CE-010 M1, M2, S1).
+//! What may be served and what may be published (CE-010 M1, M2, S1; H-100).
 //!
 //! The served directory is the one folder `tailscale serve` exposes, so it
 //! must never be, hold or sit behind the daemon's home: a root that is a
 //! symlink, or whose real path is or contains a home, its secrets,
-//! `bus.sqlite` or the daemon config, is refused when the config loads and
-//! again at every publish. A build is published only from a `<repo>-rel-*`
+//! `bus.sqlite` or the daemon config, or is any folder inside a home but
+//! the dedicated `<home>/releases`, is refused when the config loads and
+//! again at every publish; the owner sees why in Needs you. A build is published only from a `<repo>-rel-*`
 //! release worktree in the trusted paths or the project's artifacts (unless
 //! the owner configures `source_roots`), only as an `.ipa`, `.zip`, `.dmg`,
 //! `.exe` or `.msi`, and is read from one open handle that is no hard link.
@@ -58,6 +59,21 @@ pub fn check_root(cfg: &Config) -> anyhow::Result<()> {
     }
     let spellings = [root.clone(), resolved(&root)];
     for home in homes(cfg) {
+        // A folder of its own (H-100): inside a home only the dedicated
+        // `<home>/releases` is, never e.g. `<home>/projects`.
+        let dedicated = home.join("releases");
+        if let Some(inside) = spellings
+            .iter()
+            .find(|r| r.starts_with(&home) && **r != home && **r != dedicated)
+        {
+            if !inside.starts_with(home.join("secrets")) {
+                return refuse(&format!(
+                    "is inside the daemon's home {}; only {} is served from there",
+                    home.display(),
+                    dedicated.display()
+                ));
+            }
+        }
         let secrets = home.join("secrets");
         let mut sensitive = vec![home.clone(), secrets.clone(), home.join("bus.sqlite")];
         sensitive.extend(CONFIG_FILES.iter().map(|name| home.join(name)));
@@ -71,6 +87,18 @@ pub fn check_root(cfg: &Config) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+/// The owner's notice, and Needs you row, when nothing can be served.
+pub const SERVING_OFF: &str = "Release builds aren't being served";
+
+/// Why release builds aren't being served, for the owner (H-100): refused
+/// when the config loaded, or refused now.
+pub fn serving_refused(cfg: &Config) -> Option<String> {
+    cfg.releases
+        .refused
+        .clone()
+        .or_else(|| check_root(cfg).err().map(|e| format!("{e:#}")))
 }
 
 /// Check the served root once the config is read: a root that must not be
@@ -173,11 +201,11 @@ pub fn source(cfg: &Config, artifacts: &Path, file: &Path) -> anyhow::Result<Sou
         )));
     }
     let roots = source_roots(cfg, artifacts);
-    let inside = roots
+    let real_roots: Vec<PathBuf> = roots
         .iter()
         .filter_map(|r| fs::canonicalize(r).ok())
-        .any(|r| real.starts_with(r));
-    if !inside {
+        .collect();
+    if !real_roots.iter().any(|r| real.starts_with(r)) {
         let names: Vec<String> = roots.iter().map(|r| r.display().to_string()).collect();
         return Err(forbidden(format!(
             "{} is outside the roots builds are published from ({})",
@@ -185,32 +213,41 @@ pub fn source(cfg: &Config, artifacts: &Path, file: &Path) -> anyhow::Result<Sou
             names.join(", ")
         )));
     }
-    Source::open(&real)
+    Source::open(&real, &real_roots)
 }
 
 impl Source {
-    /// Open a real path without following a symlink at its end, and check
-    /// the handle: a regular file, not a hard link, and the very file the
-    /// path named when it was checked (S1).
-    pub fn open(real: &Path) -> anyhow::Result<Self> {
-        let checked = fs::symlink_metadata(real)
-            .map_err(|e| invalid(format!("can't read {}: {e}", real.display())))?;
-        let file = open_no_follow(real)?;
-        let meta = file.metadata()?;
-        if !meta.is_file() {
+    /// Open a real path without following a link at its end, and check the
+    /// handle: a regular file, not a hard link, the very file the path named
+    /// when it was checked (S1), and still at that path, inside `roots`, by
+    /// its own account (H-100): a directory on the way swapped for a link
+    /// after the checks shows up here.
+    pub fn open(real: &Path, roots: &[PathBuf]) -> anyhow::Result<Self> {
+        let cant = |e: std::io::Error| invalid(format!("can't open {}: {e}", real.display()));
+        let checked = os::path_id(real).map_err(cant)?;
+        let file = os::open_no_follow(real).map_err(cant)?;
+        let handle = os::describe(&file).map_err(cant)?;
+        if !handle.regular {
             return Err(invalid(format!("{} is not a regular file", real.display())));
         }
-        let (dev, ino, links) = identity(&meta);
-        if links != 1 {
+        if handle.links != 1 {
             return Err(forbidden(format!(
-                "{} is a hard link ({links} names); publish a copy of its own",
-                real.display()
+                "{} is a hard link ({} names); publish a copy of its own",
+                real.display(),
+                handle.links
             )));
         }
-        if (dev, ino) != (identity(&checked).0, identity(&checked).1) {
+        let at = os::real_path(&file).map_err(cant)?;
+        if checked.is_some_and(|id| id != handle.id) || at != real {
             return Err(conflict(format!(
                 "{} changed while it was checked; publish it again",
                 real.display()
+            )));
+        }
+        if !roots.iter().any(|r| at.starts_with(r)) {
+            return Err(forbidden(format!(
+                "{} is outside the roots builds are published from",
+                at.display()
             )));
         }
         Ok(Self {
@@ -249,32 +286,8 @@ fn resolved(path: &Path) -> PathBuf {
     path.to_path_buf()
 }
 
-#[cfg(unix)]
-fn open_no_follow(path: &Path) -> anyhow::Result<fs::File> {
-    use std::os::unix::fs::OpenOptionsExt;
-    fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(path)
-        .map_err(|e| invalid(format!("can't open {}: {e}", path.display())))
-}
-
-#[cfg(not(unix))]
-fn open_no_follow(path: &Path) -> anyhow::Result<fs::File> {
-    fs::File::open(path).map_err(|e| invalid(format!("can't open {}: {e}", path.display())))
-}
-
-/// (device, inode, link count).
-#[cfg(unix)]
-fn identity(meta: &fs::Metadata) -> (u64, u64, u64) {
-    use std::os::unix::fs::MetadataExt;
-    (meta.dev(), meta.ino(), meta.nlink())
-}
-
-#[cfg(not(unix))]
-fn identity(_: &fs::Metadata) -> (u64, u64, u64) {
-    (0, 0, 1)
-}
+#[path = "confine_os.rs"]
+mod os;
 
 #[cfg(all(test, unix))]
 #[path = "confine_tests.rs"]

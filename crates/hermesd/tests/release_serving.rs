@@ -16,7 +16,8 @@ const BASE: &str = "https://mac.tail.ts.net/releases";
 #[tokio::test]
 async fn devops_publishes_and_installs_check_the_served_file() {
     let d = common::spawn_daemon_with(|cfg| {
-        cfg.releases.dir = Some(cfg.home.join("served"));
+        // The dedicated folder: nothing else inside the home is served (H-100).
+        cfg.releases.dir = Some(cfg.home.join("releases"));
         cfg.releases.base_url = Some(BASE.into());
         cfg.releases.source_roots = vec![cfg.home.join("builds").display().to_string()];
     })
@@ -72,7 +73,7 @@ async fn devops_publishes_and_installs_check_the_served_file() {
     assert_eq!(build["platform"], "ios");
     assert_eq!(build["sha256"], sha.as_str());
     assert_eq!(build["url"], p["url"]);
-    let served = home.join("served").join(&id).join("ios");
+    let served = home.join("releases").join(&id).join("ios");
     assert_eq!(
         std::fs::read_to_string(served.join("TheHermes.ipa")).unwrap(),
         "ipa bytes"

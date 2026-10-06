@@ -138,6 +138,21 @@ describe("DashboardView", () => {
     ).toBeInTheDocument();
   });
 
+  it("says first when release builds aren't being served, and why", async () => {
+    const reason =
+      "the served directory /u/.thehermes/projects is inside the daemon's home; set [releases] dir";
+    const serving: NeedsYouRow = {
+      kind: "serving_off",
+      title: "Release builds aren't being served",
+      reason,
+    };
+    setup(dashboard({ needs_you: [...dashboard().needs_you, serving] }));
+    const needs = await screen.findByRole("region", { name: "Needs you · 5" });
+    const first = within(needs).getAllByRole("listitem")[0];
+    expect(first).toHaveTextContent(`Release builds aren't being served${reason}`);
+    expect(within(first).queryByRole("button")).toBeNull();
+  });
+
   it("shows the home's rows off-home, each saying what to do there", async () => {
     setup(offHome());
     const needs = await screen.findByRole("region", { name: "Needs you · 4" });

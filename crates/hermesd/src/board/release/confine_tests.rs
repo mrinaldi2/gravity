@@ -162,3 +162,56 @@ fn a_hard_linked_source_is_refused() {
     assert!(source(&cfg, &artifacts, &artifacts.join("dir.zip")).is_err());
     assert!(source(&cfg, &artifacts, &artifacts.join("gone.zip")).is_err());
 }
+
+/// H-100: the served folder is one of its own. Inside a home only the
+/// dedicated `<home>/releases` is; the owner sees why serving is off.
+#[test]
+fn only_the_dedicated_folder_is_served_from_inside_the_home() {
+    let tmp = tempfile::tempdir().unwrap();
+    let home = config(tmp.path(), None).home;
+    for dir in [
+        home.join("projects"),
+        home.join("artifacts"),
+        home.join("releases/ios"),
+        home.join("logs"),
+    ] {
+        let mut cfg = config(tmp.path(), Some(dir.clone()));
+        let err = check_root(&cfg).unwrap_err().to_string();
+        assert!(
+            err.contains("inside the daemon's home"),
+            "{}: {err}",
+            dir.display()
+        );
+        check_at_load(&mut cfg);
+        let why = serving_refused(&cfg).expect("refused");
+        assert!(why.contains("tailscale serve"), "{why}");
+    }
+    let cfg = config(tmp.path(), Some(home.join("releases")));
+    assert!(check_root(&cfg).is_ok());
+    assert_eq!(serving_refused(&cfg), None);
+    // Refused now, though not at load: the owner still sees it.
+    let cfg = config(tmp.path(), Some(home.join("projects")));
+    assert!(cfg.releases.refused.is_none());
+    assert!(serving_refused(&cfg).is_some());
+}
+
+/// H-100: the open handle's own path must be the checked one, inside a root.
+#[test]
+fn an_open_build_must_still_be_where_it_was_checked() {
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("rel");
+    let real = fs::canonicalize(file(&dir, "app.zip", "zip")).unwrap();
+    let root = fs::canonicalize(&dir).unwrap();
+    assert!(Source::open(&real, std::slice::from_ref(&root)).is_ok());
+    let elsewhere = fs::canonicalize(tmp.path()).unwrap().join("other");
+    let err = Source::open(&real, &[elsewhere]).unwrap_err().to_string();
+    assert!(err.contains("outside the roots"), "{err}");
+    // A directory on the way is a link by the time it is opened: the handle
+    // says where the file really is, which is not the path checked.
+    symlink(&root, tmp.path().join("swapped")).unwrap();
+    let spelled = fs::canonicalize(tmp.path())
+        .unwrap()
+        .join("swapped/app.zip");
+    let err = Source::open(&spelled, &[root]).unwrap_err().to_string();
+    assert!(err.contains("changed while it was checked"), "{err}");
+}

@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 
 use crate::app::AppState;
 use crate::board::model::{ColumnCategory, Priority};
+use crate::board::release::confine;
 use crate::board::release::model::{Release, ReleaseStatus};
 use crate::db::DecisionFilter;
 use crate::decisions::authority::is_relayed;
@@ -34,6 +35,12 @@ pub(crate) fn home_needs_you(
     let db = &app.db;
     let releases = db.board_read(|t| t.releases(project_id))?;
     let mut rows = Vec::new();
+    // The served folder is refused, so no build can be published (H-100).
+    if let Some(reason) = confine::serving_refused(&app.cfg) {
+        rows.push(
+            json!({ "kind": "serving_off", "title": confine::SERVING_OFF, "reason": reason }),
+        );
+    }
     for release in releases
         .iter()
         .filter(|r| r.status == ReleaseStatus::AwaitingOwner)

@@ -24,7 +24,9 @@ fn dirs(tmp: &Path) -> ServedDirs {
 }
 
 fn open(path: &Path) -> Source {
-    Source::open(&fs::canonicalize(path).unwrap()).unwrap()
+    let real = fs::canonicalize(path).unwrap();
+    let root = real.parent().unwrap().to_path_buf();
+    Source::open(&real, &[root]).unwrap()
 }
 
 fn config(home: &Path, roots: &[&Path]) -> Config {

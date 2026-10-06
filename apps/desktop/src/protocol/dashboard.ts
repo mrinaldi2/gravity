@@ -56,6 +56,13 @@ type Row =
       readonly column_key: string;
       readonly assignee: string | null;
     }
+  | {
+      /** The served folder is refused, so no build is published (H-100). */
+      readonly kind: "serving_off";
+      readonly title: string;
+      /** Why, and what to change in hermesd.toml. */
+      readonly reason: string;
+    }
   /** In Needs you on daemons before 0.16.2; shown beside it here. */
   | ({ readonly kind: "wip_override" } & WipOverride);
 

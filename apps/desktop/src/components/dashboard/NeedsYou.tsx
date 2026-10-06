@@ -44,6 +44,7 @@ type Relayed = Extract<Shown, { readonly kind: "relayed" }>;
 
 /** Releases, then decisions and relayed rulings, then P0s (§2.1). */
 const ORDER: Readonly<Record<Shown["kind"], number>> = {
+  serving_off: -1,
   release: 0,
   decision: 1,
   relayed: 2,
@@ -63,10 +64,11 @@ interface RowViewProps {
   readonly tone?: "bad" | "you";
   readonly title: ReactElement | string;
   readonly meta: string;
-  readonly action: string;
+  /** None for a row that only informs: its fix is outside the app. */
+  readonly action?: string;
   /** Starts with `action`, then says what it acts on (UX-010). */
-  readonly label: string;
-  readonly onAction: (event: MouseEvent<HTMLButtonElement>) => void;
+  readonly label?: string;
+  readonly onAction?: (event: MouseEvent<HTMLButtonElement>) => void;
   readonly disabled?: boolean;
   /** Why the action is unavailable, as its tooltip. */
   readonly why?: string;
@@ -92,7 +94,7 @@ function RowView(props: RowViewProps): ReactElement {
         <span id={there} className="dash-elsewhere">
           {props.verb} on {props.elsewhere}
         </span>
-      ) : (
+      ) : props.action === undefined ? null : (
         <button
           type="button"
           className="btn btn-small"
@@ -186,8 +188,15 @@ function p0Row(r: Extract<Shown, { readonly kind: "p0" }>, props: NeedsYouProps)
   };
 }
 
+/** No build can be published until hermesd.toml is fixed (H-100). */
+function servingRow(r: Extract<Shown, { readonly kind: "serving_off" }>): RowViewProps {
+  return { glyph: "⚠", tone: "bad", title: r.title, meta: r.reason, verb: "Fix it" };
+}
+
 function rowProps(r: Shown, props: NeedsYouProps, onReviewRelayed: () => void): RowViewProps {
   switch (r.kind) {
+    case "serving_off":
+      return servingRow(r);
     case "release":
       return releaseRow(r, props);
     case "decision":
@@ -205,6 +214,8 @@ function rowKey(r: Shown): string {
       return `release-${r.release.id}`;
     case "relayed":
       return `relayed-${r.elsewhere ?? "here"}`;
+    case "serving_off":
+      return `serving-${r.elsewhere ?? "here"}`;
     default:
       return `${r.kind}-${r.id}`;
   }

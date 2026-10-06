@@ -273,3 +273,26 @@ async fn a_relay_recorded_after_the_snapshot_is_not_confirmed() {
     assert_eq!(left[0]["count"], 1, "the later relay waits: {d}");
     assert_eq!(left[0]["rulings"][0]["title"], "Keep the old icon");
 }
+
+/// H-100: a served folder that must not be served is the owner's to fix,
+/// so Needs you says so first, with the reason and the fix.
+#[tokio::test]
+async fn a_refused_served_folder_needs_the_owner() {
+    let d = spawn_daemon_with(|cfg| cfg.releases.dir = Some(cfg.home.join("projects"))).await;
+    let r = common::releases::releases_on(d, 0).await;
+    let mut owner = WsClient::connect(&r.pair.d).await;
+    let d = dashboard(&mut owner, &r.project).await;
+    let rows = kinds(&d, "serving_off");
+    assert_eq!(rows.len(), 1, "{d}");
+    assert_eq!(rows[0]["title"], "Release builds aren't being served");
+    let reason = rows[0]["reason"].as_str().unwrap();
+    assert!(
+        reason.contains("inside the daemon's home") && reason.contains("tailscale serve"),
+        "{reason}"
+    );
+
+    let fine = releases(0).await;
+    let mut owner = WsClient::connect(&fine.pair.d).await;
+    let d = dashboard(&mut owner, &fine.project).await;
+    assert!(kinds(&d, "serving_off").is_empty(), "{d}");
+}

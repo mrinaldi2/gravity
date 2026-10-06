@@ -18,7 +18,7 @@ use crate::decisions::{conflict, forbidden, invalid, not_found};
 use crate::messaging::{self, daemon_sender, Dm};
 
 use super::assemble::attach_build;
-use super::confine;
+use super::confine::{self, SERVING_OFF};
 use super::lifecycle::tell_installers;
 use super::model::{Release, ReleaseBuild, ReleaseStatus};
 use super::serve::{self, Staged};
@@ -103,7 +103,14 @@ pub fn publish(
         ));
     }
 
-    let dirs = confine::prepare(cfg)?;
+    // The owner hears of it, not only the bot that tried (H-100).
+    let dirs = confine::prepare(cfg).inspect_err(|e| {
+        app.events.push(crate::events::Push::notice(
+            "error",
+            SERVING_OFF,
+            format!("{e:#}"),
+        ));
+    })?;
     let staged = serve::stage(&dirs, &base, &release.id, &platform, src)?;
     let install_url = match bundle_id.filter(|_| ios) {
         Some(bundle) => {
