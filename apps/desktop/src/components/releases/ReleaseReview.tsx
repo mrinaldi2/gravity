@@ -116,14 +116,47 @@ function useApproveKey(enabled: boolean, onApprove: () => void) {
   return root;
 }
 
+/**
+ * Who made the package, what it was built from and where it goes. A planned
+ * package has no builds yet, so it says nothing about them (H-142).
+ */
+function PackageFacts({
+  release,
+  version,
+  botName,
+}: {
+  readonly release: Release;
+  readonly version: string;
+  readonly botName: BotName;
+}): ReactElement {
+  const planned = release.status === "planned";
+  const targets = targetsLine(release);
+  return (
+    <>
+      <p className="release-meta">
+        {planned ? "Planned" : "Packaged"} by {botName(release.created_by) ?? "a bot"} ·{" "}
+        <span className="mono">{release.name}</span>
+        {release.supersedes ? " · replaces an earlier package" : ""}
+      </p>
+      {planned ? null : <p className="release-meta">{sourceLine(release, version)}</p>}
+      {targets ? <p className="release-meta">{targets}</p> : null}
+    </>
+  );
+}
+
 export default function ReleaseReview({
   release,
-  titles,
+  titles: boardTitles,
   botName,
   actions,
   canControl,
   now = Date.now,
 }: ReleaseReviewProps): ReactElement {
+  // The package's own live titles (H-137) fill what the board fetch lacks.
+  const titles = new Map([
+    ...boardTitles,
+    ...(release.plan ?? []).map((p): [string, string] => [p.item_id, p.title]),
+  ]);
   const version = releaseTitle(release);
   const [open, setOpen] = useState<Open>(null);
   const [leftOut, setLeftOut] = useState<ReadonlyMap<string, LeftOut>>(new Map());
@@ -143,18 +176,12 @@ export default function ReleaseReview({
           <span aria-hidden="true">{status.glyph}</span> {status.word}
         </span>
       </header>
-      <p className="release-meta">
-        {release.status === "planned" ? "Planned" : "Packaged"} by{" "}
-        {botName(release.created_by) ?? "a bot"} · <span className="mono">{release.name}</span>
-        {release.supersedes ? " · replaces an earlier package" : ""}
-      </p>
-      <p className="release-meta">{sourceLine(release, version)}</p>
-      {targetsLine(release) ? <p className="release-meta">{targetsLine(release)}</p> : null}
+      <PackageFacts release={release} version={version} botName={botName} />
       <Banner release={release} actions={actions} canControl={canControl} />
       <ReleaseProgress release={release} botName={botName} />
       <ReviewEvents release={release} botName={botName} />
       <PostInstall release={release} botName={botName} />
-      <TestSummary release={release} botName={botName} />
+      {release.status === "planned" ? null : <TestSummary release={release} botName={botName} />}
       <ReviewTabs
         release={release}
         titles={titles}

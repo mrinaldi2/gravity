@@ -1,9 +1,31 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import type { PlanItem, Release } from "../../protocol/releases";
+import { FakeDaemon } from "../../test/fakeDaemon";
 import { release } from "../../test/releaseFixtures";
 import { eventLine } from "./labels";
 import ReleaseProgress, { leftSentence, readinessLine, showsProgress } from "./ReleaseProgress";
+import ReleaseReview from "./ReleaseReview";
+import { useReleaseActions } from "./useReleases";
+
+function Review({ value }: { readonly value: Release }): ReactElement {
+  const actions = useReleaseActions(
+    new FakeDaemon(),
+    () => undefined,
+    () => undefined,
+  );
+  return (
+    <ReleaseReview
+      release={value}
+      titles={new Map()}
+      botName={() => undefined}
+      actions={actions}
+      canControl
+    />
+  );
+}
 
 function item(over: Partial<PlanItem> = {}): PlanItem {
   return {
@@ -171,5 +193,24 @@ describe("ReleaseProgress", () => {
     expect(
       eventLine({ ...base, kind: "planned", note: null, detail: { items: ["H-1", "H-2"] } }, names),
     ).toBe("Architect planned 0.16.4 with H-1, H-2.");
+  });
+
+  it("says nothing of builds and tests while planned, and lists the plan's items (H-142)", async () => {
+    render(
+      <Review
+        value={planned({
+          items: ["H-137", "H-125", "H-121"].map((item_id) => ({
+            item_id,
+            verdict: "pending" as const,
+            owner_note: null,
+          })),
+        })}
+      />,
+    );
+    expect(screen.queryByText("No builds yet")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Tests" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Items 3" }));
+    // Titles come from the plan when the board fetch has none.
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("Deployed via");
   });
 });

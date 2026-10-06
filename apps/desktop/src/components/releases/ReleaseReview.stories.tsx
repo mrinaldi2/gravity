@@ -117,6 +117,12 @@ export const Planned: Story = () => (
       decision_id: null,
       builds: [],
       tests: [],
+      // The daemon builds `plan` from `items`, so the Items tab lists the same three.
+      items: ["H-017", "H-020", "H-021"].map((item_id) => ({
+        item_id,
+        verdict: "pending" as const,
+        owner_note: null,
+      })),
       plan: [
         {
           item_id: "H-017",
