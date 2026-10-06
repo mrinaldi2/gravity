@@ -46,8 +46,11 @@ pub fn archive_bot(
     // Stop first: the runtime must not outlive its credential, or it would keep
     // making authenticated calls that then fail confusingly.
     app.supervisor.stop_bot(&bot.id)?;
-    // Its Cargo target is build output, not work: it goes now (H-029).
-    crate::workers::target::remove_bot_target(std::path::Path::new(&bot.workspace_path));
+    // Its Cargo target is build output, not work: it goes now (H-029), when
+    // its folder is this home's to touch (H-171).
+    if let Some(workspace) = crate::paths::own_workspace(&app.cfg, bot) {
+        crate::workers::target::remove_bot_target(&workspace);
+    }
 
     release_open_tasks(app, bot)?;
     // Its board items go to the lead, who moves them on (H-099).
@@ -134,7 +137,11 @@ pub fn prune_archived_workspaces(app: &Arc<AppState>, days: i64) -> anyhow::Resu
         if deleted_at > cutoff {
             continue;
         }
-        let workspace = std::path::Path::new(&bot.workspace_path);
+        // Only a folder in this home is deleted, never a copied database's
+        // paths elsewhere (H-171).
+        let Some(workspace) = crate::paths::own_workspace(&app.cfg, &bot) else {
+            continue;
+        };
         let Some(root) = workspace.parent() else {
             continue;
         };

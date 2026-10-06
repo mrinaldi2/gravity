@@ -87,7 +87,8 @@ impl Conn {
             return Ok(());
         }
         let result = if clear {
-            let root = std::path::Path::new(&bot.workspace_path).parent();
+            let workspace = crate::paths::own_workspace(&self.app.cfg, &bot);
+            let root = workspace.as_deref().and_then(std::path::Path::parent);
             self.app.supervisor.clear_session(&bot.id, root)
         } else {
             self.app.supervisor.restart_bot(&bot.id)

@@ -88,6 +88,15 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let mut cfg = Config::load(config_path.as_deref())?;
+    cfg.scratch |= args.iter().any(|arg| arg == "--scratch")
+        || std::env::var("HERMES_SCRATCH").is_ok_and(|v| v == "1");
+    if cfg.scratch {
+        tracing::warn!(
+            home = %cfg.home.display(),
+            "SCRATCH MODE: no bot starts, no peer links, no routines, deliveries or \
+             workers, no bot-folder writes, no git push"
+        );
+    }
     if let Some(e) = cfg.auth.hold_phase_two(hermesd::bus_auth::HOOKS_OVER_IPC) {
         tracing::error!("{e}");
     }

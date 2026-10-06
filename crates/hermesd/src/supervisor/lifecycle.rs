@@ -12,15 +12,15 @@ impl Supervisor {
         if bot.is_linked() {
             return Ok(()); // runs on its peer; nothing to start here
         }
-
-        // Creation and the supervision tick can both start a new bot. Held
-        // until this call returns, so a second start finds the claim and
-        // backs off instead of fighting this one over the same conversation.
+        // Outside this home or in scratch mode: not ours to write (H-171).
+        let Some(workspace) = crate::paths::own_workspace(&self.inner.cfg, &bot) else {
+            return Ok(());
+        };
+        // Creation and the tick both start bots: a second start backs off.
         let Some(_claim) = self.claim_start(bot_id) else {
             return Ok(()); // already running, or another start is in flight
         };
         let token = self.inner.secrets.bot_token(bot_id)?;
-        let workspace = std::path::PathBuf::from(&bot.workspace_path);
         let bot_root = workspace.parent().map(|p| p.to_path_buf());
         let project = self.inner.db.get_project(&bot.project_id)?;
         let artifacts = project

@@ -159,7 +159,8 @@ pub(super) fn serve_detach(app: &AppState, peer: &Peer, frame: &Value) -> anyhow
 pub(super) fn serve_session(app: &AppState, peer: &Peer, frame: &Value) -> anyhow::Result<Value> {
     let bot = exposed_bot(app, peer, frame)?;
     if frame["type"] == "clear_bot_session" {
-        let root = std::path::Path::new(&bot.workspace_path).parent();
+        let workspace = crate::paths::own_workspace(&app.cfg, &bot);
+        let root = workspace.as_deref().and_then(std::path::Path::parent);
         app.supervisor.clear_session(&bot.id, root)?;
     } else {
         app.supervisor.restart_bot(&bot.id)?;
