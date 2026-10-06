@@ -38,23 +38,41 @@ fn the_release_as_committed_passes() {
 fn a_changed_script_is_refused() {
     let (root, head) = worktree();
     std::fs::write(root.path().join(SCRIPT), "Remove-Item -Recurse C:\\\n").unwrap();
-    // A change shows as a dirty tree first; the blob check holds even if
-    // the change were hidden from status.
+    // A change shows as a dirty tree; hidden from status, the mark itself
+    // is refused (ARCH-R52 S2).
     let refused = check_tree(root.path(), &head, SCRIPT)
         .unwrap_err()
         .to_string();
     assert!(refused.contains("has changes"), "{refused}");
-    sh(
-        root.path(),
-        "git update-index --assume-unchanged scripts/build-nsis.ps1",
-    );
-    let refused = check_tree(root.path(), &head, SCRIPT)
-        .unwrap_err()
-        .to_string();
-    assert!(
-        refused.contains("differs from the one committed"),
-        "{refused}"
-    );
+    for mark in ["--assume-unchanged", "--skip-worktree"] {
+        sh(
+            root.path(),
+            &format!("git update-index --no-assume-unchanged --no-skip-worktree scripts/build-nsis.ps1 && git update-index {mark} scripts/build-nsis.ps1"),
+        );
+        let refused = check_tree(root.path(), &head, SCRIPT)
+            .unwrap_err()
+            .to_string();
+        assert!(refused.contains("files are marked"), "{mark}: {refused}");
+    }
+}
+
+/// The build runs in a fresh worktree of the commit: what the bot changed
+/// or left in its own never takes part, and the worktree goes afterwards.
+#[test]
+fn the_build_gets_a_fresh_worktree_of_the_commit() {
+    let (root, head) = worktree();
+    std::fs::write(root.path().join(SCRIPT), "evil\n").unwrap();
+    std::fs::write(root.path().join("planted.txt"), "x").unwrap();
+    let fresh = super::Fresh::add(root.path(), &head).unwrap();
+    assert_eq!(check_tree(&fresh.dir, &head, SCRIPT).unwrap(), head);
+    assert!(!fresh.dir.join("planted.txt").exists());
+    let script = std::fs::read_to_string(fresh.dir.join(SCRIPT)).unwrap();
+    assert_eq!(script, "Write-Host build\n");
+    let dir = fresh.dir.clone();
+    drop(fresh);
+    assert!(!dir.exists(), "removed");
+    let listed = super::super::git::git(root.path(), &["worktree", "list"]).unwrap();
+    assert_eq!(listed.lines().count(), 1, "{listed}");
 }
 
 #[test]

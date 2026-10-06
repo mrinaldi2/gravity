@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::super::git::{github_https, ssh_refused};
-use super::{land_in, parse, Plan};
+use super::{land_in, parse, Args, Plan};
 
 fn sh(dir: &Path, script: &str) {
     let ok = std::process::Command::new("sh")
@@ -34,23 +34,25 @@ fn repos() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
     (root, origin, clone)
 }
 
-fn plan() -> Plan {
-    super::Args {
-        release: "rel-1".into(),
-        ..Default::default()
-    }
-    .plan("0.17.0")
-}
-
 fn rev(repo: &Path, what: &str) -> String {
     super::super::git::git(repo, &["rev-parse", what]).unwrap()
 }
 
+/// The plan for the commit the release's builds were made from.
+fn plan(built_from: &str) -> Plan {
+    Args {
+        release: "rel-1".into(),
+        ..Default::default()
+    }
+    .plan("0.17.0", built_from, None)
+    .unwrap()
+}
+
 #[test]
-fn an_approved_release_fast_forwards_main_and_is_tagged_on_the_remote() {
+fn the_built_commit_fast_forwards_main_and_is_tagged_on_the_remote() {
     let (_root, origin, clone) = repos();
-    let landed = land_in(&clone, &plan()).expect("landed");
     let b = rev(&origin, "release/desktop-0.17.0");
+    let landed = land_in(&clone, &plan(&b)).expect("landed");
     assert_eq!(landed.commit, b);
     assert_eq!(landed.tag, "desktop-v0.17.0");
     assert_eq!(rev(&origin, "main"), b, "main moved on the remote");
@@ -62,12 +64,38 @@ fn an_approved_release_fast_forwards_main_and_is_tagged_on_the_remote() {
     let kind = super::super::git::git(&origin, &["cat-file", "-t", "desktop-v0.17.0"]).unwrap();
     assert_eq!(kind, "tag", "annotated");
     // Landing again changes nothing and refuses nothing.
-    land_in(&clone, &plan()).expect("again");
+    land_in(&clone, &plan(&b)).expect("again");
+}
+
+#[test]
+fn code_pushed_after_the_builds_never_lands() {
+    let (root, origin, clone) = repos();
+    let built = rev(&origin, "release/desktop-0.17.0");
+    // A commit on the release branch after the release was built.
+    sh(
+        root.path(),
+        "git clone -q origin.git late && cd late && git checkout -q release/desktop-0.17.0 \
+         && git commit -q --allow-empty -m late && git push -q origin release/desktop-0.17.0",
+    );
+    let refused = land_in(&clone, &plan(&built)).unwrap_err().to_string();
+    assert!(refused.contains("pushed after the builds"), "{refused}");
+    assert_eq!(rev(&origin, "main"), rev(&clone, "main"), "main untouched");
+    // And --commit can only restate what the builds name.
+    let other = Args {
+        release: "rel-1".into(),
+        commit: Some("f".repeat(40)),
+        ..Default::default()
+    }
+    .plan("0.17.0", &built, None)
+    .unwrap_err()
+    .to_string();
+    assert!(other.contains("can only name that"), "{other}");
 }
 
 #[test]
 fn a_main_that_moved_on_is_never_forced() {
     let (root, origin, clone) = repos();
+    let b = rev(&origin, "release/desktop-0.17.0");
     // Someone else's commit on main, not on the release branch.
     sh(
         root.path(),
@@ -75,32 +103,29 @@ fn a_main_that_moved_on_is_never_forced() {
          && git commit -q --allow-empty -m C && git push -q origin main",
     );
     let before = rev(&origin, "main");
-    let refused = land_in(&clone, &plan()).unwrap_err().to_string();
+    let refused = land_in(&clone, &plan(&b)).unwrap_err().to_string();
     assert!(refused.contains("not a fast-forward"), "{refused}");
     assert_eq!(rev(&origin, "main"), before, "main untouched");
 }
 
 #[test]
-fn only_a_commit_on_the_release_branch_lands() {
-    let (_root, _origin, clone) = repos();
-    let main = rev(&clone, "main");
-    sh(
-        &clone,
-        "git checkout -q main && git commit -q --allow-empty -m stray",
-    );
-    let stray = rev(&clone, "HEAD");
-    let mut p = plan();
-    p.commit = Some(stray.clone());
-    let refused = land_in(&clone, &p).unwrap_err().to_string();
-    assert!(
-        refused.contains("isn't on release/desktop-0.17.0"),
-        "{refused}"
-    );
-    // A dry run checks everything and pushes nothing.
-    let mut dry = plan();
+fn a_dry_run_and_a_pre_push_hook_push_nothing_of_theirs() {
+    let (_root, origin, clone) = repos();
+    let b = rev(&origin, "release/desktop-0.17.0");
+    let mut dry = plan(&b);
     dry.dry_run = true;
     land_in(&clone, &dry).expect("dry run");
-    assert_eq!(rev(&clone, "refs/remotes/origin/main"), main);
+    assert_ne!(rev(&origin, "main"), b, "nothing pushed");
+    // A hook in the checkout would run inside the gated command: it doesn't.
+    let hook = clone.join(".git/hooks/pre-push");
+    std::fs::write(&hook, "#!/bin/sh\ntouch \"$GIT_DIR/../hook-ran\"\nexit 1\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    land_in(&clone, &plan(&b)).expect("landed with hooks off");
+    assert!(!clone.join("hook-ran").exists(), "the hook never ran");
 }
 
 #[test]
@@ -108,7 +133,7 @@ fn the_command_reads_its_flags_and_the_transport_falls_back_only_for_ssh_auth() 
     let args: Vec<String> = ["rel-1", "--tag", "v0.17.0", "--dry-run"]
         .map(str::to_string)
         .to_vec();
-    let p = parse(&args).unwrap().plan("0.17.0");
+    let p = parse(&args).unwrap().plan("0.17.0", "abc", None).unwrap();
     assert_eq!(p.tag, "v0.17.0");
     assert_eq!(p.branch, "release/desktop-0.17.0");
     assert!(p.dry_run);

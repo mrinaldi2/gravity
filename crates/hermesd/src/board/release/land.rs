@@ -3,14 +3,17 @@
 //! `main` and tags it, with no owner step.
 //!
 //! The daemon checks first (`hermes/release_land`): the `release_main`
-//! extra, the project's DevOps role, a release the owner approved. Then, in
-//! DevOps's own checkout:
-//! - the commit (the release branch's tip unless named) must be on the
-//!   release branch, `release/desktop-<version>` unless named;
+//! extra, the project's DevOps role, a release the owner approved, and the
+//! one commit its builds were made from (ARCH-R52 M1). Then, in DevOps's own
+//! checkout, with git hooks off:
+//! - that commit and nothing else lands (`--commit` may only restate it);
+//! - the release branch (`release/desktop-<version>` unless named) must still
+//!   be at it, so code pushed after the builds can never land;
 //! - `main` must fast-forward to it: never forced, a diverged main is
 //!   refused;
 //! - `main` is pushed, then the annotated tag (`desktop-v<version>` unless
-//!   named), and both go on the release (`hermes/release_landed`).
+//!   named). The project's repo is then asked directly that both are at the
+//!   commit before they go on the release (`hermes/release_landed`).
 //!
 //! Over SSH, or GitHub over HTTPS with gh's credential when SSH has no key.
 //! A raw `git push … main` still goes through the guard, unchanged.
@@ -31,10 +34,14 @@ const USAGE: &str = "usage: hermesd release land <release> [--commit <sha>] [--b
 pub struct Plan {
     pub release: String,
     pub version: String,
-    pub commit: Option<String>,
+    /// The commit the release's builds were made from.
+    pub commit: String,
     pub branch: String,
     pub tag: String,
     pub dry_run: bool,
+    /// Where the result is checked: the project's configured repo, else
+    /// the checkout's origin.
+    pub repo_url: Option<String>,
 }
 
 /// What landed.
@@ -74,18 +81,32 @@ pub(crate) fn parse(args: &[String]) -> anyhow::Result<Args> {
 }
 
 impl Args {
-    /// The plan, with the repo's own conventions for what isn't named.
-    pub(crate) fn plan(self, version: &str) -> Plan {
-        Plan {
+    /// The plan, for the commit the daemon recorded, with the repo's own
+    /// conventions for what isn't named.
+    pub(crate) fn plan(
+        self,
+        version: &str,
+        recorded: &str,
+        repo_url: Option<String>,
+    ) -> anyhow::Result<Plan> {
+        if let Some(named) = &self.commit {
+            anyhow::ensure!(
+                named == recorded,
+                "release {} was built from {recorded}; --commit can only name that",
+                self.release
+            );
+        }
+        Ok(Plan {
             branch: self
                 .branch
                 .unwrap_or_else(|| format!("release/desktop-{version}")),
             tag: self.tag.unwrap_or_else(|| format!("desktop-v{version}")),
             release: self.release,
             version: version.to_string(),
-            commit: self.commit,
+            commit: recorded.to_string(),
             dry_run: self.dry_run,
-        }
+            repo_url,
+        })
     }
 }
 
@@ -113,7 +134,11 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
     )
     .await?;
     let version = gate["version"].as_str().unwrap_or_default().to_string();
-    let plan = args.plan(&version);
+    let recorded = gate["commit"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("the daemon named no commit for this release"))?;
+    let repo_url = gate["repo_url"].as_str().map(str::to_string);
+    let plan = args.plan(&version, recorded, repo_url)?;
     let repo = git::toplevel(&std::env::current_dir()?)?;
     let landed = land_in(&repo, &plan)?;
     if plan.dry_run {
@@ -139,17 +164,22 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
 /// The git half: checks, then main and the tag, in `repo`.
 pub fn land_in(repo: &Path, plan: &Plan) -> anyhow::Result<Landed> {
     let transport = git::fetch(repo, &["main", &plan.branch])?;
-    let tip = format!("refs/remotes/origin/{}", plan.branch);
-    let named = plan.commit.as_deref().unwrap_or(&tip);
-    let commit = run_git(
+    let commit = plan.commit.clone();
+    let tip = run_git(
         repo,
-        &["rev-parse", "--verify", &format!("{named}^{{commit}}")],
+        &[
+            "rev-parse",
+            "--verify",
+            &format!("refs/remotes/origin/{}^{{commit}}", plan.branch),
+        ],
     )
-    .map_err(|_| anyhow::anyhow!("no commit {named} (is {} pushed?)", plan.branch))?;
+    .map_err(|_| anyhow::anyhow!("no branch {} on origin", plan.branch))?;
     anyhow::ensure!(
-        git::yes(repo, &["merge-base", "--is-ancestor", &commit, &tip]),
-        "{commit} isn't on {}: land only what the release branch holds",
-        plan.branch
+        tip == commit,
+        "{} is at {tip}, but release {} was built from {commit}: something was pushed after \
+         the builds, so it can't land; package a new release",
+        plan.branch,
+        plan.release
     );
     anyhow::ensure!(
         git::yes(
@@ -189,11 +219,38 @@ pub fn land_in(repo: &Path, plan: &Plan) -> anyhow::Result<Landed> {
         run_git(repo, &["tag", "-a", &plan.tag, &commit, "-m", &message])?;
     }
     git::push(repo, &[format!("{tag_ref}:{tag_ref}")])?;
+    verify_remote(repo, plan, &commit, &tag_ref)?;
     Ok(Landed {
         commit,
         tag: plan.tag.clone(),
         transport,
     })
+}
+
+/// The repo itself, asked directly: main and the tag are at the commit.
+fn verify_remote(repo: &Path, plan: &Plan, commit: &str, tag_ref: &str) -> anyhow::Result<()> {
+    let url = match &plan.repo_url {
+        Some(url) => url.clone(),
+        None => run_git(repo, &["remote", "get-url", "origin"])?,
+    };
+    let peeled = format!("{tag_ref}^{{}}");
+    let refs = git::remote_refs(&url, &["refs/heads/main".to_string(), peeled.clone()])?;
+    let at = |name: &str| {
+        refs.iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, sha)| sha.as_str())
+    };
+    anyhow::ensure!(
+        at("refs/heads/main") == Some(commit),
+        "pushed, but {url} has main at {}, not {commit}; nothing recorded",
+        at("refs/heads/main").unwrap_or("nothing")
+    );
+    anyhow::ensure!(
+        at(&peeled) == Some(commit),
+        "pushed, but {url} has no tag {} on {commit}; nothing recorded",
+        plan.tag
+    );
+    Ok(())
 }
 
 #[cfg(test)]

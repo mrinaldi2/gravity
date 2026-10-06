@@ -80,7 +80,7 @@ fn release_in(conn: &Connection, id: &str) -> rusqlite::Result<Option<Release>> 
         .collect::<Result<_, _>>()?;
     release.builds = conn
         .prepare(
-            "SELECT platform, version, artifact, url, install_url, sha256, built_at
+            "SELECT platform, version, artifact, url, install_url, sha256, built_at, source_commit
              FROM release_build WHERE release_id = ?1 ORDER BY platform",
         )?
         .query_map(params![id], |r| {
@@ -92,6 +92,7 @@ fn release_in(conn: &Connection, id: &str) -> rusqlite::Result<Option<Release>> 
                 install_url: r.get(4)?,
                 sha256: r.get(5)?,
                 built_at: parse_at(r.get(6)?),
+                source_commit: r.get(7)?,
             })
         })?
         .collect::<Result<_, _>>()?;
@@ -214,12 +215,12 @@ impl BoardTx<'_> {
     pub fn set_release_build(&self, release_id: &str, b: &ReleaseBuild) -> anyhow::Result<()> {
         self.conn.execute(
             "INSERT INTO release_build(release_id, platform, version, artifact, url, install_url,
-                                       sha256, built_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                                       sha256, built_at, source_commit)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(release_id, platform) DO UPDATE SET version = excluded.version,
                  artifact = excluded.artifact, url = excluded.url,
                  install_url = excluded.install_url, sha256 = excluded.sha256,
-                 built_at = excluded.built_at",
+                 built_at = excluded.built_at, source_commit = excluded.source_commit",
             params![
                 release_id,
                 b.platform,
@@ -228,7 +229,8 @@ impl BoardTx<'_> {
                 b.url,
                 b.install_url,
                 b.sha256,
-                ts(b.built_at)
+                ts(b.built_at),
+                b.source_commit
             ],
         )?;
         Ok(())

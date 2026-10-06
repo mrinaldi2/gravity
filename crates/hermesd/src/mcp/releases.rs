@@ -99,6 +99,10 @@ pub(super) fn call(
                 install_url: req.install_url,
                 sha256: req.sha256.trim().to_string(),
                 built_at: bus::now(),
+                source_commit: req
+                    .source_commit
+                    .map(|c| c.trim().to_string())
+                    .filter(|c| !c.is_empty()),
             };
             released(assemble::attach_build(app, &me, &req.release_id, &build)?)
         }
@@ -113,6 +117,7 @@ pub(super) fn call(
                     platform: req.platform.as_deref(),
                     version: req.version.as_deref(),
                     bundle_id: req.bundle_id.as_deref(),
+                    source_commit: req.source_commit.as_deref(),
                 },
             )?;
             Ok(json!({ "release": release.to_json(), "published": published }))

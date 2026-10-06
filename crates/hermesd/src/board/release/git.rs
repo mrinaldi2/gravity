@@ -55,11 +55,25 @@ pub(crate) fn ssh_refused(stderr: &str) -> bool {
     .any(|s| stderr.contains(s))
 }
 
+/// No hooks: a pre-push hook in the bot's checkout would otherwise run
+/// inside the gated command (ARCH-R52 S1).
+pub(crate) fn no_hooks() -> [&'static str; 2] {
+    [
+        "-c",
+        if cfg!(windows) {
+            "core.hooksPath=NUL"
+        } else {
+            "core.hooksPath=/dev/null"
+        },
+    ]
+}
+
 /// `git <verb> origin <refspecs>`, falling back to GitHub over HTTPS with
 /// gh's credential. Returns how it went out.
 fn to_origin(repo: &Path, verb: &str, refspecs: &[String]) -> anyhow::Result<&'static str> {
     let out = Command::new("git")
         .current_dir(repo)
+        .args(no_hooks())
         .arg(verb)
         .arg("origin")
         .args(refspecs)
@@ -75,6 +89,7 @@ fn to_origin(repo: &Path, verb: &str, refspecs: &[String]) -> anyhow::Result<&'s
     };
     let retry = Command::new("git")
         .current_dir(repo)
+        .args(no_hooks())
         .args([
             "-c",
             "credential.helper=",
@@ -110,4 +125,33 @@ pub fn push(repo: &Path, refspecs: &[String]) -> anyhow::Result<&'static str> {
         "a release push is never forced"
     );
     to_origin(repo, "push", refspecs)
+}
+
+/// What `url` has for each of `refs` (`refs/tags/x^{}` for a tag's commit),
+/// asked outside the checkout and with no git config of the user's or the
+/// checkout's, so no `insteadOf` or `pushurl` can redirect it (ARCH-R52 S1).
+pub fn remote_refs(url: &str, refs: &[String]) -> anyhow::Result<Vec<(String, String)>> {
+    let null = if cfg!(windows) { "NUL" } else { "/dev/null" };
+    let url = github_https(url).unwrap_or_else(|| url.to_string());
+    let out = Command::new("git")
+        .current_dir(std::env::temp_dir())
+        .env("GIT_CONFIG_GLOBAL", null)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .args(no_hooks())
+        .args(["-c", "credential.helper=!gh auth git-credential"])
+        .args(["ls-remote", &url])
+        .args(refs)
+        .output()?;
+    anyhow::ensure!(
+        out.status.success(),
+        "git ls-remote {url}: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|l| {
+            let (sha, name) = l.split_once('\t')?;
+            Some((name.to_string(), sha.to_string()))
+        })
+        .collect())
 }

@@ -3,21 +3,26 @@
 //! H-104): Tester Win builds the Windows installer with no owner prompt.
 //!
 //! The daemon checks first (`hermes/release_build_installer`): the
-//! `build_installers` extra and a release the owner approved. Then, in the
-//! bot's release worktree:
-//! - HEAD is the release's commit (the release branch's tip unless named),
-//!   and nothing is changed or untracked (`git status --porcelain`);
-//! - the script (`scripts/build-nsis.ps1` unless named) is byte for byte
-//!   the one committed there (its blob hash);
+//! `build_installers` extra and a release still open for builds, and names
+//! the commit its builds were made from, if any yet (ARCH-R52 M1). Then:
+//! - the commit is that one (`--commit` may only restate it), else the
+//!   release branch's tip;
+//! - a fresh detached worktree of it is made in a private temp folder, with
+//!   git hooks off, so nothing the bot changed, marked unchanged or left
+//!   ignored in its own worktree takes part (ARCH-R52 S2);
+//! - there, the tree is clean, no file is marked assume-unchanged or
+//!   skip-worktree, and the script (`scripts/build-nsis.ps1` unless named)
+//!   is its committed blob;
 //! - it runs with `powershell -NoProfile -ExecutionPolicy Bypass -File`,
 //!   with a time limit;
-//! - the installer it made is hashed and recorded on the release, for
-//!   `release publish` (`hermes/release_installer_built`).
+//! - the installer is copied to `<checkout>/target/release-installers/`,
+//!   hashed and recorded on the release with the commit
+//!   (`hermes/release_installer_built`), and the temp worktree removed.
 //!
 //! Only this command is allowed, never the script itself: the bot can edit
 //! the script in its worktree, so a rule for it would run anything.
-//! Residual: the tree is checked, then run; a bot racing its own worktree
-//! in between is the same-user limit every guard here has.
+//! Residual: the temp worktree is the same user's, so a bot racing it during
+//! the build is the same-user limit every guard here has.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -85,6 +90,18 @@ pub fn check_tree(repo: &Path, commit: &str, script: &str) -> anyhow::Result<Str
         dirty.is_empty(),
         "this worktree has changes, so it isn't the release as committed:\n{dirty}"
     );
+    // Files status can't see: marked assume-unchanged (lowercase tag) or
+    // skip-worktree (`S`).
+    let flagged: Vec<String> = run_git(repo, &["ls-files", "-v"])?
+        .lines()
+        .filter(|l| l.starts_with(|c: char| c.is_ascii_lowercase() || c == 'S'))
+        .map(str::to_string)
+        .collect();
+    anyhow::ensure!(
+        flagged.is_empty(),
+        "files are marked so git doesn't see their changes:\n{}",
+        flagged.join("\n")
+    );
     let committed = run_git(repo, &["rev-parse", &format!("{commit}:{script}")])
         .map_err(|_| anyhow::anyhow!("{script} isn't committed at {commit}"))?;
     let on_disk = run_git(repo, &["hash-object", "--", script])?;
@@ -144,6 +161,60 @@ fn run_script(repo: &Path, script: &str, limit: Duration) -> anyhow::Result<()> 
     }
 }
 
+/// A detached worktree of one commit in a private temp folder, removed
+/// with its build when dropped.
+pub struct Fresh {
+    repo: PathBuf,
+    pub dir: PathBuf,
+}
+
+impl Fresh {
+    pub fn add(repo: &Path, commit: &str) -> anyhow::Result<Fresh> {
+        let dir = std::env::temp_dir().join(format!("hermes-installer-{}", bus::new_id()));
+        let mut args: Vec<&str> = git::no_hooks().to_vec();
+        let path = dir.display().to_string();
+        args.extend(["worktree", "add", "--detach", &path, commit]);
+        run_git(repo, &args)?;
+        Ok(Fresh {
+            repo: repo.to_path_buf(),
+            dir,
+        })
+    }
+}
+
+impl Drop for Fresh {
+    fn drop(&mut self) {
+        let path = self.dir.display().to_string();
+        let _ = run_git(&self.repo, &["worktree", "remove", "--force", &path]);
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+/// The commit to build: the one the release's builds name (only restated
+/// by `--commit`), else the one named, else the release branch's tip.
+fn commit_to_build(
+    repo: &Path,
+    recorded: Option<&str>,
+    named: Option<&str>,
+    branch: &str,
+) -> anyhow::Result<String> {
+    if let (Some(recorded), Some(named)) = (recorded, named) {
+        anyhow::ensure!(
+            recorded == named,
+            "this release's builds come from {recorded}; --commit can only name that"
+        );
+    }
+    git::fetch(repo, &[branch])?;
+    let wanted = recorded
+        .or(named)
+        .map_or_else(|| format!("refs/remotes/origin/{branch}"), str::to_string);
+    run_git(
+        repo,
+        &["rev-parse", "--verify", &format!("{wanted}^{{commit}}")],
+    )
+    .map_err(|_| anyhow::anyhow!("no commit {wanted} here"))
+}
+
 pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
     let args = parse(args)?;
     let gate = ask(
@@ -155,20 +226,28 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
     let version = gate["version"].as_str().unwrap_or_default();
     let repo = git::toplevel(&std::env::current_dir()?)?;
     let branch = format!("release/desktop-{version}");
-    let commit = match &args.commit {
-        Some(commit) => commit.clone(),
-        None => {
-            git::fetch(&repo, &[&branch])?;
-            format!("refs/remotes/origin/{branch}")
-        }
-    };
+    let commit = commit_to_build(
+        &repo,
+        gate["commit"].as_str(),
+        args.commit.as_deref(),
+        &branch,
+    )?;
     let script = args.script.as_deref().unwrap_or(SCRIPT);
-    let commit = check_tree(&repo, &commit, script)?;
-    println!("{script} is as committed at {commit}; building");
+    let fresh = Fresh::add(&repo, &commit)?;
+    check_tree(&fresh.dir, &commit, script)?;
+    println!(
+        "{script} is as committed at {commit}; building in {}",
+        fresh.dir.display()
+    );
     let since = SystemTime::now();
     let limit = Duration::from_secs(60 * args.timeout_minutes.unwrap_or(TIMEOUT_MINUTES));
-    run_script(&repo, script, limit)?;
-    let file = made_since(&repo, args.output.as_deref(), since)?;
+    run_script(&fresh.dir, script, limit)?;
+    let built = made_since(&fresh.dir, args.output.as_deref(), since)?;
+    let kept = repo.join("target").join("release-installers");
+    std::fs::create_dir_all(&kept)?;
+    let file = kept.join(built.file_name().unwrap_or_default());
+    std::fs::copy(&built, &file)?;
+    drop(fresh);
     let sha256 = crate::quiesce::file_sha256(&file)?;
     let file = file.display().to_string();
     ask(

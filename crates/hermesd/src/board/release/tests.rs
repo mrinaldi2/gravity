@@ -61,6 +61,7 @@ fn release() -> Release {
             install_url: None,
             sha256: "a".repeat(64),
             built_at: now,
+            source_commit: None,
         }],
         tests: Vec::new(),
         deployments: Vec::new(),

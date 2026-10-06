@@ -9,11 +9,24 @@ use crate::config::Config;
 
 const USAGE: &str = "usage:
   hermesd release publish <release> <file> [--platform <p>] [--version <v>] [--bundle-id <id>]
+                          [--source-commit <sha>]   (default: this checkout's HEAD, when clean)
   hermesd release install <release> [--dry-run | --status]
   hermesd release land <release> [--commit <sha>] [--branch <b>] [--tag <t>] [--dry-run]
   hermesd release build-installer <release> [--commit <sha>] [--script <path>] [--output <file>]";
 
-const FLAGS: [&str; 3] = ["--platform", "--version", "--bundle-id"];
+const FLAGS: [&str; 4] = ["--platform", "--version", "--bundle-id", "--source-commit"];
+
+/// The commit a build in this checkout was made from: HEAD, when the tree
+/// has no changes (ARCH-R52 M1). Otherwise it has to be named.
+fn checkout_commit() -> Option<String> {
+    let here = std::env::current_dir().ok()?;
+    let repo = super::git::toplevel(&here).ok()?;
+    let dirty = super::git::git(&repo, &["status", "--porcelain"]).ok()?;
+    if !dirty.is_empty() {
+        return None;
+    }
+    super::git::git(&repo, &["rev-parse", "HEAD"]).ok()
+}
 
 pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
     match args.first().map(String::as_str) {
@@ -46,6 +59,18 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
     for (flag, value) in flags {
         let key = flag.trim_start_matches("--").replace('-', "_");
         arguments[key] = json!(value);
+    }
+    if arguments.get("source_commit").is_none() {
+        match checkout_commit() {
+            Some(commit) => {
+                println!("source commit {commit} (this checkout's HEAD)");
+                arguments["source_commit"] = json!(commit);
+            }
+            None => eprintln!(
+                "note: no source commit recorded (not a clean checkout); `release land` will \
+                 refuse this release until its builds name one with --source-commit"
+            ),
+        }
     }
     let port = crate::home::runtime_port(&cfg.home).unwrap_or(cfg.port);
     let body = json!({

@@ -73,11 +73,36 @@ fn answer(
         PermissionExtra::BuildInstallers
     };
     let release = gate(app, &bot, release_id, extra)?;
+    // The commit the owner approved: what the builds were made from.
+    let recorded = recorded_commit(&release)?;
+    let commit = if extra == PermissionExtra::ReleaseMain {
+        Some(recorded.ok_or_else(|| {
+            forbidden(format!(
+                "release {}'s builds don't all record the commit they were built from, so \
+                 nothing can say what the owner approved; republish them with --source-commit",
+                release.name
+            ))
+        })?)
+    } else {
+        recorded
+    };
+    if let (Some(sent), Some(commit)) = (params.get("commit").and_then(Value::as_str), &commit) {
+        if sent != commit {
+            return Err(forbidden(format!(
+                "{sent} isn't the commit release {} was built from ({commit})",
+                release.name
+            )));
+        }
+    }
     match method {
         LAND | BUILD => Ok(json!({
             "release_id": release.id,
             "name": release.name,
             "version": version_of(&release),
+            "commit": commit,
+            // Where `land` checks its result: the project's repo, as the
+            // owner configured it, not the checkout's own remote.
+            "repo_url": app.db.project_repo(&bot.project_id)?.map(|r| r.url),
         })),
         LANDED => {
             let detail = json!({ "commit": text(params, "commit")?, "tag": text(params, "tag")? });
@@ -145,14 +170,67 @@ fn gate(
         .db
         .board_read(|t| load(t, &bot.project_id, release_id))
         .map_err(|_| invalid(format!("no release {release_id} on this computer's board")))?;
-    if !approved(release.status) {
+    // Landing takes the owner's approval. The installer is a build of the
+    // package, made while it is still open for builds, before the owner
+    // rules on it.
+    if extra == PermissionExtra::ReleaseMain && !approved(release.status) {
         return Err(forbidden(format!(
             "release {} is {}: only a release the owner approved goes on",
             release.name,
             release.status.as_str()
         )));
     }
+    if extra == PermissionExtra::BuildInstallers && !release.status.is_assembling() {
+        return Err(forbidden(format!(
+            "release {} is {}: its builds were frozen when it was submitted",
+            release.name,
+            release.status.as_str()
+        )));
+    }
     Ok(release)
+}
+
+/// The one commit a release's builds (and its installer builds) were made
+/// from, `None` when no build says yet (ARCH-R52 M1). Refused when they
+/// disagree, and, once there are builds, when any build doesn't say.
+pub(crate) fn recorded_commit(release: &Release) -> anyhow::Result<Option<String>> {
+    let mut commits = std::collections::BTreeSet::new();
+    let mut unnamed = Vec::new();
+    for b in &release.builds {
+        match &b.source_commit {
+            Some(c) => {
+                commits.insert(c.clone());
+            }
+            None => unnamed.push(b.platform.clone()),
+        }
+    }
+    for e in release
+        .events
+        .iter()
+        .filter(|e| e.kind == "installer_built")
+    {
+        if let Some(c) = e.detail["commit"].as_str() {
+            commits.insert(c.to_string());
+        }
+    }
+    if commits.len() > 1 {
+        return Err(forbidden(format!(
+            "release {}'s builds come from different commits ({}); one release is one commit",
+            release.name,
+            commits.into_iter().collect::<Vec<_>>().join(", ")
+        )));
+    }
+    if !unnamed.is_empty() && !commits.is_empty() {
+        return Err(forbidden(format!(
+            "release {}'s {} build records no source commit; republish it with --source-commit",
+            release.name,
+            unnamed.join(", ")
+        )));
+    }
+    if !unnamed.is_empty() {
+        return Ok(None);
+    }
+    Ok(commits.into_iter().next())
 }
 
 /// Approved by the owner, and not stopped since.

@@ -104,6 +104,10 @@ pub fn frozen_hash(release: &Release) -> String {
             "build\0{}\0{}\0{}\n",
             b.platform, b.version, b.sha256
         ));
+        // Only when recorded, so packages frozen before it keep their hash.
+        if let Some(commit) = &b.source_commit {
+            h.update(format!("commit\0{}\0{commit}\n", b.platform));
+        }
     }
     for t in &release.tests {
         h.update(format!(

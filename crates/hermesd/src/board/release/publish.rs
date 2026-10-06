@@ -32,6 +32,8 @@ pub struct Publish<'a> {
     pub version: Option<&'a str>,
     /// iOS only: the app's bundle id for the manifest.
     pub bundle_id: Option<&'a str>,
+    /// The git commit it was built from (ARCH-R52 M1).
+    pub source_commit: Option<&'a str>,
 }
 
 /// Stage `req.file` in the served directory and attach it as the package's
@@ -119,6 +121,7 @@ pub fn publish(
         install_url: Some(install_url.clone()),
         sha256: staged.sha256.clone(),
         built_at: bus::now(),
+        source_commit: given(req.source_commit),
     };
     let release = attach_build(app, me, &release.id, &build)?;
     Ok((release, published(&staged, &build, &install_url)))

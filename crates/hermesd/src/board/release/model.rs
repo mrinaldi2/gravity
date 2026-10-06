@@ -56,6 +56,9 @@ pub struct ReleaseBuild {
     pub install_url: Option<String>,
     pub sha256: String,
     pub built_at: DateTime<Utc>,
+    /// The git commit it was built from (ARCH-R52 M1): what `release land`
+    /// and `release build-installer` accept, and nothing else.
+    pub source_commit: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -188,7 +191,7 @@ impl Release {
             "builds": self.builds.iter().map(|b| json!({
                 "platform": b.platform, "version": b.version, "artifact": b.artifact,
                 "url": b.url, "install_url": b.install_url, "sha256": b.sha256,
-                "built_at": b.built_at,
+                "built_at": b.built_at, "source_commit": b.source_commit,
             })).collect::<Vec<_>>(),
             "deployments": self.deployments.iter().map(|d| json!({
                 "machine": d.machine, "action": d.action.as_str(), "executor": d.executor,

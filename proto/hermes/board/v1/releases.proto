@@ -108,6 +108,9 @@ message ReleaseAttachBuild {
   string sha256 = 5;
   optional string url = 6;
   optional string install_url = 7;
+  // The git commit it was built from (40 hex); the only one `release land`
+  // and `release build-installer` accept (H-117, ARCH-R52 M1).
+  optional string source_commit = 8;
 }
 
 // DevOps with the Publish extra: copy a build file into the served directory,
@@ -125,6 +128,8 @@ message ReleasePublish {
   optional string version = 4;
   // iOS only: the app's bundle identifier for the manifest.
   optional string bundle_id = 5;
+  // The git commit it was built from (40 hex), as for ReleaseAttachBuild.
+  optional string source_commit = 6;
 }
 
 // DevOps: freeze the package, move its items to Owner testing and ask the owner.

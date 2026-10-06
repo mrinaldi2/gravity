@@ -106,6 +106,14 @@ pub fn create(
     })
 }
 
+/// A full git commit id, as recorded with a build.
+pub fn is_commit(text: &str) -> bool {
+    text.len() == 40
+        && text
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+}
+
 /// Add or replace one platform's build while the package is assembling.
 pub fn attach_build(
     app: &Arc<AppState>,
@@ -125,6 +133,13 @@ pub fn attach_build(
     if build.platform.trim().is_empty() || build.artifact.trim().is_empty() {
         return Err(invalid("'platform' and 'artifact' are required"));
     }
+    if let Some(commit) = &build.source_commit {
+        if !is_commit(commit) {
+            return Err(invalid(
+                "'source_commit' must be a full git commit: 40 lowercase hex digits",
+            ));
+        }
+    }
     app.db.board_tx(|t| {
         let release = load(t, &me.bot.project_id, release_id)?;
         if !release.status.is_assembling() {
@@ -132,6 +147,21 @@ pub fn attach_build(
                 "release {} is {}; builds change only before it is submitted",
                 release.name,
                 release.status.as_str()
+            )));
+        }
+        // One release is one commit: every build names the same (ARCH-R52 M1).
+        let other = release.builds.iter().find(|b| {
+            b.platform != build.platform
+                && b.source_commit.is_some()
+                && build.source_commit.is_some()
+                && b.source_commit != build.source_commit
+        });
+        if let Some(other) = other {
+            return Err(conflict(format!(
+                "the {} build is from {}, not {}; one release is built from one commit",
+                other.platform,
+                other.source_commit.as_deref().unwrap_or_default(),
+                build.source_commit.as_deref().unwrap_or_default()
             )));
         }
         t.set_release_build(&release.id, build)?;

@@ -114,3 +114,9 @@ CREATE TABLE IF NOT EXISTS release_event (
 CREATE INDEX IF NOT EXISTS idx_release_event_release ON release_event(release_id, at);
 CREATE INDEX IF NOT EXISTS idx_release_event_related ON release_event(related_id, at);
 "#;
+
+/// The git commit each build was made from (H-117, ARCH-R52 M1): recorded
+/// at publish, folded into the frozen hash, and the only commit `release
+/// land` and `release build-installer` accept. Older builds have none.
+pub(super) const MIGRATION_RELEASE_BUILD_COMMIT: &str =
+    "ALTER TABLE release_build ADD COLUMN source_commit TEXT;";
