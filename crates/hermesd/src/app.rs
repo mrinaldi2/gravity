@@ -45,6 +45,10 @@ pub const CAPABILITIES: &[&str] = &[
     "permission_profiles",
     // The projects home (H-128): `projects_overview`, `attention_rows`.
     "projects_overview",
+    // Owner threads and pins (H-128 D6, D7): `owner_threads`,
+    // `owner_thread_get`, `owner_thread_read`, `project_pin`.
+    "owner_threads",
+    "project_pin",
 ];
 
 pub struct AppState {

@@ -44,12 +44,12 @@ pub fn attention_rows(app: &AppState, project_id: &str) -> anyhow::Result<Attent
 }
 
 /// Only an owner question can be dismissed; the others close when the owner
-/// acts on them. Owner questions arrive with D6, so none is open yet.
-pub fn dismiss(id: &str) -> anyhow::Result<AttentionDismissed> {
+/// acts on them.
+pub fn dismiss(app: &AppState, id: &str) -> anyhow::Result<AttentionDismissed> {
     if !id.starts_with(&format!("{}:", kind_key(AttentionKind::OwnerQuestion))) {
         return Err(invalid(
             "only an owner question can be dismissed; the others close when you act on them",
         ));
     }
-    Err(not_found(format!("no open owner question {id}")))
+    crate::owner_threads::dismiss(app, id)
 }

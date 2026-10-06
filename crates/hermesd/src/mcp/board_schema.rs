@@ -191,13 +191,20 @@ pub(super) fn board_tool_list(roles: &[Role]) -> Vec<Value> {
         .filter(|t| t.audience.admits(roles) || OWN_ITEM_TOOLS.contains(&t.name))
         .map(|t| {
             let schema = message_schema(t.message);
-            let properties: Map<String, Value> = schema["properties"]
+            let mut properties: Map<String, Value> = schema["properties"]
                 .as_object()
                 .into_iter()
                 .flatten()
                 .filter(|(name, _)| *name != "project_id")
                 .map(|(name, s)| (name.clone(), public(s)))
                 .collect();
+            // A bot's question on the card (H-128 D6); handled before the board.
+            if t.name == "item_comment" {
+                properties.insert(
+                    "asks_owner".into(),
+                    super::owner_threads::asks_owner_property(),
+                );
+            }
             let required: Vec<&Value> = schema["required"]
                 .as_array()
                 .into_iter()

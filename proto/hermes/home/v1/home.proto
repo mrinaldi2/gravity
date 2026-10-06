@@ -186,6 +186,7 @@ message ProjectAttention {
     ReleaseBrief current_release = 6;       // home only
     SummaryBrief latest_summary = 7;        // home only
     google.protobuf.Timestamp last_activity_at = 8;
+    bool pinned = 9;                        // addition (D7): pinned on that computer
   }
   repeated Part parts = 1;
 }
@@ -198,6 +199,10 @@ message HomeRequest {
     ProjectsOverviewRequest projects_overview = 1;
     AttentionRowsRequest attention_rows = 2;
     AttentionDismissRequest attention_dismiss = 3;
+    ProjectPinRequest project_pin = 4;
+    OwnerThreadsRequest owner_threads = 5;
+    OwnerThreadGetRequest owner_thread_get = 6;
+    OwnerThreadReadRequest owner_thread_read = 7;
   }
 }
 
@@ -209,10 +214,52 @@ message HomeResponse {
     AttentionRows attention_rows = 2;
     // To `attention_dismiss`.
     AttentionDismissed attention_dismissed = 3;
+    // To `project_pin`.
+    ProjectPinned project_pinned = 4;
+    // To `owner_threads`.
+    OwnerThreads owner_threads = 5;
+    // To `owner_thread_get`.
+    OwnerThreadPage owner_thread = 6;
+    // To `owner_thread_read`.
+    OwnerThreadMarked owner_thread_marked = 7;
   }
 }
 
 // [attention_dismissed] the row closed.
 message AttentionDismissed {
   string id = 1;
+}
+
+// ---- owner threads and pins (additions, H-132: D6, D7) ----
+
+// [project_pinned] the pin as stored on this computer.
+message ProjectPinned {
+  string project_id = 1;
+  bool pinned = 2;
+}
+
+// [owner_thread] a page of one bot's owner thread, oldest first.
+message OwnerThreadPage {
+  BotRef bot = 1;
+  string project_id = 2;                    // the asking computer's id
+  repeated ThreadMessage messages = 3;
+  int64 last_read_num = 4;                  // 0 = nothing read
+  bool has_more = 5;                        // older messages exist
+}
+
+message ThreadMessage {
+  int64 num = 1;
+  string id = 2;
+  bool from_owner = 3;
+  string text = 4;                          // in full; a bot's is at most 4 KB
+  google.protobuf.Timestamp at = 5;
+  bool asks = 6;                            // the bot asked the owner here
+  bool open = 7;                            // that question is still open
+}
+
+// [owner_thread_marked] read state after `owner_thread_read`.
+message OwnerThreadMarked {
+  string bot_id = 1;
+  int64 last_read_num = 2;
+  uint32 unread = 3;
 }

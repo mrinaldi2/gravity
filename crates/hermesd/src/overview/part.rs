@@ -59,6 +59,7 @@ pub fn part(app: &AppState, project_id: &str) -> anyhow::Result<Part> {
         current_release,
         latest_summary,
         last_activity_at: app.db.project_last_activity(project_id)?.map(timestamp),
+        pinned: app.db.project_pinned(project_id)?,
     })
 }
 

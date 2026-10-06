@@ -19,6 +19,7 @@ mod detail;
 mod liveness;
 mod part;
 mod peers;
+mod pin;
 #[cfg(test)]
 mod tests;
 
@@ -27,6 +28,7 @@ pub use detail::{attention_rows, dismiss};
 pub use liveness::spawn;
 pub use part::part;
 pub use peers::{link_down, link_up, receive_changed, refresh, serve};
+pub use pin::{pin, serve_pin};
 
 /// How long a peer may take to answer `project_attention`.
 const PEER_TIMEOUT: Duration = Duration::from_secs(3);

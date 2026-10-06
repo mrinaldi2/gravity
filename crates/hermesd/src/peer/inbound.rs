@@ -39,6 +39,10 @@ pub(super) fn handle(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> anyho
         "grant_extras" => crate::decisions::grants::serve_grant(app, &peer.id, frame),
         "metrics_get" => super::board_home::serve_metrics(app, &peer, frame),
         "project_attention" => crate::overview::serve(app, &peer, frame),
+        "project_pin" => crate::overview::serve_pin(app, &peer, frame),
+        "owner_threads" | "owner_thread_get" | "owner_thread_read" => {
+            crate::owner_threads::serve(app, &peer, frame)
+        }
         "create_bot" => super::remote_bots::serve_create(app, &peer, frame),
         "update_bot" => super::remote_bots::serve_update(app, &peer, frame),
         "delete_bot" => super::remote_bots::serve_delete(app, &peer, frame),
@@ -72,6 +76,7 @@ pub(super) fn event(app: &Arc<AppState>, peer_id: &str, frame: &Value) {
         "owner_action_update" => super::owner_actions::receive_update(app, peer_id, frame),
         "owner_action_output" => super::owner_actions::receive_output(app, peer_id, frame),
         "project_attention_changed" => crate::overview::receive_changed(app, peer_id),
+        "owner_thread_updated" => crate::owner_threads::receive_updated(app, peer_id, frame),
         _ => {}
     }
 }

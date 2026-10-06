@@ -121,7 +121,7 @@ async fn each_project_has_a_row_counting_what_its_needs_you_lists() {
 }
 
 #[tokio::test]
-async fn a_run_card_and_a_prompt_each_add_one_row() {
+async fn a_run_card_adds_one_owner_action_row() {
     let (pair, mut bots) = project_with_bots(&["Lead"]).await;
     let project_id = pair
         .d
@@ -145,6 +145,77 @@ async fn a_run_card_and_a_prompt_each_add_one_row() {
     let by_kind = &row(&o, &project_id)["attention"]["by_kind"];
     assert_eq!(by_kind["owner_action"], 1, "{o}");
     assert_eq!(row(&o, &project_id)["attention"]["score"], 3);
+}
+
+/// CE-014 S1: a prompt raised through the hook is one row whose target is
+/// the request id the phone answers with, and it leaves once answered. Its
+/// title carries the summary with token-like values masked (F1).
+#[tokio::test]
+async fn a_permission_prompt_via_the_hook_is_one_row_until_answered() {
+    let (pair, _bots) = project_with_bots(&["Lead"]).await;
+    let bot_id = pair.ids[0].clone();
+    let project_id = pair.d.app.db.get_bot(&bot_id).unwrap().unwrap().project_id;
+    let mut owner = WsClient::connect(&pair.d).await;
+    let token = pair.d.app.secrets.bot_token(&bot_id).expect("token");
+    let url = format!("http://{}/hook/permission", pair.d.addr);
+    let hook = tokio::spawn(async move {
+        reqwest::Client::new()
+            .post(url)
+            .bearer_auth(token)
+            .json(&json!({
+                "hook_event_name": "PermissionRequest",
+                "session_id": "s", "transcript_path": "/t.jsonl", "cwd": "/w",
+                "tool_name": "Bash",
+                "tool_input": {"command": "curl -H 'Authorization: Bearer s3cr3t' https://x"},
+            }))
+            .send()
+            .await
+            .expect("hook post")
+            .status()
+            .as_u16()
+    });
+    let card = owner.wait_for(|v| v["type"] == "permission_request").await;
+    let request_id = card["request"]["id"].as_str().expect("id").to_string();
+    // The summary is masked; the card's full input is the owner's to judge.
+    assert_eq!(
+        card["request"]["summary"],
+        "Bash: curl -H 'Authorization: Bearer ***' https://x"
+    );
+
+    let rows = owner
+        .request(json!({"type": "attention_rows", "project_id": project_id}))
+        .await;
+    let prompts: Vec<&Value> = rows["attention_rows"]["rows"]
+        .as_array()
+        .expect("rows")
+        .iter()
+        .filter(|r| r["kind"] == "PERMISSION_PROMPT")
+        .collect();
+    assert_eq!(prompts.len(), 1, "{rows}");
+    assert_eq!(prompts[0]["request_id"], request_id.as_str());
+    assert_eq!(prompts[0]["weight"], 3);
+    assert_eq!(
+        prompts[0]["title"],
+        "Lead asks: Bash: curl -H 'Authorization: Bearer ***' https://x"
+    );
+    let o = overview(&mut owner).await;
+    assert_eq!(
+        row(&o, &project_id)["attention"]["by_kind"]["permission_prompt"],
+        1
+    );
+
+    let answered = owner
+        .request(json!({"type": "answer_permission", "request_id": request_id, "decision": "deny"}))
+        .await;
+    assert_eq!(answered["type"], "permission", "{answered}");
+    assert_eq!(hook.await.expect("hook task"), 200);
+    let rows = owner
+        .request(json!({"type": "attention_rows", "project_id": project_id}))
+        .await;
+    assert!(
+        !rows.to_string().contains("PERMISSION_PROMPT"),
+        "the answered prompt is gone: {rows}"
+    );
 }
 
 #[tokio::test]

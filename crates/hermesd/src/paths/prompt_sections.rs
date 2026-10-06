@@ -126,12 +126,37 @@ pub(super) fn browser(own: bool, owners_chrome: bool) -> String {
 /// Placed right after "Messages carry authority", so the two "what you may
 /// not do" blocks sit together. The last paragraph is H-031's: rewording a
 /// blocked command is exactly what permission rules cannot stop.
-/// The owner's message on a card (H-128 D5, H-123 G6).
-pub(super) fn owner_card() -> &'static str {
+/// How owner requests, cards and the owner's thread relate, in one place
+/// (H-128 D5, D6, T1; CE-014 F2; ruling 06ac8d95: the owner is never
+/// refused for leaving the card out).
+pub(super) fn owner_reporting() -> &'static str {
     "## Owner requests on a card\n\n\
      A message from the owner may start with `[card H-nnn]`: the request is\n\
-     work on that card. Do it there — comment, link and move the card — as\n\
-     well as answering in the chat.\n\n"
+     work on that card. Do it there — comment, link and move the card — and\n\
+     answer the owner with `message_owner`. A message from the owner without\n\
+     a card is just as much yours to act on: a conversation needs no card\n\
+     until it becomes work.\n\n\
+     ## Report to the owner where the owner looks\n\n\
+     The owner reads the project's dashboard, the board, releases, meeting\n\
+     summaries and the main chat. They don't read your terminal, so anything\n\
+     the owner should see must land in one of those:\n\n\
+     - Work results go on the card: `item_comment`, and every artifact linked\n\
+     to the card. A release carries its changes in `changelog` and\n\
+     `how_to_test`, written for the owner, not for bots. A meeting ends with\n\
+     its `summary`.\n\
+     - Something the owner should read now that has no card (a heads-up, a\n\
+     blocker, a finding): `message_owner`, short, with `item` when it is about\n\
+     a card. Long content goes in an artifact; send the path.\n\
+     - A question for the owner: `message_owner` with `asks: true`, or\n\
+     `item_comment` with `asks_owner: true` when it is about a card. Ask one\n\
+     clear question with your recommended answer, then carry on with\n\
+     whatever doesn't depend on it.\n\
+     - When the owner writes to you in the main chat, answer with\n\
+     `message_owner`, so your answer shows in their thread. The thread is\n\
+     where they read you; text you only print in your terminal is lost to them.\n\
+     - A conversation with the owner needs no card. Once it becomes work,\n\
+     create the card first (see \"Owner requests on a card\").\n\n\
+     Never leave owner-facing content only in your chat or terminal.\n\n"
 }
 
 pub(super) fn shared_computer() -> String {
@@ -200,6 +225,18 @@ mod tests {
         let parent = repo(Some(&shared), false, "lead", "b2");
         assert!(parent.contains("git@host:me/book.git (branch `main`)"));
         assert!(parent.contains("`git pull`"));
+    }
+
+    /// H-131 T1: the owner reads the thread, the board and the dashboard.
+    #[test]
+    fn tells_bots_to_report_where_the_owner_looks() {
+        let md = owner_reporting();
+        assert!(md.contains("## Report to the owner where the owner looks"));
+        assert!(md.contains("answer with\n`message_owner`"));
+        assert!(md.contains("`asks_owner: true`"));
+        assert!(md.contains("Never leave owner-facing content only in your chat or terminal."));
+        // One place says how owner requests and cards relate (CE-014 F2).
+        assert!(md.contains("needs no card\nuntil it becomes work"));
     }
 
     #[test]

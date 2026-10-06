@@ -207,6 +207,10 @@ fn arm_of(envelope: &bus::contract::wire::Envelope) -> String {
                 home_request::Request::ProjectsOverview(_) => "projects_overview",
                 home_request::Request::AttentionRows(_) => "attention_rows",
                 home_request::Request::AttentionDismiss(_) => "attention_dismiss",
+                home_request::Request::ProjectPin(_) => "project_pin",
+                home_request::Request::OwnerThreads(_) => "owner_threads",
+                home_request::Request::OwnerThreadGet(_) => "owner_thread_get",
+                home_request::Request::OwnerThreadRead(_) => "owner_thread_read",
             }
         ),
         Body::HomeResponse(r) => format!(
@@ -215,6 +219,10 @@ fn arm_of(envelope: &bus::contract::wire::Envelope) -> String {
                 home_response::Response::ProjectsOverview(_) => "projects_overview",
                 home_response::Response::AttentionRows(_) => "attention_rows",
                 home_response::Response::AttentionDismissed(_) => "attention_dismissed",
+                home_response::Response::ProjectPinned(_) => "project_pinned",
+                home_response::Response::OwnerThreads(_) => "owner_threads",
+                home_response::Response::OwnerThread(_) => "owner_thread",
+                home_response::Response::OwnerThreadMarked(_) => "owner_thread_marked",
             }
         ),
         Body::Error(_) => "error".to_string(),
@@ -261,6 +269,14 @@ const ARMS: &[&str] = &[
     "response.projects_overview",
     "response.attention_rows",
     "response.attention_dismissed",
+    "request.project_pin",
+    "request.owner_threads",
+    "request.owner_thread_get",
+    "request.owner_thread_read",
+    "response.project_pinned",
+    "response.owner_threads",
+    "response.owner_thread",
+    "response.owner_thread_marked",
     "error",
 ];
 

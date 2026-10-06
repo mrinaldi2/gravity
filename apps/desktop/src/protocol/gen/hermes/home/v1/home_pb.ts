@@ -21,7 +21,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file hermes/home/v1/home.proto.
  */
 export const file_hermes_home_v1_home: GenFile = /*@__PURE__*/
-  fileDesc("ChloZXJtZXMvaG9tZS92MS9ob21lLnByb3RvEg5oZXJtZXMuaG9tZS52MSIuChdQcm9qZWN0c092ZXJ2aWV3UmVxdWVzdBITCgtwcm9qZWN0X2lkcxgBIAMoCSIqChRBdHRlbnRpb25Sb3dzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIiUKF0F0dGVudGlvbkRpc21pc3NSZXF1ZXN0EgoKAmlkGAEgASgJIjcKEVByb2plY3RQaW5SZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSDgoGcGlubmVkGAIgASgIIhUKE093bmVyVGhyZWFkc1JlcXVlc3QibQoVT3duZXJUaHJlYWRHZXRSZXF1ZXN0Eg4KBmJvdF9pZBgBIAEoCRIXCgpiZWZvcmVfbnVtGAIgASgDSACIAQESEgoFbGltaXQYAyABKA1IAYgBAUINCgtfYmVmb3JlX251bUIICgZfbGltaXQiOwoWT3duZXJUaHJlYWRSZWFkUmVxdWVzdBIOCgZib3RfaWQYASABKAkSEQoJdXBfdG9fbnVtGAIgASgDIsEBChBQcm9qZWN0c092ZXJ2aWV3EikKBWFzX29mGAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIoCgRyb3dzGAIgAygLMhouaGVybWVzLmhvbWUudjEuUHJvamVjdFJvdxInCgdzb3VyY2VzGAMgAygLMhYuaGVybWVzLmhvbWUudjEuU291cmNlEi8KBXRvdGFsGAQgASgLMiAuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uU3VtbWFyeSL8AwoKUHJvamVjdFJvdxISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSJwoHbWVtYmVycxgDIAMoCzIWLmhlcm1lcy5ob21lLnYxLk1lbWJlchISCgpib2FyZF9ob21lGAQgASgJEjUKD2N1cnJlbnRfcmVsZWFzZRgFIAEoCzIcLmhlcm1lcy5ob21lLnYxLlJlbGVhc2VCcmllZhISCgpvcGVuX3Rhc2tzGAYgASgNEikKBWRvaW5nGAcgAygLMhouaGVybWVzLmhvbWUudjEuRG9pbmdCcmllZhIMCgRib3RzGAggASgNEhQKDGJvdHNfd29ya2luZxgJIAEoDRIzCglhdHRlbnRpb24YCiABKAsyIC5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25TdW1tYXJ5Eg8KB3BhcnRpYWwYCyABKAgSFQoNc3RhbGVfc291cmNlcxgMIAMoCRI0ChBsYXN0X2FjdGl2aXR5X2F0GA0gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZwaW5uZWQYDiABKAgSDAoEcmFuaxgPIAEoDRI0Cg5sYXRlc3Rfc3VtbWFyeRgQIAEoCzIcLmhlcm1lcy5ob21lLnYxLlN1bW1hcnlCcmllZhIOCgZsZWdhY3kYESABKAgiRgoGTWVtYmVyEhEKCWRhZW1vbl9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhUKDWNvbXB1dGVyX25hbWUYAyABKAki1AEKBlNvdXJjZRIRCglkYWVtb25faWQYASABKAkSDAoEbmFtZRgCIAEoCRIrCgVzdGF0ZRgDIAEoDjIcLmhlcm1lcy5ob21lLnYxLlNvdXJjZS5TdGF0ZRIpCgVhc19vZhgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiUQoFU3RhdGUSFQoRU1RBVEVfVU5TUEVDSUZJRUQQABIGCgJPSxABEgsKB09GRkxJTkUQAhILCgdUSU1FT1VUEAMSDwoLT0xEX1ZFUlNJT04QBCLNAQoQQXR0ZW50aW9uU3VtbWFyeRINCgVjb3VudBgBIAEoDRINCgVzY29yZRgCIAEoDRI9CgdieV9raW5kGAMgAygLMiwuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uU3VtbWFyeS5CeUtpbmRFbnRyeRItCglvbGRlc3RfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wGi0KC0J5S2luZEVudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoDToCOAEiggMKDEF0dGVudGlvblJvdxIKCgJpZBgBIAEoCRIrCgRraW5kGAIgASgOMh0uaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uS2luZBIRCglkYWVtb25faWQYAyABKAkSEgoKcHJvamVjdF9pZBgEIAEoCRINCgV0aXRsZRgFIAEoCRIuCgpjcmVhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZ3ZWlnaHQYByABKA0SFQoLZGVjaXNpb25faWQYCiABKAlIABIUCgpyZWxlYXNlX2lkGAsgASgJSAASEwoJYWN0aW9uX2lkGAwgASgJSAASFAoKcmVxdWVzdF9pZBgNIAEoCUgAEiUKA2JvdBgOIAEoCzIWLmhlcm1lcy5ob21lLnYxLkJvdFJlZkgAEhEKB2l0ZW1faWQYDyABKAlIABIVCg1yZWxheWVkX2NvdW50GBQgASgNEhAKCHByaW9yaXR5GBUgASgJQggKBnRhcmdldCJkCg1BdHRlbnRpb25Sb3dzEioKBHJvd3MYASADKAsyHC5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25Sb3cSJwoHc291cmNlcxgCIAMoCzIWLmhlcm1lcy5ob21lLnYxLlNvdXJjZSI5CgZCb3RSZWYSEQoJZGFlbW9uX2lkGAEgASgJEg4KBmJvdF9pZBgCIAEoCRIMCgRuYW1lGAMgASgJIrQBCgxSZWxlYXNlQnJpZWYSEgoKcmVsZWFzZV9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgJEg0KBXN0YXRlGAMgASgJEhYKDmF3YWl0aW5nX293bmVyGAQgASgIEhMKC2l0ZW1zX3RvdGFsGAUgASgNEhIKCml0ZW1zX2RvbmUYBiABKA0SLwoLZGVwbG95ZWRfYXQYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlwKCkRvaW5nQnJpZWYSDwoHaXRlbV9pZBgBIAEoCRINCgV0aXRsZRgCIAEoCRIVCg1hc3NpZ25lZV9uYW1lGAMgASgJEhcKD2Fzc2lnbmVlX2JvdF9pZBgEIAEoCSJYCgxTdW1tYXJ5QnJpZWYSEgoKbWVldGluZ19pZBgBIAEoCRIMCgR0ZXh0GAIgASgJEiYKAmF0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCI8CgxPd25lclRocmVhZHMSLAoHdGhyZWFkcxgBIAMoCzIbLmhlcm1lcy5ob21lLnYxLk93bmVyVGhyZWFkIpkBCgtPd25lclRocmVhZBIjCgNib3QYASABKAsyFi5oZXJtZXMuaG9tZS52MS5Cb3RSZWYSEgoKcHJvamVjdF9pZBgCIAEoCRIqCgRsYXN0GAMgASgLMhwuaGVybWVzLmhvbWUudjEuTWVzc2FnZUJyaWVmEg4KBnVucmVhZBgEIAEoDRIVCg1vcGVuX3F1ZXN0aW9uGAUgASgIInMKDE1lc3NhZ2VCcmllZhILCgNudW0YASABKAMSEgoKZnJvbV9vd25lchgCIAEoCBIMCgR0ZXh0GAMgASgJEiYKAmF0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRhc2tzGAUgASgIIi4KF1Byb2plY3RzT3ZlcnZpZXdDaGFuZ2VkEhMKC3Byb2plY3RfaWRzGAEgAygJIk0KEk93bmVyVGhyZWFkVXBkYXRlZBIjCgNib3QYASABKAsyFi5oZXJtZXMuaG9tZS52MS5Cb3RSZWYSEgoKcHJvamVjdF9pZBgCIAEoCSIuChdQcm9qZWN0QXR0ZW50aW9uUmVxdWVzdBITCgtwcm9qZWN0X2lkcxgBIAMoCSKMAwoQUHJvamVjdEF0dGVudGlvbhI0CgVwYXJ0cxgBIAMoCzIlLmhlcm1lcy5ob21lLnYxLlByb2plY3RBdHRlbnRpb24uUGFydBrBAgoEUGFydBISCgpwcm9qZWN0X2lkGAEgASgJEi8KBWxvY2FsGAIgASgLMiAuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uU3VtbWFyeRIqCgRyb3dzGAMgAygLMhwuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uUm93EhQKDGJvdHNfd29ya2luZxgEIAEoDRIPCgdpc19ob21lGAUgASgIEjUKD2N1cnJlbnRfcmVsZWFzZRgGIAEoCzIcLmhlcm1lcy5ob21lLnYxLlJlbGVhc2VCcmllZhI0Cg5sYXRlc3Rfc3VtbWFyeRgHIAEoCzIcLmhlcm1lcy5ob21lLnYxLlN1bW1hcnlCcmllZhI0ChBsYXN0X2FjdGl2aXR5X2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIuChdQcm9qZWN0QXR0ZW50aW9uQ2hhbmdlZBITCgtwcm9qZWN0X2lkcxgBIAMoCSLkAQoLSG9tZVJlcXVlc3QSRAoRcHJvamVjdHNfb3ZlcnZpZXcYASABKAsyJy5oZXJtZXMuaG9tZS52MS5Qcm9qZWN0c092ZXJ2aWV3UmVxdWVzdEgAEj4KDmF0dGVudGlvbl9yb3dzGAIgASgLMiQuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uUm93c1JlcXVlc3RIABJEChFhdHRlbnRpb25fZGlzbWlzcxgDIAEoCzInLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvbkRpc21pc3NSZXF1ZXN0SABCCQoHcmVxdWVzdCLVAQoMSG9tZVJlc3BvbnNlEj0KEXByb2plY3RzX292ZXJ2aWV3GAEgASgLMiAuaGVybWVzLmhvbWUudjEuUHJvamVjdHNPdmVydmlld0gAEjcKDmF0dGVudGlvbl9yb3dzGAIgASgLMh0uaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uUm93c0gAEkEKE2F0dGVudGlvbl9kaXNtaXNzZWQYAyABKAsyIi5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25EaXNtaXNzZWRIAEIKCghyZXNwb25zZSIgChJBdHRlbnRpb25EaXNtaXNzZWQSCgoCaWQYASABKAkq4wEKDUF0dGVudGlvbktpbmQSHgoaQVRURU5USU9OX0tJTkRfVU5TUEVDSUZJRUQQABIUChBSRUxFQVNFX0FXQUlUSU5HEAESEAoMT1dORVJfQUNUSU9OEAISFQoRUEVSTUlTU0lPTl9QUk9NUFQQAxIMCghERUNJU0lPThAEEhMKD1JFTEFZRURfUlVMSU5HUxAFEgsKB1AwX0lURU0QBhIPCgtCT1RfV0FJVElORxAHEg0KCU9GRl9CT0FSRBAIEg8KC1NFUlZJTkdfT0ZGEAkSEgoOT1dORVJfUVVFU1RJT04QCmIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("ChloZXJtZXMvaG9tZS92MS9ob21lLnByb3RvEg5oZXJtZXMuaG9tZS52MSIuChdQcm9qZWN0c092ZXJ2aWV3UmVxdWVzdBITCgtwcm9qZWN0X2lkcxgBIAMoCSIqChRBdHRlbnRpb25Sb3dzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIiUKF0F0dGVudGlvbkRpc21pc3NSZXF1ZXN0EgoKAmlkGAEgASgJIjcKEVByb2plY3RQaW5SZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSDgoGcGlubmVkGAIgASgIIhUKE093bmVyVGhyZWFkc1JlcXVlc3QibQoVT3duZXJUaHJlYWRHZXRSZXF1ZXN0Eg4KBmJvdF9pZBgBIAEoCRIXCgpiZWZvcmVfbnVtGAIgASgDSACIAQESEgoFbGltaXQYAyABKA1IAYgBAUINCgtfYmVmb3JlX251bUIICgZfbGltaXQiOwoWT3duZXJUaHJlYWRSZWFkUmVxdWVzdBIOCgZib3RfaWQYASABKAkSEQoJdXBfdG9fbnVtGAIgASgDIsEBChBQcm9qZWN0c092ZXJ2aWV3EikKBWFzX29mGAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIoCgRyb3dzGAIgAygLMhouaGVybWVzLmhvbWUudjEuUHJvamVjdFJvdxInCgdzb3VyY2VzGAMgAygLMhYuaGVybWVzLmhvbWUudjEuU291cmNlEi8KBXRvdGFsGAQgASgLMiAuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uU3VtbWFyeSL8AwoKUHJvamVjdFJvdxISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSJwoHbWVtYmVycxgDIAMoCzIWLmhlcm1lcy5ob21lLnYxLk1lbWJlchISCgpib2FyZF9ob21lGAQgASgJEjUKD2N1cnJlbnRfcmVsZWFzZRgFIAEoCzIcLmhlcm1lcy5ob21lLnYxLlJlbGVhc2VCcmllZhISCgpvcGVuX3Rhc2tzGAYgASgNEikKBWRvaW5nGAcgAygLMhouaGVybWVzLmhvbWUudjEuRG9pbmdCcmllZhIMCgRib3RzGAggASgNEhQKDGJvdHNfd29ya2luZxgJIAEoDRIzCglhdHRlbnRpb24YCiABKAsyIC5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25TdW1tYXJ5Eg8KB3BhcnRpYWwYCyABKAgSFQoNc3RhbGVfc291cmNlcxgMIAMoCRI0ChBsYXN0X2FjdGl2aXR5X2F0GA0gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZwaW5uZWQYDiABKAgSDAoEcmFuaxgPIAEoDRI0Cg5sYXRlc3Rfc3VtbWFyeRgQIAEoCzIcLmhlcm1lcy5ob21lLnYxLlN1bW1hcnlCcmllZhIOCgZsZWdhY3kYESABKAgiRgoGTWVtYmVyEhEKCWRhZW1vbl9pZBgBIAEoCRISCgpwcm9qZWN0X2lkGAIgASgJEhUKDWNvbXB1dGVyX25hbWUYAyABKAki1AEKBlNvdXJjZRIRCglkYWVtb25faWQYASABKAkSDAoEbmFtZRgCIAEoCRIrCgVzdGF0ZRgDIAEoDjIcLmhlcm1lcy5ob21lLnYxLlNvdXJjZS5TdGF0ZRIpCgVhc19vZhgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiUQoFU3RhdGUSFQoRU1RBVEVfVU5TUEVDSUZJRUQQABIGCgJPSxABEgsKB09GRkxJTkUQAhILCgdUSU1FT1VUEAMSDwoLT0xEX1ZFUlNJT04QBCLNAQoQQXR0ZW50aW9uU3VtbWFyeRINCgVjb3VudBgBIAEoDRINCgVzY29yZRgCIAEoDRI9CgdieV9raW5kGAMgAygLMiwuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uU3VtbWFyeS5CeUtpbmRFbnRyeRItCglvbGRlc3RfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wGi0KC0J5S2luZEVudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoDToCOAEiggMKDEF0dGVudGlvblJvdxIKCgJpZBgBIAEoCRIrCgRraW5kGAIgASgOMh0uaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uS2luZBIRCglkYWVtb25faWQYAyABKAkSEgoKcHJvamVjdF9pZBgEIAEoCRINCgV0aXRsZRgFIAEoCRIuCgpjcmVhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZ3ZWlnaHQYByABKA0SFQoLZGVjaXNpb25faWQYCiABKAlIABIUCgpyZWxlYXNlX2lkGAsgASgJSAASEwoJYWN0aW9uX2lkGAwgASgJSAASFAoKcmVxdWVzdF9pZBgNIAEoCUgAEiUKA2JvdBgOIAEoCzIWLmhlcm1lcy5ob21lLnYxLkJvdFJlZkgAEhEKB2l0ZW1faWQYDyABKAlIABIVCg1yZWxheWVkX2NvdW50GBQgASgNEhAKCHByaW9yaXR5GBUgASgJQggKBnRhcmdldCJkCg1BdHRlbnRpb25Sb3dzEioKBHJvd3MYASADKAsyHC5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25Sb3cSJwoHc291cmNlcxgCIAMoCzIWLmhlcm1lcy5ob21lLnYxLlNvdXJjZSI5CgZCb3RSZWYSEQoJZGFlbW9uX2lkGAEgASgJEg4KBmJvdF9pZBgCIAEoCRIMCgRuYW1lGAMgASgJIrQBCgxSZWxlYXNlQnJpZWYSEgoKcmVsZWFzZV9pZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgJEg0KBXN0YXRlGAMgASgJEhYKDmF3YWl0aW5nX293bmVyGAQgASgIEhMKC2l0ZW1zX3RvdGFsGAUgASgNEhIKCml0ZW1zX2RvbmUYBiABKA0SLwoLZGVwbG95ZWRfYXQYByABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlwKCkRvaW5nQnJpZWYSDwoHaXRlbV9pZBgBIAEoCRINCgV0aXRsZRgCIAEoCRIVCg1hc3NpZ25lZV9uYW1lGAMgASgJEhcKD2Fzc2lnbmVlX2JvdF9pZBgEIAEoCSJYCgxTdW1tYXJ5QnJpZWYSEgoKbWVldGluZ19pZBgBIAEoCRIMCgR0ZXh0GAIgASgJEiYKAmF0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCI8CgxPd25lclRocmVhZHMSLAoHdGhyZWFkcxgBIAMoCzIbLmhlcm1lcy5ob21lLnYxLk93bmVyVGhyZWFkIpkBCgtPd25lclRocmVhZBIjCgNib3QYASABKAsyFi5oZXJtZXMuaG9tZS52MS5Cb3RSZWYSEgoKcHJvamVjdF9pZBgCIAEoCRIqCgRsYXN0GAMgASgLMhwuaGVybWVzLmhvbWUudjEuTWVzc2FnZUJyaWVmEg4KBnVucmVhZBgEIAEoDRIVCg1vcGVuX3F1ZXN0aW9uGAUgASgIInMKDE1lc3NhZ2VCcmllZhILCgNudW0YASABKAMSEgoKZnJvbV9vd25lchgCIAEoCBIMCgR0ZXh0GAMgASgJEiYKAmF0GAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIMCgRhc2tzGAUgASgIIi4KF1Byb2plY3RzT3ZlcnZpZXdDaGFuZ2VkEhMKC3Byb2plY3RfaWRzGAEgAygJIk0KEk93bmVyVGhyZWFkVXBkYXRlZBIjCgNib3QYASABKAsyFi5oZXJtZXMuaG9tZS52MS5Cb3RSZWYSEgoKcHJvamVjdF9pZBgCIAEoCSIuChdQcm9qZWN0QXR0ZW50aW9uUmVxdWVzdBITCgtwcm9qZWN0X2lkcxgBIAMoCSKcAwoQUHJvamVjdEF0dGVudGlvbhI0CgVwYXJ0cxgBIAMoCzIlLmhlcm1lcy5ob21lLnYxLlByb2plY3RBdHRlbnRpb24uUGFydBrRAgoEUGFydBISCgpwcm9qZWN0X2lkGAEgASgJEi8KBWxvY2FsGAIgASgLMiAuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uU3VtbWFyeRIqCgRyb3dzGAMgAygLMhwuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uUm93EhQKDGJvdHNfd29ya2luZxgEIAEoDRIPCgdpc19ob21lGAUgASgIEjUKD2N1cnJlbnRfcmVsZWFzZRgGIAEoCzIcLmhlcm1lcy5ob21lLnYxLlJlbGVhc2VCcmllZhI0Cg5sYXRlc3Rfc3VtbWFyeRgHIAEoCzIcLmhlcm1lcy5ob21lLnYxLlN1bW1hcnlCcmllZhI0ChBsYXN0X2FjdGl2aXR5X2F0GAggASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZwaW5uZWQYCSABKAgiLgoXUHJvamVjdEF0dGVudGlvbkNoYW5nZWQSEwoLcHJvamVjdF9pZHMYASADKAki5AMKC0hvbWVSZXF1ZXN0EkQKEXByb2plY3RzX292ZXJ2aWV3GAEgASgLMicuaGVybWVzLmhvbWUudjEuUHJvamVjdHNPdmVydmlld1JlcXVlc3RIABI+Cg5hdHRlbnRpb25fcm93cxgCIAEoCzIkLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvblJvd3NSZXF1ZXN0SAASRAoRYXR0ZW50aW9uX2Rpc21pc3MYAyABKAsyJy5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25EaXNtaXNzUmVxdWVzdEgAEjgKC3Byb2plY3RfcGluGAQgASgLMiEuaGVybWVzLmhvbWUudjEuUHJvamVjdFBpblJlcXVlc3RIABI8Cg1vd25lcl90aHJlYWRzGAUgASgLMiMuaGVybWVzLmhvbWUudjEuT3duZXJUaHJlYWRzUmVxdWVzdEgAEkEKEG93bmVyX3RocmVhZF9nZXQYBiABKAsyJS5oZXJtZXMuaG9tZS52MS5Pd25lclRocmVhZEdldFJlcXVlc3RIABJDChFvd25lcl90aHJlYWRfcmVhZBgHIAEoCzImLmhlcm1lcy5ob21lLnYxLk93bmVyVGhyZWFkUmVhZFJlcXVlc3RIAEIJCgdyZXF1ZXN0IsADCgxIb21lUmVzcG9uc2USPQoRcHJvamVjdHNfb3ZlcnZpZXcYASABKAsyIC5oZXJtZXMuaG9tZS52MS5Qcm9qZWN0c092ZXJ2aWV3SAASNwoOYXR0ZW50aW9uX3Jvd3MYAiABKAsyHS5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25Sb3dzSAASQQoTYXR0ZW50aW9uX2Rpc21pc3NlZBgDIAEoCzIiLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvbkRpc21pc3NlZEgAEjcKDnByb2plY3RfcGlubmVkGAQgASgLMh0uaGVybWVzLmhvbWUudjEuUHJvamVjdFBpbm5lZEgAEjUKDW93bmVyX3RocmVhZHMYBSABKAsyHC5oZXJtZXMuaG9tZS52MS5Pd25lclRocmVhZHNIABI3Cgxvd25lcl90aHJlYWQYBiABKAsyHy5oZXJtZXMuaG9tZS52MS5Pd25lclRocmVhZFBhZ2VIABJAChNvd25lcl90aHJlYWRfbWFya2VkGAcgASgLMiEuaGVybWVzLmhvbWUudjEuT3duZXJUaHJlYWRNYXJrZWRIAEIKCghyZXNwb25zZSIgChJBdHRlbnRpb25EaXNtaXNzZWQSCgoCaWQYASABKAkiMwoNUHJvamVjdFBpbm5lZBISCgpwcm9qZWN0X2lkGAEgASgJEg4KBnBpbm5lZBgCIAEoCCKkAQoPT3duZXJUaHJlYWRQYWdlEiMKA2JvdBgBIAEoCzIWLmhlcm1lcy5ob21lLnYxLkJvdFJlZhISCgpwcm9qZWN0X2lkGAIgASgJEi8KCG1lc3NhZ2VzGAMgAygLMh0uaGVybWVzLmhvbWUudjEuVGhyZWFkTWVzc2FnZRIVCg1sYXN0X3JlYWRfbnVtGAQgASgDEhAKCGhhc19tb3JlGAUgASgIIo4BCg1UaHJlYWRNZXNzYWdlEgsKA251bRgBIAEoAxIKCgJpZBgCIAEoCRISCgpmcm9tX293bmVyGAMgASgIEgwKBHRleHQYBCABKAkSJgoCYXQYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgwKBGFza3MYBiABKAgSDAoEb3BlbhgHIAEoCCJKChFPd25lclRocmVhZE1hcmtlZBIOCgZib3RfaWQYASABKAkSFQoNbGFzdF9yZWFkX251bRgCIAEoAxIOCgZ1bnJlYWQYAyABKA0q4wEKDUF0dGVudGlvbktpbmQSHgoaQVRURU5USU9OX0tJTkRfVU5TUEVDSUZJRUQQABIUChBSRUxFQVNFX0FXQUlUSU5HEAESEAoMT1dORVJfQUNUSU9OEAISFQoRUEVSTUlTU0lPTl9QUk9NUFQQAxIMCghERUNJU0lPThAEEhMKD1JFTEFZRURfUlVMSU5HUxAFEgsKB1AwX0lURU0QBhIPCgtCT1RfV0FJVElORxAHEg0KCU9GRl9CT0FSRBAIEg8KC1NFUlZJTkdfT0ZGEAkSEgoOT1dORVJfUVVFU1RJT04QCmIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * ---- requests (WS type in brackets; grant) ----
@@ -976,6 +976,13 @@ export type ProjectAttention_Part = Message<"hermes.home.v1.ProjectAttention.Par
    * @generated from field: google.protobuf.Timestamp last_activity_at = 8;
    */
   lastActivityAt?: Timestamp | undefined;
+
+  /**
+   * addition (D7): pinned on that computer
+   *
+   * @generated from field: bool pinned = 9;
+   */
+  pinned: boolean;
 };
 
 /**
@@ -1030,6 +1037,30 @@ export type HomeRequest = Message<"hermes.home.v1.HomeRequest"> & {
      */
     value: AttentionDismissRequest;
     case: "attentionDismiss";
+  } | {
+    /**
+     * @generated from field: hermes.home.v1.ProjectPinRequest project_pin = 4;
+     */
+    value: ProjectPinRequest;
+    case: "projectPin";
+  } | {
+    /**
+     * @generated from field: hermes.home.v1.OwnerThreadsRequest owner_threads = 5;
+     */
+    value: OwnerThreadsRequest;
+    case: "ownerThreads";
+  } | {
+    /**
+     * @generated from field: hermes.home.v1.OwnerThreadGetRequest owner_thread_get = 6;
+     */
+    value: OwnerThreadGetRequest;
+    case: "ownerThreadGet";
+  } | {
+    /**
+     * @generated from field: hermes.home.v1.OwnerThreadReadRequest owner_thread_read = 7;
+     */
+    value: OwnerThreadReadRequest;
+    case: "ownerThreadRead";
   } | { case: undefined; value?: undefined };
 };
 
@@ -1071,6 +1102,38 @@ export type HomeResponse = Message<"hermes.home.v1.HomeResponse"> & {
      */
     value: AttentionDismissed;
     case: "attentionDismissed";
+  } | {
+    /**
+     * To `project_pin`.
+     *
+     * @generated from field: hermes.home.v1.ProjectPinned project_pinned = 4;
+     */
+    value: ProjectPinned;
+    case: "projectPinned";
+  } | {
+    /**
+     * To `owner_threads`.
+     *
+     * @generated from field: hermes.home.v1.OwnerThreads owner_threads = 5;
+     */
+    value: OwnerThreads;
+    case: "ownerThreads";
+  } | {
+    /**
+     * To `owner_thread_get`.
+     *
+     * @generated from field: hermes.home.v1.OwnerThreadPage owner_thread = 6;
+     */
+    value: OwnerThreadPage;
+    case: "ownerThread";
+  } | {
+    /**
+     * To `owner_thread_read`.
+     *
+     * @generated from field: hermes.home.v1.OwnerThreadMarked owner_thread_marked = 7;
+     */
+    value: OwnerThreadMarked;
+    case: "ownerThreadMarked";
   } | { case: undefined; value?: undefined };
 };
 
@@ -1099,6 +1162,157 @@ export type AttentionDismissed = Message<"hermes.home.v1.AttentionDismissed"> & 
  */
 export const AttentionDismissedSchema: GenMessage<AttentionDismissed> = /*@__PURE__*/
   messageDesc(file_hermes_home_v1_home, 28);
+
+/**
+ * [project_pinned] the pin as stored on this computer.
+ *
+ * @generated from message hermes.home.v1.ProjectPinned
+ */
+export type ProjectPinned = Message<"hermes.home.v1.ProjectPinned"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: bool pinned = 2;
+   */
+  pinned: boolean;
+};
+
+/**
+ * Describes the message hermes.home.v1.ProjectPinned.
+ * Use `create(ProjectPinnedSchema)` to create a new message.
+ */
+export const ProjectPinnedSchema: GenMessage<ProjectPinned> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 29);
+
+/**
+ * [owner_thread] a page of one bot's owner thread, oldest first.
+ *
+ * @generated from message hermes.home.v1.OwnerThreadPage
+ */
+export type OwnerThreadPage = Message<"hermes.home.v1.OwnerThreadPage"> & {
+  /**
+   * @generated from field: hermes.home.v1.BotRef bot = 1;
+   */
+  bot?: BotRef | undefined;
+
+  /**
+   * the asking computer's id
+   *
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: repeated hermes.home.v1.ThreadMessage messages = 3;
+   */
+  messages: ThreadMessage[];
+
+  /**
+   * 0 = nothing read
+   *
+   * @generated from field: int64 last_read_num = 4;
+   */
+  lastReadNum: bigint;
+
+  /**
+   * older messages exist
+   *
+   * @generated from field: bool has_more = 5;
+   */
+  hasMore: boolean;
+};
+
+/**
+ * Describes the message hermes.home.v1.OwnerThreadPage.
+ * Use `create(OwnerThreadPageSchema)` to create a new message.
+ */
+export const OwnerThreadPageSchema: GenMessage<OwnerThreadPage> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 30);
+
+/**
+ * @generated from message hermes.home.v1.ThreadMessage
+ */
+export type ThreadMessage = Message<"hermes.home.v1.ThreadMessage"> & {
+  /**
+   * @generated from field: int64 num = 1;
+   */
+  num: bigint;
+
+  /**
+   * @generated from field: string id = 2;
+   */
+  id: string;
+
+  /**
+   * @generated from field: bool from_owner = 3;
+   */
+  fromOwner: boolean;
+
+  /**
+   * in full; a bot's is at most 4 KB
+   *
+   * @generated from field: string text = 4;
+   */
+  text: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp at = 5;
+   */
+  at?: Timestamp | undefined;
+
+  /**
+   * the bot asked the owner here
+   *
+   * @generated from field: bool asks = 6;
+   */
+  asks: boolean;
+
+  /**
+   * that question is still open
+   *
+   * @generated from field: bool open = 7;
+   */
+  open: boolean;
+};
+
+/**
+ * Describes the message hermes.home.v1.ThreadMessage.
+ * Use `create(ThreadMessageSchema)` to create a new message.
+ */
+export const ThreadMessageSchema: GenMessage<ThreadMessage> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 31);
+
+/**
+ * [owner_thread_marked] read state after `owner_thread_read`.
+ *
+ * @generated from message hermes.home.v1.OwnerThreadMarked
+ */
+export type OwnerThreadMarked = Message<"hermes.home.v1.OwnerThreadMarked"> & {
+  /**
+   * @generated from field: string bot_id = 1;
+   */
+  botId: string;
+
+  /**
+   * @generated from field: int64 last_read_num = 2;
+   */
+  lastReadNum: bigint;
+
+  /**
+   * @generated from field: uint32 unread = 3;
+   */
+  unread: number;
+};
+
+/**
+ * Describes the message hermes.home.v1.OwnerThreadMarked.
+ * Use `create(OwnerThreadMarkedSchema)` to create a new message.
+ */
+export const OwnerThreadMarkedSchema: GenMessage<OwnerThreadMarked> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 32);
 
 /**
  * @generated from enum hermes.home.v1.AttentionKind

@@ -88,7 +88,9 @@ fn mark_of(app: &AppState, push: &Push) -> Option<Mark> {
             .map(|p| Mark::Project(p.to_string())),
         Push::PermissionRequest { request } => bot(&request.bot_id),
         Push::PermissionResolved { bot_id, .. } => bot(bot_id),
-        Push::MeetingEvent { project_id, .. } => Some(Mark::Project(project_id.clone())),
+        Push::MeetingEvent { project_id, .. }
+        | Push::OwnerThreadUpdated { project_id, .. }
+        | Push::ProjectPinned { project_id, .. } => Some(Mark::Project(project_id.clone())),
         _ => None,
     }
 }

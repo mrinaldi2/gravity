@@ -17,6 +17,7 @@ pub use decisions::NewDecision;
 pub use decisions_edit::DecisionEdit;
 pub use decisions_list::DecisionFilter;
 pub use overview::LatestSummary;
+pub use owner_threads::{Asked, OwnerQuestion};
 pub use quiesce::{NewQuiesce, Quiesce};
 pub use release_life::NewReleaseTest;
 pub use releases::NewRelease;
@@ -57,6 +58,9 @@ mod meetings;
 pub mod metrics;
 mod overview;
 mod owner_actions;
+mod owner_threads;
+#[cfg(test)]
+mod owner_threads_tests;
 mod peers;
 mod permissions;
 mod project_links;

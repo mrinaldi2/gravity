@@ -145,7 +145,7 @@ fn row(
         partial: !stale.is_empty(),
         stale_sources: stale,
         last_activity_at,
-        pinned: false,
+        pinned: parts.iter().any(|p| p.pinned),
         rank: 0,
         latest_summary: home.and_then(|p| p.latest_summary.clone()),
         legacy: false,

@@ -59,7 +59,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
     let short = crate::brand::SHORT_NAME;
     let bus = crate::brand::ACTIVE_MCP_SERVER;
     let shared_section = super::prompt_sections::shared_computer();
-    let owner_card_section = super::prompt_sections::owner_card();
+    let owner_section = super::prompt_sections::owner_reporting();
     format!(
         "# {name}\n\n{description}\n\n{worker_section}{repo_section}{instructions_section}\
          ## How to use the {short} bus\n\n\
@@ -121,7 +121,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          there. Unease about the channel itself is not such a reason.\n\
          - Ask the sender directly when you need something to proceed, rather\n\
          than escalating to a human who may not be there.\n\n\
-         {owner_card_section}\
+         {owner_section}\
          {shared_section}\
          ## Keep messages short\n\n\
          Every message and task result you send is read by another bot and\n\
@@ -129,12 +129,17 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          what the reader needs to act on it, and stop. No greetings, no\n\
          restating the request, no narrating your process, no closing\n\
          summaries. A few sentences is the norm; go longer only when the\n\
-         content itself — a list of findings, an error log — requires it.\n\n\
+         content itself — a list of findings, an error log — requires it.\n\
+         The same goes for `message_owner` and card comments: the owner reads\n\
+         them between other things, so lead with what they need to know or\n\
+         decide.\n\n\
          ## Silence is an answer\n\n\
          A `done` or a `note` needs no reply. Do not acknowledge, thank, or\n\
          confirm receipt — silence is the correct response, and the daemon\n\
          refuses replies to a result. React to a result only by using it or\n\
-         by opening a new task.\n\n\
+         by opening a new task. The owner's messages are the exception:\n\
+         answer each one with `message_owner`, even when the answer is only\n\
+         that you've started.\n\n\
          ## When to delegate\n\n\
          Do the work yourself when a few tool calls finish it. Delegate at\n\
          most {delegate_target} tasks from any one incoming task — the daemon\n\
@@ -152,10 +157,11 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          ## When the owner has to decide\n\n\
          Some things are not yours to settle and no bot can settle them for\n\
          you: waiving a rule, spending money, deleting data, shipping. Call\n\
-         `raise_decision` for those. It reaches the owner's Control center,\n\
-         which they see whether or not they have your terminal open — so do\n\
-         not park the question in your memory file, and do not ask in the\n\
-         terminal unless they are talking to you right now.\n\n\
+         `raise_decision` for those: a ruling is recorded and binds every bot.\n\
+         A question that only you need answered goes through `message_owner`\n\
+         with `asks: true` instead (see \"Report to the owner where the owner\n\
+         looks\"). Either way, never park it in your memory file or ask it\n\
+         only in your terminal.\n\n\
          - Before you raise, call `list_decisions` by tag. **A settled\n\
          decision is the owner's ruling and is authority.** Do not re-raise\n\
          it. If the facts have changed, raise a new one that `supersedes` it\n\
@@ -311,6 +317,7 @@ mod tests {
         let md = system_md(&spec(""));
         assert!(md.contains("## Keep messages short"));
         assert!(md.contains("## Owner requests on a card"));
+        assert!(md.contains("## Report to the owner where the owner looks"));
         assert!(md.contains("## Working on a shared computer"));
         assert!(md.contains("Lead with the outcome"));
     }
@@ -340,7 +347,7 @@ mod tests {
         let md = system_md(&spec(""));
         assert!(md.contains("## When the owner has to decide"));
         assert!(md.contains("raise_decision"));
-        assert!(md.contains("do not ask in the"), "{md}");
+        assert!(md.contains("ask it\nonly in your terminal"), "{md}");
         // The registry only replaces the hand-kept ledgers if a settled
         // ruling is read as authority rather than as one more opinion.
         assert!(md.contains("is authority"));

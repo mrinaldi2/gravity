@@ -83,8 +83,12 @@ pub(crate) fn cut_text(text: &str, max: usize) -> String {
     format!("{}…", kept.trim_end())
 }
 
+/// A row's title: one line, token-like values masked (CE-014 F1), cut.
 pub(crate) fn title(text: &str) -> String {
-    cut(text, TITLE_MAX)
+    cut(
+        &crate::redact::secrets(text.lines().next().unwrap_or_default()),
+        TITLE_MAX,
+    )
 }
 
 pub(crate) fn timestamp(at: DateTime<Utc>) -> Timestamp {

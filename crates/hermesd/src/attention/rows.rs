@@ -116,6 +116,7 @@ pub(crate) fn rows(
     if scope.local {
         owner_actions(app, &mut b)?;
         prompts_and_waiting(app, &mut b)?;
+        owner_questions(app, &mut b)?;
     }
     Ok(b.out)
 }
@@ -329,6 +330,31 @@ fn prompts_and_waiting(app: &AppState, b: &mut Builder<'_>) -> anyhow::Result<()
             })),
         };
         b.push(part, weight(AttentionKind::BotWaiting), None);
+    }
+    Ok(())
+}
+
+/// Questions the project's bots here asked the owner (D6): in a bot's
+/// thread, or on a card.
+fn owner_questions(app: &AppState, b: &mut Builder<'_>) -> anyhow::Result<()> {
+    for q in crate::owner_threads::open_questions(app, Some(b.project_id), None)? {
+        let target = match &q.item_id {
+            Some(item_id) => Target::ItemId(item_id.clone()),
+            None => {
+                let Some(bot) = app.db.get_bot(&q.bot_id)? else {
+                    continue;
+                };
+                Target::Bot(crate::owner_threads::bot_ref(app, &bot))
+            }
+        };
+        let part = Part {
+            kind: AttentionKind::OwnerQuestion,
+            target_id: q.id.clone(),
+            title: q.title.clone(),
+            created_at: q.created_at,
+            target: Some(target),
+        };
+        b.push(part, weight(AttentionKind::OwnerQuestion), None);
     }
     Ok(())
 }

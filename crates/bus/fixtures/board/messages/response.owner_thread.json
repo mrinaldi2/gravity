@@ -1,0 +1,32 @@
+{
+  "reqId": "45",
+  "homeResponse": {
+    "owner_thread": {
+      "bot": {
+        "daemon_id": "d-mac",
+        "bot_id": "b-lead",
+        "name": "Team Lead"
+      },
+      "project_id": "p-gravity",
+      "messages": [
+        {
+          "num": "801",
+          "id": "m-1",
+          "from_owner": true,
+          "text": "How is 0.17?",
+          "at": "2026-10-06T09:00:00Z"
+        },
+        {
+          "num": "812",
+          "id": "m-2",
+          "text": "Should 0.17 wait for the iOS build?",
+          "at": "2026-10-06T09:30:00Z",
+          "asks": true,
+          "open": true
+        }
+      ],
+      "last_read_num": "801",
+      "has_more": true
+    }
+  }
+}
