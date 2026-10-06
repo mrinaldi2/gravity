@@ -29,6 +29,8 @@ interface NeedsYouActions extends AttentionActions {
 interface NeedsYouProps extends NeedsYouActions {
   readonly projectName: string;
   readonly rows: readonly Row[];
+  /** The daemon's count, as the projects home counts (H-161); absent before 0.17. */
+  readonly count?: number;
   readonly overrides: readonly WipOverride[];
   /** Off-home, why the home's rows are missing. */
   readonly note?: string | null;
@@ -317,10 +319,14 @@ export default function NeedsYou(props: NeedsYouProps): ReactElement {
     const view = rowProps(r, props, openReview);
     return view === undefined ? [] : [{ key: rowKey(r), view, elsewhere: r.elsewhere }];
   });
+  // The number the projects home shows (H-161): an info row such as
+  // routines with no card is listed, not counted. An older daemon sends
+  // none, so its listed rows are counted as before.
+  const count = props.count ?? views.length;
   return (
     <section className="dash-widget dash-wide" aria-labelledby="dash-needs-you">
       {/* At zero the empty sentence says it; no "· 0" badge (UX-010). */}
-      <h2 id="dash-needs-you">Needs you{views.length > 0 ? ` · ${views.length}` : ""}</h2>
+      <h2 id="dash-needs-you">Needs you{count > 0 ? ` · ${count}` : ""}</h2>
       {props.note ? (
         <p className="dash-note">
           <strong>{props.note}</strong>

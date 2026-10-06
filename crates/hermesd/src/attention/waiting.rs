@@ -2,7 +2,7 @@
 //! prompts with a card, and bots waiting for input or on a prompt only
 //! their terminal shows (H-172).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bus::contract::home::{attention_row::Target, AttentionKind, BotRef};
 use bus::BotState;
@@ -71,6 +71,31 @@ pub(super) fn prompts_and_waiting(app: &AppState, b: &mut Builder<'_>) -> anyhow
         b.push(part, weight(AttentionKind::BotWaiting), None);
     }
     Ok(())
+}
+
+/// The project's bots here waiting on the owner: for their input, or on a
+/// permission prompt, with a card or only in their terminal (H-172). The
+/// projects home's `bots_waiting` counts these (H-161), so it agrees with
+/// the rows above. Stand-ins run elsewhere: their computer counts them.
+pub(crate) fn waiting_bots(app: &AppState, project_id: &str) -> anyhow::Result<Vec<bus::Bot>> {
+    let prompted: HashSet<String> = app
+        .approvals
+        .list(None)
+        .into_iter()
+        .map(|p| p.bot_id)
+        .collect();
+    Ok(app
+        .db
+        .list_bots(Some(project_id))?
+        .into_iter()
+        .filter(|bot| !bot.is_linked())
+        .filter(|bot| {
+            matches!(
+                app.supervisor.state(&bot.id).0,
+                BotState::WaitingForUser | BotState::WaitingForApproval
+            ) || prompted.contains(&bot.id)
+        })
+        .collect())
 }
 
 /// "<bot> needs approval", with the command when the bot's state names one

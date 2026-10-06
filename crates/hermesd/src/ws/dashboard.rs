@@ -138,7 +138,7 @@ impl Conn {
         let dashboard = json!({
             "project_id": project_id, "as_of": now, "since": since,
             "home": home, "needs_you": needs.rows, "wip_overrides": needs.wip_overrides,
-            "needs_you_note": Value::Null, "board": board,
+            "needs_you_count": needs.count, "needs_you_note": Value::Null, "board": board,
             "releases": shown, "team": team,
             "meetings": meetings, "action_items": action_items,
         });
@@ -189,6 +189,10 @@ async fn from_home(
             if let Some(here) = dashboard["needs_you"].as_array_mut() {
                 here.extend(rows);
             }
+            // The home's rows count as its part of the projects home does.
+            let count = dashboard["needs_you_count"].as_u64().unwrap_or(0)
+                + answer["count"].as_u64().unwrap_or(0);
+            dashboard["needs_you_count"] = json!(count);
             dashboard["wip_overrides"] = answer["wip_overrides"].take();
         }
         _ => {
