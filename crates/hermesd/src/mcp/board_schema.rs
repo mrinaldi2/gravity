@@ -202,7 +202,7 @@ pub(super) fn board_tool_list(roles: &[Role]) -> Vec<Value> {
                 .as_array()
                 .into_iter()
                 .flatten()
-                .filter(|r| *r != "project_id")
+                .filter(|r| *r != "project_id" && !leave_out(t.message, r.as_str().unwrap_or_default()))
                 .collect();
             json!({
                 "name": t.name,
@@ -273,7 +273,7 @@ pub(super) fn decode<T: DeserializeOwned>(
     }
     for required in schema["required"].as_array().into_iter().flatten() {
         let name = required.as_str().unwrap_or_default();
-        if name != "project_id" && !wire.contains_key(name) {
+        if name != "project_id" && !leave_out(message, name) && !wire.contains_key(name) {
             anyhow::bail!("'{name}' is required");
         }
     }
@@ -335,3 +335,12 @@ pub(super) fn friendly(mut value: Value) -> Value {
 #[cfg(test)]
 #[path = "board_schema_tests.rs"]
 mod tests;
+
+/// Plain proto3 fields a tool takes as optional. Their wire cardinality stays
+/// as it shipped (buf breaking), and an empty value means "left out":
+/// `ReleaseTest.machine`, the tester's one computer (H-115).
+const OPTIONAL: &[(&str, &str)] = &[("ReleaseTest", "machine")];
+
+fn leave_out(message: &str, field: &str) -> bool {
+    OPTIONAL.contains(&(message, field))
+}

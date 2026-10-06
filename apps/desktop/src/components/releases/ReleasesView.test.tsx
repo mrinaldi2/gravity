@@ -43,7 +43,8 @@ describe("ReleasesView", () => {
       release({ id: "rel-0", display_version: "0.15.2", status: "deployed", decision_id: null }),
     ]);
     const nav = await screen.findByRole("navigation", { name: "Releases" });
-    expect(nav).toHaveTextContent(/Current.*0\.16\.0.*History.*0\.15\.2/s);
+    // The nav shows before the packages arrive ("Nothing waiting").
+    await waitFor(() => expect(nav).toHaveTextContent(/Current.*0\.16\.0.*History.*0\.15\.2/s));
     expect(screen.getByRole("heading", { name: "0.16.0" })).toBeInTheDocument();
     expect(screen.getByText("Packaged by DevOps", { exact: false })).toBeInTheDocument();
     expect(await screen.findByText("Release packages and the deploy gate")).toBeInTheDocument();
