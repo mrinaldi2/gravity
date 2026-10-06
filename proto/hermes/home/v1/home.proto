@@ -63,6 +63,17 @@ message ProjectRow {
   uint32 rank = 15;                         // 0 = first
   SummaryBrief latest_summary = 16;         // unset = none
   bool legacy = 17;                         // only set by clients for an older daemon (R2.1)
+  // Additions (H-144), for the projects home card:
+  repeated ColumnCount columns = 18;        // every board column, board order; empty = no board
+  uint32 doing_total = 19;                  // cards in Doing columns; `doing` lists at most 3
+  uint32 bots_waiting = 20;                 // bots waiting for the owner, across computers
+}
+
+message ColumnCount {                       // addition (H-144)
+  string key = 1;
+  string name = 2;
+  string category = 3;                      // ColumnCategory name, lowercase: inbox, ready, doing…
+  uint32 count = 4;                         // cards in the column
 }
 
 message Member {
@@ -139,6 +150,7 @@ message ReleaseBrief {                      // iOS M4
   uint32 items_total = 5;
   uint32 items_done = 6;
   google.protobuf.Timestamp deployed_at = 7;
+  uint32 items_ready = 8;                   // addition (H-144): items in Verify or later (H-137)
 }
 
 message DoingBrief {
@@ -187,6 +199,7 @@ message ProjectAttention {
     SummaryBrief latest_summary = 7;        // home only
     google.protobuf.Timestamp last_activity_at = 8;
     bool pinned = 9;                        // addition (D7): pinned on that computer
+    uint32 bots_waiting = 10;               // addition (H-144): its own bots waiting for the owner
   }
   repeated Part parts = 1;
 }

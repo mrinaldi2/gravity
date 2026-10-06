@@ -15,7 +15,8 @@
         "state": "awaiting_owner",
         "awaiting_owner": true,
         "items_total": 4,
-        "items_done": 3
+        "items_done": 3,
+        "items_ready": 4
       },
       "open_tasks": 5,
       "doing": [
@@ -23,6 +24,15 @@
       ],
       "bots": 6,
       "bots_working": 2,
+      "bots_waiting": 1,
+      "doing_total": 4,
+      "columns": [
+        { "key": "inbox", "name": "Inbox", "category": "inbox", "count": 2 },
+        { "key": "doing", "name": "Doing", "category": "doing", "count": 4 },
+        { "key": "review", "name": "Review", "category": "review", "count": 1 },
+        { "key": "verify", "name": "Verify", "category": "verify", "count": 3 },
+        { "key": "awaiting", "name": "Awaiting owner", "category": "approval", "count": 1 }
+      ],
       "attention": {
         "count": 3,
         "score": 7,
