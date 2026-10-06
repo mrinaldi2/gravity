@@ -3,7 +3,7 @@
 
 use serde_json::{json, Value};
 
-use super::{create_bot, spawn_daemon, McpClient, TestDaemon, WsClient};
+use super::{create_bot, setup_wait, spawn_daemon, McpClient, TestDaemon, WsClient};
 
 /// Inbox messages from other bots, dropping the daemon's introduction prompt.
 pub fn peer_messages(inbox: &Value) -> Vec<Value> {
@@ -30,7 +30,7 @@ pub async fn project_with_bots(names: &[&str]) -> (Pair, Vec<McpClient>) {
 pub async fn project_with_bots_on(d: TestDaemon, names: &[&str]) -> (Pair, Vec<McpClient>) {
     let mut c = WsClient::connect(&d).await;
     let project = c
-        .request(json!({"type": "create_project", "name": "p"}))
+        .request_within(setup_wait(), json!({"type": "create_project", "name": "p"}))
         .await;
     let project_id = project["project"]["id"].as_str().expect("pid").to_string();
     let mut ids = Vec::new();
@@ -54,7 +54,10 @@ pub async fn two_projects_one_bot_each() -> (Pair, Vec<McpClient>) {
     let mut clients = Vec::new();
     for (project, bot) in [("alpha", "ann"), ("beta", "bo")] {
         let created = c
-            .request(json!({"type": "create_project", "name": project}))
+            .request_within(
+                setup_wait(),
+                json!({"type": "create_project", "name": project}),
+            )
             .await;
         let project_id = created["project"]["id"].as_str().expect("pid").to_string();
         let created = create_bot(&mut c, &project_id, bot).await;
