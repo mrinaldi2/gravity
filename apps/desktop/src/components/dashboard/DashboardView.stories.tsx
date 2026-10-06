@@ -75,6 +75,8 @@ export const HomeAway: Story = () => (
       releases: [],
       needs_you: [],
       wip_overrides: [],
+      meetings: [],
+      action_items: [],
       needs_you_note: "Can't reach mac right now, so this may not be everything that needs you.",
     })}
   />
@@ -108,6 +110,8 @@ export const Mirrored: Story = () => (
       home: "mac",
       needs_you: [],
       releases: [],
+      meetings: [],
+      action_items: [],
       board: MIRRORED_BOARD,
     })}
   />

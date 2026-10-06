@@ -1,11 +1,14 @@
 // Widgets 5 and 6 of the dashboard (H-018 §2.1, H-102): each meeting
 // series with its next time, the meeting collecting now and the last one
 // held; and the open action items, which the owner ticks, drops or
-// promotes to the board. Every state carries a glyph and a word.
+// promotes to the board. Every state carries a glyph and a word. Off the
+// board's home both lists are empty, so they say where they are kept
+// instead of "nothing" (UX-021, the H-112 pattern).
 
 import { MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import type { ReactElement } from "react";
+import type { Dashboard } from "../../protocol/dashboard";
 import type { DashboardAction, MeetingRow, MeetingSummary } from "../../protocol/meetings";
 import { OWNER } from "../../protocol/meetings";
 import RowContextMenu from "../sidebar/RowContextMenu";
@@ -72,12 +75,41 @@ function MeetingLines(props: { readonly row: MeetingRow }): ReactElement {
   );
 }
 
+/** Off the board's home: the computer holding it, and whether it answered. */
+export interface OffHome {
+  readonly home: string;
+  readonly away: boolean;
+}
+
+/** Off-home the lists are empty; Needs you's note says the home can't be reached. */
+export function offHomeOf(d: Pick<Dashboard, "home" | "needs_you_note">): OffHome | null {
+  return d.home === null ? null : { home: d.home, away: Boolean(d.needs_you_note) };
+}
+
+function offHomeText(off: OffHome, what: string, reachable: string): string {
+  return off.away ? `Can't reach ${off.home} right now, so ${what} can't be shown.` : reachable;
+}
+
 /** Widget 5. */
-export function MeetingsWidget(props: { readonly rows: readonly MeetingRow[] }): ReactElement {
+export function MeetingsWidget(props: {
+  readonly rows: readonly MeetingRow[];
+  /** The project's lead bot by name; null without one. */
+  readonly leadName: string | null;
+  readonly offHome: OffHome | null;
+}): ReactElement {
+  const off = props.offHome;
+  const empty =
+    off === null
+      ? `No meetings set up yet. ${props.leadName ?? "Your lead bot"} schedules the regular ones, such as the stand-up and the retro.`
+      : offHomeText(
+          off,
+          "meetings",
+          `Meetings are kept on ${off.home}. Open The Hermes there to see them.`,
+        );
   return (
     <Widget id="dash-meetings" title="Meetings">
       {props.rows.length === 0 ? (
-        <p className="dash-empty">No meetings set up. The lead sets up a series.</p>
+        <p className="dash-empty">{empty}</p>
       ) : (
         <ul className="dash-rows">
           {props.rows.map((row) => (
@@ -94,6 +126,7 @@ export interface ActionItemsProps {
   readonly botName: (id: string) => string;
   /** The owner may change them (the control grant). */
   readonly canControl: boolean;
+  readonly offHome: OffHome | null;
   readonly onDone: (actionId: string) => void;
   readonly onDrop: (actionId: string) => void;
   readonly onPromote: (actionId: string) => void;
@@ -168,7 +201,7 @@ function ActionRow(
         <button
           type="button"
           className="dash-row-menu"
-          aria-label={`More for: ${a.text}`}
+          aria-label={`More actions for ${a.text}`}
           onClick={(event) => {
             const r = event.currentTarget.getBoundingClientRect();
             props.onMenu({ action: a, x: r.right, y: r.bottom });
@@ -192,10 +225,15 @@ function title(actions: readonly DashboardAction[]): string {
 /** Widget 6. */
 export function ActionItemsWidget(props: ActionItemsProps): ReactElement {
   const [menu, setMenu] = useState<Menu | null>(null);
+  const off = props.offHome;
+  const empty =
+    off === null
+      ? "No open action items."
+      : offHomeText(off, "action items", `Action items are kept on ${off.home}.`);
   return (
     <Widget id="dash-actions" title={title(props.actions)}>
       {props.actions.length === 0 ? (
-        <p className="dash-empty">No open action items.</p>
+        <p className="dash-empty">{empty}</p>
       ) : (
         <ul className="dash-rows">
           {props.actions.map((a) => (

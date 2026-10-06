@@ -23,7 +23,7 @@ import { useConfirmRelayed } from "./useConfirmRelayed";
 import { useDashboard } from "./useDashboard";
 import { useDashboardDrawers } from "./useDashboardDrawers";
 import { useMetrics } from "./useMetrics";
-import { ActionItemsWidget, MeetingsWidget } from "./MeetingWidgets";
+import { ActionItemsWidget, MeetingsWidget, offHomeOf } from "./MeetingWidgets";
 import { useActionItems } from "./useActionItems";
 import { BoardWidget, ReleasesWidget, TeamWidget } from "./Widgets";
 
@@ -120,6 +120,8 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const botName = (id: string): string => named(id) ?? "a bot";
   const columns = new Map(dashboard.board?.columns.map((c) => [c.key, c.name]) ?? []);
   const openBoard = (): void => props.onOpenTab("board");
+  const offHome = offHomeOf(dashboard);
+  const leadName = named(project.lead_bot_id ?? "") ?? null;
   return (
     <div className="dash">
       <div className="dash-scroll">
@@ -164,9 +166,10 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             onOpen={() => props.onOpenTab("releases")}
           />
           <TeamWidget team={dashboard.team} bots={bots} onOpenBot={props.onOpenBot} />
-          <MeetingsWidget rows={dashboard.meetings} />
+          <MeetingsWidget rows={dashboard.meetings} leadName={leadName} offHome={offHome} />
           <ActionItemsWidget
             actions={dashboard.action_items}
+            offHome={offHome}
             botName={botName}
             canControl={connected && props.canControl}
             onDone={(id) => void actionItems.setStatus(id, "done")}

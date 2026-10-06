@@ -11,11 +11,12 @@ const botName = (id: string): string => DASH_BOTS.find((b) => b.id === id)?.name
 export const Filled: Story = () => (
   <div className="dash" style={{ width: 900 }}>
     <div className="dash-grid">
-      <MeetingsWidget rows={MEETING_ROWS} />
+      <MeetingsWidget rows={MEETING_ROWS} leadName="Team Lead" offHome={null} />
       <ActionItemsWidget
         actions={ACTION_ITEMS}
         botName={botName}
         canControl
+        offHome={null}
         onDone={noop}
         onDrop={noop}
         onPromote={noop}
