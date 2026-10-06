@@ -125,8 +125,10 @@ impl Conn {
         let (app, out, req_id) = (self.app.clone(), self.out.clone(), req_id.clone());
         let task = if bot.is_linked() {
             // The peer feeds the mirror for as long as this task holds its
-            // viewer; detaching aborts the task and lets it go.
-            tokio::spawn(async move {
+            // viewer; detaching aborts the task and lets it go. A panic
+            // answers the attach `internal` (H-170).
+            let (kind, failed) = (self.kind.clone(), (out.clone(), req_id.clone()));
+            let attach = async move {
                 match crate::peer::term::view(&app, &bot).await {
                     Ok(viewer) => {
                         let term = app.supervisor.ensure_term(&bot.id);
@@ -141,6 +143,13 @@ impl Conn {
                         }));
                     }
                 }
+            };
+            tokio::spawn(async move {
+                crate::contain::run_async(&kind, attach, || {
+                    let (out, req_id) = failed;
+                    let _ = out.send(super::later::internal(&req_id, &kind));
+                })
+                .await;
             })
         } else {
             let term = app.supervisor.ensure_term(&bot_id);

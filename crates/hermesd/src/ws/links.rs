@@ -19,8 +19,7 @@ impl Conn {
         req_id: &Value,
         work: impl Future<Output = anyhow::Result<Value>> + Send + 'static,
     ) {
-        let (out, req_id) = (self.out.clone(), req_id.clone());
-        tokio::spawn(async move {
+        self.spawn_reply(req_id, move |req_id| async move {
             let mut reply = match work.await {
                 Ok(reply) => reply,
                 Err(e) => json!({
@@ -29,7 +28,7 @@ impl Conn {
                 }),
             };
             reply["req_id"] = req_id;
-            let _ = out.send(reply);
+            reply
         });
     }
 

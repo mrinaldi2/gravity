@@ -74,7 +74,7 @@ impl Conn {
         // Revoking unlinks every project linked through the peer, on both
         // sides: it is told while its link is still up, then cut off.
         let (app, id) = (self.app.clone(), peer_id.to_string());
-        tokio::spawn(async move {
+        super::later::spawn_quiet(self.kind.clone(), async move {
             crate::peer::links::unlink_all(&app, &id).await;
             app.peers.disconnect(&id);
         });
@@ -90,9 +90,9 @@ impl Conn {
     /// The bots running on a peer, for choosing one to link.
     pub(super) fn list_peer_bots(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let peer_id = Self::str_field(req, "peer_id")?.to_string();
-        let (app, out, req_id) = (self.app.clone(), self.out.clone(), req_id.clone());
-        tokio::spawn(async move {
-            let reply = match app
+        let app = self.app.clone();
+        self.spawn_reply(req_id, move |req_id| async move {
+            match app
                 .peers
                 .request(&peer_id, json!({ "type": "list_bots" }))
                 .await
@@ -102,8 +102,7 @@ impl Conn {
                     "bots": result.get("bots").cloned().unwrap_or_else(|| json!([]))
                 }),
                 Err(e) => error(&req_id, "unavailable", &e.to_string()),
-            };
-            let _ = out.send(reply);
+            }
         });
         Ok(())
     }
@@ -113,15 +112,14 @@ impl Conn {
         let peer_id = Self::str_field(req, "peer_id")?.to_string();
         let remote_bot_id = Self::str_field(req, "remote_bot_id")?.to_string();
         let project_id = Self::str_field(req, "project_id")?.to_string();
-        let (app, out, req_id) = (self.app.clone(), self.out.clone(), req_id.clone());
-        tokio::spawn(async move {
-            let reply = match link(&app, &peer_id, &remote_bot_id, &project_id).await {
+        let app = self.app.clone();
+        self.spawn_reply(req_id, move |req_id| async move {
+            match link(&app, &peer_id, &remote_bot_id, &project_id).await {
                 Ok(bot) => json!({
                     "type": "bot", "req_id": req_id, "bot": super::views::bot_view(&app, &bot)
                 }),
                 Err(e) => error(&req_id, "conflict", &format!("{e:#}")),
-            };
-            let _ = out.send(reply);
+            }
         });
         Ok(())
     }
