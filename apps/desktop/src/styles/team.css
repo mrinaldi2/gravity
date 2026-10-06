@@ -44,14 +44,58 @@
   white-space: nowrap;
 }
 
-.team-unread {
-  position: static;
+.team-badge {
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-radius: 8px;
+}
+
+.team-new {
+  color: var(--bg);
+  background: var(--amber);
+}
+
+.team-failed {
+  color: var(--red);
+  border: 1px solid var(--red);
+}
+
+.team-menu {
+  position: relative;
+  z-index: 1;
+  padding: 0 6px;
+  font: inherit;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.team-menu:hover {
+  color: var(--text);
+  background: var(--bg-hover);
 }
 
 .team-line {
   margin: 0;
   font-size: 12.5px;
   color: var(--text-dim);
+}
+
+.team-activity {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Working is the accent everywhere (UX-027). */
+.release-tone-acc {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: transparent;
 }
 
 /* From the team: who · what · when, the words, and Reply. */

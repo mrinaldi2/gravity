@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { backToTeam, botCard, openBotFromTeam, openTeam, waitForHome } from "./test/appNav";
 import { FakeDaemon } from "./test/fakeDaemon";
 import * as fx from "./test/fixtures";
 import { stubLocalStorage } from "./test/spies";
@@ -38,16 +39,18 @@ function seedDaemon(): FakeDaemon {
     .onRequest("list_messages", () => ({ type: "messages", req_id: "1", messages: [] }));
 }
 
-/** Renders the app, waits for the snapshot, then opens alice as the owner would. */
-async function renderApp(): Promise<void> {
+/** Renders the app and waits for the snapshot, on the projects home. */
+async function renderHome(): Promise<void> {
   render(<App />);
   daemon.setStatus("connected");
-  await waitFor(() => {
-    expect(screen.getByText("Acme", { selector: ".project-name" })).toBeInTheDocument();
-  });
-  await act(async () => {
-    screen.getByText("alice", { selector: ".bot-row-name" }).click();
-  });
+  await waitForHome();
+}
+
+/** Renders the app, then opens alice from her project's Team, as the owner would. */
+async function renderApp(): Promise<void> {
+  await renderHome();
+  await openTeam();
+  await openBotFromTeam("alice");
 }
 
 describe("App actions", () => {
@@ -63,9 +66,9 @@ describe("App actions", () => {
   it("opens the project window on the Overview, then on the tab last used", async () => {
     const user = userEvent.setup();
     stubLocalStorage();
-    await renderApp();
+    await renderHome();
 
-    await user.click(screen.getByRole("button", { name: "Acme" }));
+    await user.click(screen.getByRole("button", { name: "Open project" }));
     expect(screen.getByRole("tab", { name: "Overview", selected: true })).toBeInTheDocument();
     expect(
       await within(screen.getByRole("tabpanel")).findByText(
@@ -77,7 +80,7 @@ describe("App actions", () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "3", metaKey: true }));
     });
     expect(screen.getByRole("tab", { name: "Team", selected: true })).toBeInTheDocument();
-    expect(screen.getByRole("article", { name: "alice" })).toBeInTheDocument();
+    expect(botCard("alice")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "More ▾" }));
     await user.click(screen.getByRole("menuitem", { name: "Settings" }));
@@ -87,18 +90,20 @@ describe("App actions", () => {
     await user.click(screen.getByRole("menuitem", { name: "Conversations" }));
     expect(screen.getByText("Conversations need a newer Hermes service.")).toBeInTheDocument();
 
-    await user.click(screen.getByText("alice", { selector: ".bot-row-name" }));
-    await user.click(screen.getByRole("button", { name: "Project" }));
+    // Away to Projects (⌘0) and back: the window reopens where it was left.
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "0", metaKey: true }));
+    });
+    await user.click(screen.getByRole("button", { name: "Open project" }));
     expect(screen.getByRole("button", { name: "Conversations ▾" })).toBeInTheDocument();
   });
 
   it("goes from a bot back to its project's Team", async () => {
-    const user = userEvent.setup();
     stubLocalStorage();
     await renderApp();
-    await user.click(screen.getByRole("button", { name: "‹ Team" }));
+    await backToTeam();
     expect(screen.getByRole("tab", { name: "Team", selected: true })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Open alice" }));
+    await openBotFromTeam("alice");
     expect(screen.getByText("alice", { selector: ".view-title" })).toBeInTheDocument();
   });
 
@@ -117,7 +122,7 @@ describe("App actions", () => {
     render(<App />);
     daemon.setStatus("connected");
 
-    // renderApp waits for the seeded project row, which a fresh daemon lacks.
+    // A fresh daemon has no project card to wait for.
     await waitFor(() => {
       expect(screen.getByText("Welcome to The Hermes")).toBeInTheDocument();
     });
@@ -150,45 +155,52 @@ describe("App actions", () => {
     expect(screen.getByTestId("terminal")).toBeInTheDocument();
   });
 
-  it("creates a project and a bot through the sidebar", async () => {
+  it("creates a project from Projects and a bot from Team", async () => {
     const user = userEvent.setup();
     const newBot = fx.bot({ id: "b2", name: "New bot", dir_name: "new-bot" });
     daemon
       .onRequest("create_project", () => ({ type: "project", req_id: "1", project: fx.project() }))
       .onRequest("create_bot", () => ({ type: "bot", req_id: "1", bot: newBot }));
-    await renderApp();
+    await renderHome();
 
-    await user.click(screen.getByTitle("New project"));
-    await user.type(screen.getByPlaceholderText("Project name"), "Beta");
-    await user.click(screen.getByRole("button", { name: "Create" }));
-    await waitFor(() => {
-      expect(daemon.requests.some((r) => r.body.type === "create_project")).toBe(true);
-    });
+    // The refresh after creating must already list what the daemon made.
     daemon.onRequest("list_bots", () => ({
       type: "bots",
       req_id: "1",
       bots: [fx.bot(), newBot],
     }));
-
-    await user.click(screen.getByRole("button", { name: "Project menu" }));
-    await user.click(screen.getByRole("menuitem", { name: "New bot" }));
+    await user.click(screen.getByRole("button", { name: "＋ New project" }));
+    await user.type(screen.getByPlaceholderText("Project name"), "Beta");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => {
+      expect(daemon.requests.some((r) => r.body.type === "create_project")).toBe(true);
+    });
+    // A new project comes with its first bot, whose page opens.
     await waitFor(() => {
       expect(screen.getByText("New bot", { selector: ".view-title" })).toBeInTheDocument();
     });
-    const creation = daemon.requests.find((request) => request.body.type === "create_bot");
-    expect(creation?.body).toEqual({ type: "create_bot", project_id: "p1" });
+
+    await backToTeam();
+    await user.click(screen.getByRole("button", { name: "＋ New bot" }));
+    await waitFor(() => {
+      expect(daemon.requests.filter((r) => r.body.type === "create_bot")).toHaveLength(2);
+    });
+    const creations = daemon.requests.filter((request) => request.body.type === "create_bot");
+    expect(creations.map((request) => request.body)).toEqual([
+      { type: "create_bot", project_id: "p1" },
+      { type: "create_bot", project_id: "p1" },
+    ]);
+    expect(screen.getByText("New bot", { selector: ".view-title" })).toBeInTheDocument();
     expect(screen.getByTestId("terminal")).toBeInTheDocument();
   });
 
-  it("deletes a bot from the sidebar context menu", async () => {
+  it("deletes a bot from its Team card", async () => {
     const user = userEvent.setup();
     daemon.onRequest("delete_bot", () => ({ type: "ok", req_id: "1" }));
-    await renderApp();
+    await renderHome();
+    await openTeam();
 
-    await user.pointer({
-      keys: "[MouseRight]",
-      target: screen.getByText("alice", { selector: ".bot-row-name" }),
-    });
+    await user.click(screen.getByRole("button", { name: "More for alice" }));
     await user.click(screen.getByRole("menuitem", { name: "Delete bot" }));
     await user.click(screen.getByRole("button", { name: "Delete bot" }));
 
@@ -202,12 +214,10 @@ describe("App actions", () => {
     daemon.onRequest("delete_bot", () => {
       throw new Error("bot not found");
     });
-    await renderApp();
+    await renderHome();
+    await openTeam();
 
-    await user.pointer({
-      keys: "[MouseRight]",
-      target: screen.getByText("alice", { selector: ".bot-row-name" }),
-    });
+    await user.click(screen.getByRole("button", { name: "More for alice" }));
     await user.click(screen.getByRole("menuitem", { name: "Delete bot" }));
     await user.click(screen.getByRole("button", { name: "Delete bot" }));
 
@@ -221,9 +231,9 @@ describe("App actions", () => {
     daemon.onRequest("create_project", () => {
       throw new Error("duplicate");
     });
-    await renderApp();
+    await renderHome();
 
-    await user.click(screen.getByTitle("New project"));
+    await user.click(screen.getByRole("button", { name: "＋ New project" }));
     await user.type(screen.getByPlaceholderText("Project name"), "Acme");
     await user.click(screen.getByRole("button", { name: "Create" }));
 
@@ -255,17 +265,18 @@ describe("App actions", () => {
     expect(screen.queryByRole("dialog", { name: "Command palette" })).not.toBeInTheDocument();
   });
 
-  it("searches from the sidebar and opens the matching conversation", async () => {
+  it("searches from the palette and opens the matching conversation", async () => {
     const user = userEvent.setup();
     daemon.onRequest("search", () => ({
       type: "search_results",
       req_id: "1",
       search_results: [fx.message({ body: "standup notes" })],
     }));
-    await renderApp();
+    await renderHome();
 
-    await user.click(screen.getByRole("button", { name: "Search" }));
-    await user.type(screen.getByPlaceholderText("Search bots and messages…"), "notes");
+    await user.keyboard("{Meta>}k{/Meta}");
+    await user.keyboard("notes");
+    await user.click(screen.getByText("Search: notes"));
     await waitFor(() => {
       expect(screen.getByText("standup notes")).toBeInTheDocument();
     });
@@ -283,10 +294,11 @@ describe("App actions", () => {
       req_id: "1",
       search_results: [fx.message({ conversation_id: "ghost", body: "orphan" })],
     }));
-    await renderApp();
+    await renderHome();
 
-    await user.click(screen.getByRole("button", { name: "Search" }));
-    await user.type(screen.getByPlaceholderText("Search bots and messages…"), "orphan");
+    await user.keyboard("{Meta>}k{/Meta}");
+    await user.keyboard("orphan");
+    await user.click(screen.getByText("Search: orphan"));
     await user.click(await screen.findByText("orphan"));
 
     await waitFor(() => {
@@ -294,11 +306,11 @@ describe("App actions", () => {
     });
   });
 
-  it("changes the daemon endpoint from connection settings", async () => {
+  it("changes the daemon endpoint from the rail's connection dot", async () => {
     const user = userEvent.setup();
-    await renderApp();
+    await renderHome();
 
-    await user.click(screen.getByTitle("Connection settings"));
+    await user.click(screen.getByRole("button", { name: /^Hermes service:/ }));
     const host = screen.getByLabelText("Computer host");
     await user.clear(host);
     await user.type(host, "mini");
@@ -311,7 +323,7 @@ describe("App actions", () => {
 
   it("opens a bot from the command palette and offers no lifecycle entries", async () => {
     const user = userEvent.setup();
-    await renderApp();
+    await renderHome();
 
     await user.keyboard("{Meta>}k{/Meta}");
     expect(screen.queryByText("Stop alice")).not.toBeInTheDocument();

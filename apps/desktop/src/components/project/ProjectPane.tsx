@@ -34,6 +34,7 @@ export interface ProjectActions {
   readonly onSetProjectRepo: (projectId: string, repo: ProjectRepo | null) => Promise<void>;
   readonly onDeleteProject: (projectId: string) => Promise<void>;
   readonly onCreateBot: (projectId: string) => Promise<void>;
+  readonly onDeleteBot: (botId: string) => Promise<void>;
 }
 
 interface ProjectPaneProps extends ProjectActions {
@@ -41,6 +42,15 @@ interface ProjectPaneProps extends ProjectActions {
   readonly tab: ProjectTab;
   /** Answers a bot, quoting a report of its own. */
   readonly onReply: (botId: string, quote: string) => void;
+}
+
+/** Failed deliveries per bot, for the Team cards' badge. */
+function failedByBot(deliveries: readonly { readonly bot_id: string }[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const delivery of deliveries) {
+    counts[delivery.bot_id] = (counts[delivery.bot_id] ?? 0) + 1;
+  }
+  return counts;
 }
 
 function NeedsNewer({ what }: { readonly what: string }): ReactElement {
@@ -102,11 +112,14 @@ function Team({ ctx }: { readonly ctx: TabContext }): ReactElement {
       row={ctx.row}
       threads={ctx.threads}
       unread={daemon.unreadBots}
+      failed={failedByBot(daemon.failedDeliveries)}
+      activity={daemon.activityByBot}
       leadBotId={project.lead_bot_id}
       now={ctx.now}
       canControl={daemon.canControl}
       onOpenBot={(botId) => daemon.select({ kind: "bot", botId })}
       onCreateBot={() => void ctx.onCreateBot(project.id)}
+      onDeleteBot={(botId) => void ctx.onDeleteBot(botId)}
     />
   );
 }

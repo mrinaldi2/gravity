@@ -21,7 +21,15 @@ function Home({ legacy = false }: { readonly legacy?: boolean }): ReactElement {
   }
   return (
     <div className="app" style={{ height: 700 }}>
-      <Rail selection={{ kind: "home" }} needsYou={5} onSelect={noop} onOpenSettings={noop} />
+      <Rail
+        selection={{ kind: "home" }}
+        needsYou={5}
+        status="connected"
+        endpoint={{ host: "127.0.0.1", port: 49777 }}
+        canControl
+        onSelect={noop}
+        onOpenSettings={noop}
+      />
       <main className="main">
         <ProjectsHome
           client={client}

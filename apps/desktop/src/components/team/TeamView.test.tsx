@@ -20,11 +20,14 @@ function renderTeam(onOpenBot = vi.fn<(botId: string) => void>(), canControl = t
       row={row}
       threads={decodeOwnerThreads(ownerThreadsJson()).threads}
       unread={{ b2: 1 }}
+      failed={{}}
+      activity={{}}
       leadBotId="b1"
       now={HOME_NOW}
       canControl={canControl}
       onOpenBot={onOpenBot}
       onCreateBot={vi.fn<() => void>()}
+      onDeleteBot={vi.fn<(botId: string) => void>()}
     />,
   );
 }
@@ -38,7 +41,7 @@ describe("TeamView", () => {
     expect(lead.getByText(/^Lead/)).toBeInTheDocument();
     const dev = within(screen.getByRole("article", { name: "Desktop Dev" }));
     expect(dev.getByText("▲ Waiting for you")).toBeInTheDocument();
-    expect(dev.getByLabelText("1 unread")).toBeInTheDocument();
+    expect(dev.getByText("1 new")).toBeInTheDocument();
     expect(dev.getByText(/Asked you/)).toBeInTheDocument();
     const idle = within(screen.getByRole("article", { name: "Architect" }));
     expect(idle.getByText("○ Idle")).toBeInTheDocument();

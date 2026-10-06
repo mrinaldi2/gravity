@@ -20,11 +20,14 @@ export const Team: Story = () => (
       row={row}
       threads={decodeOwnerThreads(ownerThreadsJson()).threads}
       unread={{ b2: 1 }}
+      failed={{}}
+      activity={{}}
       leadBotId="b1"
       now={HOME_NOW}
       canControl
       onOpenBot={noop}
       onCreateBot={noop}
+      onDeleteBot={noop}
     />
   </div>
 );

@@ -22,7 +22,7 @@ interface ProjectViewProps {
 }
 
 /** How deleting this project is described before it happens. */
-export function deletionBody(project: Project, botCount: number): string {
+function deletionBody(project: Project, botCount: number): string {
   const bots =
     botCount === 0
       ? "It holds no bots"

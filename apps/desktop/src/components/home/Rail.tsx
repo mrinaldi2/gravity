@@ -1,13 +1,42 @@
 import { useEffect } from "react";
 import type { ReactElement } from "react";
 import type { Selection } from "../../app/selection";
+import { connectionStatusLabel } from "../../protocol/connection";
+import type { ConnectionStatus, Endpoint } from "../../protocol/connection";
+import type { SettingsCategory } from "../settings/categories";
 
 interface RailProps {
   readonly selection: Selection;
   /** Everything waiting for the owner, for the Needs you badge. */
   readonly needsYou: number;
+  readonly status: ConnectionStatus;
+  readonly endpoint: Endpoint;
+  /** False on a read-only connection, which the status says. */
+  readonly canControl: boolean;
   readonly onSelect: (next: Selection) => void;
-  readonly onOpenSettings: () => void;
+  readonly onOpenSettings: (category?: SettingsCategory) => void;
+}
+
+/** The Hermes service's state as a dot, opening the connection settings. */
+function Connection(
+  props: Pick<RailProps, "status" | "endpoint" | "canControl" | "onOpenSettings">,
+): ReactElement {
+  const { status, endpoint } = props;
+  const readOnly = status === "connected" && !props.canControl ? " · read-only" : "";
+  const label = `Hermes service: ${connectionStatusLabel(status)}${readOnly} (${endpoint.host}:${endpoint.port})`;
+  return (
+    <button
+      type="button"
+      className="rail-item rail-conn"
+      title={label}
+      aria-label={label}
+      onClick={() => {
+        props.onOpenSettings("connection");
+      }}
+    >
+      <span className={`conn-dot conn-${status}`} aria-hidden="true" />
+    </button>
+  );
 }
 
 interface RailItemProps {
@@ -65,12 +94,8 @@ function useRailKeys(onSelect: (next: Selection) => void): void {
 }
 
 /** The app's left rail: Projects · Needs you, with Settings at the bottom. */
-export default function Rail({
-  selection,
-  needsYou,
-  onSelect,
-  onOpenSettings,
-}: RailProps): ReactElement {
+export default function Rail(props: RailProps): ReactElement {
+  const { selection, needsYou, onSelect, onOpenSettings } = props;
   useRailKeys(onSelect);
   return (
     <nav className="rail" aria-label="Main">
@@ -94,7 +119,21 @@ export default function Rail({
         }}
       />
       <span className="rail-spacer" />
-      <RailItem glyph="⚙" label="Settings" shortcut="⌘," active={false} onClick={onOpenSettings} />
+      <Connection
+        status={props.status}
+        endpoint={props.endpoint}
+        canControl={props.canControl}
+        onOpenSettings={onOpenSettings}
+      />
+      <RailItem
+        glyph="⚙"
+        label="Settings"
+        shortcut="⌘,"
+        active={false}
+        onClick={() => {
+          onOpenSettings();
+        }}
+      />
     </nav>
   );
 }

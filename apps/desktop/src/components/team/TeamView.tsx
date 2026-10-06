@@ -1,20 +1,23 @@
-// A project's Team tab (UX-024, H-133 U2): its bots as cards, not a sidebar
-// list. Each says its state in a glyph and a word, what it is doing, and the
-// last thing it sent the owner; opening one shows its page, on Reports.
+// A project's Team tab (UX-024, H-133 U2): its bots as cards, in place of the
+// old sidebar list. Each says its state in a glyph and a word, what it is
+// doing, the last thing it sent the owner, and what is new; opening one shows
+// its page, on Reports. ⋯ holds what the sidebar row's menu did.
 
 import type { ReactElement } from "react";
-import type { Bot, BotState } from "../../protocol/entities";
+import type { Bot, BotActivity, BotState } from "../../protocol/entities";
 import type { OwnerThread, ProjectRow } from "../../protocol/gen/hermes/home/v1/home_pb";
 import BotAvatar from "../BotAvatar";
 import { BOT_STATE_LABEL } from "../bot/botStates";
 import { clock } from "../home/homeText";
+import { useRowMenu } from "../sidebar/useRowMenu";
 
-type Tone = "ok" | "you" | "bad" | "off" | "wait";
+type Tone = "acc" | "ok" | "you" | "bad" | "off" | "wait";
 
+/** The app's state colours: Working in the accent, Idle in green (UX-027). */
 const STATE_GLYPH: Readonly<Record<BotState, readonly [string, Tone]>> = {
   starting: ["◌", "wait"],
-  ready: ["○", "off"],
-  working: ["◑", "ok"],
+  ready: ["○", "ok"],
+  working: ["◑", "acc"],
   waiting_for_user: ["▲", "you"],
   waiting_for_approval: ["▲", "you"],
   rate_limited: ["⏸", "wait"],
@@ -34,17 +37,64 @@ function StatePill({ state }: { readonly state: BotState }): ReactElement {
   );
 }
 
+/** What changed for a bot since the owner last looked. */
+interface Signals {
+  readonly unread: number;
+  readonly failed: number;
+  /** Its last word anywhere, shown when it sent the owner nothing. */
+  readonly activity: BotActivity | undefined;
+}
+
 interface TeamViewProps {
   readonly bots: readonly Bot[];
   readonly row: ProjectRow | null;
   /** The owner's threads, for each bot's last word to the owner. */
   readonly threads: readonly OwnerThread[];
   readonly unread: Readonly<Record<string, number>>;
+  readonly failed: Readonly<Record<string, number>>;
+  readonly activity: Readonly<Record<string, BotActivity>>;
   readonly leadBotId: string | null | undefined;
   readonly now: number;
   readonly canControl: boolean;
   readonly onOpenBot: (botId: string) => void;
   readonly onCreateBot: () => void;
+  readonly onDeleteBot: (botId: string) => void;
+}
+
+/** ⋯ on a card; deleting is confirmed first. */
+function CardMenu(props: {
+  readonly bot: Bot;
+  readonly canControl: boolean;
+  readonly onDelete: () => void;
+}): ReactElement | null {
+  const menu = useRowMenu({
+    items: [],
+    deletion: props.canControl
+      ? {
+          label: "Delete bot",
+          title: `Delete ${props.bot.name}?`,
+          body: "Its session is stopped and the bot is archived along with its conversations.",
+          confirmLabel: "Delete bot",
+          onConfirm: props.onDelete,
+        }
+      : null,
+  });
+  if (!props.canControl) {
+    return null;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className="team-menu"
+        aria-label={`More for ${props.bot.name}`}
+        onClick={menu.onOpenFrom}
+      >
+        ⋯
+      </button>
+      {menu.overlays}
+    </>
+  );
 }
 
 /** What the bot is doing: its board item, else its description. */
@@ -55,39 +105,80 @@ function doingLine(bot: Bot, row: ProjectRow | null, lead: boolean): string {
   return [role, doing.length > 0 ? doing : bot.description].filter((s) => s.length > 0).join(" · ");
 }
 
+/** "1 new", "⚠ 2 failed deliveries": badges in words. */
+function Badges({ signals }: { readonly signals: Signals }): ReactElement {
+  const { unread, failed } = signals;
+  return (
+    <>
+      {unread > 0 ? (
+        <span
+          className="team-badge team-new"
+          aria-label={`${unread} new ${unread === 1 ? "message" : "messages"}`}
+        >
+          {unread} new
+        </span>
+      ) : null}
+      {failed > 0 ? (
+        <span
+          className="team-badge team-failed"
+          title={`${failed} failed ${failed === 1 ? "delivery" : "deliveries"}`}
+        >
+          ⚠ {failed}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/** The last thing the bot sent the owner, else the last thing it said at all. */
+function LastWord(props: {
+  readonly thread: OwnerThread | undefined;
+  readonly activity: BotActivity | undefined;
+  readonly now: number;
+}): ReactElement | null {
+  const last = props.thread?.last;
+  if (last !== undefined && !last.fromOwner) {
+    const asked = last.asks && props.thread?.openQuestion === true;
+    return (
+      <blockquote className="home-quote">
+        <b>
+          {asked ? "Asked you" : "Sent you"}
+          {last.at === undefined ? "" : ` · ${clock(last.at, props.now)}`}:{" "}
+        </b>
+        “{last.text}”
+      </blockquote>
+    );
+  }
+  const said = props.activity;
+  return said === undefined ? null : (
+    <p className="team-line team-activity" title={said.at}>
+      {said.text}
+    </p>
+  );
+}
+
 function BotCard(props: {
   readonly bot: Bot;
   readonly line: string;
   readonly thread: OwnerThread | undefined;
-  readonly unread: number;
+  readonly signals: Signals;
   readonly now: number;
+  readonly canControl: boolean;
   readonly onOpen: () => void;
+  readonly onDelete: () => void;
 }): ReactElement {
-  const { bot, thread, now } = props;
-  const last = thread?.last;
-  const said = last !== undefined && !last.fromOwner ? last : undefined;
+  const { bot } = props;
   return (
     <article className="team-card" aria-label={bot.name} data-testid="team-card">
       <header className="team-card-head">
         <BotAvatar avatar={bot.avatar} name={bot.name} id={bot.id} size="sm" />
         <h3>{bot.name}</h3>
-        {props.unread > 0 ? (
-          <span className="rail-badge team-unread" aria-label={`${props.unread} unread`}>
-            {props.unread}
-          </span>
-        ) : null}
+        <Badges signals={props.signals} />
         <StatePill state={bot.state} />
+        <CardMenu bot={bot} canControl={props.canControl} onDelete={props.onDelete} />
       </header>
       <p className="team-line">{props.line.length > 0 ? props.line : "No current item"}</p>
-      {said === undefined ? null : (
-        <blockquote className="home-quote">
-          <b>
-            {said.asks && thread?.openQuestion ? "Asked you" : "Sent you"}
-            {said.at === undefined ? "" : ` · ${clock(said.at, now)}`}:{" "}
-          </b>
-          “{said.text}”
-        </blockquote>
-      )}
+      <LastWord thread={props.thread} activity={props.signals.activity} now={props.now} />
       <button type="button" className="btn btn-small home-open" onClick={props.onOpen}>
         Open {bot.name}
       </button>
@@ -119,10 +210,18 @@ export default function TeamView(props: TeamViewProps): ReactElement {
                 bot={bot}
                 line={doingLine(bot, props.row, bot.id === props.leadBotId)}
                 thread={props.threads.find((t) => t.bot?.botId === bot.id)}
-                unread={props.unread[bot.id] ?? 0}
+                signals={{
+                  unread: props.unread[bot.id] ?? 0,
+                  failed: props.failed[bot.id] ?? 0,
+                  activity: props.activity[bot.id],
+                }}
                 now={props.now}
+                canControl={props.canControl}
                 onOpen={() => {
                   props.onOpenBot(bot.id);
+                }}
+                onDelete={() => {
+                  props.onDeleteBot(bot.id);
                 }}
               />
             ))}

@@ -1,7 +1,8 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { backToTeam, botCard, openBotFromTeam, openTeam, waitForHome } from "./test/appNav";
 import { FakeDaemon } from "./test/fakeDaemon";
 import * as fx from "./test/fixtures";
 import { stubLocalStorage } from "./test/spies";
@@ -44,10 +45,8 @@ function seedDaemon(): FakeDaemon {
 }
 
 /**
- * Adds a second bot, bob, with its own DM thread.
- *
- * Startup opens the first row, so anything about an *unselected* bot needs a
- * bot that is not alice.
+ * Adds a second bot, bob, with its own DM thread, for anything about a bot
+ * the owner isn't looking at.
  */
 function seedSecondBot(): void {
   daemon
@@ -63,27 +62,23 @@ function seedSecondBot(): void {
     }));
 }
 
-/** The sidebar row for a bot, distinct from the same name in the open view. */
-function botRow(name: string): HTMLElement {
-  return screen.getByText(name, { selector: ".bot-row-name" });
-}
-
 /** Renders the app and waits for the initial snapshot to land, on the projects home. */
 async function renderHome(): Promise<void> {
   render(<App />);
   daemon.setStatus("connected");
-  await waitFor(() => {
-    expect(screen.getByText("Acme", { selector: ".project-name" })).toBeInTheDocument();
-  });
-  await act(async () => {});
+  await waitForHome();
+}
+
+/** Renders the app and opens Acme's Team tab. */
+async function renderTeam(): Promise<void> {
+  await renderHome();
+  await openTeam();
 }
 
 /** Renders the app, then opens alice, the first bot, as the owner would. */
 async function renderApp(): Promise<void> {
-  await renderHome();
-  await act(async () => {
-    botRow("alice").click();
-  });
+  await renderTeam();
+  await openBotFromTeam("alice");
 }
 
 /** Seeds the badges a previous session left behind. */
@@ -111,16 +106,17 @@ describe("App state", () => {
 
   it("loads the daemon snapshot on connect", async () => {
     seedSecondBot();
-    await renderApp();
+    await renderTeam();
     expect(daemon.started).toBe(true);
-    expect(botRow("alice")).toBeInTheDocument();
+    expect(botCard("alice")).toBeInTheDocument();
+    expect(botCard("bob")).toBeInTheDocument();
   });
 
   it("restores the badges the previous session left unread", async () => {
     seedSecondBot();
     storeUnread({ b2: { count: 2, seenAt: Date.parse(AT) } });
-    await renderApp();
-    expect(screen.getByText("2")).toBeInTheDocument();
+    await renderTeam();
+    expect(within(botCard("bob")).getByText("2 new")).toBeInTheDocument();
   });
 
   it("keeps a bot read across a reload when nothing new was said", async () => {
@@ -139,10 +135,10 @@ describe("App state", () => {
         activity: [fx.botActivity({ bot_id: "b2", text: "said before", at: AT })],
       }));
     storeUnread({ b2: { count: 0, seenAt: Date.parse(AT) } });
-    await renderApp();
-    expect(screen.getByText("said before")).toBeInTheDocument();
-    expect(screen.queryByText("7")).not.toBeInTheDocument();
-    expect(screen.queryByText("1")).not.toBeInTheDocument();
+    await renderTeam();
+    const bob = within(botCard("bob"));
+    expect(bob.getByText("said before")).toBeInTheDocument();
+    expect(bob.queryByText(/new$/)).not.toBeInTheDocument();
   });
 
   it("badges a bot that spoke while the client was closed", async () => {
@@ -153,8 +149,8 @@ describe("App state", () => {
       activity: [fx.botActivity({ bot_id: "b2", at: "2024-05-01T10:00:00.000Z" })],
     }));
     storeUnread({ b2: { count: 0, seenAt: Date.parse(AT) } });
-    await renderApp();
-    expect(screen.getByText("1")).toBeInTheDocument();
+    await renderTeam();
+    expect(within(botCard("bob")).getByText("1 new")).toBeInTheDocument();
   });
 
   it("opens on the projects home, never on a bot", async () => {
@@ -162,16 +158,20 @@ describe("App state", () => {
     await renderHome();
     // UX-024: the app opens on Projects; a bot is one level further in.
     expect(screen.getByRole("heading", { name: "Projects" })).toBeInTheDocument();
-    expect(screen.getByRole("article", { name: "Acme" })).toBeInTheDocument();
     expect(screen.queryByText("alice", { selector: ".view-title" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Projects/, current: "page" })).toBeInTheDocument();
   });
 
-  it("updates the sidebar preview when a finished turn is pushed", async () => {
+  it("updates a bot's last word when a finished turn is pushed", async () => {
     // A terminal turn never touches the bus, so this push is the only signal
-    // the sidebar gets. The daemon holds it until the transcript is readable.
-    await renderApp();
-    expect(screen.getByText("does things", { selector: ".bot-row-preview" })).toBeInTheDocument();
+    // the Team tab gets. The daemon holds it until the transcript is readable.
+    daemon.onRequest("list_bot_activity", () => ({
+      type: "bot_activity",
+      req_id: "1",
+      activity: [fx.botActivity({ text: "said earlier" })],
+    }));
+    await renderTeam();
+    expect(within(botCard("alice")).getByText("said earlier")).toBeInTheDocument();
 
     daemon.emit("activity_update", {
       type: "activity_update",
@@ -179,7 +179,7 @@ describe("App state", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText("PROBE-OK")).toBeInTheDocument();
+      expect(within(botCard("alice")).getByText("PROBE-OK")).toBeInTheDocument();
     });
   });
 
@@ -187,8 +187,15 @@ describe("App state", () => {
     daemon.onRequest("list_bots", () => ({ type: "bots", req_id: "1", bots: [] }));
     await renderHome();
     expect(screen.getByText("Update needed for full info")).toBeInTheDocument();
-    // The endpoint lives in the sidebar footer alone; the pane stays quiet.
+    // The endpoint lives behind the rail's connection dot; the pane stays quiet.
     expect(screen.queryByText(/Connected to/)).not.toBeInTheDocument();
+  });
+
+  it("says where the Hermes service is from the rail", async () => {
+    await renderHome();
+    expect(
+      screen.getByRole("button", { name: /^Hermes service: Connected \(/ }),
+    ).toBeInTheDocument();
   });
 
   it("reports a snapshot failure as a toast", async () => {
@@ -204,24 +211,24 @@ describe("App state", () => {
   });
 
   it("opens a bot and clears its unread badge for good", async () => {
-    const user = userEvent.setup();
     seedSecondBot();
     storeUnread({ b2: { count: 2, seenAt: 0 } });
-    await renderApp();
+    await renderTeam();
 
-    await user.click(botRow("bob"));
+    await openBotFromTeam("bob");
     expect(screen.getByTestId("terminal")).toBeInTheDocument();
     // A control connection owns the terminal outright: no read-only badge.
     expect(screen.queryByText("Read-only")).not.toBeInTheDocument();
-    expect(screen.queryByText("2")).not.toBeInTheDocument();
     // Persisted, so the next launch does not resurrect what was just read.
     expect(readUnread()["b2"]?.count).toBe(0);
+    await backToTeam();
+    expect(within(botCard("bob")).queryByText("2 new")).not.toBeInTheDocument();
   });
 
   it("raises an unread badge for a message in an unselected bot's DM", async () => {
     seedSecondBot();
     storeUnread({ b2: { count: 2, seenAt: 0 } });
-    await renderApp();
+    await renderTeam();
     daemon.emit("message_new", {
       type: "message_new",
       message: fx.message({
@@ -230,7 +237,7 @@ describe("App state", () => {
       }),
     });
     await waitFor(() => {
-      expect(screen.getByText("3")).toBeInTheDocument();
+      expect(within(botCard("bob")).getByText("3 new")).toBeInTheDocument();
     });
   });
 
@@ -238,21 +245,18 @@ describe("App state", () => {
     // A bot answering in its terminal never reaches the bus, so the preview
     // push is the only signal that it said anything at all.
     seedSecondBot();
-    await renderApp();
+    await renderTeam();
     daemon.emit("activity_update", {
       type: "activity_update",
       activity: fx.botActivity({ bot_id: "b2", text: "on it", at: "2024-05-01T10:00:00.000Z" }),
     });
     await waitFor(() => {
-      expect(screen.getByText("1")).toBeInTheDocument();
+      expect(within(botCard("bob")).getByText("1 new")).toBeInTheDocument();
     });
   });
 
   it("raises no badge for the bot the user is looking at", async () => {
     await renderApp();
-    // Startup opens alice's row one snapshot after the project lands, and this
-    // is about activity for the bot already on screen: emitting before that
-    // selection commits would count it against a bot nobody was looking at.
     await waitFor(() => {
       expect(screen.getByTestId("terminal")).toBeInTheDocument();
     });
@@ -260,27 +264,26 @@ describe("App state", () => {
       type: "activity_update",
       activity: fx.botActivity({ text: "on it", at: "2024-05-01T10:00:00.000Z" }),
     });
+    await backToTeam();
     await waitFor(() => {
-      expect(screen.getByText("on it")).toBeInTheDocument();
+      expect(within(botCard("alice")).getByText("on it")).toBeInTheDocument();
     });
-    expect(screen.queryByText("1")).not.toBeInTheDocument();
+    expect(within(botCard("alice")).queryByText("1 new")).not.toBeInTheDocument();
   });
 
   it("ignores a message for an unknown conversation", async () => {
     seedSecondBot();
     storeUnread({ b2: { count: 2, seenAt: 0 } });
-    await renderApp();
+    await renderTeam();
     daemon.emit("message_new", {
       type: "message_new",
       message: fx.message({ conversation_id: "nope" }),
     });
-    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(within(botCard("bob")).getByText("2 new")).toBeInTheDocument();
   });
 
   it("applies bot state pushes", async () => {
-    const user = userEvent.setup();
     await renderApp();
-    await user.click(botRow("alice"));
 
     daemon.emit("bot_state", {
       type: "bot_state",
@@ -296,23 +299,23 @@ describe("App state", () => {
     });
   });
 
-  it("adds a bot created by another bot to the sidebar", async () => {
-    await renderApp();
-    expect(screen.queryByText("steve")).not.toBeInTheDocument();
+  it("adds a bot created by another bot to its project's Team", async () => {
+    await renderTeam();
+    expect(screen.queryByRole("article", { name: "steve" })).not.toBeInTheDocument();
 
     // Creation, rename and deletion all arrive as `bot_updated`; only the
-    // snapshot ever lists bots, so an unhandled push leaves the sidebar stale
+    // snapshot ever lists bots, so an unhandled push leaves the Team stale
     // until the next reconnect.
     daemon.emit("bot_updated", {
       type: "bot_updated",
       bot: fx.bot({ id: "b2", name: "steve" }),
     });
     await waitFor(() => {
-      expect(screen.getByText("steve")).toBeInTheDocument();
+      expect(botCard("steve")).toBeInTheDocument();
     });
   });
 
-  it("updates the sidebar and inspector on bot_updated, then removes archived bots", async () => {
+  it("updates the Team and inspector on bot_updated, then removes archived bots", async () => {
     await renderApp();
 
     daemon.emit("bot_updated", {
@@ -320,11 +323,12 @@ describe("App state", () => {
       bot: fx.bot({ name: "alice-renamed", avatar: "icon:rune" }),
     });
     await waitFor(() => {
-      expect(botRow("alice-renamed")).toBeInTheDocument();
       expect(screen.getByDisplayValue("alice-renamed")).toBeInTheDocument();
       expect(screen.getByRole("radio", { name: "rune" })).toBeChecked();
     });
-    expect(screen.queryByText("alice", { selector: ".bot-row-name" })).not.toBeInTheDocument();
+    await backToTeam();
+    expect(botCard("alice-renamed")).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "alice" })).not.toBeInTheDocument();
 
     // An archived bot arrives as the same push, carrying `deleted_at`.
     daemon.emit("bot_updated", {
@@ -332,9 +336,7 @@ describe("App state", () => {
       bot: fx.bot({ name: "alice-renamed", deleted_at: "2024-05-01T09:00:00.000Z" }),
     });
     await waitFor(() => {
-      expect(
-        screen.queryByText("alice-renamed", { selector: ".bot-row-name" }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("article", { name: "alice-renamed" })).not.toBeInTheDocument();
     });
   });
 
@@ -353,7 +355,7 @@ describe("App state", () => {
 
   it("offers a View action on approval pushes that opens the bot", async () => {
     const user = userEvent.setup();
-    await renderApp();
+    await renderTeam();
     const push = {
       type: "approval_pending",
       bot_id: "b1",
@@ -369,13 +371,13 @@ describe("App state", () => {
   });
 
   it("tracks failed deliveries pushed by the daemon", async () => {
-    await renderApp();
+    await renderTeam();
     daemon.emit("delivery_update", {
       type: "delivery_update",
       delivery: fx.delivery({ state: "failed" }),
     });
     await waitFor(() => {
-      expect(screen.getByTitle("1 failed deliveries")).toBeInTheDocument();
+      expect(screen.getByTitle("1 failed delivery")).toBeInTheDocument();
     });
 
     daemon.emit("delivery_update", {
@@ -383,7 +385,7 @@ describe("App state", () => {
       delivery: fx.delivery({ state: "acknowledged" }),
     });
     await waitFor(() => {
-      expect(screen.queryByTitle("1 failed deliveries")).not.toBeInTheDocument();
+      expect(screen.queryByTitle("1 failed delivery")).not.toBeInTheDocument();
     });
   });
 });
