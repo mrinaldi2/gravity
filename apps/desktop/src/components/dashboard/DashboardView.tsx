@@ -147,6 +147,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
           <NeedsYou
             projectName={project.name}
             rows={dashboard.needs_you}
+            count={dashboard.needs_you_count}
             overrides={dashboard.wip_overrides ?? []}
             note={dashboard.needs_you_note}
             canApprove={connected && client.hasGrant("approve")}

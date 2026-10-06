@@ -129,7 +129,9 @@ pub(super) fn serve_needs_you(
         v["can_rule"] = json!(false);
         Ok(v)
     })?;
-    let mut answer = json!({ "rows": needs.rows, "wip_overrides": needs.wip_overrides });
+    let mut answer = json!({
+        "rows": needs.rows, "wip_overrides": needs.wip_overrides, "count": needs.count,
+    });
     board_ids::json(&mut answer, &|id| board_ids::to_peer(&app.db, &peer.id, id));
     Ok(answer)
 }

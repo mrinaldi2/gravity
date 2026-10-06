@@ -9,12 +9,12 @@ import { FakeDaemon } from "../../test/fakeDaemon";
 import { project } from "../../test/fixtures";
 import DashboardView from "./DashboardView";
 
-function setup(needsYou: readonly NeedsYouRow[]) {
+function setup(needsYou: readonly NeedsYouRow[], count?: number) {
   const fake = new FakeDaemon();
   fake.onRequest("dashboard_get", () => ({
     type: "dashboard",
     req_id: "1",
-    dashboard: dashboard({ needs_you: [...needsYou] }),
+    dashboard: dashboard({ needs_you: [...needsYou], needs_you_count: count }),
   }));
   fake.onBoard("boardGet", () => {
     throw new Error("no board here");
@@ -69,5 +69,17 @@ describe("Needs you, a bot waiting on an approval", () => {
     ]);
     await user.click(within(nth(rows, 2)).getByRole("button", { name: "Open Architect" }));
     expect(nav.onOpenBot).toHaveBeenCalledWith("arch");
+  });
+
+  it("heads Needs you with the daemon's count, as the projects home's (H-161)", async () => {
+    const cardless: NeedsYouRow = {
+      kind: "routines_without_card",
+      routines: [{ id: "r1", name: "nightly", bot_id: "dd" }],
+    };
+    // Four rows the home counts, and the routines row it lists without counting.
+    setup([...dashboard().needs_you, cardless], 4);
+    const needs = await screen.findByRole("region", { name: "Needs you · 4" });
+    const rows = within(nth(within(needs).getAllByRole("list"), 0)).getAllByRole("listitem");
+    expect(rows).toHaveLength(5);
   });
 });

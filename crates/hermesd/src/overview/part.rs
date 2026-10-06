@@ -35,10 +35,8 @@ pub fn part(app: &AppState, project_id: &str) -> anyhow::Result<Part> {
         .iter()
         .filter(|s| matches!(s, BotState::Working | BotState::Starting))
         .count();
-    let bots_waiting = states
-        .iter()
-        .filter(|s| **s == BotState::WaitingForUser)
-        .count();
+    // The bots its rows say wait on the owner, approvals included (H-161).
+    let bots_waiting = attention::waiting_bots(app, project_id)?.len();
     let (current_release, latest_summary) = if scope.home {
         (
             current_release(app, project_id)?,
