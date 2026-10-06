@@ -34,7 +34,7 @@ export function renderSidebar(over: Partial<Parameters<typeof Sidebar>[0]> = {})
     nextRun: {},
     activityByBot: {},
     pendingDecisions: dfx.pendingCounts({ by_project: {}, total: 0 }),
-    selection: { kind: "none" } as const,
+    selection: { kind: "home" } as const,
     canControl: true,
     ...spies,
     ...over,

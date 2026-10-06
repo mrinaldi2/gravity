@@ -30,6 +30,9 @@ export function emptyHandlers(): PushHandlerSets {
     permission_resolved: new Set(),
     browser_tabs: new Set(),
     browser_frame: new Set(),
+    projects_overview_changed: new Set(),
+    owner_thread_updated: new Set(),
+    project_pinned: new Set(),
   };
 }
 

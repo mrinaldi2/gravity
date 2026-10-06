@@ -22,7 +22,7 @@ function daemonState(client: FakeDaemon): DaemonState {
     unreadBots: {},
     nextRun: {},
     activityByBot: {},
-    selection: { kind: "none" },
+    selection: { kind: "home" },
     select: voidSpy(),
     changeEndpoint: vi.fn<(endpoint: { host: string; port: number }) => void>(),
     refreshAll: vi.fn<() => Promise<void>>(() => Promise.resolve()),

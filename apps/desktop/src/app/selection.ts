@@ -12,7 +12,8 @@ export type ProjectTab = (typeof PROJECT_TABS)[number];
 
 /** What the main pane is currently showing. */
 export type Selection =
-  | { readonly kind: "none" }
+  /** The projects home, ranked by what needs the owner: where the app opens (H-133). */
+  | { readonly kind: "home" }
   | { readonly kind: "bot"; readonly botId: string }
   /**
    * A project window. Without `tab` it reopens on the tab last used there,

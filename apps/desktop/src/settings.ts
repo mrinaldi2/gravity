@@ -138,26 +138,6 @@ export function savePinnedBotIds(ids: readonly string[]): void {
   }
 }
 
-const LAST_USED_BOT_KEY = "last-used-bot";
-
-/** Loads the bot that was open when the app was last used. */
-export function loadLastUsedBotId(): string | undefined {
-  try {
-    const botId = readStored(LAST_USED_BOT_KEY);
-    return botId === null || botId.length === 0 ? undefined : botId;
-  } catch {
-    return undefined;
-  }
-}
-
-export function saveLastUsedBotId(botId: string): void {
-  try {
-    writeStored(LAST_USED_BOT_KEY, botId);
-  } catch {
-    // localStorage unavailable; selection is session-only
-  }
-}
-
 const PROJECT_TAB_KEY = "project-tab.";
 
 /** The tab a project window was last showing, so it reopens there. */

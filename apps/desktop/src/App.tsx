@@ -15,6 +15,7 @@ import type { AddToast } from "./app/useToasts";
 import { useServiceRecovery } from "./app/useServiceRecovery";
 import { useUpdates } from "./app/useUpdates";
 import CommandPalette from "./components/CommandPalette";
+import Rail from "./components/home/Rail";
 import HomeMigrationConfirm from "./components/overlay/HomeMigrationConfirm";
 import MainPane from "./components/MainPane";
 import SearchOverlay from "./components/SearchOverlay";
@@ -177,6 +178,14 @@ export default function App(): ReactElement {
   return (
     <SetupGate setup={setup} toasts={toasts} onDismissToast={dismissToast}>
       <div className="app">
+        <Rail
+          selection={daemon.selection}
+          needsYou={pending.total}
+          onSelect={select}
+          onOpenSettings={() => {
+            overlays.openSettings();
+          }}
+        />
         <Sidebar
           status={daemon.status}
           endpoint={daemon.endpoint}

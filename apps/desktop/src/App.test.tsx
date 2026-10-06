@@ -10,7 +10,6 @@ let daemon: FakeDaemon;
 let storage: Map<string, string>;
 
 const UNREAD_KEY = "hermes.unread";
-const LAST_USED_BOT_KEY = "hermes.last-used-bot";
 const AT = "2024-05-01T09:00:00.000Z";
 
 vi.mock("./components/TerminalPane", () => ({
@@ -69,16 +68,22 @@ function botRow(name: string): HTMLElement {
   return screen.getByText(name, { selector: ".bot-row-name" });
 }
 
-/** Renders the app and waits for the initial snapshot to land. */
-async function renderApp(): Promise<void> {
+/** Renders the app and waits for the initial snapshot to land, on the projects home. */
+async function renderHome(): Promise<void> {
   render(<App />);
   daemon.setStatus("connected");
   await waitFor(() => {
-    expect(screen.getByText("Acme")).toBeInTheDocument();
+    expect(screen.getByText("Acme", { selector: ".project-name" })).toBeInTheDocument();
   });
-  // The snapshot paints one commit before the startup pick runs, so flush that
-  // effect too - otherwise assertions race an empty main pane.
   await act(async () => {});
+}
+
+/** Renders the app, then opens alice, the first bot, as the owner would. */
+async function renderApp(): Promise<void> {
+  await renderHome();
+  await act(async () => {
+    botRow("alice").click();
+  });
 }
 
 /** Seeds the badges a previous session left behind. */
@@ -152,28 +157,14 @@ describe("App state", () => {
     expect(screen.getByText("1")).toBeInTheDocument();
   });
 
-  it("opens the first sidebar bot on a first launch", async () => {
-    await renderApp();
-    // A fresh launch would otherwise land on a blank main pane.
-    expect(screen.getByText("alice", { selector: ".view-title" })).toBeInTheDocument();
-    expect(storage.get(LAST_USED_BOT_KEY)).toBe("b1");
-  });
-
-  it("opens the first sidebar bot when the last-used bot no longer exists", async () => {
-    storage.set(LAST_USED_BOT_KEY, "deleted-bot");
-    await renderApp();
-    expect(screen.getByText("alice", { selector: ".view-title" })).toBeInTheDocument();
-    expect(screen.queryByText("2")).not.toBeInTheDocument();
-    expect(storage.get(LAST_USED_BOT_KEY)).toBe("b1");
-  });
-
-  it("opens the last-used bot on startup", async () => {
+  it("opens on the projects home, never on a bot", async () => {
     seedSecondBot();
-    storage.set(LAST_USED_BOT_KEY, "b2");
-
-    await renderApp();
-
-    expect(screen.getByText("bob", { selector: ".view-title" })).toBeInTheDocument();
+    await renderHome();
+    // UX-024: the app opens on Projects; a bot is one level further in.
+    expect(screen.getByRole("heading", { name: "Projects" })).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Acme" })).toBeInTheDocument();
+    expect(screen.queryByText("alice", { selector: ".view-title" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Projects/, current: "page" })).toBeInTheDocument();
   });
 
   it("updates the sidebar preview when a finished turn is pushed", async () => {
@@ -192,10 +183,10 @@ describe("App state", () => {
     });
   });
 
-  it("shows the empty state when there is no bot to open", async () => {
+  it("shows projects without counts when the service predates the overview", async () => {
     daemon.onRequest("list_bots", () => ({ type: "bots", req_id: "1", bots: [] }));
-    await renderApp();
-    expect(screen.getByText(/Select a bot/)).toBeInTheDocument();
+    await renderHome();
+    expect(screen.getByText("Update needed for full info")).toBeInTheDocument();
     // The endpoint lives in the sidebar footer alone; the pane stays quiet.
     expect(screen.queryByText(/Connected to/)).not.toBeInTheDocument();
   });
@@ -225,7 +216,6 @@ describe("App state", () => {
     expect(screen.queryByText("2")).not.toBeInTheDocument();
     // Persisted, so the next launch does not resurrect what was just read.
     expect(readUnread()["b2"]?.count).toBe(0);
-    expect(storage.get(LAST_USED_BOT_KEY)).toBe("b2");
   });
 
   it("raises an unread badge for a message in an unselected bot's DM", async () => {

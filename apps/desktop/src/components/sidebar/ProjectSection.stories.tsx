@@ -34,7 +34,7 @@ function Section({ selection }: { readonly selection: Selection }): ReturnType<S
   );
 }
 
-export const Expanded: Story = () => <Section selection={{ kind: "none" }} />;
+export const Expanded: Story = () => <Section selection={{ kind: "home" }} />;
 
 export const ProjectOpen: Story = () => (
   <Section selection={{ kind: "project", projectId: "p1", tab: "dashboard" }} />

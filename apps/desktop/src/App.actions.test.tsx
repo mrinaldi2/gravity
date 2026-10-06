@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -38,16 +38,16 @@ function seedDaemon(): FakeDaemon {
     .onRequest("list_messages", () => ({ type: "messages", req_id: "1", messages: [] }));
 }
 
-/** Renders the app and waits for the initial snapshot to land. */
+/** Renders the app, waits for the snapshot, then opens alice as the owner would. */
 async function renderApp(): Promise<void> {
   render(<App />);
   daemon.setStatus("connected");
   await waitFor(() => {
-    expect(screen.getByText("Acme")).toBeInTheDocument();
+    expect(screen.getByText("Acme", { selector: ".project-name" })).toBeInTheDocument();
   });
-  // The snapshot paints one commit before the startup pick runs, so flush that
-  // effect too - otherwise assertions race an empty main pane.
-  await act(async () => {});
+  await act(async () => {
+    screen.getByText("alice", { selector: ".bot-row-name" }).click();
+  });
 }
 
 describe("App actions", () => {
@@ -68,7 +68,9 @@ describe("App actions", () => {
     await user.click(screen.getByRole("button", { name: "Acme" }));
     expect(screen.getByRole("tab", { name: "Dashboard", selected: true })).toBeInTheDocument();
     expect(
-      await screen.findByText(/Loading the dashboard…|Couldn't load the dashboard|Needs you/),
+      await within(screen.getByRole("tabpanel")).findByText(
+        /Loading the dashboard…|Couldn't load the dashboard|Needs you/,
+      ),
     ).toBeInTheDocument();
 
     act(() => {

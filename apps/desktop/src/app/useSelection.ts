@@ -1,9 +1,7 @@
 import { useCallback, useState } from "react";
 import type { MutableRefObject } from "react";
-import type { Bot, Project } from "../protocol/entities";
-import { loadProjectTab, saveLastUsedBotId, saveProjectTab } from "../settings";
+import { loadProjectTab, saveProjectTab } from "../settings";
 import type { Selection } from "./selection";
-import { useInitialBot } from "./useInitialBot";
 import { useLatestRef } from "./useLatestRef";
 import type { UnreadApi } from "./useUnread";
 
@@ -27,17 +25,13 @@ function withProjectTab(selection: Selection): Selection {
 }
 
 /**
- * The current selection and the ways it changes: an explicit pick, a bot opened
- * by id, and the one-off startup pick made by `useInitialBot`. Selecting always
+ * The current selection and the ways it changes: an explicit pick or a bot
+ * opened by id. The app opens on the projects home (UX-024). Selecting always
  * clears the target's unread badge, so the two stay in step here rather than at
  * each call site.
  */
-export function useSelection(
-  projects: readonly Project[],
-  bots: readonly Bot[],
-  unread: UnreadApi,
-): SelectionApi {
-  const [selection, setSelection] = useState<Selection>({ kind: "none" });
+export function useSelection(unread: UnreadApi): SelectionApi {
+  const [selection, setSelection] = useState<Selection>({ kind: "home" });
   const selectionRef = useLatestRef(selection);
 
   const select = useCallback(
@@ -45,9 +39,6 @@ export function useSelection(
       const next = withProjectTab(requested);
       setSelection(next);
       unread.clearFor(next);
-      if (next.kind === "bot") {
-        saveLastUsedBotId(next.botId);
-      }
       if (next.kind === "project" && next.tab !== undefined) {
         saveProjectTab(next.projectId, next.tab);
       }
@@ -61,8 +52,6 @@ export function useSelection(
     },
     [select],
   );
-
-  useInitialBot(projects, bots, selection, select);
 
   return { selection, selectionRef, select, selectBot };
 }

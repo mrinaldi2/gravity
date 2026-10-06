@@ -108,15 +108,15 @@ export function useDaemonActions(deps: ActionDeps): DaemonActions {
 
   /**
    * Deleting a project archives every bot inside it, so anything the main pane
-   * was showing is gone by the time this returns; the selection is cleared
-   * rather than left pointing at an archived row.
+   * was showing is gone by the time this returns; the app goes back to the
+   * projects home rather than pointing at an archived row.
    */
   const deleteProject = useCallback(
     async (projectId: string): Promise<void> => {
       try {
         await client.request({ type: "delete_project", project_id: projectId }, "ok");
         capture("project_deleted", {});
-        select({ kind: "none" });
+        select({ kind: "home" });
         await refreshAll();
       } catch (error) {
         captureException(error, "project_delete");

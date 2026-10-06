@@ -15,7 +15,7 @@ const unread: UnreadApi = {
 };
 
 function render(): { current: ReturnType<typeof useSelection> } {
-  return renderHook(() => useSelection([], [], unread)).result;
+  return renderHook(() => useSelection(unread)).result;
 }
 
 function openProject(result: { current: ReturnType<typeof useSelection> }, next: Selection): void {

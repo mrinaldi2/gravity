@@ -14,6 +14,7 @@ import type { Permissions } from "./permissions/usePermissions";
 import BoardView from "./board/BoardView";
 import ConversationsView from "./conversations/ConversationsView";
 import DashboardView from "./dashboard/DashboardView";
+import ProjectsHome from "./home/ProjectsHome";
 import ComingSoon, { isUpcomingTab } from "./project/ComingSoon";
 import ProjectWindow from "./project/ProjectWindow";
 import ProjectView from "./ProjectView";
@@ -225,5 +226,21 @@ export default function MainPane(props: MainPaneProps): ReactElement {
     );
   }
 
+  if (connected && daemon.projects.length > 0) {
+    return (
+      <ProjectsHome
+        client={client}
+        projects={daemon.projects}
+        bots={bots}
+        connected={connected}
+        canControl={canControl}
+        addToast={addToast}
+        onOpenProject={(projectId) => {
+          daemon.select({ kind: "project", projectId });
+        }}
+        onCreateProject={props.onCreateProject}
+      />
+    );
+  }
   return <EmptyState daemon={daemon} onCreateProject={props.onCreateProject} />;
 }
