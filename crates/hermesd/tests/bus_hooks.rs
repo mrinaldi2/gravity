@@ -112,11 +112,20 @@ async fn session_start_registers_its_own_bots_socket() {
     assert!(stderr.contains("not a bot session"), "{stderr}");
     assert_eq!(d.app.supervisor.msg_socket_path(&alice), before);
 
-    let (code, stderr) = session_start(&d, "/tmp/alice.sock", Some(&alice)).await;
+    // The socket must be live and its session's (H-041): this test listens,
+    // and stands as alice's session root, so the hook (its child) is hers.
+    let dir = tempfile::tempdir().expect("dir");
+    let socket = dir.path().join("alice.sock");
+    let _listener = std::os::unix::net::UnixListener::bind(&socket).expect("bind");
+    d.app
+        .supervisor
+        .session_roots()
+        .record_pid(&OsProcessTable, std::process::id(), &alice);
+    let (code, stderr) = session_start(&d, &socket.display().to_string(), None).await;
     assert_eq!(code, Some(0), "{stderr}");
     assert_eq!(
         d.app.supervisor.msg_socket_path(&alice),
-        Some("/tmp/alice.sock".into()),
+        Some(socket),
         "{stderr}"
     );
 }

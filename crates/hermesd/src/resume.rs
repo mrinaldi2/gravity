@@ -27,6 +27,10 @@ const CLEARED: &str = " with a cleared conversation: you start without its histo
      FACTS.md and CLAUDE.md in your workspace hold what you keep, and your \
      files are as you left them.";
 
+/// A note the same as one sent this recently is not sent again: watchdog
+/// restarts can follow each other within minutes (H-041).
+const SAME_NOTE_WINDOW_MINUTES: i64 = 10;
+
 /// Characters of a task's request quoted in the note.
 const PREVIEW_CHARS: usize = 300;
 
@@ -53,6 +57,13 @@ pub fn pick_up(app: &Arc<AppState>, bot_id: &str, continues: bool) {
         Ok(Some(bot)) if !bot.is_linked() => bot,
         _ => return,
     };
+    if reading_its_note(app, &bot) {
+        tracing::info!(
+            bot_id,
+            "restarted while reading its resume note; not sent another"
+        );
+        return;
+    }
     match interrupted(app, &bot, !continues) {
         Ok(Some(work)) => nudge(app, vec![work]),
         Ok(None) => {}
@@ -60,10 +71,28 @@ pub fn pick_up(app: &Arc<AppState>, bot_id: &str, continues: bool) {
     }
 }
 
+fn is_note(trigger: &Trigger) -> bool {
+    matches!(trigger, Trigger::Bus { text, .. } if text.trim_start().starts_with(HEADER))
+}
+
+/// The session stopped while it was reading a resume note sent a few minutes
+/// ago, as in a run of watchdog restarts: that note still says it all, so
+/// another would only stack (H-041).
+fn reading_its_note(app: &AppState, bot: &Bot) -> bool {
+    let window = chrono::Duration::minutes(SAME_NOTE_WINDOW_MINUTES);
+    let recent = matches!(
+        app.db.last_message_to(&bot.id, HEADER),
+        Ok(Some((_, at))) if chrono::Utc::now() - at < window
+    );
+    recent && matches!(app.chat.interrupted(app, bot), Ok(Some(turn)) if is_note(&turn))
+}
+
 /// What a bot left unfinished, if anything, read from its transcript and
 /// its open tasks.
 pub fn interrupted(app: &AppState, bot: &Bot, fresh: bool) -> anyhow::Result<Option<Interrupted>> {
-    let turn = app.chat.interrupted(app, bot)?;
+    // A turn a resume note started is that note being read, not work: told
+    // again, it would quote itself and stack with each restart (H-041).
+    let turn = app.chat.interrupted(app, bot)?.filter(|t| !is_note(t));
     let mut tasks = Vec::new();
     for task in app.db.open_tasks_for(&bot.id)? {
         let asked_by = match &task.from_bot_id {
@@ -146,6 +175,10 @@ pub fn nudge(app: &Arc<AppState>, work: Vec<Interrupted>) {
             continue;
         }
         let body = note(&item);
+        if told_the_same(app, &item.bot_id, &body) {
+            tracing::info!(bot_id = %item.bot_id, "resume note unchanged since the last restart; not sent again");
+            continue;
+        }
         match messaging::send_dm(
             &app.db,
             &app.events,
@@ -156,6 +189,16 @@ pub fn nudge(app: &Arc<AppState>, work: Vec<Interrupted>) {
             Err(e) => tracing::warn!(bot_id = %item.bot_id, error = %e, "resume note not queued"),
         }
     }
+}
+
+/// Whether the bot got this very note a few minutes ago, as across a run of
+/// watchdog restarts.
+fn told_the_same(app: &AppState, bot_id: &str, body: &str) -> bool {
+    let window = chrono::Duration::minutes(SAME_NOTE_WINDOW_MINUTES);
+    matches!(
+        app.db.last_message_to(bot_id, HEADER),
+        Ok(Some((last, at))) if last == body && chrono::Utc::now() - at < window
+    )
 }
 
 /// Whether a resume note is still waiting to reach the bot, as after two

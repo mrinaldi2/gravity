@@ -136,6 +136,38 @@ async fn restarting_a_bot_tells_it_to_pick_its_work_back_up_once() {
     assert_ne!(done["isError"], json!(true), "{done}");
 }
 
+/// H-041 (ARCH-R20 F4): a session stopped while it was reading its resume
+/// note, as watchdog restarts do, gets no second note quoting the first.
+#[tokio::test]
+async fn a_restart_while_reading_the_note_doesnt_stack_another() {
+    let mut t = interrupted(|_| {}).await;
+    let ok =
+        t.c.request(json!({"type": "restart_bot", "bot_id": t.dev}))
+            .await;
+    assert_eq!(ok["type"], "ok", "{ok}");
+    let first = read_until(&mut t.dev_mcp, "Your session restarted", 100).await;
+    assert_eq!(notes(&first).len(), 1, "{first:?}");
+
+    // The next session stops in the turn that note started.
+    let reading = json!({"type": "user", "uuid": "t-note", "timestamp": "2026-10-01T10:05:00Z",
+        "isMeta": true, "origin": {"kind": "peer"},
+        "message": {"content": format!(
+            "Another Claude session sent a message:\n[msg #9 from HERMES · note] {}",
+            notes(&first)[0])}});
+    transcript(&t.d, &t.dev, &[reading]);
+    let ok =
+        t.c.request(json!({"type": "restart_bot", "bot_id": t.dev}))
+            .await;
+    assert_eq!(ok["type"], "ok", "{ok}");
+    let (d, dev) = (&t.d, t.dev.clone());
+    wait_until("the session is back", || {
+        d.app.supervisor.msg_socket_path(&dev).is_some()
+    })
+    .await;
+    let after = read_until(&mut t.dev_mcp, "never sent", 20).await;
+    assert!(notes(&after).is_empty(), "{after:?}");
+}
+
 #[tokio::test]
 async fn clearing_a_bot_starts_fresh_and_says_so() {
     let mut t = interrupted(|_| {}).await;

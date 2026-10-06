@@ -28,7 +28,7 @@ describe("ConversationsView", () => {
       />,
     );
     const list = await screen.findByRole("navigation", { name: "Conversations" });
-    expect(within(list).getByText("lead ↔ windev @ win-pc")).toBeInTheDocument();
+    expect(await within(list).findByText("lead ↔ windev @ win-pc")).toBeInTheDocument();
     expect(within(list).getByText("lead ↔ qa")).toBeInTheDocument();
     const shown = await screen.findByRole("region", { name: "lead ↔ windev @ win-pc" });
     expect(await within(shown).findByText("Port the updater to Windows.")).toBeInTheDocument();

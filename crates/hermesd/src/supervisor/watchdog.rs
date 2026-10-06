@@ -25,6 +25,49 @@ use super::*;
 pub const DIDNT_CONNECT: &str = "Didn't connect — Restart bot";
 /// Why a worker the watchdog gave up on lost its task.
 pub const WORKER_DIDNT_CONNECT: &str = "didn't connect";
+/// How long give-ups wait for the rest of a mass restart before the owner is
+/// told, at the latest (H-041).
+const GIVE_UP_WINDOW: Duration = Duration::from_secs(120);
+
+/// Bots given up on since the owner was last told: named in one toast once
+/// no session is still connecting, so a mass restart doesn't raise one
+/// toast per bot.
+#[derive(Debug, Default)]
+pub(crate) struct GaveUp {
+    /// `(name, was a worker)`.
+    bots: Vec<(String, bool)>,
+    since: Option<Instant>,
+}
+
+/// The toast for the bots given up on: one bot keeps its own words.
+pub(crate) fn gave_up_toast(bots: &[(String, bool)]) -> (String, String) {
+    match bots {
+        [(name, true)] => (
+            format!("{name} didn't connect"),
+            "Its task was cancelled and its worker slot freed.".to_string(),
+        ),
+        [(name, false)] => (
+            format!("{name} didn't connect"),
+            "Messages can't reach it. Restart bot to try again.".to_string(),
+        ),
+        _ => {
+            let names: Vec<&str> = bots.iter().map(|(n, _)| n.as_str()).collect();
+            let shown = if names.len() > 4 {
+                format!("{} and {} more", names[..3].join(", "), names.len() - 3)
+            } else {
+                let (last, rest) = names.split_last().expect("two or more");
+                format!("{} and {last}", rest.join(", "))
+            };
+            let mut body =
+                format!("{shown}: messages can't reach them. Restart each to try again.");
+            if bots.iter().any(|(_, worker)| *worker) {
+                body.push_str(" Workers among them had their tasks cancelled.");
+            }
+            (format!("{} bots didn't connect", bots.len()), body)
+        }
+    }
+}
+
 /// Trust attempts deferred for a busy config lock before starting anyway.
 const TRUST_RETRIES: u32 = 4;
 const TRUST_RETRY_BASE: Duration = Duration::from_secs(1);
@@ -140,18 +183,40 @@ impl Supervisor {
                         restarts = limit,
                         "inbox socket never registered; giving up"
                     );
-                    if self.release_worker(&bot_id) {
-                        continue;
+                    let worker = self.release_worker(&bot_id);
+                    if !worker {
+                        self.set_state(&bot_id, BotState::WaitingForUser, DIDNT_CONNECT);
                     }
-                    self.set_state(&bot_id, BotState::WaitingForUser, DIDNT_CONNECT);
-                    self.inner.events.push(Push::notice(
-                        "error",
-                        format!("{} didn't connect", self.bot_name(&bot_id)),
-                        "Messages can't reach it. Restart bot to try again.",
-                    ));
+                    let mut gave_up = self.inner.gave_up.lock().unwrap_or_else(|e| e.into_inner());
+                    gave_up.bots.push((self.bot_name(&bot_id), worker));
+                    gave_up.since.get_or_insert_with(Instant::now);
                 }
             }
         }
+        self.tell_gave_up();
+    }
+
+    /// One toast for the bots given up on, once nothing else is still
+    /// connecting or the window has passed.
+    fn tell_gave_up(&self) {
+        let connecting = self.lock_bots().values().any(|h| {
+            h.awaiting_socket()
+                && !h.connect_gave_up
+                && matches!(h.state, BotState::Starting | BotState::Ready)
+        });
+        let bots = {
+            let mut gave_up = self.inner.gave_up.lock().unwrap_or_else(|e| e.into_inner());
+            let due = gave_up.since.is_some_and(|t| t.elapsed() >= GIVE_UP_WINDOW);
+            if gave_up.bots.is_empty() || (connecting && !due) {
+                return;
+            }
+            gave_up.since = None;
+            std::mem::take(&mut gave_up.bots)
+        };
+        let mut bots = bots;
+        bots.sort();
+        let (title, body) = gave_up_toast(&bots);
+        self.inner.events.push(Push::notice("error", title, body));
     }
 
     /// A worker nobody will restart: its task is cancelled, which frees its
@@ -170,11 +235,6 @@ impl Supervisor {
             BotState::WaitingForUser,
             "Didn't connect — task cancelled",
         );
-        self.inner.events.push(Push::notice(
-            "error",
-            format!("{} didn't connect", Db::display_name(&bot)),
-            "Its task was cancelled and its worker slot freed.",
-        ));
         true
     }
 

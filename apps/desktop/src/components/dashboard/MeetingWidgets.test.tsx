@@ -3,17 +3,19 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
-import { DASH_BOTS, dashboard } from "../../test/dashboardFixtures";
+import type { Dashboard } from "../../protocol/dashboard";
+import type { Project } from "../../protocol/entities";
+import { DASH_BOTS, dashboard, offHome, quietDashboard } from "../../test/dashboardFixtures";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { project } from "../../test/fixtures";
 import DashboardView from "./DashboardView";
 
-function setup(canControl = true) {
+function setup(canControl = true, data: Dashboard = dashboard(), over: Partial<Project> = {}) {
   const fake = new FakeDaemon();
   let reads = 0;
   fake.onRequest("dashboard_get", () => {
     reads += 1;
-    return { type: "dashboard", req_id: "1", dashboard: dashboard() };
+    return { type: "dashboard", req_id: "1", dashboard: data };
   });
   const updated: unknown[] = [];
   fake.onRequest("action_update", (req) => {
@@ -32,7 +34,7 @@ function setup(canControl = true) {
   render(
     <DashboardView
       client={fake}
-      project={project({ id: "p1", name: "The Hermes" })}
+      project={project({ id: "p1", name: "The Hermes", ...over })}
       bots={DASH_BOTS}
       connected
       canControl={canControl}
@@ -46,6 +48,37 @@ function setup(canControl = true) {
 }
 
 describe("Meetings and action items", () => {
+  it("names the lead bot in the empty Meetings state", async () => {
+    setup(true, quietDashboard(), { lead_bot_id: "arch" });
+    expect(
+      await screen.findByText(
+        "No meetings set up yet. Architect schedules the regular ones, such as the stand-up and the retro.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("off-home, says where meetings and action items are kept, never 'No meetings'", async () => {
+    setup(true, offHome());
+    const meetings = await screen.findByRole("region", { name: "Meetings" });
+    expect(meetings).toHaveTextContent(
+      "Meetings are kept on mac. Open The Hermes there to see them.",
+    );
+    expect(meetings).not.toHaveTextContent("No meetings");
+    const actions = screen.getByRole("region", { name: "Action items" });
+    expect(actions).toHaveTextContent("Action items are kept on mac.");
+    expect(actions).not.toHaveTextContent("No open action items");
+  });
+
+  it("with the home away, says meetings and action items can't be shown", async () => {
+    const note = "Can't reach mac right now, so this may not be everything that needs you.";
+    setup(true, offHome({ needs_you: [], needs_you_note: note }));
+    const meetings = await screen.findByRole("region", { name: "Meetings" });
+    expect(meetings).toHaveTextContent("Can't reach mac right now, so meetings can't be shown.");
+    expect(screen.getByRole("region", { name: "Action items" })).toHaveTextContent(
+      "Can't reach mac right now, so action items can't be shown.",
+    );
+  });
+
   it("shows each series' next time, the meeting collecting and the last one held", async () => {
     setup();
     const meetings = await screen.findByRole("region", { name: "Meetings" });
@@ -78,9 +111,11 @@ describe("Meetings and action items", () => {
     const { updated, addToast, reads } = setup();
     await screen.findByRole("region", { name: /^Action items/ });
     await user.click(screen.getByRole("checkbox", { name: "Mark done: Split H-014" }));
-    await user.click(screen.getByRole("button", { name: "More for: Decide the release cadence" }));
+    await user.click(
+      screen.getByRole("button", { name: "More actions for Decide the release cadence" }),
+    );
     await user.click(screen.getByRole("menuitem", { name: "Promote to item" }));
-    await user.click(screen.getByRole("button", { name: "More for: Add a WIP alert" }));
+    await user.click(screen.getByRole("button", { name: "More actions for Add a WIP alert" }));
     // Already promoted: only done and drop.
     expect(screen.queryByRole("menuitem", { name: "Promote to item" })).toBeNull();
     await user.click(screen.getByRole("menuitem", { name: "Drop" }));
@@ -106,6 +141,6 @@ describe("Meetings and action items", () => {
     setup(false);
     const box = await screen.findByRole("checkbox", { name: "Mark done: Split H-014" });
     expect(box).toBeDisabled();
-    expect(screen.queryByRole("button", { name: /^More for/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^More actions for/ })).toBeNull();
   });
 });

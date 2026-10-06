@@ -75,6 +75,14 @@ impl SessionRoots {
         self.lock().retain(|_, bot| bot != bot_id);
     }
 
+    /// The bot's current session root, when one is recorded.
+    pub fn root_of(&self, bot_id: &str) -> Option<ProcKey> {
+        self.lock()
+            .iter()
+            .find(|(_, bot)| bot.as_str() == bot_id)
+            .map(|(key, _)| *key)
+    }
+
     pub fn bot_of(&self, key: ProcKey) -> Option<String> {
         self.lock().get(&key).cloned()
     }

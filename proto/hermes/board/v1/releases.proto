@@ -97,8 +97,8 @@ message ReleaseUpdate {
 // the current builds.
 message ReleaseTest {
   string release_id = 1;
-  // The computer you tested on; leave it out when you test on one.
-  optional string machine = 2;
+  // The computer you tested on; leave it out (or "") when you test on one.
+  string machine = 2;
   // The sha256 of the build you tested.
   string build_sha256 = 3;
   // "pass", "fail" or "blocked".

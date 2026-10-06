@@ -702,7 +702,7 @@ runs through the tester the same way.
     - A linked tester tests on its peer's computer, whatever its role says (ARCH-R55 S2).
     - A tester here tests on the machine its role names, unless that is a linked computer's name.
     - Otherwise it tests on this computer, which is called by its `machine_name`. That defaults to the host's name (the Mac's LocalHostName); the lead sets it with `machine_name_set {name}`, the owner with `release_machines_set {machine_name}`. It can't be a linked computer's name.
-  - Each computer's own tester records a result against one of the builds' sha256 with `release_test`. `machine` may be left out by a tester on one computer; naming another computer is refused. The build must be for that machine's platform: one whose board `required_machines` lists it, or with none configured for it, the items' platforms (a build platform `desktop-mac` is a `desktop` build).
+  - Each computer's own tester records a result against one of the builds' sha256 with `release_test`. `machine` may be left out (or "") by a tester on one computer; naming another computer is refused. The build must be for that machine's platform: one whose board `required_machines` lists it, or with none configured for it, the items' platforms (a build platform `desktop-mac` is a `desktop` build).
   - `release_submit` is refused until every required computer has passed the current builds. Required computers are the list the owner or lead set, or with none set, every tester's computer. With neither, submit is refused: an empty set is never a pass.
   - A package counts as deployed only once every tester's computer reports a good deploy, unless the **owner** narrowed the list. A lead's list narrows testing only, so no release is "deployed" while a computer runs the old version (ARCH-R55 M1).
   - Both sets are frozen into the package at submit and covered by its frozen hash. The release JSON shows them as `tested_on`, `tested_set_by`, `deploys_to` and `deploys_set_by`. Later edits apply to the next package.
@@ -903,6 +903,21 @@ A bot proposes an exact command for the owner to run; only the owner runs it.
 - **`team`:** each bot of the project (`bot`, as in `list_bots`), its items in Doing, and its open task count.
 - **`meetings`:** one row per meeting series, `{series, next_at, collecting, last_held}`: `next_at` is when its routine next starts it (null while disabled), `collecting` the meeting taking contributions now, `last_held` the last one closed. Ad-hoc meetings still collecting follow, with `series` null. Meetings are summaries (see below). Empty off the board's home.
 - **`action_items`:** the open ones, soonest due first, each with `meeting_name` and `overdue`.
+
+### Flow metrics (B11)
+
+`metrics_get {project_id, range}` (read). `range` is `week` (7 days, the default) or `4w` (28 days). It answers `{type: "metrics", metrics, note}`, computed from the board's history. Items brought in by the backlog import never count.
+
+`metrics` holds:
+- **`throughput`:** items that reached Done in the range. `weekly` is the count per week for the last 8 weeks, oldest first.
+- **`cycle`:** `{p50, p85, count}` in seconds, from an item's first entry into Doing to Done, for the items done in the range (nearest-rank percentiles).
+- **`by_column`:** each in-progress column (Doing through Deploying), with `p50`/`p85`/`count` of the time items spent in it, for stints that ended in the range.
+- **`daily`:** one point per day, `{at, wip, columns: {key: count}}`: where every item stood at the end of the day. `wip` counts Doing through Deploying. This is the cumulative-flow series.
+- **`reworked`, `past_doing`, `rework_rate`:** items sent back to Doing in the range, over the items that went past Doing in it.
+- **`aging`:** the five open in-progress items longest in their current column, `{id, title, column_key, age}`.
+- **`expired_tasks`**, **`days`**, and **`since`**.
+
+Without a board, `metrics` is null. Off the board's home, the daemon asks the home (peer request `metrics_get {project_id, days}`) and answers once it has. If the home can't be reached, `metrics` is null and `note` names it.
 
 ## Meetings
 

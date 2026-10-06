@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 pub mod app_identity;
 pub mod hook;
+pub mod inbox;
 pub mod ipc;
 pub mod origin;
 pub mod os;

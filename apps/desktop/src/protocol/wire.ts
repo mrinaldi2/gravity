@@ -93,6 +93,7 @@ const REPLY_TYPES: ReadonlySet<string> = new Set(
     release: true,
     release_machines: true,
     dashboard: true,
+    metrics: true,
     relayed_confirmed: true,
     meeting_action: true,
     quiesce: true,

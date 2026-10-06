@@ -100,6 +100,18 @@ pub(super) fn serve_read(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> any
     Ok(json!({ "response": response }))
 }
 
+/// `metrics_get {project_id, days}`: the Flow widget's numbers from this
+/// home's history (B11). They name items, not bots, so nothing is rewritten.
+pub(super) fn serve_metrics(
+    app: &Arc<AppState>,
+    peer: &Peer,
+    frame: &Value,
+) -> anyhow::Result<Value> {
+    let link = home_link(app, peer, frame)?;
+    let days = frame["days"].as_i64().unwrap_or(7).clamp(1, 28);
+    Ok(json!({ "metrics": crate::ws::home_metrics(app, &link.project_id, days)? }))
+}
+
 /// `dashboard_needs_you {project_id}`: the dashboard's Needs you as this home
 /// has it, in the peer's ids (H-112). Rulings stay here, so no package can
 /// be ruled from there.

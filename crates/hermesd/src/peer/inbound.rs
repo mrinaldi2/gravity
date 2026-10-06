@@ -37,6 +37,7 @@ pub(super) fn handle(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> anyho
         "owner_action_run" => super::owner_actions::serve_run(app, &peer, frame),
         "owner_action_close" => super::owner_actions::serve_close(app, &peer, frame),
         "grant_extras" => crate::decisions::grants::serve_grant(app, &peer.id, frame),
+        "metrics_get" => super::board_home::serve_metrics(app, &peer, frame),
         "create_bot" => super::remote_bots::serve_create(app, &peer, frame),
         "update_bot" => super::remote_bots::serve_update(app, &peer, frame),
         "delete_bot" => super::remote_bots::serve_delete(app, &peer, frame),
