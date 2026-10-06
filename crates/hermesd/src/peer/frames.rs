@@ -50,6 +50,11 @@ pub struct TaskFrame {
     /// receiver allows nested sends under it rather than refusing them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub item_id: Option<String>,
+    /// The release a deploy or rollback task is for, by the release home's
+    /// id (H-158): the receiver counts the task as on the board, since the
+    /// release accounts for it. An older peer sends none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

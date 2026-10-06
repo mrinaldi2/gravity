@@ -6,7 +6,7 @@ use super::{create_bot, McpClient};
 use hermesd::actor::Actor;
 use hermesd::board::feed::{Change, ChangeKind};
 use hermesd::board::model::{ItemType, Platform, Priority, ProjectRole, Role};
-use hermesd::db::NewItem;
+use hermesd::db::{MoveTo, NewItem};
 use serde_json::json;
 
 pub struct Board {
@@ -100,4 +100,61 @@ pub async fn board() -> Board {
         tester_id,
         stand_in,
     }
+}
+
+/// A release of H-1, homed on the Mac, tested by the PC's tester and
+/// approved by the owner: DevOps (a bot on the Mac) and the release's id.
+pub async fn approved_release(b: &mut Board) -> (McpClient, String) {
+    let (mac, mac_app) = (&b.p.mac, b.mac_app.clone());
+    let devops = create_bot(&mut b.p.mac_client, &mac_app, "devops").await;
+    let devops_id = devops["id"].as_str().expect("id").to_string();
+    let db = &mac.app.db;
+    db.set_project_role(&ProjectRole {
+        project_id: mac_app.clone(),
+        role: Role::Devops,
+        bot_id: devops_id.clone(),
+        machine: None,
+    })
+    .unwrap();
+    let item = db.get_item(&b.item).unwrap().unwrap();
+    let to = MoveTo {
+        column: "verify",
+        ..MoveTo::default()
+    };
+    db.move_item(&item.id, item.version, &to, &Actor::User)
+        .unwrap();
+    let mut ops = McpClient::new(mac, &mac.app.secrets.bot_token(&devops_id).expect("token"));
+
+    let created = ops
+        .call(
+            "release_create",
+            json!({"name": "0.16.0", "items": [b.item]}),
+        )
+        .await;
+    let id = created["release"]["id"].as_str().expect("id").to_string();
+    ops.call(
+        "release_attach_build",
+        json!({"release_id": id, "platform": "daemon", "version": "0.16.0",
+               "artifact": "/builds/0.16.0", "url": "https://dl.example/0.16.0.tar.gz",
+               "sha256": "a".repeat(64)}),
+    )
+    .await;
+    b.tester
+        .call(
+            "release_test",
+            json!({"release_id": id, "machine": "win", "build_sha256": "a".repeat(64),
+                   "result": "pass"}),
+        )
+        .await;
+    let release = ops.call("release_submit", json!({"release_id": id})).await["release"].clone();
+    let ship = json!([{"item_id": b.item, "verdict": "ship"}]);
+    let ruled =
+        b.p.mac_client
+            .request(
+                json!({"type": "release_rule", "release_id": id, "verdicts": ship,
+                        "expected_version": release["version"]}),
+            )
+            .await;
+    assert_eq!(ruled["release"]["status"], "approved", "{ruled}");
+    (ops, id)
 }

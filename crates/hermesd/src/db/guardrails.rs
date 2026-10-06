@@ -1,6 +1,6 @@
 //! Guardrails part 2 (H-135): the card a routine's runs are for (G5),
 //! which peer holds a linked project's board (ARCH-R59 a), and which tasks
-//! count as on the board (ARCH-R61).
+//! count as on the board (ARCH-R61, H-158).
 
 use bus::Message;
 use rusqlite::{params, OptionalExtension};
@@ -57,16 +57,37 @@ impl Db {
 
     /// Whether a task is on the board: it names a card, or it is a release's
     /// deploy or rollback, which the release itself accounts for (ARCH-R61
-    /// M2).
+    /// M2), here or on the computer that forwarded it (H-158).
     pub fn task_on_board(&self, task_id: &str) -> anyhow::Result<bool> {
         if self.task_card(task_id)?.is_some() {
             return Ok(true);
         }
-        Ok(self.lock().query_row(
-            "SELECT EXISTS(SELECT 1 FROM release_deployment WHERE task_id = ?1)",
-            params![task_id],
-            |r| r.get(0),
-        )?)
+        Ok(self.task_release(task_id)?.is_some())
+    }
+
+    /// Names the release a deploy or rollback task is for: as it opens on
+    /// the release's home, or as a peer's frame says (H-158).
+    pub fn set_task_release(&self, task_id: &str, release_id: &str) -> anyhow::Result<()> {
+        self.lock().execute(
+            "INSERT OR REPLACE INTO task_release(task_id, release_id) VALUES (?1, ?2)",
+            params![task_id, release_id],
+        )?;
+        Ok(())
+    }
+
+    /// The release a task deploys or rolls back, if it is one.
+    pub fn task_release(&self, task_id: &str) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .lock()
+            .query_row(
+                "SELECT coalesce(
+                     (SELECT release_id FROM task_release WHERE task_id = ?1),
+                     (SELECT release_id FROM release_deployment WHERE task_id = ?1 LIMIT 1))",
+                params![task_id],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten())
     }
 
     /// The message with this number, as an envelope names it.

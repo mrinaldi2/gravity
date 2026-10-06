@@ -161,6 +161,9 @@ pub(super) fn receive(
         )?;
         app.db.map_peer_task(&peer.id, &spec.id, &task.id)?;
         super::task_card::received(app, &to, linked, &task.id, spec.item_id.as_deref())?;
+        if let Some(release_id) = &spec.release_id {
+            app.db.set_task_release(&task.id, release_id)?;
+        }
         task_id = Some(task.id);
     }
     app.db.map_peer_message(&peer.id, &frame.id, &msg.id)?;
