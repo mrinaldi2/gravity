@@ -71,14 +71,20 @@ async fn the_home_relays_its_changes_to_a_linked_computers_clients() {
     b.tester
         .call("item_comment", json!({"id": b.item, "body": "relayed"}))
         .await;
+    // A snapshot fetch started before the fixture's (by a relay that came
+    // before the mirror existed) can still land after the watch and push a
+    // settings change (H-042). The client's seq still has no gap.
+    let mut seen = board.seq;
     let push = loop {
         let push = next_push(&mut b.p.win_client).await.expect("a push");
         if push.item_id == b.item {
             break push;
         }
+        assert_eq!(push.seq, seen + 1, "no gap before the item's push");
+        seen = push.seq;
     };
     assert_eq!(push.project_id, b.win_app);
-    assert_eq!(push.seq, board.seq + 1, "continues the snapshot's seq");
+    assert_eq!(push.seq, seen + 1, "continues the client's seq");
     assert_eq!(
         push.card.expect("card").assignee.as_deref(),
         Some(b.tester_id.as_str())
