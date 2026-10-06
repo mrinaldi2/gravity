@@ -248,10 +248,14 @@ mod tests {
 
         let mut auth = refusing();
         assert_eq!(auth.hold_phase_two(true), None);
-        assert!(
-            auth.storage().enforce,
+        assert_eq!(
+            auth.bot_bearer,
+            BearerPolicy::Refuse,
             "phase 2 once hooks have their own way in"
         );
+        // A dev build (HERMES_DEV_BUILD, as a release verify may set) never
+        // enforces storage; only shipped binaries do (H-042).
+        assert_eq!(auth.storage().enforce, !app_identity::DEV_BUILD);
 
         let mut auth = AuthConfig::default();
         assert_eq!(auth.hold_phase_two(false), None, "phase 1 needs nothing");
