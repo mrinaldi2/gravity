@@ -318,19 +318,26 @@ fn extra_allow(extra: PermissionExtra, workspace: &Path) -> Vec<String> {
             "PowerShell(hermesd quiesce *)".to_string(),
         ],
         PermissionExtra::Install => {
+            // The supported install, with no owner prompt; the daemon checks
+            // the gate and swaps the app from its own job (H-117 X1).
+            let mut rules = vec![
+                "Bash(hermesd release install *)".to_string(),
+                "PowerShell(hermesd release install *)".to_string(),
+            ];
             if cfg!(windows) {
-                vec![
+                rules.extend([
                     "PowerShell(Start-Process msiexec *)".to_string(),
                     "PowerShell(& .\\*-setup.exe *)".to_string(),
-                ]
+                ]);
             } else {
-                vec![
+                rules.extend([
                     "Bash(ditto -xk * /Applications/*)".to_string(),
                     "Bash(xattr -dr com.apple.quarantine /Applications/*)".to_string(),
                     "Bash(open -a *)".to_string(),
                     "Bash(xcrun simctl install *)".to_string(),
-                ]
+                ]);
             }
+            rules
         }
     }
 }

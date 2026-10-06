@@ -10,8 +10,11 @@
 //!    sha256 there (`stage`);
 //! 2. unpacks it and checks its code signature against the identity
 //!    compiled into hermesd, saying so when it can't (`signature`);
-//! 3. swaps the app into place and hands `service install` to the operating
-//!    system (`handoff`), because that restarts this very session.
+//! 3. hands the rest to the operating system (`handoff`), because it
+//!    restarts this very session: for an app, the job swaps it into place,
+//!    keeping the one it replaces, and rolls back unless the new service
+//!    answers with the new version (`apply`, H-117 X1); otherwise it runs
+//!    `service install` or the setup.
 //!
 //! The tester reads the outcome from its next session with `--status`,
 //! smoke-tests, and reports with `deploy_confirm`.
@@ -24,6 +27,7 @@ use serde_json::{json, Value};
 
 use crate::config::Config;
 
+pub mod apply;
 mod handoff;
 mod signature;
 mod stage;
@@ -173,22 +177,44 @@ fn prepare_one(args: &Args, build: &Build, stage: &stage::Stage) -> anyhow::Resu
         println!("dry run: would install it as {kind:?}");
         return Ok(None);
     }
-    let (program, mut service_args) = match kind {
-        Kind::AppZip | Kind::AppDmg => (
-            swap_app(&unpacked, &signature::plan_here(kind))?.join("Contents/MacOS/hermesd"),
-            vec!["service".to_string(), "install".to_string()],
-        ),
+    let (program, mut service_args, binary) = match kind {
+        // The swap itself is the job's, outside this session (H-117 X1):
+        // a copy of this hermesd runs `release apply-app` from the stage.
+        Kind::AppZip | Kind::AppDmg => {
+            let runner = stage.dir.join("hermesd-apply");
+            std::fs::copy(std::env::current_exe()?, &runner)?;
+            let apply = apply_args(&args.release, &unpacked, &build.version);
+            (runner, apply, Some(unpacked.join("Contents/MacOS/hermesd")))
+        }
         // The setup's own hook runs `service install` (installer-hooks.nsh).
-        Kind::WindowsSetup => (unpacked, vec!["/S".to_string()]),
-        Kind::Daemon => (unpacked, vec!["service".to_string(), "install".to_string()]),
+        Kind::WindowsSetup => (unpacked, vec!["/S".to_string()], None),
+        Kind::Daemon => (
+            unpacked.clone(),
+            vec!["service".to_string(), "install".to_string()],
+            Some(unpacked),
+        ),
     };
     if kind != Kind::WindowsSetup {
         if let Some(config) = &args.config {
             service_args.extend(["--config".to_string(), config.clone()]);
         }
     }
-    let binary = (kind != Kind::WindowsSetup).then(|| program.clone());
     Ok(Some((program, service_args, binary)))
+}
+
+/// What the job runs for an app: the swap with its rollback (`apply`).
+pub(crate) fn apply_args(release: &str, app: &Path, version: &str) -> Vec<String> {
+    [
+        "release",
+        "apply-app",
+        release,
+        "--app",
+        &app.display().to_string(),
+        "--version",
+        version,
+    ]
+    .map(str::to_string)
+    .to_vec()
 }
 
 /// `--status`: how the handed-off install ended.
@@ -350,29 +376,6 @@ fn find_app(dir: &Path) -> anyhow::Result<PathBuf> {
         .map(|e| e.path())
         .find(|p| p.extension().is_some_and(|e| e == "app"))
         .ok_or_else(|| anyhow::anyhow!("no app bundle in {}", dir.display()))
-}
-
-/// Replaces `/Applications/<name>.app` (staged beside it, so the swap is a
-/// rename on one volume) and returns where it now is. The copy beside it
-/// is checked again: it, not the stage's, is what runs.
-fn swap_app(app: &Path, check: &signature::Check) -> anyhow::Result<PathBuf> {
-    let name = app.file_name().unwrap_or_default();
-    let dest = Path::new("/Applications").join(name);
-    let staged = dest.with_extension("app.new");
-    let old = dest.with_extension("app.old");
-    let _ = std::fs::remove_dir_all(&staged);
-    run_ok(Command::new("ditto").arg(app).arg(&staged))?;
-    if let Err(e) = signature::run(check, &staged) {
-        let _ = std::fs::remove_dir_all(&staged);
-        return Err(e);
-    }
-    let _ = std::fs::remove_dir_all(&old);
-    if dest.exists() {
-        std::fs::rename(&dest, &old)?;
-    }
-    std::fs::rename(&staged, &dest)?;
-    let _ = std::fs::remove_dir_all(&old);
-    Ok(dest)
 }
 
 fn run_ok(command: &mut Command) -> anyhow::Result<()> {

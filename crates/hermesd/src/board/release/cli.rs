@@ -18,6 +18,8 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
         Some("publish") => {}
         // A tester installing a release on their computer (B8).
         Some("install") => return super::install::run(cfg, &args[1..]).await,
+        // The install job's app swap, never a bot's session (H-117 X1).
+        Some("apply-app") => return super::install::apply::run(cfg, &args[1..]),
         _ => anyhow::bail!("{USAGE}"),
     }
     let (positional, flags) = split(&args[1..])?;
