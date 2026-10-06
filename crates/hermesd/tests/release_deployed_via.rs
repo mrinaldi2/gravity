@@ -284,3 +284,78 @@ async fn a_package_without_a_commit_closes_only_through_its_release_branch() {
     assert_eq!(r.column(&items[0]), "done");
     assert_eq!(r.column(&items[1]), "done");
 }
+
+/// H-146: a via package whose builds record no source commit is read from
+/// its own release branch, else its tag; with neither, it is refused.
+#[tokio::test]
+async fn a_via_package_without_a_commit_is_read_from_its_release_branch_or_tag() {
+    let mut r = releases(6).await;
+    let repo = tempfile::tempdir().unwrap();
+    let [a, _b, c, d] = history(repo.path());
+    // The branch wins over a tag that points elsewhere.
+    git(repo.path(), &["branch", "release/desktop-0.16.4", &c]);
+    git(repo.path(), &["tag", "desktop-v0.16.4", &d]);
+    git(repo.path(), &["tag", "desktop-v0.16.5", &c]);
+    r.pair
+        .d
+        .app
+        .db
+        .set_project_repo(
+            &r.project,
+            Some(&bus::ProjectRepo {
+                url: repo.path().display().to_string(),
+                branch: "main".into(),
+            }),
+        )
+        .unwrap();
+    let mut owner = WsClient::connect(&r.pair.d).await;
+    let items = r.items.clone();
+    let branched_old = approved(&mut r, &mut owner, "0.16.2", &items[0], Some(&a)).await;
+    let tagged_old = approved(&mut r, &mut owner, "0.16.3", &items[1], Some(&a)).await;
+    let bare_old = approved(&mut r, &mut owner, "0.16.2-r2", &items[2], Some(&a)).await;
+    let branched = approved(&mut r, &mut owner, "0.16.4", &items[3], None).await;
+    let tagged = approved(&mut r, &mut owner, "0.16.5", &items[4], None).await;
+    let bare = approved(&mut r, &mut owner, "0.16.6", &items[5], None).await;
+    for v in [&branched, &tagged, &bare] {
+        deploy(&mut r, v["id"].as_str().unwrap()).await;
+    }
+
+    // Neither a branch nor a tag for the via package: refused, left put.
+    let raw = r.bots[1]
+        .call_raw("release_deployed_via", via(&bare_old, &bare))
+        .await;
+    let text = error_text(&raw);
+    assert!(
+        text.contains("0.16.6 records no source commit and has no release branch or tag"),
+        "{raw}"
+    );
+    assert_eq!(r.column(&items[2]), "deploying", "left where it was");
+
+    for (old, via_package, reference, item) in [
+        (
+            &branched_old,
+            &branched,
+            "refs/heads/release/desktop-0.16.4",
+            &items[0],
+        ),
+        (&tagged_old, &tagged, "refs/tags/desktop-v0.16.5", &items[1]),
+    ] {
+        let closed = r.bots[1]
+            .call("release_deployed_via", via(old, via_package))
+            .await["release"]
+            .clone();
+        assert_eq!(closed["status"], "deployed", "{closed}");
+        let detail = closed["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["kind"] == "deployed_via")
+            .map(|e| e["detail"].clone())
+            .expect("event");
+        assert_eq!(detail["basis"], "ancestry", "{detail}");
+        assert_eq!(detail["via_reference"], reference, "{detail}");
+        assert_eq!(detail["via_commit"], c.as_str(), "{detail}");
+        assert_eq!(detail["commit"], a.as_str(), "{detail}");
+        assert_eq!(r.column(item), "done");
+    }
+}

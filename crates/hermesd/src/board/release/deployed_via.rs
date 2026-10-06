@@ -11,7 +11,10 @@
 //!   repository. The old commit is the one it recorded, or for a package from
 //!   before commits were recorded, its release branch
 //!   `release/desktop-<version>` (or tag `desktop-v<version>`) (CE-015 M1).
-//!   Nothing else counts: with neither, it is refused;
+//!   Nothing else counts: with neither, it is refused. The via commit is
+//!   likewise the one it recorded, or for a package whose builds record
+//!   none, its own release branch or tag (H-146); with neither, it is
+//!   refused;
 //! - its post-install acceptance criteria are ticked (H-116).
 //!
 //! Then it records a `deployed_via` event, invents no deployment, marks the
@@ -40,6 +43,8 @@ struct Basis {
     rule: &'static str,
     /// The branch or tag the old commit was read from, for `release_branch`.
     reference: Option<String>,
+    /// The branch or tag the via commit was read from, when it recorded none.
+    via_reference: Option<String>,
     old: String,
     via: String,
 }
@@ -68,7 +73,7 @@ pub fn deployed_via(
         post_install_checked(t, &old)?;
         let detail = json!({
             "via_release_id": via.id, "basis": basis.rule, "reference": basis.reference,
-            "commit": basis.old, "via_commit": basis.via,
+            "commit": basis.old, "via_commit": basis.via, "via_reference": basis.via_reference,
         });
         let event = ReleaseEvent {
             release_id: old.id.clone(),
@@ -138,13 +143,7 @@ fn contained(
     old: &Release,
     via: &Release,
 ) -> anyhow::Result<Basis> {
-    let via_commit = recorded_commit(via)?.ok_or_else(|| {
-        forbidden(format!(
-            "release {} records no source commit, so it can't be shown to contain {}; \
-             record its source commit, or ask the owner",
-            via.name, old.name
-        ))
-    })?;
+    let via_recorded = recorded_commit(via)?;
     let recorded = recorded_commit(old)?;
     let url = app
         .db
@@ -152,6 +151,21 @@ fn contained(
         .map(|r| r.url)
         .ok_or_else(|| forbidden("the project has no repository set, so history can't be read"))?;
     let cache = git_cache::refresh(&app.cfg.home, project, &url)?;
+    let (via_reference, via_commit) = match via_recorded {
+        Some(commit) => (None, commit),
+        // Its builds were attached without a commit (H-146): its own release
+        // branch or tag, as for the old package.
+        None => {
+            let (reference, commit) = release_ref(&cache, via).ok_or_else(|| {
+                forbidden(format!(
+                    "can't show {} contains {}: {} records no source commit and has no \
+                     release branch or tag; record its source commit, or ask the owner",
+                    via.name, old.name, via.name
+                ))
+            })?;
+            (Some(reference), commit)
+        }
+    };
     let (rule, reference, commit) = match recorded {
         Some(commit) => ("ancestry", None, commit),
         // Recorded before commits were (CE-015 M1): its release branch or
@@ -178,6 +192,7 @@ fn contained(
         Ok(Basis {
             rule,
             reference,
+            via_reference,
             old: commit,
             via: via_commit,
         })
@@ -193,14 +208,14 @@ fn contained(
     }
 }
 
-/// The old package's release branch or tag and its commit:
+/// A package's release branch or tag and its commit:
 /// `release/desktop-<v>`, then `desktop-v<v>`, for its display version and
 /// then its name.
-fn release_ref(cache: &std::path::Path, old: &Release) -> Option<(String, String)> {
-    let versions = old
+fn release_ref(cache: &std::path::Path, release: &Release) -> Option<(String, String)> {
+    let versions = release
         .display_version
         .iter()
-        .chain(std::iter::once(&old.name))
+        .chain(std::iter::once(&release.name))
         .map(|v| v.trim().trim_start_matches('v').to_string())
         .filter(|v| !v.is_empty());
     for version in versions {
