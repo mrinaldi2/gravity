@@ -7,6 +7,28 @@
 
 use std::path::{Component, Path, PathBuf};
 
+/// The home variable that overrides the default home, by name, if one does.
+pub fn home_override_var() -> Option<String> {
+    if !super::home_is_overridden() {
+        return None;
+    }
+    [
+        crate::brand::env_name("HOME"),
+        crate::brand::legacy_env_name("HOME"),
+    ]
+    .into_iter()
+    .find(|name| std::env::var_os(name).is_some())
+}
+
+/// `Home: <path>`, naming the variable that chose it, so an operator sees
+/// which home a command is about to act on before it does.
+pub fn home_notice(home: &Path, override_var: Option<&str>) -> String {
+    match override_var {
+        Some(var) => format!("Home: {} (overridden by {var})", home.display()),
+        None => format!("Home: {}", home.display()),
+    }
+}
+
 /// `env_home` is overridden when it is set and names neither
 /// `<user_home>/.gravity` nor `<user_home>/.thehermes`, after resolving
 /// symlinks where the path exists and ignoring case where the file system

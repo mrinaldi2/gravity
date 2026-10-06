@@ -33,7 +33,11 @@ async fn spawn_worker(app: &Arc<AppState>, bot_id: &str, args: &Value) -> anyhow
     let me = caller(app, bot_id)?;
     super::selfmgmt::edit_from_args(args, false)?;
     let brief = text(args, "task").ok_or_else(|| anyhow::anyhow!("'task' is required"))?;
-    let item = super::board::item_arg(app, &me, args)?;
+    // Every worker's task names a card (H-125): the one given, else the
+    // card of the task the parent holds.
+    let item = super::task_card::item(app, &me, args).await?;
+    let parent_task = app.db.newest_open_task_for(&me.id)?;
+    let card = super::task_card::card_for(app, &me, item, parent_task.as_ref())?;
     let worker = workers::spawn(
         app,
         &me,
@@ -49,13 +53,18 @@ async fn spawn_worker(app: &Arc<AppState>, bot_id: &str, args: &Value) -> anyhow
     )
     .await?;
     // Linked when its task exists: now if it started, else when it does.
-    if let Some(item) = &item {
-        app.db.set_worker_item(&worker.id, item)?;
+    if let Some(card) = &card {
+        app.db.set_worker_card(&worker.id, card)?;
         let now = app
             .db
             .get_worker(&worker.id)?
             .unwrap_or_else(|| worker.clone());
-        workers::link_item(app, &now, &me)?;
+        if app.db.item_project(card)?.as_deref() == Some(me.project_id.as_str()) {
+            app.db.set_worker_item(&worker.id, card)?;
+            workers::link_item(app, &now, &me)?;
+        } else if let Some(task_id) = &now.task_id {
+            app.db.set_task_card(task_id, card)?;
+        }
     }
     let mut out = workers::describe(app, &worker)?;
     out["result"] = json!(match worker.state {

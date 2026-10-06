@@ -4,7 +4,7 @@
 //! that closes it.
 
 use bus::{now, TaskState};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::board::model::{ItemEventKind, LinkKind};
 
@@ -53,6 +53,54 @@ impl Db {
             params![task_id],
             |r| r.get(0),
         )?)
+    }
+}
+
+impl Db {
+    /// Name the card a task is for without linking it here: the card lives
+    /// on another machine's board (H-125).
+    pub fn set_task_card(&self, task_id: &str, card_id: &str) -> anyhow::Result<()> {
+        self.lock().execute(
+            "INSERT OR REPLACE INTO task_card(task_id, card_id) VALUES (?1, ?2)",
+            params![task_id, card_id],
+        )?;
+        Ok(())
+    }
+
+    /// The card a task is for, linked here or not. `None` for a task opened
+    /// before cards were required, or forwarded by an older peer.
+    pub fn task_card(&self, task_id: &str) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .lock()
+            .query_row(
+                "SELECT coalesce(
+                     (SELECT card_id FROM task_card WHERE task_id = ?1), item_id)
+                 FROM task WHERE id = ?1",
+                params![task_id],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten())
+    }
+
+    /// The card a spawn's task will be for, kept until that task exists.
+    pub fn set_worker_card(&self, worker_id: &str, card_id: &str) -> anyhow::Result<()> {
+        self.lock().execute(
+            "INSERT OR REPLACE INTO worker_card(worker_id, card_id) VALUES (?1, ?2)",
+            params![worker_id, card_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn worker_card(&self, worker_id: &str) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .lock()
+            .query_row(
+                "SELECT card_id FROM worker_card WHERE worker_id = ?1",
+                params![worker_id],
+                |r| r.get(0),
+            )
+            .optional()?)
     }
 }
 

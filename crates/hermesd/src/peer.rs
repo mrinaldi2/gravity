@@ -23,6 +23,7 @@ mod receive;
 pub mod remote_bots;
 mod roster;
 mod socket;
+mod task_card;
 pub mod term;
 mod term_mirror;
 

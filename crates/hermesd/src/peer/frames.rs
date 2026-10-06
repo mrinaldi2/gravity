@@ -45,6 +45,11 @@ pub struct TaskFrame {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deadline_at: Option<DateTime<Utc>>,
     pub hop_count: i64,
+    /// The board card the task is for, by the board home's id (H-125 S1b).
+    /// An older peer sends none: the task is then "card unknown", and the
+    /// receiver allows nested sends under it rather than refusing them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
