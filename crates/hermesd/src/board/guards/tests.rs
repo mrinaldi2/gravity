@@ -120,6 +120,7 @@ fn case(from: Cat) -> Case {
 }
 
 mod ac;
+mod close;
 mod table;
 
 #[test]

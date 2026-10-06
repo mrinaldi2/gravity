@@ -102,6 +102,10 @@ pub struct Context {
     /// The bots holding an open task linked to the item, from the lead or
     /// the owner.
     pub task_holders: Vec<String>,
+    /// A branch or PR was linked at some point, as the item's history says,
+    /// even if it has since been unlinked (ARCH-R62 M1): such work takes the
+    /// release path whatever its type is now.
+    pub ever_had_code: bool,
 }
 
 impl Context {
@@ -279,10 +283,10 @@ fn refused(rule: Rule, item: &Item, who: &Who, ctx: &Context) -> Option<&'static
         Rule::Package => (who.has(Role::Devops), "DevOps"),
         Rule::Reject => (who.leads() || who.verifies(item), "a tester or the lead"),
         // A spike or a chore without code closes on someone else's word
-        // (H-154): the lead, or a reviewer who isn't the one who did it.
+        // (H-154, ARCH-R62 M2): the lead or a reviewer, never the one who did it.
         Rule::Finish => (
-            who.leads() || (who.reviews(item, ctx) && !assignee),
-            "the lead, or a reviewer other than the assignee",
+            (who.leads() || who.reviews(item, ctx)) && !assignee,
+            "the lead or a reviewer who isn't the assignee",
         ),
         Rule::Release | Rule::Unlisted => (false, "the owner"),
     };

@@ -40,7 +40,7 @@ async fn a_spike_closes_on_its_outcome_by_the_lead_not_its_assignee() {
     let version = version_of(worker, &id).await;
     let raw = worker.call_raw("item_move", close(&version)).await;
     assert!(
-        error_text(&raw).contains("the lead, or a reviewer"),
+        error_text(&raw).contains("the lead or a reviewer who isn't the assignee"),
         "{raw}"
     );
 
@@ -103,4 +103,78 @@ async fn features_keep_the_release_path_and_unstarted_spikes_are_told_how() {
         error_text(&raw).contains("from Doing, Review or Verify"),
         "{raw}"
     );
+}
+
+/// Moves `id` to Done as `bot`, which must be refused; the refusal text.
+async fn close(bot: &mut common::McpClient, id: &str) -> String {
+    let version = version_of(bot, id).await;
+    let raw = bot
+        .call_raw(
+            "item_move",
+            json!({"id": id, "to": "done", "expected_version": version}),
+        )
+        .await;
+    error_text(&raw).to_string()
+}
+
+/// ARCH-R62 M1: a feature that had a branch, retyped to a spike, still
+/// ships in a release.
+#[tokio::test]
+async fn a_feature_with_a_branch_retyped_to_a_spike_keeps_the_release_path() {
+    let (pair, mut bots, project) = team(&["Team Lead", "Desktop Dev"]).await;
+    let id = item(&pair, &project, "verify", Some(&pair.ids[1]));
+    let lead = &mut bots[0];
+    for (kind, target) in [("branch", "H-1-thing"), ("artifact", "answer.md")] {
+        lead.call("item_link", json!({"id": id, "kind": kind, "ref": target}))
+            .await;
+    }
+    let version = version_of(lead, &id).await;
+    lead.call(
+        "item_update",
+        json!({"id": id, "expected_version": version, "type": "spike"}),
+    )
+    .await;
+    let refused = close(lead, &id).await;
+    assert!(refused.contains("Only spikes and chores"), "{refused}");
+}
+
+/// ARCH-R62 M1: unlinking a chore's branch doesn't make its code skip the
+/// release; the history remembers the branch.
+#[tokio::test]
+async fn a_chore_whose_branch_was_unlinked_keeps_the_release_path() {
+    let (pair, mut bots, project) = team(&["Team Lead", "Desktop Dev"]).await;
+    let id = item(&pair, &project, "verify", Some(&pair.ids[1]));
+    let lead = &mut bots[0];
+    let version = version_of(lead, &id).await;
+    lead.call(
+        "item_update",
+        json!({"id": id, "expected_version": version, "type": "chore"}),
+    )
+    .await;
+    lead.call(
+        "item_link",
+        json!({"id": id, "kind": "artifact", "ref": "cleanup-log.md"}),
+    )
+    .await;
+    lead.call(
+        "item_link",
+        json!({"id": id, "kind": "branch", "ref": "H-1-cleanup"}),
+    )
+    .await;
+    lead.call(
+        "item_unlink",
+        json!({"id": id, "kind": "branch", "ref": "H-1-cleanup"}),
+    )
+    .await;
+    let links = lead.call("item_get", json!({ "id": id })).await["links"].clone();
+    assert!(
+        !links
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|l| l["kind"] == "branch"),
+        "{links}"
+    );
+    let refused = close(lead, &id).await;
+    assert!(refused.contains("Only spikes and chores"), "{refused}");
 }

@@ -136,7 +136,19 @@ impl BoardTx<'_> {
                 None => None,
             },
             task_holders: self.task_holders(&item.id)?,
+            ever_had_code: self.ever_had_code(&item.id)?,
         })
+    }
+
+    /// Whether a branch or PR was ever linked to the item, from its history,
+    /// so unlinking one doesn't turn shipped code into a spike (ARCH-R62 M1).
+    fn ever_had_code(&self, item_id: &str) -> anyhow::Result<bool> {
+        Ok(self.conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM item_event WHERE item_id = ?1 \
+             AND kind = 'linked' AND field IN ('branch', 'pr'))",
+            params![item_id],
+            |r| r.get(0),
+        )?)
     }
 
     pub fn item(&self, id: &str) -> anyhow::Result<Option<Item>> {

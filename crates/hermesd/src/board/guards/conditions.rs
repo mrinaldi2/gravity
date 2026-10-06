@@ -92,12 +92,13 @@ pub(super) fn conditions(
     }
 }
 
-/// A spike, or a chore with no branch or PR linked: the work that closes on
-/// its outcome rather than in a release (H-154).
+/// A spike, or a chore, that has never had a branch or PR linked: the work
+/// that closes on its outcome rather than in a release (H-154). Code linked
+/// once, even since unlinked or before a retype, keeps the release path
+/// (ARCH-R62 M1).
 pub(super) fn closes_on_outcome(item: &Item, ctx: &Context) -> bool {
-    let chore_without_code =
-        item.item_type == ItemType::Chore && !ctx.has_link(&[LinkKind::Branch, LinkKind::Pr]);
-    item.item_type == ItemType::Spike || chore_without_code
+    let had_code = ctx.ever_had_code || ctx.has_link(&[LinkKind::Branch, LinkKind::Pr]);
+    matches!(item.item_type, ItemType::Spike | ItemType::Chore) && !had_code
 }
 
 /// Inbox/Ready → Done for work that closes on its outcome: not a release
