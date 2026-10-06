@@ -167,6 +167,28 @@ export const SettledQuestionExpanded: Story = () => (
   </Frame>
 );
 
+/** Hermes notes the grants a ruling applied, not the owner (H-173). */
+export const SettledGrantsApplied: Story = () => (
+  <Frame>
+    <DecisionReader
+      {...base({
+        ...SETTLED,
+        comments: [
+          decisionComment({
+            author_kind: "system",
+            author_name: "Hermes",
+            body: "Applied this ruling's grants. auction: install; ledger: publish.",
+            created_at: iso(-3 * HOUR),
+          }),
+        ],
+        comment_count: 1,
+      })}
+      showBack
+      showQuestion={false}
+    />
+  </Frame>
+);
+
 export const Relayed: Story = () => (
   <Frame>
     <DecisionReader

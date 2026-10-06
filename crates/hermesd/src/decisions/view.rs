@@ -132,6 +132,7 @@ fn named_comments(
         .map(|comment| {
             let mut comment = comment.clone();
             comment.author_name = match &comment.author_bot_id {
+                _ if comment.author_kind == CommentAuthorKind::System => "Hermes".to_string(),
                 Some(bot_id) => bots
                     .get(bot_id)
                     .map(Db::display_name)
