@@ -39,8 +39,8 @@ function renderHome(
   render(
     <ProjectsHome
       client={daemon}
-      projects={[fx.project()]}
-      bots={[fx.bot()]}
+      projects={[fx.project({ id: "p1", lead_bot_id: "b1" })]}
+      bots={[fx.bot({ id: "b1", name: "Team Lead" })]}
       connected
       canControl
       addToast={vi.fn<AddToast>()}
@@ -56,23 +56,32 @@ function overviewReads(daemon: FakeDaemon): number {
 }
 
 describe("ProjectsHome", () => {
-  it("ranks the projects and says why the first one needs you", async () => {
+  it("puts pinned projects first and numbers the rest by need", async () => {
     renderHome(daemonWithOverview());
     const cards = await screen.findAllByTestId("project-card");
     expect(cards.map((card) => card.getAttribute("aria-label"))).toEqual([
-      "The Hermes",
       "PhD",
+      "The Hermes",
       "Aurora Notes",
     ]);
-    const first = within(cardAt(cards, 0));
-    expect(first.getByText("#1")).toBeInTheDocument();
+    const pinned = within(cardAt(cards, 0));
+    expect(pinned.getByLabelText("Pinned")).toBeInTheDocument();
+    expect(pinned.queryByText(/^#/)).not.toBeInTheDocument();
+    expect(pinned.getByText("1 decision")).toBeInTheDocument();
+    // The outline follows the highest score, not the pin.
+    expect(cardAt(cards, 0)).not.toHaveClass("home-card-first");
+    expect(cardAt(cards, 1)).toHaveClass("home-card-first");
+    const top = within(cardAt(cards, 1));
+    expect(top.getByText("#1")).toBeInTheDocument();
     expect(
-      first.getByText("Needs you most: 1 release to test · 2 decisions · 1 Run card"),
+      top.getByText("Needs you most: 1 release to test · 2 decisions · 1 Run card"),
     ).toBeInTheDocument();
-    expect(first.getByText("◐ 0.17.0 ready for you to test")).toBeInTheDocument();
-    expect(first.getByText("8 · 5 working")).toBeInTheDocument();
-    expect(first.getByText("Project-first desktop UI")).toBeInTheDocument();
-    expect(first.getByText(/0\.17\.0 is packaged/)).toBeInTheDocument();
+    expect(top.getByText("◐ 0.17.0 ready for you to test")).toBeInTheDocument();
+    expect(top.getByText("8 · 5 working")).toBeInTheDocument();
+    expect(top.getByText("Doing")).toBeInTheDocument();
+    expect(top.getByText("Project-first desktop UI · Desktop Dev")).toBeInTheDocument();
+    expect(top.getByText(/Team Lead · .*:/)).toBeInTheDocument();
+    expect(top.getByText(/0\.17\.0 is packaged/)).toBeInTheDocument();
     const last = within(cardAt(cards, 2));
     expect(last.getByLabelText("Nothing needs you")).toBeInTheDocument();
     expect(last.getByText("Last activity 3 days ago")).toBeInTheDocument();
@@ -84,7 +93,6 @@ describe("ProjectsHome", () => {
     renderHome(daemonWithOverview());
     const card = await screen.findByRole("article", { name: "PhD" });
     expect(within(card).getByText(/imac is offline · last seen/)).toBeInTheDocument();
-    expect(within(card).getByText("#2")).toBeInTheDocument();
   });
 
   it("pins a project and reads the order again", async () => {
@@ -93,7 +101,7 @@ describe("ProjectsHome", () => {
     renderHome(daemon);
     const card = await screen.findByRole("article", { name: "Aurora Notes" });
     const before = overviewReads(daemon);
-    await user.click(within(card).getByRole("button", { name: "Pin" }));
+    await user.click(within(card).getByRole("button", { name: "Pin Aurora Notes to the top" }));
     expect(daemon.requests.map((request) => request.body)).toContainEqual({
       type: "project_pin",
       project_id: "p3",
@@ -104,7 +112,7 @@ describe("ProjectsHome", () => {
     });
     expect(
       within(screen.getByRole("article", { name: "PhD" })).getByRole("button", {
-        name: "📌 Pinned",
+        name: "Unpin PhD",
         pressed: true,
       }),
     ).toBeInTheDocument();
@@ -139,6 +147,6 @@ describe("ProjectsHome", () => {
     renderHome(new FakeDaemon());
     const card = screen.getByRole("article", { name: "Acme" });
     expect(within(card).getByText("Update needed for full info")).toBeInTheDocument();
-    expect(within(card).queryByRole("button", { name: "Pin" })).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /^Pin/ })).not.toBeInTheDocument();
   });
 });

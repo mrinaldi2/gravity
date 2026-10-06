@@ -239,34 +239,15 @@
 }
 
 .home-doing {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
   margin: 0;
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 0;
   list-style: none;
-  background: var(--bg);
-  border-radius: 6px;
 }
 
 .home-doing li {
-  display: flex;
-  gap: 8px;
-  min-width: 0;
-}
-
-.home-doing-title {
-  flex: 1;
   overflow: hidden;
-  color: var(--text);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.home-doing-who {
-  flex-shrink: 0;
-  color: var(--text-dim);
 }
 
 .home-quote {
@@ -292,10 +273,41 @@
   margin-top: auto;
 }
 
+/* The whole card opens the project: the button's hit area covers it, while
+   the button stays the one keyboard target. The pin sits above it. */
+.home-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+}
+
+.home-card {
+  position: relative;
+  cursor: pointer;
+}
+
+.home-card:hover {
+  border-color: var(--text-faint);
+}
+
+.home-pin {
+  position: relative;
+  z-index: 1;
+}
+
+.home-rank-pin {
+  background: var(--bg-active);
+}
+
 .home-rule {
   padding: 0;
   font: inherit;
   font-size: 12px;
   background: none;
   border: none;
+}
+
+.home-card-first:hover {
+  border-color: var(--amber);
 }
