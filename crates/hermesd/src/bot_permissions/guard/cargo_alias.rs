@@ -129,21 +129,56 @@ pub(super) fn resolve(
         let Some(entry) = value.get("alias").and_then(|a| a.get(sub)) else {
             continue;
         };
-        let words = match entry {
-            toml::Value::String(s) => s.split_whitespace().map(str::to_string).collect(),
-            toml::Value::Array(list) => list
-                .iter()
-                .map(|w| w.as_str().map(str::to_string))
-                .collect::<Option<Vec<_>>>()
-                .ok_or_else(|| format!("the alias `{sub}` in {} isn't words", file.display()))?,
-            _ => {
-                return Err(format!(
-                    "the alias `{sub}` in {} isn't words",
-                    file.display()
-                ))
-            }
-        };
-        return Ok(Some(words));
+        return words_of(entry)
+            .map(Some)
+            .ok_or_else(|| format!("the alias `{sub}` in {} isn't words", file.display()));
     }
     Ok(None)
+}
+
+/// An alias's words as cargo takes them: a string split on whitespace, with
+/// no escapes (a Windows path's `\` stays), or a list as it is.
+fn words_of(entry: &toml::Value) -> Option<Vec<String>> {
+    match entry {
+        toml::Value::String(s) => Some(s.split_whitespace().map(str::to_string).collect()),
+        toml::Value::Array(list) => list
+            .iter()
+            .map(|w| w.as_str().map(str::to_string))
+            .collect(),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::words_of;
+
+    #[test]
+    fn an_alias_keeps_a_windows_path_whole() {
+        let config: toml::Value = toml::from_str(
+            r"[alias]
+xb = 'build --target-dir \\?\C:\Users\me\bots\dev\cargo-target'
+xc = ['clean', '--target-dir', 'C:\Users\me\bots\ops\cargo-target']
+",
+        )
+        .unwrap();
+        let alias = |name: &str| words_of(&config["alias"][name]).unwrap();
+        assert_eq!(
+            alias("xb"),
+            [
+                "build",
+                "--target-dir",
+                r"\\?\C:\Users\me\bots\dev\cargo-target"
+            ]
+        );
+        assert_eq!(
+            alias("xc"),
+            [
+                "clean",
+                "--target-dir",
+                r"C:\Users\me\bots\ops\cargo-target"
+            ]
+        );
+        assert!(words_of(&toml::Value::Integer(3)).is_none());
+    }
 }

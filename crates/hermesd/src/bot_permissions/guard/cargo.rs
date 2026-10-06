@@ -119,7 +119,9 @@ fn check_at(
         Ok(named) => named,
         Err(why) => return Some(why),
     };
-    for target in &named {
+    for raw in &named {
+        // `\\?\C:\…`: its `?` would read as a wildcard (WIN-CHK-11).
+        let target = &unverbatim(raw);
         let expanded = ctx.expand(target, scope);
         // A `$( )` or backtick on the line may compute the target.
         if scope.substitutes || expanded.contains('$') || expanded.contains('`') {
@@ -327,5 +329,32 @@ mod tests {
                 PathBuf::from(r"C:\a\cargo-target")
             );
         }
+    }
+}
+
+/// A Windows verbatim path (`\\?\C:\…`, `\\?\UNC\server\share\…`) in its
+/// plain spelling, so the `?` in its prefix isn't read as a wildcard.
+fn unverbatim(word: &str) -> String {
+    if let Some(rest) = word.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = word.strip_prefix(r"\\?\") {
+        rest.to_string()
+    } else {
+        word.to_string()
+    }
+}
+
+#[cfg(test)]
+mod verbatim_tests {
+    use super::unverbatim;
+
+    #[test]
+    fn a_verbatim_target_is_read_plainly() {
+        assert_eq!(
+            unverbatim(r"\\?\C:\Users\me\bots\dev\cargo-target"),
+            r"C:\Users\me\bots\dev\cargo-target"
+        );
+        assert_eq!(unverbatim(r"\\?\UNC\server\share\t"), r"\\server\share\t");
+        assert_eq!(unverbatim("/a/b"), "/a/b");
     }
 }
