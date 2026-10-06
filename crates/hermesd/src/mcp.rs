@@ -29,6 +29,7 @@ mod schema;
 mod schema_decisions;
 mod selfmgmt;
 mod tags;
+mod task_card;
 pub(crate) mod tasks;
 mod tools;
 mod workers;
@@ -198,7 +199,10 @@ async fn remote_call(app: &Arc<AppState>, bot_id: &str, params: &Value) -> Optio
             Some(result) => result,
             None => match owner_actions::intercept(app, bot_id, name, &args).await {
                 Some(result) => result,
-                None => board_remote::intercept(app, bot_id, name, &args).await?,
+                None => match task_card::intercept(app, bot_id, name, &args).await {
+                    Some(result) => result,
+                    None => board_remote::intercept(app, bot_id, name, &args).await?,
+                },
             },
         },
     };

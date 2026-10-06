@@ -63,6 +63,7 @@ mod projects;
 mod quiesce;
 mod release_life;
 mod release_machines;
+mod release_plans;
 mod releases;
 #[cfg(test)]
 mod releases_tests;
@@ -261,6 +262,10 @@ impl Db {
                  AND id NOT IN (SELECT source_task_id FROM decision
                                  WHERE source_task_id IS NOT NULL)",
                 params![cutoff(message_days)],
+            )?;
+            tx.execute(
+                "DELETE FROM task_card WHERE task_id NOT IN (SELECT id FROM task)",
+                [],
             )?;
             tx.execute(
                 "UPDATE message SET ref_message_id = NULL WHERE ref_message_id IN

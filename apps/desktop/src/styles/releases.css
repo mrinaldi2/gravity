@@ -175,16 +175,41 @@
   border-color: var(--red);
 }
 
-.release-tests {
+.release-tests,
+.release-progress {
   padding: 12px;
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: 10px;
 }
 
-.release-tests h3 {
+.release-tests h3,
+.release-progress h3 {
   margin: 0 0 6px;
   font-size: 13px;
+  color: var(--text-strong);
+}
+
+/* H-137: how far an unsubmitted package is, one row per item (boxed as .release-tests). */
+.release-progress ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.release-progress-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 6px 0;
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+}
+
+.release-progress-title {
+  flex: 1 1 12rem;
+  min-width: 0;
   color: var(--text-strong);
 }
 

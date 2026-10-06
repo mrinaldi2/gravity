@@ -2,7 +2,7 @@
 //! successor assembled wrongly must not strand its predecessor's shipped
 //! items, whose Owner-testing exits are the daemon's.
 //!
-//! Only an assembling or built package can be cancelled. It is removed, and
+//! Only a planned, assembling or built package can be cancelled. It is removed, and
 //! a `cancelled` event keeps who, why and what it held. Its items were never
 //! moved: a predecessor's shipped items are still in Owner testing in that
 //! package, which is still repackaging and can take a new successor; items
@@ -16,7 +16,7 @@ use crate::app::AppState;
 use crate::board::model::{ColumnCategory, Role};
 use crate::decisions::conflict;
 
-use super::model::{Release, ReleaseEvent};
+use super::model::{Release, ReleaseEvent, ReleaseStatus};
 use super::{load, publish_touched, Caller};
 
 /// The record of a cancelled package, and the package it succeeded as it
@@ -32,14 +32,17 @@ pub fn cancel(
     release_id: &str,
     reason: Option<&str>,
 ) -> anyhow::Result<Cancelled> {
-    me.require(Role::Devops, "cancel a release")?;
     let project = me.bot.project_id.as_str();
     let actor = me.actor();
     let reason = reason.map(str::trim).filter(|r| !r.is_empty());
     let mut feed = app.board.writer();
     let (cancelled, touched) = app.db.board_tx(|t| {
         let release = load(t, project, release_id)?;
-        if !release.status.is_assembling() {
+        // The lead may call off a plan it made; a package is DevOps's.
+        if !(me.has(Role::Lead) && release.status == ReleaseStatus::Planned) {
+            me.require(Role::Devops, "cancel a release")?;
+        }
+        if !release.status.is_unsubmitted() {
             return Err(conflict(format!(
                 "release {} is {}; only a package not yet submitted can be cancelled",
                 release.name,

@@ -18,7 +18,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file hermes/board/v1/releases.proto.
  */
 export const file_hermes_board_v1_releases: GenFile = /*@__PURE__*/
-  fileDesc("Ch5oZXJtZXMvYm9hcmQvdjEvcmVsZWFzZXMucHJvdG8SD2hlcm1lcy5ib2FyZC52MSIhCgtSZWxlYXNlTGlzdBISCgpwcm9qZWN0X2lkGAEgASgJIiAKClJlbGVhc2VHZXQSEgoKcmVsZWFzZV9pZBgBIAEoCSK0AQoNUmVsZWFzZUNyZWF0ZRISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSHAoPZGlzcGxheV92ZXJzaW9uGAMgASgJSACIAQESDQoFaXRlbXMYBCADKAkSFgoJY2hhbmdlbG9nGAUgASgJSAGIAQESEQoEZnJvbRgGIAEoCUgCiAEBQhIKEF9kaXNwbGF5X3ZlcnNpb25CDAoKX2NoYW5nZWxvZ0IHCgVfZnJvbSJOCglIb3dUb1Rlc3QSFAoHaXRlbV9pZBgBIAEoCUgAiAEBEhAKCHBsYXRmb3JtGAIgASgJEg0KBXN0ZXBzGAMgAygJQgoKCF9pdGVtX2lkIjsKDUhvd1RvVGVzdExpc3QSKgoGdmFsdWVzGAEgAygLMhouaGVybWVzLmJvYXJkLnYxLkhvd1RvVGVzdCKwAQoNUmVsZWFzZVVwZGF0ZRISCgpyZWxlYXNlX2lkGAEgASgJEhwKD2Rpc3BsYXlfdmVyc2lvbhgCIAEoCUgAiAEBEhYKCWNoYW5nZWxvZxgDIAEoCUgBiAEBEjMKC2hvd190b190ZXN0GAQgASgLMh4uaGVybWVzLmJvYXJkLnYxLkhvd1RvVGVzdExpc3RCEgoQX2Rpc3BsYXlfdmVyc2lvbkIMCgpfY2hhbmdlbG9nIt4BCgtSZWxlYXNlVGVzdBISCgpyZWxlYXNlX2lkGAEgASgJEg8KB21hY2hpbmUYAiABKAkSFAoMYnVpbGRfc2hhMjU2GAMgASgJEg4KBnJlc3VsdBgEIAEoCRIaCg1jaGVja3NfcGFzc2VkGAUgASgNSACIAQESGQoMY2hlY2tzX3RvdGFsGAYgASgNSAGIAQESGQoMbG9nX2FydGlmYWN0GAcgASgJSAKIAQFCEAoOX2NoZWNrc19wYXNzZWRCDwoNX2NoZWNrc190b3RhbEIPCg1fbG9nX2FydGlmYWN0IjIKDFJlbGVhc2VQYXVzZRISCgpyZWxlYXNlX2lkGAEgASgJEg4KBnJlYXNvbhgCIAEoCSIjCg1SZWxlYXNlUmVzdW1lEhIKCnJlbGVhc2VfaWQYASABKAkiQwoNUmVsZWFzZUNhbmNlbBISCgpyZWxlYXNlX2lkGAEgASgJEhMKBnJlYXNvbhgCIAEoCUgAiAEBQgkKB19yZWFzb24i3wEKElJlbGVhc2VBdHRhY2hCdWlsZBISCgpyZWxlYXNlX2lkGAEgASgJEhAKCHBsYXRmb3JtGAIgASgJEg8KB3ZlcnNpb24YAyABKAkSEAoIYXJ0aWZhY3QYBCABKAkSDgoGc2hhMjU2GAUgASgJEhAKA3VybBgGIAEoCUgAiAEBEhgKC2luc3RhbGxfdXJsGAcgASgJSAGIAQESGgoNc291cmNlX2NvbW1pdBgIIAEoCUgCiAEBQgYKBF91cmxCDgoMX2luc3RhbGxfdXJsQhAKDl9zb3VyY2VfY29tbWl0IswBCg5SZWxlYXNlUHVibGlzaBISCgpyZWxlYXNlX2lkGAEgASgJEgwKBGZpbGUYAiABKAkSFQoIcGxhdGZvcm0YAyABKAlIAIgBARIUCgd2ZXJzaW9uGAQgASgJSAGIAQESFgoJYnVuZGxlX2lkGAUgASgJSAKIAQESGgoNc291cmNlX2NvbW1pdBgGIAEoCUgDiAEBQgsKCV9wbGF0Zm9ybUIKCghfdmVyc2lvbkIMCgpfYnVuZGxlX2lkQhAKDl9zb3VyY2VfY29tbWl0IiMKDVJlbGVhc2VTdWJtaXQSEgoKcmVsZWFzZV9pZBgBIAEoCSI0Cg1SZWxlYXNlRGVwbG95EhIKCnJlbGVhc2VfaWQYASABKAkSDwoHbWFjaGluZRgCIAEoCSI2Cg9SZWxlYXNlUm9sbGJhY2sSEgoKcmVsZWFzZV9pZBgBIAEoCRIPCgdtYWNoaW5lGAIgASgJIiQKDkluc3RhbGxSZWxlYXNlEhIKCnJlbGVhc2VfaWQYASABKAkihAEKDkluc3RhbGxRdWllc2NlEhIKCnJlbGVhc2VfaWQYASABKAkSDgoGYWN0aW9uGAIgASgJEhQKB3ZlcnNpb24YAyABKAlIAIgBARIaCg1iaW5hcnlfc2hhMjU2GAQgASgJSAGIAQFCCgoIX3ZlcnNpb25CEAoOX2JpbmFyeV9zaGEyNTYijgEKDURlcGxveUNvbmZpcm0SEgoKcmVsZWFzZV9pZBgBIAEoCRIPCgdtYWNoaW5lGAIgASgJEg4KBnJlc3VsdBgDIAEoCRISCgVzbW9rZRgEIAEoCUgAiAEBEhkKDGxvZ19hcnRpZmFjdBgFIAEoCUgBiAEBQggKBl9zbW9rZUIPCg1fbG9nX2FydGlmYWN0IiUKD1JlbGVhc2VNYWNoaW5lcxISCgpwcm9qZWN0X2lkGAEgASgJIjoKElJlbGVhc2VNYWNoaW5lc1NldBISCgpwcm9qZWN0X2lkGAEgASgJEhAKCG1hY2hpbmVzGAIgAygJIjIKDk1hY2hpbmVOYW1lU2V0EhIKCnByb2plY3RfaWQYASABKAkSDAoEbmFtZRgCIAEoCSJAChJSZWxlYXNlRGVwbG95ZWRWaWESEgoKcmVsZWFzZV9pZBgBIAEoCRIWCg52aWFfcmVsZWFzZV9pZBgCIAEoCWIGcHJvdG8z");
+  fileDesc("Ch5oZXJtZXMvYm9hcmQvdjEvcmVsZWFzZXMucHJvdG8SD2hlcm1lcy5ib2FyZC52MSIhCgtSZWxlYXNlTGlzdBISCgpwcm9qZWN0X2lkGAEgASgJIiAKClJlbGVhc2VHZXQSEgoKcmVsZWFzZV9pZBgBIAEoCSK0AQoNUmVsZWFzZUNyZWF0ZRISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSHAoPZGlzcGxheV92ZXJzaW9uGAMgASgJSACIAQESDQoFaXRlbXMYBCADKAkSFgoJY2hhbmdlbG9nGAUgASgJSAGIAQESEQoEZnJvbRgGIAEoCUgCiAEBQhIKEF9kaXNwbGF5X3ZlcnNpb25CDAoKX2NoYW5nZWxvZ0IHCgVfZnJvbSKWAQoLUmVsZWFzZVBsYW4SEgoKcHJvamVjdF9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEhwKD2Rpc3BsYXlfdmVyc2lvbhgDIAEoCUgAiAEBEg0KBWl0ZW1zGAQgAygJEhYKCWNoYW5nZWxvZxgFIAEoCUgBiAEBQhIKEF9kaXNwbGF5X3ZlcnNpb25CDAoKX2NoYW5nZWxvZyJfCgxSZWxlYXNlSXRlbXMSEgoKcmVsZWFzZV9pZBgBIAEoCRILCgNhZGQYAiADKAkSDgoGcmVtb3ZlGAMgAygJEhMKBnJlYXNvbhgEIAEoCUgAiAEBQgkKB19yZWFzb24iJQoPUmVsZWFzZUFzc2VtYmxlEhIKCnJlbGVhc2VfaWQYASABKAkiTgoJSG93VG9UZXN0EhQKB2l0ZW1faWQYASABKAlIAIgBARIQCghwbGF0Zm9ybRgCIAEoCRINCgVzdGVwcxgDIAMoCUIKCghfaXRlbV9pZCI7Cg1Ib3dUb1Rlc3RMaXN0EioKBnZhbHVlcxgBIAMoCzIaLmhlcm1lcy5ib2FyZC52MS5Ib3dUb1Rlc3QisAEKDVJlbGVhc2VVcGRhdGUSEgoKcmVsZWFzZV9pZBgBIAEoCRIcCg9kaXNwbGF5X3ZlcnNpb24YAiABKAlIAIgBARIWCgljaGFuZ2Vsb2cYAyABKAlIAYgBARIzCgtob3dfdG9fdGVzdBgEIAEoCzIeLmhlcm1lcy5ib2FyZC52MS5Ib3dUb1Rlc3RMaXN0QhIKEF9kaXNwbGF5X3ZlcnNpb25CDAoKX2NoYW5nZWxvZyLeAQoLUmVsZWFzZVRlc3QSEgoKcmVsZWFzZV9pZBgBIAEoCRIPCgdtYWNoaW5lGAIgASgJEhQKDGJ1aWxkX3NoYTI1NhgDIAEoCRIOCgZyZXN1bHQYBCABKAkSGgoNY2hlY2tzX3Bhc3NlZBgFIAEoDUgAiAEBEhkKDGNoZWNrc190b3RhbBgGIAEoDUgBiAEBEhkKDGxvZ19hcnRpZmFjdBgHIAEoCUgCiAEBQhAKDl9jaGVja3NfcGFzc2VkQg8KDV9jaGVja3NfdG90YWxCDwoNX2xvZ19hcnRpZmFjdCIyCgxSZWxlYXNlUGF1c2USEgoKcmVsZWFzZV9pZBgBIAEoCRIOCgZyZWFzb24YAiABKAkiIwoNUmVsZWFzZVJlc3VtZRISCgpyZWxlYXNlX2lkGAEgASgJIkMKDVJlbGVhc2VDYW5jZWwSEgoKcmVsZWFzZV9pZBgBIAEoCRITCgZyZWFzb24YAiABKAlIAIgBAUIJCgdfcmVhc29uIt8BChJSZWxlYXNlQXR0YWNoQnVpbGQSEgoKcmVsZWFzZV9pZBgBIAEoCRIQCghwbGF0Zm9ybRgCIAEoCRIPCgd2ZXJzaW9uGAMgASgJEhAKCGFydGlmYWN0GAQgASgJEg4KBnNoYTI1NhgFIAEoCRIQCgN1cmwYBiABKAlIAIgBARIYCgtpbnN0YWxsX3VybBgHIAEoCUgBiAEBEhoKDXNvdXJjZV9jb21taXQYCCABKAlIAogBAUIGCgRfdXJsQg4KDF9pbnN0YWxsX3VybEIQCg5fc291cmNlX2NvbW1pdCLMAQoOUmVsZWFzZVB1Ymxpc2gSEgoKcmVsZWFzZV9pZBgBIAEoCRIMCgRmaWxlGAIgASgJEhUKCHBsYXRmb3JtGAMgASgJSACIAQESFAoHdmVyc2lvbhgEIAEoCUgBiAEBEhYKCWJ1bmRsZV9pZBgFIAEoCUgCiAEBEhoKDXNvdXJjZV9jb21taXQYBiABKAlIA4gBAUILCglfcGxhdGZvcm1CCgoIX3ZlcnNpb25CDAoKX2J1bmRsZV9pZEIQCg5fc291cmNlX2NvbW1pdCIjCg1SZWxlYXNlU3VibWl0EhIKCnJlbGVhc2VfaWQYASABKAkiNAoNUmVsZWFzZURlcGxveRISCgpyZWxlYXNlX2lkGAEgASgJEg8KB21hY2hpbmUYAiABKAkiNgoPUmVsZWFzZVJvbGxiYWNrEhIKCnJlbGVhc2VfaWQYASABKAkSDwoHbWFjaGluZRgCIAEoCSIkCg5JbnN0YWxsUmVsZWFzZRISCgpyZWxlYXNlX2lkGAEgASgJIoQBCg5JbnN0YWxsUXVpZXNjZRISCgpyZWxlYXNlX2lkGAEgASgJEg4KBmFjdGlvbhgCIAEoCRIUCgd2ZXJzaW9uGAMgASgJSACIAQESGgoNYmluYXJ5X3NoYTI1NhgEIAEoCUgBiAEBQgoKCF92ZXJzaW9uQhAKDl9iaW5hcnlfc2hhMjU2Io4BCg1EZXBsb3lDb25maXJtEhIKCnJlbGVhc2VfaWQYASABKAkSDwoHbWFjaGluZRgCIAEoCRIOCgZyZXN1bHQYAyABKAkSEgoFc21va2UYBCABKAlIAIgBARIZCgxsb2dfYXJ0aWZhY3QYBSABKAlIAYgBAUIICgZfc21va2VCDwoNX2xvZ19hcnRpZmFjdCIlCg9SZWxlYXNlTWFjaGluZXMSEgoKcHJvamVjdF9pZBgBIAEoCSI6ChJSZWxlYXNlTWFjaGluZXNTZXQSEgoKcHJvamVjdF9pZBgBIAEoCRIQCghtYWNoaW5lcxgCIAMoCSIyCg5NYWNoaW5lTmFtZVNldBISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkiQAoSUmVsZWFzZURlcGxveWVkVmlhEhIKCnJlbGVhc2VfaWQYASABKAkSFgoOdmlhX3JlbGVhc2VfaWQYAiABKAliBnByb3RvMw");
 
 /**
  * The project's release packages, newest first.
@@ -115,6 +115,113 @@ export const ReleaseCreateSchema: GenMessage<ReleaseCreate> = /*@__PURE__*/
   messageDesc(file_hermes_board_v1_releases, 2);
 
 /**
+ * Lead or DevOps: plan a release as soon as its contents are decided (H-137).
+ * Its items may be in any open column; each one's live status shows in the
+ * release, with how many are ready. Nothing is built or frozen until it is
+ * assembled (ReleaseAssemble).
+ *
+ * @generated from message hermes.board.v1.ReleasePlan
+ */
+export type ReleasePlan = Message<"hermes.board.v1.ReleasePlan"> & {
+  /**
+   * @generated from field: string project_id = 1;
+   */
+  projectId: string;
+
+  /**
+   * Unique in the project, e.g. "0.17.0".
+   *
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * The version the owner sees, e.g. "0.17.0".
+   *
+   * @generated from field: optional string display_version = 3;
+   */
+  displayVersion?: string | undefined;
+
+  /**
+   * Item ids, e.g. "H-137"; each open and in no other open package.
+   *
+   * @generated from field: repeated string items = 4;
+   */
+  items: string[];
+
+  /**
+   * @generated from field: optional string changelog = 5;
+   */
+  changelog?: string | undefined;
+};
+
+/**
+ * Describes the message hermes.board.v1.ReleasePlan.
+ * Use `create(ReleasePlanSchema)` to create a new message.
+ */
+export const ReleasePlanSchema: GenMessage<ReleasePlan> = /*@__PURE__*/
+  messageDesc(file_hermes_board_v1_releases, 3);
+
+/**
+ * Lead or DevOps: add items to a release or take them out before it is
+ * submitted, recorded as a release event. A planned release takes any open
+ * item; one being assembled takes items in Verify only, and none once it has
+ * a build or a test result.
+ *
+ * @generated from message hermes.board.v1.ReleaseItems
+ */
+export type ReleaseItems = Message<"hermes.board.v1.ReleaseItems"> & {
+  /**
+   * @generated from field: string release_id = 1;
+   */
+  releaseId: string;
+
+  /**
+   * @generated from field: repeated string add = 2;
+   */
+  add: string[];
+
+  /**
+   * @generated from field: repeated string remove = 3;
+   */
+  remove: string[];
+
+  /**
+   * Why the scope changed; the owner reads it.
+   *
+   * @generated from field: optional string reason = 4;
+   */
+  reason?: string | undefined;
+};
+
+/**
+ * Describes the message hermes.board.v1.ReleaseItems.
+ * Use `create(ReleaseItemsSchema)` to create a new message.
+ */
+export const ReleaseItemsSchema: GenMessage<ReleaseItems> = /*@__PURE__*/
+  messageDesc(file_hermes_board_v1_releases, 4);
+
+/**
+ * Lead or DevOps: a planned release becomes one being assembled, once every
+ * item is in Verify. From there: attach builds, test, submit.
+ *
+ * @generated from message hermes.board.v1.ReleaseAssemble
+ */
+export type ReleaseAssemble = Message<"hermes.board.v1.ReleaseAssemble"> & {
+  /**
+   * @generated from field: string release_id = 1;
+   */
+  releaseId: string;
+};
+
+/**
+ * Describes the message hermes.board.v1.ReleaseAssemble.
+ * Use `create(ReleaseAssembleSchema)` to create a new message.
+ */
+export const ReleaseAssembleSchema: GenMessage<ReleaseAssemble> = /*@__PURE__*/
+  messageDesc(file_hermes_board_v1_releases, 5);
+
+/**
  * One platform's steps for trying a package, shown to the owner.
  *
  * @generated from message hermes.board.v1.HowToTest
@@ -145,7 +252,7 @@ export type HowToTest = Message<"hermes.board.v1.HowToTest"> & {
  * Use `create(HowToTestSchema)` to create a new message.
  */
 export const HowToTestSchema: GenMessage<HowToTest> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 3);
+  messageDesc(file_hermes_board_v1_releases, 6);
 
 /**
  * The whole how-to-test list, where "unset" and "none" must differ.
@@ -164,7 +271,7 @@ export type HowToTestList = Message<"hermes.board.v1.HowToTestList"> & {
  * Use `create(HowToTestListSchema)` to create a new message.
  */
 export const HowToTestListSchema: GenMessage<HowToTestList> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 4);
+  messageDesc(file_hermes_board_v1_releases, 7);
 
 /**
  * DevOps: fill in what the owner reads, while the package is assembling.
@@ -202,7 +309,7 @@ export type ReleaseUpdate = Message<"hermes.board.v1.ReleaseUpdate"> & {
  * Use `create(ReleaseUpdateSchema)` to create a new message.
  */
 export const ReleaseUpdateSchema: GenMessage<ReleaseUpdate> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 5);
+  messageDesc(file_hermes_board_v1_releases, 8);
 
 /**
  * Tester: your computer's result for a package, against one of its builds for
@@ -260,7 +367,7 @@ export type ReleaseTest = Message<"hermes.board.v1.ReleaseTest"> & {
  * Use `create(ReleaseTestSchema)` to create a new message.
  */
 export const ReleaseTestSchema: GenMessage<ReleaseTest> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 6);
+  messageDesc(file_hermes_board_v1_releases, 9);
 
 /**
  * DevOps: pause a rollout; testers holding its deploy tasks are told not to install.
@@ -286,7 +393,7 @@ export type ReleasePause = Message<"hermes.board.v1.ReleasePause"> & {
  * Use `create(ReleasePauseSchema)` to create a new message.
  */
 export const ReleasePauseSchema: GenMessage<ReleasePause> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 7);
+  messageDesc(file_hermes_board_v1_releases, 10);
 
 /**
  * DevOps: resume a paused rollout.
@@ -305,7 +412,7 @@ export type ReleaseResume = Message<"hermes.board.v1.ReleaseResume"> & {
  * Use `create(ReleaseResumeSchema)` to create a new message.
  */
 export const ReleaseResumeSchema: GenMessage<ReleaseResume> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 8);
+  messageDesc(file_hermes_board_v1_releases, 11);
 
 /**
  * DevOps: call off a package that hasn't been submitted. It is removed and an
@@ -333,7 +440,7 @@ export type ReleaseCancel = Message<"hermes.board.v1.ReleaseCancel"> & {
  * Use `create(ReleaseCancelSchema)` to create a new message.
  */
 export const ReleaseCancelSchema: GenMessage<ReleaseCancel> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 9);
+  messageDesc(file_hermes_board_v1_releases, 12);
 
 /**
  * DevOps: add or replace one platform's build while the package is assembling.
@@ -396,7 +503,7 @@ export type ReleaseAttachBuild = Message<"hermes.board.v1.ReleaseAttachBuild"> &
  * Use `create(ReleaseAttachBuildSchema)` to create a new message.
  */
 export const ReleaseAttachBuildSchema: GenMessage<ReleaseAttachBuild> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 10);
+  messageDesc(file_hermes_board_v1_releases, 13);
 
 /**
  * DevOps with the Publish extra: copy a build file into the served directory,
@@ -454,7 +561,7 @@ export type ReleasePublish = Message<"hermes.board.v1.ReleasePublish"> & {
  * Use `create(ReleasePublishSchema)` to create a new message.
  */
 export const ReleasePublishSchema: GenMessage<ReleasePublish> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 11);
+  messageDesc(file_hermes_board_v1_releases, 14);
 
 /**
  * DevOps: freeze the package, move its items to Owner testing and ask the owner.
@@ -473,7 +580,7 @@ export type ReleaseSubmit = Message<"hermes.board.v1.ReleaseSubmit"> & {
  * Use `create(ReleaseSubmitSchema)` to create a new message.
  */
 export const ReleaseSubmitSchema: GenMessage<ReleaseSubmit> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 12);
+  messageDesc(file_hermes_board_v1_releases, 15);
 
 /**
  * DevOps: send an approved package to a machine; opens a task to its tester.
@@ -497,7 +604,7 @@ export type ReleaseDeploy = Message<"hermes.board.v1.ReleaseDeploy"> & {
  * Use `create(ReleaseDeploySchema)` to create a new message.
  */
 export const ReleaseDeploySchema: GenMessage<ReleaseDeploy> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 13);
+  messageDesc(file_hermes_board_v1_releases, 16);
 
 /**
  * DevOps: take a package back off a machine; opens a task to its tester.
@@ -521,7 +628,7 @@ export type ReleaseRollback = Message<"hermes.board.v1.ReleaseRollback"> & {
  * Use `create(ReleaseRollbackSchema)` to create a new message.
  */
 export const ReleaseRollbackSchema: GenMessage<ReleaseRollback> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 14);
+  messageDesc(file_hermes_board_v1_releases, 17);
 
 /**
  * Tester: the verified builds of the package DevOps tasked you to install.
@@ -540,7 +647,7 @@ export type InstallRelease = Message<"hermes.board.v1.InstallRelease"> & {
  * Use `create(InstallReleaseSchema)` to create a new message.
  */
 export const InstallReleaseSchema: GenMessage<InstallRelease> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 15);
+  messageDesc(file_hermes_board_v1_releases, 18);
 
 /**
  * Tester (or DevOps) installing a release on this computer: pause every
@@ -586,7 +693,7 @@ export type InstallQuiesce = Message<"hermes.board.v1.InstallQuiesce"> & {
  * Use `create(InstallQuiesceSchema)` to create a new message.
  */
 export const InstallQuiesceSchema: GenMessage<InstallQuiesce> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 16);
+  messageDesc(file_hermes_board_v1_releases, 19);
 
 /**
  * Tester (or DevOps): how a deploy or rollback on a machine went.
@@ -629,7 +736,7 @@ export type DeployConfirm = Message<"hermes.board.v1.DeployConfirm"> & {
  * Use `create(DeployConfirmSchema)` to create a new message.
  */
 export const DeployConfirmSchema: GenMessage<DeployConfirm> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 17);
+  messageDesc(file_hermes_board_v1_releases, 20);
 
 /**
  * Who tests a release on which computer, and the computers a package must
@@ -649,7 +756,7 @@ export type ReleaseMachines = Message<"hermes.board.v1.ReleaseMachines"> & {
  * Use `create(ReleaseMachinesSchema)` to create a new message.
  */
 export const ReleaseMachinesSchema: GenMessage<ReleaseMachines> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 18);
+  messageDesc(file_hermes_board_v1_releases, 21);
 
 /**
  * Lead: set the computers a package must pass on, each one a tester tests
@@ -674,7 +781,7 @@ export type ReleaseMachinesSet = Message<"hermes.board.v1.ReleaseMachinesSet"> &
  * Use `create(ReleaseMachinesSetSchema)` to create a new message.
  */
 export const ReleaseMachinesSetSchema: GenMessage<ReleaseMachinesSet> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 19);
+  messageDesc(file_hermes_board_v1_releases, 22);
 
 /**
  * Lead: name this computer for its testers (ARCH-R55 S1). It is what a
@@ -700,7 +807,7 @@ export type MachineNameSet = Message<"hermes.board.v1.MachineNameSet"> & {
  * Use `create(MachineNameSetSchema)` to create a new message.
  */
 export const MachineNameSetSchema: GenMessage<MachineNameSet> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 20);
+  messageDesc(file_hermes_board_v1_releases, 23);
 
 /**
  * DevOps: close an approved package that a later, deployed release contains
@@ -727,5 +834,5 @@ export type ReleaseDeployedVia = Message<"hermes.board.v1.ReleaseDeployedVia"> &
  * Use `create(ReleaseDeployedViaSchema)` to create a new message.
  */
 export const ReleaseDeployedViaSchema: GenMessage<ReleaseDeployedVia> = /*@__PURE__*/
-  messageDesc(file_hermes_board_v1_releases, 21);
+  messageDesc(file_hermes_board_v1_releases, 24);
 

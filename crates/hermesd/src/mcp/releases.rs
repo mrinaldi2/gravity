@@ -13,7 +13,8 @@ use crate::board::release::assemble::{self, NewPackage};
 use crate::board::release::model::{DeployResult, ReleaseBuild, Smoke};
 use crate::board::release::publish::{self, Publish};
 use crate::board::release::{
-    cancel, deploy, deployed_via, lifecycle, load, machines, model::parse_arg, package, Caller,
+    cancel, deploy, deployed_via, lifecycle, load, machines, model::parse_arg, package, plan,
+    Caller,
 };
 use crate::db::NewReleaseTest;
 
@@ -23,6 +24,13 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
     tool("release_list", "ReleaseList", Audience::Everyone),
     tool("release_get", "ReleaseGet", Audience::Everyone),
     tool("release_create", "ReleaseCreate", Audience::Devops),
+    tool("release_plan", "ReleasePlan", Audience::LeadOrDevops),
+    tool("release_items", "ReleaseItems", Audience::LeadOrDevops),
+    tool(
+        "release_assemble",
+        "ReleaseAssemble",
+        Audience::LeadOrDevops,
+    ),
     tool(
         "release_attach_build",
         "ReleaseAttachBuild",
@@ -30,7 +38,8 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
     ),
     tool("release_publish", "ReleasePublish", Audience::Devops),
     tool("release_update", "ReleaseUpdate", Audience::Devops),
-    tool("release_cancel", "ReleaseCancel", Audience::Devops),
+    // The lead may cancel a plan it made (H-137); a package is DevOps's.
+    tool("release_cancel", "ReleaseCancel", Audience::LeadOrDevops),
     tool(
         "release_deployed_via",
         "ReleaseDeployedVia",
@@ -98,6 +107,34 @@ pub(super) fn call(
                     from: req.from.as_deref(),
                 },
             )?)
+        }
+        "release_plan" => {
+            let req: c::ReleasePlan = decode("ReleasePlan", args, project)?;
+            released(plan::plan(
+                app,
+                &me,
+                &plan::NewPlan {
+                    name: &req.name,
+                    display_version: req.display_version.as_deref(),
+                    items: &req.items,
+                    changelog: req.changelog.as_deref().unwrap_or_default(),
+                },
+            )?)
+        }
+        "release_items" => {
+            let req: c::ReleaseItems = decode("ReleaseItems", args, project)?;
+            released(plan::change_items(
+                app,
+                &me,
+                &req.release_id,
+                &req.add,
+                &req.remove,
+                req.reason.as_deref(),
+            )?)
+        }
+        "release_assemble" => {
+            let req: c::ReleaseAssemble = decode("ReleaseAssemble", args, project)?;
+            released(plan::assemble(app, &me, &req.release_id)?)
         }
         "release_attach_build" => {
             let req: c::ReleaseAttachBuild = decode("ReleaseAttachBuild", args, project)?;

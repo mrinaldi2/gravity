@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Decision } from "../../protocol/decisions";
 import type { Release } from "../../protocol/releases";
-import { card, snapshot } from "../../test/boardFixtures";
+import { card, moved, snapshot } from "../../test/boardFixtures";
 import * as dfx from "../../test/decisionFixtures";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import * as fx from "../../test/fixtures";
@@ -59,6 +59,43 @@ describe("ReleasesView", () => {
     expect(await screen.findByRole("heading", { name: "No release yet" })).toBeInTheDocument();
     // No package, so nothing asks the board for item titles.
     expect(client.boardCalls).toHaveLength(0);
+  });
+
+  it("reads a planned release again when one of its cards moves (H-137)", async () => {
+    const plan = release({
+      status: "planned",
+      decision_id: null,
+      readiness: {
+        items_total: 2,
+        items_ready: 1,
+        builds: [],
+        tests_required: [],
+        tests_passed: [],
+      },
+      plan: [],
+    });
+    const client = daemon([plan]).onBoard("boardWatch", () => ({
+      case: "board",
+      value: snapshot([card({ id: "H-017" })], 1n),
+    }));
+    render(
+      <ReleasesView
+        client={client}
+        project={fx.project({ id: "p1", name: "The Hermes" })}
+        bots={[]}
+        connected
+        canControl
+        addToast={actionToastSpy()}
+      />,
+    );
+    expect(await screen.findByText(/1\/2 ready/)).toBeInTheDocument();
+    const reads = () => client.requests.filter((r) => r.body.type === "list_releases").length;
+    await waitFor(() => expect(reads()).toBeGreaterThan(1));
+    const before = reads();
+    act(() => {
+      client.emitBoardEvent(moved(2n, card({ id: "H-017", columnKey: "verify" }), "doing"));
+    });
+    await waitFor(() => expect(reads()).toBeGreaterThan(before));
   });
 });
 

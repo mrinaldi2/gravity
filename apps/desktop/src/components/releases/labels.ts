@@ -11,6 +11,7 @@ export interface StatusLabel {
 }
 
 const STATUS: Readonly<Record<ReleaseStatus, StatusLabel>> = {
+  planned: { glyph: "◌", word: "Planned: work in progress", tone: "wait" },
   assembling: { glyph: "○", word: "Being packaged by DevOps", tone: "wait" },
   built: { glyph: "○", word: "Being tested", tone: "wait" },
   awaiting_owner: { glyph: "◐", word: "Ready for you to test", tone: "you" },
@@ -73,9 +74,9 @@ export function eventLine(event: ReleaseEvent, botName: BotName): string {
     event.actor === "owner" || event.actor.startsWith("device:")
       ? "You"
       : (botName(event.actor) ?? "A bot");
-  const line = EVENT_LINES[event.kind];
-  if (line) {
-    return line(event, who);
+  const special = EVENT_LINES[event.kind]?.(event, who) ?? scopeLine(event, who);
+  if (special) {
+    return special;
   }
   const what = `${who}: ${event.kind} ${event.release_name}`;
   return event.note ? `${what}: ${event.note}` : what;
@@ -125,4 +126,24 @@ export function rolloutLabel(release: Release, machine: string): StatusLabel {
   return release.status === "paused"
     ? { glyph: "○", word: "Not started", tone: "off" }
     : { glyph: "○", word: "Queued", tone: "wait" };
+}
+
+/** The planning events of a package (H-137): planned, scope changed, assembled. */
+function scopeLine(event: ReleaseEvent, who: string): string | null {
+  const d = event.detail ?? {};
+  if (event.kind === "planned") {
+    return `${who} planned ${event.release_name} with ${(d.items ?? []).join(", ")}.`;
+  }
+  if (event.kind === "assembled") {
+    return `${who} started packaging ${event.release_name}: every item reached Verify.`;
+  }
+  if (event.kind !== "items_changed") {
+    return null;
+  }
+  const parts = [
+    d.added?.length ? `added ${d.added.join(", ")}` : "",
+    d.removed?.length ? `took out ${d.removed.join(", ")}` : "",
+  ].filter(Boolean);
+  const what = `${who} ${parts.join(" and ")} in ${event.release_name}.`;
+  return event.note ? `${what} Why: “${event.note}”.` : what;
 }

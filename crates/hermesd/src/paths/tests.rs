@@ -163,3 +163,12 @@ fn hooks_go_over_the_local_endpoint_without_a_token() {
     assert!(!raw.contains("TOKEN") && !raw.contains("curl"), "{raw}");
     assert!(!dir.path().join(".claude/gravity-hook.ps1").exists());
 }
+
+#[test]
+fn system_md_puts_all_work_on_the_board() {
+    let md = prompt::system_md(&spec("Reviewer", ""));
+    assert!(md.contains("## Work is on the board"));
+    assert!(md.contains("always names the board card"));
+    assert!(md.contains("never asks for\nwork"));
+    assert!(md.contains("`parent_task`"));
+}

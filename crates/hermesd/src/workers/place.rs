@@ -345,6 +345,9 @@ fn hand_over(
         hop,
         &chain,
     )?;
+    if let Some(card) = app.db.worker_card(&worker.id)? {
+        app.db.set_task_card(&task.id, &card)?;
+    }
     let started = app.db.start_worker(&worker.id, &bot.id, &task.id)?;
     if started {
         let running = Worker {

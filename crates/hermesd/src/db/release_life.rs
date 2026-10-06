@@ -151,6 +151,7 @@ impl BoardTx<'_> {
             "release_build",
             "release_item",
             "release_deployment",
+            "release_plan",
         ] {
             self.conn.execute(
                 &format!("DELETE FROM {table} WHERE release_id = ?1"),

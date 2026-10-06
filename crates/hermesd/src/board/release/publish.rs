@@ -60,6 +60,7 @@ pub fn publish(
     let release = app
         .db
         .board_read(|t| load(t, &project.id, req.release_id))?;
+    super::plan::builds_wait(&release)?;
     if !release.status.is_assembling() {
         return Err(conflict(format!(
             "release {} is {}; builds change only before it is submitted",

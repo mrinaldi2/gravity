@@ -29,6 +29,8 @@ pub(super) enum Audience {
     TesterOrDevops,
     /// Acceptance checks: a tester, or the lead with evidence (H-116).
     TesterOrLead,
+    /// Planning a release's contents (H-137): the lead, or DevOps.
+    LeadOrDevops,
 }
 
 pub(super) struct BoardTool {
@@ -134,6 +136,7 @@ impl Audience {
                 roles.contains(&Role::Tester) || roles.contains(&Role::Devops)
             }
             Audience::TesterOrLead => roles.contains(&Role::Tester) || roles.contains(&Role::Lead),
+            Audience::LeadOrDevops => roles.contains(&Role::Lead) || roles.contains(&Role::Devops),
         }
     }
 }

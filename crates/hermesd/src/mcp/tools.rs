@@ -9,10 +9,10 @@ use bus::{
 use serde_json::{json, Value};
 
 use crate::app::AppState;
-use crate::board::feed::ChangeKind;
 use crate::messaging;
 use crate::messaging::Dm;
 
+use super::task_card;
 use super::tasks::describe_tasks;
 use super::{bot_sender, caller};
 
@@ -20,6 +20,17 @@ pub(super) fn send_message(
     app: &Arc<AppState>,
     bot_id: &str,
     args: &Value,
+) -> anyhow::Result<Value> {
+    send(app, bot_id, args, None)
+}
+
+/// `send_message`, with `checked_item` set when the card was already checked
+/// at a board home on a peer (`task_card::intercept`).
+pub(super) fn send(
+    app: &Arc<AppState>,
+    bot_id: &str,
+    args: &Value,
+    checked_item: Option<String>,
 ) -> anyhow::Result<Value> {
     let me = caller(app, bot_id)?;
     let to = args
@@ -50,13 +61,22 @@ pub(super) fn send_message(
         MessageKind::Task | MessageKind::Reply | MessageKind::Note => {}
     }
     let ref_id = args.get("ref").and_then(|v| v.as_str());
-    let item = super::board::item_arg(app, &me, args)?;
-    if item.is_some() && kind != MessageKind::Task {
+    let named = args
+        .get("item")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty());
+    if named.is_some() && kind != MessageKind::Task {
         anyhow::bail!("'item' links a delegated task to a board item; send kind 'task'");
     }
+    let item = match (checked_item, named) {
+        (Some(checked), _) => Some(checked),
+        (None, Some(id)) => Some(task_card::local_item(app, &me, id)?),
+        (None, None) => None,
+    };
 
-    // Hop/origin tracking: extend the chain from the caller's newest open task.
-    let open_task = app.db.newest_open_task_for(bot_id)?;
+    // Hop/origin tracking: extend the chain from the task this send is for
+    // (`parent_task`, else the caller's newest open one).
+    let open_task = task_card::parent_task(app, &me, args)?;
     let (hop, chain) = open_task
         .as_ref()
         .map(|t| (t.hop_count, t.origin_chain.clone()))
@@ -165,17 +185,26 @@ pub(super) fn send_message(
             } else {
                 format!("{chain},{}", me.id)
             };
-            let open = app.db.open_tasks_delegated_by(&me.id, Some(&new_chain))?;
-            if open.len() as i64 >= MAX_TASK_FANOUT {
-                // Naming the tasks is what makes the advice actionable: the
-                // ids came back from sends that may be far behind in context.
-                anyhow::bail!(
-                    "refusing send: you already have {MAX_TASK_FANOUT} open tasks \
-                     delegated from this one — wait for a result, ask a delegate \
-                     for status with kind 'reply', or close one with cancel_task \
-                     before opening another. Open now: {}",
-                    describe_tasks(app, &open)?
-                );
+            // Every task names a card (H-125): the one given, else the
+            // parent's. A root task is budgeted per card and per sender; a
+            // nested one per incoming task, as before.
+            let card = task_card::card_for(app, &me, item, open_task.as_ref())?;
+            match (&open_task, &card) {
+                (None, Some(card)) => task_card::check_root(app, &me, card)?,
+                _ => {
+                    let open = app.db.open_tasks_delegated_by(&me.id, Some(&new_chain))?;
+                    if open.len() as i64 >= MAX_TASK_FANOUT {
+                        // Naming the tasks is what makes the advice actionable:
+                        // the ids came back from sends that may be far behind.
+                        anyhow::bail!(
+                            "refusing send: you already have {MAX_TASK_FANOUT} open tasks \
+                             delegated from this one — wait for a result, ask a delegate \
+                             for status with kind 'reply', or close one with cancel_task \
+                             before opening another. Open now: {}",
+                            describe_tasks(app, &open)?
+                        );
+                    }
+                }
             }
             let deadline_hours = args
                 .get("deadline_hours")
@@ -195,18 +224,8 @@ pub(super) fn send_message(
                 hop + 1,
                 &new_chain,
             )?;
-            if let Some(item) = &item {
-                let actor = super::board::bot_actor(&me);
-                super::board::published(
-                    app,
-                    &me.project_id,
-                    ChangeKind::ItemUpserted,
-                    None,
-                    || {
-                        app.db.link_task_item(&task.id, item, &actor)?;
-                        Ok(((), item.clone()))
-                    },
-                )?;
+            if let Some(card) = &card {
+                task_card::attach(app, &me, &task.id, card)?;
             }
             Ok(json!({ "message_id": msg.id, "num": msg.num, "task_id": task.id }))
         }
