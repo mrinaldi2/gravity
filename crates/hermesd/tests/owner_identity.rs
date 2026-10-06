@@ -25,9 +25,8 @@ impl CodeCheck for AppIs {
 
 async fn ask(proxy: &mut Proxy, method: &str, params: Value, within: u64) -> Value {
     proxy
-        .request_within(method, params, Duration::from_secs(within))
+        .answer(method, params, Duration::from_secs(within))
         .await
-        .expect("an answer")
 }
 
 fn ticket_of(reply: &Value) -> String {
@@ -79,7 +78,9 @@ async fn the_pinned_app_is_the_owner_and_nothing_else_is() {
 /// when allowed; a denial, silence or no app to ask refuses it.
 #[tokio::test]
 async fn a_cli_owner_command_runs_only_when_the_owner_allows_it() {
-    let d = spawn_daemon_with(|cfg| cfg.permission_timeout_seconds = 2).await;
+    // The default card timeout: the owner's answer never races the clock,
+    // however loaded the machine (WIN-CHK-3). Expiry has its own daemon.
+    let d = spawn_daemon().await;
     let request = json!({ "command": "hermesd board import --dry-run" });
 
     // No app open to ask: refused at once.
@@ -125,6 +126,8 @@ async fn a_cli_owner_command_runs_only_when_the_owner_allows_it() {
     }
 
     // Left unanswered, the card closes and the command is refused.
+    let d = spawn_daemon_with(|cfg| cfg.permission_timeout_seconds = 2).await;
+    let _owner = WsClient::connect(&d).await;
     let mut late = Proxy::spawn(&d);
     late.start().await;
     let refused = ask(&mut late, "hermes/owner_request", request, 20).await;

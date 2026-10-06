@@ -72,6 +72,7 @@ impl Proxy {
             .current_dir(dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()
             .expect("spawn the launcher");
@@ -135,6 +136,23 @@ impl Proxy {
             .expect("a reply in time")
             .ok()??;
         Some(serde_json::from_str(&reply).expect("json"))
+    }
+
+    /// A request that must be answered. With no answer, the panic says why:
+    /// the proxy's exit status and what it printed on stderr (it can't
+    /// reach the endpoint, the daemon closed it...), not just "no answer".
+    pub async fn answer(&mut self, method: &str, params: Value, within: Duration) -> Value {
+        if let Some(reply) = self.request_within(method, params, within).await {
+            return reply;
+        }
+        let status = tokio::time::timeout(Duration::from_secs(5), self.child.wait()).await;
+        let mut stderr = String::new();
+        if let Some(mut err) = self.child.stderr.take() {
+            use tokio::io::AsyncReadExt;
+            let _ =
+                tokio::time::timeout(Duration::from_secs(5), err.read_to_string(&mut stderr)).await;
+        }
+        panic!("no answer to {method}: proxy exit {status:?}, stderr: {stderr:?}");
     }
 
     /// `get_self` as whoever the daemon decides this process is.
