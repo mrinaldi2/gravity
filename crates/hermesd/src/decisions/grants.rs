@@ -13,12 +13,18 @@ use crate::app::AppState;
 
 use super::invalid;
 
-/// The extras a linked computer's ruling may grant here.
+/// The extras a linked computer's ruling may grant here (ARCH-R51 S1c).
 const REMOTE_GRANTABLE: [PermissionExtra; 3] = [
     PermissionExtra::Install,
     PermissionExtra::DaemonRestart,
     PermissionExtra::Quiesce,
 ];
+
+/// Whether another computer's ruling may grant `extra` on this one. The
+/// ruling's computer checks it too, before sending (H-163).
+pub fn remote_grantable(extra: &str) -> bool {
+    PermissionExtra::parse(extra).is_some_and(|e| REMOTE_GRANTABLE.contains(&e))
+}
 
 /// The sha256 over the canonical JSON of an option's grants: what a view
 /// shows as `grants_sha` and a ruling sends back (ARCH-R51 M2).
@@ -119,13 +125,9 @@ pub fn apply(app: &Arc<AppState>, decision: &Decision) {
         };
         let name = crate::db::Db::display_name(&bot);
         if bot.is_linked() {
-            let (app, bot, title) = (app.clone(), bot.clone(), decision.title.clone());
+            // Kept until that computer applies or refuses it (H-163).
             let names: Vec<String> = names.iter().map(|n| n.to_string()).collect();
-            lines.push(format!(
-                "{name}: {} (sent to its computer)",
-                names.join(", ")
-            ));
-            tokio::spawn(async move { grant_there(&app, &bot, &names, &title).await });
+            lines.push(super::grants_peer::queue(app, &decision.id, &bot, &names));
             continue;
         }
         match add_extras(app, &bot, &extras) {
@@ -139,18 +141,6 @@ pub fn apply(app: &Arc<AppState>, decision: &Decision) {
             .insert_decision_comment(&decision.id, bus::CommentAuthorKind::User, None, &body)
     {
         tracing::warn!(error = %e, "could not note the applied grants");
-    }
-}
-
-/// Asks the computer a linked bot runs on to add its extras.
-async fn grant_there(app: &AppState, bot: &Bot, extras: &[String], title: &str) {
-    let (Some(peer), Some(remote)) = (&bot.peer_id, &bot.remote_bot_id) else {
-        return;
-    };
-    let frame = json!({ "type": "grant_extras", "bot_id": remote, "extras": extras,
-                        "decision": title });
-    if let Err(e) = app.peers.request(peer, frame).await {
-        tracing::warn!(bot_id = %bot.id, error = %e, "linked bot's grants not applied");
     }
 }
 
@@ -169,21 +159,26 @@ pub fn serve_grant(app: &AppState, peer_id: &str, frame: &Value) -> anyhow::Resu
         .get_live_bot(bot_id)?
         .filter(|b| !b.is_linked())
         .ok_or_else(|| crate::peer::refuse("not_found", "no such bot here"))?;
-    let extras: Vec<PermissionExtra> = frame["extras"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|v| v.as_str().and_then(PermissionExtra::parse))
-        .collect();
-    // A linked computer grants only what installs need (ARCH-R51 S1c).
-    if let Some(other) = extras.iter().find(|e| !REMOTE_GRANTABLE.contains(e)) {
-        return Err(crate::peer::refuse(
-            "forbidden",
-            format!(
-                "{} can't be granted from another computer; set it here",
-                other.as_str()
-            ),
-        ));
+    // A linked computer grants only what installs need (ARCH-R51 S1c). The
+    // rest is refused one by one, said in the answer, rather than turning
+    // the whole grant away (H-163): the grantable extras still apply.
+    let mut extras = Vec::new();
+    let mut refused = Vec::new();
+    for name in frame["extras"].as_array().into_iter().flatten() {
+        let name = name.as_str().unwrap_or_default();
+        match PermissionExtra::parse(name) {
+            Some(e) if REMOTE_GRANTABLE.contains(&e) => extras.push(e),
+            Some(_) => refused.push(json!({"extra": name,
+                "why": "it can't be granted from another computer; set it here"})),
+            None => refused.push(json!({"extra": name, "why": "this computer doesn't know it"})),
+        }
+    }
+    if extras.is_empty() {
+        let why = refused
+            .first()
+            .and_then(|r| r["why"].as_str())
+            .unwrap_or("nothing to grant");
+        return Err(crate::peer::refuse("forbidden", why.to_string()));
     }
     let held = add_extras(app, &bot, &extras)?;
     // On record where this computer's owner can read it (ARCH-R51 S1b).
@@ -196,5 +191,5 @@ pub fn serve_grant(app: &AppState, peer_id: &str, frame: &Value) -> anyhow::Resu
         json!({ "bot": bot.name, "extras": names, "decision": frame["decision"] }),
     );
     let held: Vec<&str> = held.iter().map(|e| e.as_str()).collect();
-    Ok(json!({ "extras": held }))
+    Ok(json!({ "extras": held, "refused": refused }))
 }

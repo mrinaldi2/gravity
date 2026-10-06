@@ -13,6 +13,7 @@ mod base;
 mod board;
 mod board_links;
 mod decisions;
+mod grants;
 mod history;
 mod home;
 mod meetings;
@@ -30,6 +31,7 @@ use board_links::{
     MIGRATION_GUARDRAILS_2, MIGRATION_TASK_CARDS,
 };
 use decisions::MIGRATION_12;
+use grants::MIGRATION_PEER_GRANTS;
 use history::{
     MIGRATION_10, MIGRATION_11, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6,
     MIGRATION_7, MIGRATION_8, MIGRATION_9,
@@ -89,6 +91,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_OWNER_READ,
     MIGRATION_PROJECT_PIN,
     MIGRATION_GUARDRAILS_2,
+    MIGRATION_PEER_GRANTS,
 ];
 
 #[cfg(test)]

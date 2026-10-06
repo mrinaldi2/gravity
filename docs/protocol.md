@@ -375,7 +375,15 @@ Decision { "id", "project_id", "kind": "question"|"decision", "title", "body",
     - `answer_decision`, `update_decision` with `ruling_option`, `publish_decisions` items and `confirm_decision` on a granting option must send back that `grants_sha`. A mismatch gets `conflict` (the grants changed since they were shown).
     - Other clients get `forbidden`: "Answer this on the desktop — this choice changes bot permissions".
     - `confirm_relayed` skips granting ones (listed as `failed`); confirm those one at a time.
-  - **What they do:** they only add extras. A linked bot gets them on its own computer, through peer request `grant_extras {bot_id, extras, decision}`. It is accepted only for bots exposed to that peer and only for `install`, `daemon_restart` and `quiesce`, and it is recorded in that computer's `owner_action_audit` (as `grant:<bot id>`, event `granted`).
+  - **What they do:** they only add extras. A linked bot gets them on its own computer, through peer request `grant_extras {bot_id, extras, decision}`. It is accepted only for bots exposed to that peer and only for `install`, `daemon_restart` and `quiesce` (ARCH-R51 S1c), and it is recorded in that computer's `owner_action_audit` (as `grant:<bot id>`, event `granted`).
+  - **Per grant, not per frame (H-163):** the ruling's computer sends only those three. Each other extra is refused there, on the decision: "Not granted on <computer>: <bot>'s <extra> can't be granted from another computer; set it on <computer>, in the app there under <bot>'s permissions." The receiving computer checks the same way: it applies what it may and answers `{extras: <now held>, refused: [{extra, why}]}`. When nothing is grantable, it refuses the request (`forbidden`).
+  - **Until it lands (H-163):** the ruling's computer keeps each linked bot's grant in `peer_grant` until that computer applies or refuses it.
+    - It is sent at once, again on link-up, and on a 60 s sweep.
+    - Only a transient failure is retried: the peer offline, its link closing mid-request, or no answer. Any answer is final.
+    - The decision gets a comment for each outcome:
+      - "Granted on <computer>: <bot> now has …";
+      - "Not granted on <computer>: <bot>'s <extra> (<why>); set it on <computer>, …", one per refused extra;
+      - "Waiting for <computer> …", said once while it is unreachable.
   - **Record:** a comment on the decision lists what was applied.
 DecisionComment { "id", "decision_id", "author_kind": "bot"|"user", "author_bot_id?",
            "author_name", "body", "created_at" }

@@ -9,6 +9,7 @@
 
 pub(crate) mod authority;
 pub mod grants;
+pub mod grants_peer;
 mod owner;
 pub(crate) mod publish;
 mod record;
