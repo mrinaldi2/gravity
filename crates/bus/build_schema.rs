@@ -1,7 +1,7 @@
 //! JSON Schemas for the board's messages, written at build time from the
 //! same descriptors prost compiles; the MCP tools use the request ones
 //! (ADR-001 §1, "MCP (bots speak JSON)"). A field is required unless it is `optional`,
-//! repeated or a message; an enum field carries `x-enum` with the enum's name,
+//! repeated, a message or listed in `MAY_OMIT`; an enum field carries `x-enum` with the enum's name,
 //! which the daemon turns into the list of its short names; a `*List` wrapper
 //! (one repeated `values` field) reads as a plain array marked `x-list`.
 
@@ -12,6 +12,10 @@ use prost_types::{DescriptorProto, FieldDescriptorProto, FileDescriptorSet};
 use serde_json::{json, Map, Value};
 
 const PACKAGE: &str = "hermes.board.v1";
+
+/// Plain (implicit-presence) fields a bot may leave out, where "" means not
+/// given: they shipped plain, and `optional` would break the wire (buf breaking).
+const MAY_OMIT: &[(&str, &str)] = &[("ReleaseTest", "machine")];
 
 pub fn message_schemas(set: &FileDescriptorSet) -> Value {
     let files: Vec<_> = set.file.iter().filter(|f| f.package() == PACKAGE).collect();
@@ -47,7 +51,8 @@ pub fn message_schemas(set: &FileDescriptorSet) -> Value {
                 }
                 let optional = field.proto3_optional()
                     || field.label() == Label::Repeated
-                    || field.r#type() == Type::Message;
+                    || field.r#type() == Type::Message
+                    || MAY_OMIT.contains(&(message.name(), field.name()));
                 if !optional {
                     required.push(field.name().to_string());
                 }
