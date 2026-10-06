@@ -162,6 +162,10 @@ fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
         "find" => return find(rest, scope, ctx),
         "xargs" => return xargs(rest, scope, ctx),
         "cargo" => return cargo::check(words, at, scope, ctx),
+        // `cargo-clippy clippy …`: a subcommand's own binary (CE-013).
+        bin if bin.len() > 6 && bin.starts_with("cargo-") => {
+            return cargo::check_binary(words, at, &bin[6..], scope, ctx)
+        }
         _ => targets::of(name, rest, &args),
     };
     let target = targets

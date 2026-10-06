@@ -17,7 +17,7 @@
 use std::path::{Path, PathBuf};
 
 use super::paths::Scope;
-use super::GuardContext;
+use super::{cargo_alias, GuardContext};
 
 /// Subcommands that build or change nothing in a target.
 const READ_ONLY: &[&str] = &[
@@ -50,8 +50,68 @@ pub(super) fn check(
     scope: &Scope,
     ctx: &GuardContext,
 ) -> Option<String> {
+    check_at(words, at, scope, ctx, 0)
+}
+
+/// `cargo-<sub> [<sub>] args…`, a subcommand's binary run directly, judged
+/// as `cargo <sub> args…` (CE-013).
+pub(super) fn check_binary(
+    words: &[String],
+    at: usize,
+    sub: &str,
+    scope: &Scope,
+    ctx: &GuardContext,
+) -> Option<String> {
+    let mut rest = &words[at + 1..];
+    if rest.first().is_some_and(|w| w == sub) {
+        rest = &rest[1..];
+    }
+    let mut as_cargo = words[..at].to_vec();
+    as_cargo.push("cargo".to_string());
+    as_cargo.push(sub.to_string());
+    as_cargo.extend_from_slice(rest);
+    check_at(&as_cargo, at, scope, ctx, 0)
+}
+
+fn check_at(
+    words: &[String],
+    at: usize,
+    scope: &Scope,
+    ctx: &GuardContext,
+    depth: usize,
+) -> Option<String> {
     let rest = &words[at + 1..];
-    let sub = subcommand(rest)?;
+    let (index, sub) = subcommand(rest)?;
+    if words[..at]
+        .iter()
+        .chain(scope.vars.keys())
+        .any(|w| w.starts_with("CARGO_ALIAS_"))
+    {
+        return Some(
+            "a CARGO_ALIAS_ variable can make any cargo command build anywhere; run the \
+             command itself"
+                .to_string(),
+        );
+    }
+    // An alias is judged by what it expands to (G3).
+    if !cargo_alias::is_builtin(sub) {
+        if depth >= cargo_alias::MAX_DEPTH {
+            return Some(format!("the cargo alias `{sub}` nests too deep to check"));
+        }
+        return match cargo_alias::resolve(sub, scope, ctx) {
+            Ok(Some(expansion)) => {
+                let mut expanded = words[..at + 1 + index].to_vec();
+                expanded.extend(expansion);
+                expanded.extend_from_slice(&rest[index + 1..]);
+                check_at(&expanded, at, scope, ctx, depth + 1)
+            }
+            Ok(None) => Some(format!(
+                "`cargo {sub}` is neither a cargo command nor an alias the guard can read; run \
+                 the cargo command itself"
+            )),
+            Err(why) => Some(why),
+        };
+    }
     if READ_ONLY.contains(&sub) {
         return None;
     }
@@ -97,7 +157,7 @@ pub(super) fn computed_target(line: &str, substitutes: bool) -> Option<String> {
 
 /// The subcommand after `+toolchain` and global options; `None` for a bare
 /// `cargo --version` or `cargo` alone.
-fn subcommand(rest: &[String]) -> Option<&str> {
+fn subcommand(rest: &[String]) -> Option<(usize, &str)> {
     let mut i = 0;
     while let Some(w) = rest.get(i) {
         if w.starts_with('+') {
@@ -107,7 +167,7 @@ fn subcommand(rest: &[String]) -> Option<&str> {
         } else if w.starts_with('-') {
             i += 1;
         } else {
-            return Some(w.as_str());
+            return Some((i, w.as_str()));
         }
     }
     None
@@ -168,6 +228,11 @@ fn config_value(value: &str) -> Result<Option<String>, String> {
         .chars()
         .filter(|c| !c.is_whitespace() && *c != '"')
         .collect();
+    if key.starts_with("alias.") {
+        return Err(format!(
+            "`--config {value}` defines a cargo alias the guard can't follow; run the command itself"
+        ));
+    }
     if key != "build.target-dir" {
         return Ok(None);
     }

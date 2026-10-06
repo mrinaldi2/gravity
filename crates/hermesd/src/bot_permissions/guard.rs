@@ -42,6 +42,7 @@ use std::path::PathBuf;
 use serde_json::{json, Value};
 
 mod cargo;
+mod cargo_alias;
 mod commands;
 mod full;
 mod git;
