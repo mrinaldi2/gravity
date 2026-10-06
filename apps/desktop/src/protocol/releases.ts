@@ -50,6 +50,8 @@ interface ReleaseBuild {
   readonly install_url: string | null;
   readonly sha256: string;
   readonly built_at: string;
+  /** The git commit it was built from, when recorded (ARCH-R52 M1). */
+  readonly source_commit?: string | null;
 }
 
 export interface ReleaseTest {

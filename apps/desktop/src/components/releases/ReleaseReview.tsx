@@ -34,6 +34,25 @@ export interface ReleaseReviewProps {
 }
 
 /** The verdicts for an approval: every item ships unless left out. */
+/**
+ * What the builds were made from, the commit that lands on main if the
+ * owner approves (ARCH-R52): "Built from 1a2b3c4 on release/desktop-0.17.0".
+ */
+export function sourceLine(release: Release, version: string): string {
+  const commits = new Set(release.builds.map((b) => b.source_commit ?? null));
+  if (release.builds.length === 0) {
+    return "No builds yet";
+  }
+  if (commits.has(null)) {
+    return "Built from: not recorded for every build, so it can't land on main as is";
+  }
+  if (commits.size > 1) {
+    return "Built from more than one commit, so it can't land on main as is";
+  }
+  const [commit] = [...commits];
+  return `Built from ${String(commit).slice(0, 7)} on release/desktop-${version.replace(/^v/u, "")}`;
+}
+
 function approval(release: Release, leftOut: ReadonlyMap<string, LeftOut>): ItemVerdict[] {
   return release.items.map((i) => {
     const out = leftOut.get(i.item_id);
@@ -105,6 +124,7 @@ export default function ReleaseReview({
         <span className="mono">{release.name}</span>
         {release.supersedes ? " · replaces an earlier package" : ""}
       </p>
+      <p className="release-meta">{sourceLine(release, version)}</p>
       <Banner release={release} actions={actions} canControl={canControl} />
       <ReviewEvents release={release} botName={botName} />
       <TestSummary release={release} botName={botName} />

@@ -16,8 +16,9 @@ import {
 } from "../../test/releaseFixtures";
 import { actionToastSpy } from "../../test/spies";
 import { fmtTimestamp } from "../../util";
-import ReleaseReview from "./ReleaseReview";
+import ReleaseReview, { sourceLine } from "./ReleaseReview";
 import { UNDO_MS } from "./useDelayedSend";
+
 import { useReleaseActions } from "./useReleases";
 
 const NOW = Date.parse("2026-10-05T12:00:00Z");
@@ -316,5 +317,20 @@ describe("ReleaseReview", () => {
   it("lists computers the rollout hasn't reached as queued while it rolls out", () => {
     setup(release({ status: "deploying", deployments: [deployment({ result: "ok" })] }));
     expect(screen.getByRole("tabpanel")).toHaveTextContent("win-pc○ Queued");
+  });
+});
+
+describe("the commit a release was built from", () => {
+  it("names it with the release branch, or says why it can't land", () => {
+    const r = release();
+    expect(sourceLine(r, "0.16.0")).toBe("Built from 1a2b3c4 on release/desktop-0.16.0");
+    const [mac, win] = r.builds;
+    if (mac === undefined || win === undefined) {
+      throw new Error("the fixture has two builds");
+    }
+    const unnamed = release({ builds: [{ ...mac, source_commit: null }, win] });
+    expect(sourceLine(unnamed, "0.16.0")).toMatch(/not recorded for every build/u);
+    const split = release({ builds: [{ ...mac, source_commit: "f".repeat(40) }, win] });
+    expect(sourceLine(split, "0.16.0")).toMatch(/more than one commit/u);
   });
 });

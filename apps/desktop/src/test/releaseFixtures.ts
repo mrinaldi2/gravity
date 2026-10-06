@@ -16,6 +16,8 @@ export const CANCELLED: ReleaseEvent = {
 /** The mac build and the Windows build: each computer tests its own. */
 export const MAC_SHA = "a".repeat(64);
 export const WIN_SHA = "b".repeat(64);
+/** The commit both builds were made from. */
+const SOURCE_COMMIT = "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b";
 
 /** A package of two items waiting for the owner, tested on mac and win-pc. */
 export function release(over: Partial<Release> = {}): Release {
@@ -57,6 +59,7 @@ export function release(over: Partial<Release> = {}): Release {
         install_url: null,
         sha256: MAC_SHA,
         built_at: "2026-10-05T10:00:00Z",
+        source_commit: SOURCE_COMMIT,
       },
       {
         platform: "desktop-win",
@@ -66,6 +69,7 @@ export function release(over: Partial<Release> = {}): Release {
         install_url: null,
         sha256: WIN_SHA,
         built_at: "2026-10-05T10:05:00Z",
+        source_commit: SOURCE_COMMIT,
       },
     ],
     tests: [

@@ -1,6 +1,43 @@
 use std::path::Path;
 
-use super::{check_tree, parse, SCRIPT};
+use super::{check_tree, commit_to_build, parse, SCRIPT};
+
+/// Before any build names a commit, a named one must be on the release
+/// branch; the branch's tip is the default (ARCH-R52 follow-up).
+#[test]
+fn a_named_commit_is_built_only_when_it_is_on_the_release_branch() {
+    let root = tempfile::tempdir().unwrap();
+    sh(root.path(), "git init -q --bare -b main origin.git");
+    sh(
+        root.path(),
+        "git clone -q origin.git c && cd c && git checkout -q -b main \
+         && git commit -q --allow-empty -m A && git push -q origin main \
+         && git checkout -q -b release/desktop-0.17.0 && git commit -q --allow-empty -m B \
+         && git push -q origin release/desktop-0.17.0 \
+         && git checkout -q main && git commit -q --allow-empty -m stray",
+    );
+    let clone = root.path().join("c");
+    let git = |what: &str| super::super::git::git(&clone, &["rev-parse", what]).unwrap();
+    let (tip, stray) = (git("origin/release/desktop-0.17.0"), git("main"));
+    let branch = "release/desktop-0.17.0";
+    assert_eq!(commit_to_build(&clone, None, None, branch).unwrap(), tip);
+    assert_eq!(
+        commit_to_build(&clone, None, Some(&tip), branch).unwrap(),
+        tip
+    );
+    let refused = commit_to_build(&clone, None, Some(&stray), branch)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        refused.contains("isn't on release/desktop-0.17.0"),
+        "{refused}"
+    );
+    // Once a build names one, only that one.
+    let refused = commit_to_build(&clone, Some(&tip), Some(&stray), branch)
+        .unwrap_err()
+        .to_string();
+    assert!(refused.contains("can only name that"), "{refused}");
+}
 
 fn sh(dir: &Path, script: &str) {
     let ok = std::process::Command::new("sh")

@@ -191,8 +191,9 @@ impl Drop for Fresh {
 }
 
 /// The commit to build: the one the release's builds name (only restated
-/// by `--commit`), else the one named, else the release branch's tip.
-fn commit_to_build(
+/// by `--commit`), else the one named, which must be on the release
+/// branch, else the release branch's tip.
+pub fn commit_to_build(
     repo: &Path,
     recorded: Option<&str>,
     named: Option<&str>,
@@ -205,14 +206,22 @@ fn commit_to_build(
         );
     }
     git::fetch(repo, &[branch])?;
-    let wanted = recorded
-        .or(named)
-        .map_or_else(|| format!("refs/remotes/origin/{branch}"), str::to_string);
-    run_git(
+    let tip = format!("refs/remotes/origin/{branch}");
+    let wanted = recorded.or(named).unwrap_or(&tip).to_string();
+    let commit = run_git(
         repo,
         &["rev-parse", "--verify", &format!("{wanted}^{{commit}}")],
     )
-    .map_err(|_| anyhow::anyhow!("no commit {wanted} here"))
+    .map_err(|_| anyhow::anyhow!("no commit {wanted} here"))?;
+    // The first build names it, so it has to be the release's code
+    // (ARCH-R52 follow-up).
+    if recorded.is_none() && named.is_some() {
+        anyhow::ensure!(
+            git::yes(repo, &["merge-base", "--is-ancestor", &commit, &tip]),
+            "{commit} isn't on {branch}: build only what the release branch holds"
+        );
+    }
+    Ok(commit)
 }
 
 pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
