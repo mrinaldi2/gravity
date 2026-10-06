@@ -110,6 +110,16 @@ impl Context {
     }
 }
 
+/// The outcome a spike or a chore without code closes on: its newest
+/// artifact link (H-154).
+pub fn outcome_link(ctx: &Context) -> Option<&str> {
+    ctx.links
+        .iter()
+        .filter(|l| l.kind == LinkKind::Artifact)
+        .max_by_key(|l| l.at)
+        .map(|l| l.target.as_str())
+}
+
 /// A requested move.
 pub struct Move<'a> {
     pub to: &'a BoardColumn,
@@ -216,6 +226,9 @@ pub fn evaluate(item: &Item, mv: &Move<'_>, who: &Who, ctx: &Context) -> Vec<Unm
         return Vec::new();
     }
     let rule = rule(item.category, mv.to.category);
+    if rule == Rule::Release && conditions::closes_too_early(item, mv, ctx) {
+        return vec![conditions::not_started()];
+    }
     if rule == Rule::Release {
         return vec![unmet(
             "move.daemon_only",
@@ -265,9 +278,11 @@ fn refused(rule: Rule, item: &Item, who: &Who, ctx: &Context) -> Option<&'static
         ),
         Rule::Package => (who.has(Role::Devops), "DevOps"),
         Rule::Reject => (who.leads() || who.verifies(item), "a tester or the lead"),
+        // A spike or a chore without code closes on someone else's word
+        // (H-154): the lead, or a reviewer who isn't the one who did it.
         Rule::Finish => (
-            assignee || who.reviews(item, ctx),
-            "the assignee or a reviewer",
+            who.leads() || (who.reviews(item, ctx) && !assignee),
+            "the lead, or a reviewer other than the assignee",
         ),
         Rule::Release | Rule::Unlisted => (false, "the owner"),
     };

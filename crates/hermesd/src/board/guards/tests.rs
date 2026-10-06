@@ -254,11 +254,10 @@ fn only_the_owner_closes_verify_without_a_release_and_never_a_released_item() {
     c.who = Who::Owner;
     c.item.release_id = Some("R-1".into());
     assert_eq!(run(&c, Cat::Done), ["done.flow", "done.outcome"]);
+    // The lead may close spikes and code-free chores (H-154), but a feature
+    // still goes through a release.
     c.who = bot("lead", LEAD);
-    assert_eq!(
-        run(&c, Cat::Done),
-        ["role.not_allowed", "done.flow", "done.outcome"]
-    );
+    assert_eq!(run(&c, Cat::Done), ["done.flow", "done.outcome"]);
     // The escape is out of Verify only.
     let mut c = case(Cat::Review);
     c.reason = Some("shipped by hand");
@@ -282,10 +281,56 @@ fn the_owner_does_not_close_an_item_in_an_open_package() {
     let refused = evaluate(&c.item, &mv, &c.who, &c.ctx);
     assert!(refused[0].text.contains("package 0.16.0"), "{refused:?}");
     c.who = bot("lead", LEAD);
+    assert_eq!(run(&c, Cat::Done), ["done.flow", "done.outcome"]);
+}
+
+#[test]
+fn the_lead_or_another_reviewer_closes_a_spike_on_its_outcome() {
+    // H-154: answered spikes and code-free chores reach Done without a
+    // release, on the word of someone other than whoever did the work.
+    let mut c = case(Cat::Verify);
+    c.item.item_type = ItemType::Spike;
+    c.who = bot("lead", LEAD);
     assert_eq!(
         run(&c, Cat::Done),
-        ["role.not_allowed", "done.flow", "done.outcome"]
+        ["done.outcome"],
+        "the outcome is required"
     );
+    c.ctx.links.push(link(LinkKind::Artifact, "dev"));
+    assert!(run(&c, Cat::Done).is_empty(), "the lead closes it");
+
+    // The assignee can't close their own spike, reviewer or not.
+    c.who = bot("dev", &[Role::Dev, Role::ReviewerArch]);
+    assert_eq!(run(&c, Cat::Done), ["role.not_allowed"]);
+    // Another reviewer can.
+    c.who = bot("arch", &[Role::ReviewerArch]);
+    assert!(run(&c, Cat::Done).is_empty());
+
+    // A chore closes the same way while it has no code; a branch makes it
+    // a release's.
+    c.item.item_type = ItemType::Chore;
+    assert!(run(&c, Cat::Done).is_empty());
+    c.ctx.links.push(link(LinkKind::Branch, "dev"));
+    assert_eq!(run(&c, Cat::Done), ["done.flow"]);
+    // Features and bugs keep the release path.
+    for kind in [ItemType::Feature, ItemType::Bug] {
+        c.item.item_type = kind;
+        assert_eq!(run(&c, Cat::Done), ["done.flow"], "{kind:?}");
+    }
+}
+
+#[test]
+fn a_spike_not_yet_started_is_told_how_to_close() {
+    // From Inbox or Ready a spike used to hit "only the daemon moves items",
+    // which named the release path it never takes.
+    for from in [Cat::Inbox, Cat::Ready] {
+        let mut c = case(from);
+        c.item.item_type = ItemType::Spike;
+        c.who = bot("lead", LEAD);
+        assert_eq!(run(&c, Cat::Done), ["done.not_started"], "{from:?}");
+        c.item.item_type = ItemType::Feature;
+        assert_eq!(run(&c, Cat::Done), ["move.daemon_only"], "{from:?}");
+    }
 }
 
 #[test]
