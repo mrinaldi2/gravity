@@ -13,7 +13,7 @@ use crate::board::release::assemble::{self, NewPackage};
 use crate::board::release::model::{DeployResult, ReleaseBuild, Smoke};
 use crate::board::release::publish::{self, Publish};
 use crate::board::release::{
-    cancel, deploy, lifecycle, load, machines, model::parse_arg, package, Caller,
+    cancel, deploy, deployed_via, lifecycle, load, machines, model::parse_arg, package, Caller,
 };
 use crate::db::NewReleaseTest;
 
@@ -31,6 +31,11 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
     tool("release_publish", "ReleasePublish", Audience::Devops),
     tool("release_update", "ReleaseUpdate", Audience::Devops),
     tool("release_cancel", "ReleaseCancel", Audience::Devops),
+    tool(
+        "release_deployed_via",
+        "ReleaseDeployedVia",
+        Audience::Devops,
+    ),
     tool("release_test", "ReleaseTest", Audience::Tester),
     tool("release_machines", "ReleaseMachines", Audience::Everyone),
     tool("release_machines_set", "ReleaseMachinesSet", Audience::Lead),
@@ -139,6 +144,15 @@ pub(super) fn call(
                 steps.as_ref(),
             )?)
         }
+        "release_deployed_via" => {
+            let req: c::ReleaseDeployedVia = decode("ReleaseDeployedVia", args, project)?;
+            released(deployed_via::deployed_via(
+                app,
+                &me,
+                &req.release_id,
+                &req.via_release_id,
+            )?)
+        }
         "release_cancel" => {
             let req: c::ReleaseCancel = decode("ReleaseCancel", args, project)?;
             let done = cancel::cancel(app, &me, &req.release_id, req.reason.as_deref())?;
@@ -150,7 +164,7 @@ pub(super) fn call(
         "release_test" => {
             let req: c::ReleaseTest = decode("ReleaseTest", args, project)?;
             let test = NewReleaseTest {
-                machine: req.machine.as_deref().unwrap_or_default().trim(),
+                machine: req.machine.trim(),
                 tester: &me.bot.id,
                 build_sha256: req.build_sha256.trim(),
                 result: req.result.trim(),

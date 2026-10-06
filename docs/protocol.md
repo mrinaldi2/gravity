@@ -696,6 +696,14 @@ runs through the tester the same way.
 
 - **Successor:** after a mixed ruling (`repackaging`) or a failed deploy (`partially_deployed`), DevOps calls `release_create` with `from`. The predecessor's shipped items join straight from Owner testing, and the predecessor becomes `superseded` when the successor is **submitted**. The successor is a new build, so it gets a new ruling. A failed deploy clears its items' `release_id`.
 - **Cancel:** `release_cancel {release_id, reason?}` (DevOps) removes a package that is still `assembling` or `built`; anything submitted or later is refused. Its items were never moved: a predecessor's shipped items stay in Owner testing for the predecessor, which can take a new successor, and items from Verify are free again. A `cancelled` event keeps who, why and what it held, and shows in the predecessor's `events`.
+- **Deployed via (H-121):** `release_deployed_via {release_id, via_release_id}` (DevOps) closes an approved package that a later, deployed release contains, for when the owner skips installing it.
+  - The old package must be `approved` with no deployment open.
+  - The via package must be `deployed`; it may itself have been closed this way, so a chain works.
+  - The via package must contain the old one:
+    - the old package's recorded source commit is the via's, or in its history. The daemon checks this with `git merge-base --is-ancestor` in its own copy of the project's repository: a bare, blob-less clone under `<home>/cache/repos/<project>.git`, cloned and fetched with no hooks and no user git config.
+    - A package from before commits were recorded is contained when the via package is newer and has a build for every platform it built.
+  - Its post-install acceptance criteria must be ticked (H-116).
+  - It records a `deployed_via` event (note `deployed via <name>`; detail `{via_release_id, basis: "ancestry" | "platforms", commit?, via_commit?}`), creates no deployment rows, sets the status to `deployed` and moves its items to Done.
 - **Testing:**
   - DevOps fills `changelog` and `how_to_test` (`[{item_id?, platform, steps}]`) with `release_update` while the package is assembling.
   - Required machines are per computer, not per platform (H-115). Where a tester tests:

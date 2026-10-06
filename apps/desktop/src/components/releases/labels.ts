@@ -48,22 +48,34 @@ export function isCurrent(release: Release): boolean {
 /** A bot's name by id; undefined when this device doesn't know the bot. */
 export type BotName = (id: string) => string | undefined;
 
+type EventText = (event: ReleaseEvent, who: string) => string;
+
+/** A line per event kind; the note is a bot's own words, so it is quoted. */
+const EVENT_LINES: Readonly<Record<string, EventText>> = {
+  cancelled: (event, who) => {
+    const what = `${who} cancelled ${event.release_name}, the package that was going to replace this one.`;
+    return event.note ? `${what} Their note: “${event.note}”.` : what;
+  },
+  // H-121: closed because a later, deployed release contains it.
+  deployed_via: (event, who) =>
+    `${who} closed ${event.release_name}: ${event.note ?? "deployed through a later release"}.`,
+  lead_ticked: (event, who) => {
+    const d = event.detail ?? {};
+    const verb = d.passed === false ? "marked failed" : "ticked";
+    const what = `${who} ${verb} “${d.text ?? "a criterion"}” on ${d.item_id ?? "an item"} on the lead's own evidence.`;
+    return event.note ? `${what} Evidence: “${event.note}”.` : what;
+  },
+};
+
 /** One line for an event on a package, e.g. a successor DevOps cancelled. */
 export function eventLine(event: ReleaseEvent, botName: BotName): string {
   const who =
     event.actor === "owner" || event.actor.startsWith("device:")
       ? "You"
       : (botName(event.actor) ?? "A bot");
-  if (event.kind === "cancelled") {
-    // The note is the bot's own words, so it is quoted, not run into ours.
-    const what = `${who} cancelled ${event.release_name}, the package that was going to replace this one.`;
-    return event.note ? `${what} Their note: “${event.note}”.` : what;
-  }
-  if (event.kind === "lead_ticked") {
-    const d = event.detail ?? {};
-    const verb = d.passed === false ? "marked failed" : "ticked";
-    const what = `${who} ${verb} “${d.text ?? "a criterion"}” on ${d.item_id ?? "an item"} on the lead's own evidence.`;
-    return event.note ? `${what} Evidence: “${event.note}”.` : what;
+  const line = EVENT_LINES[event.kind];
+  if (line) {
+    return line(event, who);
   }
   const what = `${who}: ${event.kind} ${event.release_name}`;
   return event.note ? `${what}: ${event.note}` : what;
