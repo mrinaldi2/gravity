@@ -81,7 +81,8 @@ fn a_cargo_config_names_a_target_too() {
     let other: PathBuf = root.join("bots/ops/cargo-target");
     std::fs::write(
         &config,
-        format!("[build]\ntarget-dir = \"{}\"\n", other.display()),
+        // A literal string: a Windows path's backslashes are no escapes.
+        format!("[build]\ntarget-dir = '{}'\n", other.display()),
     )
     .unwrap();
     assert!(call().is_some());
@@ -114,15 +115,18 @@ fn cargo_aliases_and_subcommand_binaries_are_followed() {
     };
     let other = root.join("bots/ops/cargo-target").display().to_string();
     let own = bot.join("cargo-target").display().to_string();
+    // Literal strings ('…'): a Windows path's backslashes are no escapes.
     std::fs::write(
         worktree.join(".cargo/config.toml"),
         format!(
-            "[alias]\nxb = \"build --target-dir {other}\"\nxc = [\"clean\", \"--target-dir\", \
-             \"{other}\"]\nok = \"build --release --target-dir {own}\"\nouter = \"xb\"\n\
-             loop = \"loop\"\nbad = 3\n"
+            "[alias]\nxb = 'build --target-dir {other}'\nxc = ['clean', '--target-dir', \
+             '{other}']\nok = 'build --release --target-dir {own}'\nouter = 'xb'\n\
+             loop = 'loop'\nbad = 3\n"
         ),
     )
     .unwrap();
+    // The config itself reads (WIN-CHK-10): `cargo ok` is allowed below.
+    assert_eq!(call("cargo ok"), None, "{:?}", call("cargo ok"));
     for command in [
         "cargo xb",
         "cargo xc",

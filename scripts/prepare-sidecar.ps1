@@ -10,10 +10,12 @@ try {
     $triple = $hostLine.Substring(6)
     if (!$triple.EndsWith('windows-msvc')) { throw 'Use a native Windows MSVC Rust toolchain' }
     # Where to build, and then copy from, in this one step (H-029, CE-013
-    # G2). A release (HERMES_RELEASE_BUILD=1, as build-nsis.ps1 sets) never
-    # trusts $env:CARGO_TARGET_DIR: it builds into this checkout's own target,
-    # which no other bot may write. A dev build uses the session's target.
-    $target = if ($env:HERMES_RELEASE_BUILD -ne '1' -and $env:CARGO_TARGET_DIR) {
+    # G2). A release (no HERMES_DEV_BUILD, or HERMES_RELEASE_BUILD=1 as
+    # build-nsis.ps1 sets), as in prepare-sidecar.sh, never trusts
+    # $env:CARGO_TARGET_DIR: it builds into this checkout's own target, which
+    # no other bot may write. A dev build uses the session's target.
+    $release = (-not $env:HERMES_DEV_BUILD) -or ($env:HERMES_RELEASE_BUILD -eq '1')
+    $target = if (-not $release -and $env:CARGO_TARGET_DIR) {
         $env:CARGO_TARGET_DIR
     } else {
         Join-Path $repoRoot 'target'

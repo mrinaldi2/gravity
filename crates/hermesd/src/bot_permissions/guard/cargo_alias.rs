@@ -118,10 +118,11 @@ pub(super) fn resolve(
         let value: toml::Value = match toml::from_str(&text) {
             Ok(value) => value,
             Err(_) if !text.contains("alias") => continue,
-            Err(_) => {
+            Err(error) => {
                 return Err(format!(
-                    "can't read the cargo aliases in {}; run the cargo command itself",
-                    file.display()
+                    "can't read the cargo aliases in {} ({}); run the cargo command itself",
+                    file.display(),
+                    error.message()
                 ))
             }
         };

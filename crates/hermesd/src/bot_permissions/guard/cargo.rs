@@ -268,7 +268,7 @@ fn config_files(dir: &Path, ctx: &GuardContext, scope: &Scope, sub: &str) -> Opt
             } else {
                 base.join(value)
             };
-            let word = target.display().to_string();
+            let word = plain(&target).display().to_string();
             if value.is_empty() || ctx.may_change_word(&word, scope).is_err() {
                 return Some(format!(
                     "`cargo {sub}` would build into {} (target-dir in {}), outside your own \
@@ -280,4 +280,52 @@ fn config_files(dir: &Path, ctx: &GuardContext, scope: &Scope, sub: &str) -> Opt
         }
     }
     None
+}
+
+/// A path as one spelling the guard compares (WIN-CHK-10): no Windows
+/// verbatim prefix (`\\?\C:\…` is `C:\…`), and `.` and `..` folded
+/// lexically, which a verbatim path would otherwise keep literally.
+fn plain(path: &Path) -> PathBuf {
+    use std::path::{Component, Prefix};
+    let mut out = PathBuf::new();
+    for part in path.components() {
+        match part {
+            Component::Prefix(prefix) => match prefix.kind() {
+                Prefix::VerbatimDisk(drive) => out.push(format!("{}:", drive as char)),
+                Prefix::VerbatimUNC(server, share) => out.push(format!(
+                    r"\\{}\{}",
+                    server.to_string_lossy(),
+                    share.to_string_lossy()
+                )),
+                _ => out.push(prefix.as_os_str()),
+            },
+            Component::RootDir => out.push(part.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::Normal(name) => out.push(name),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plain;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn a_config_path_is_folded_to_one_spelling() {
+        assert_eq!(
+            plain(Path::new("/a/bots/dev/workspace/repo/../../cargo-target")),
+            PathBuf::from("/a/bots/dev/cargo-target")
+        );
+        if cfg!(windows) {
+            assert_eq!(
+                plain(Path::new(r"\\?\C:\a\repo\..\cargo-target")),
+                PathBuf::from(r"C:\a\cargo-target")
+            );
+        }
+    }
 }
