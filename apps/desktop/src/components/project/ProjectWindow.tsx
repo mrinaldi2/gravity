@@ -19,19 +19,41 @@ interface ProjectWindowProps {
   readonly children: ReactNode;
 }
 
-/** "▲ 4 need you" and the release, when the service sent the project's row. */
-function Pills({ row }: { readonly row: ProjectRow }): ReactElement {
+/**
+ * "▲ 4 need you" and the release, when the service sent the project's row.
+ * Each is an action (UX-027): Needs you opens the Overview, where they are
+ * listed first; the release opens Releases.
+ */
+function Pills(props: {
+  readonly row: ProjectRow;
+  readonly onSelectTab: (tab: ProjectTab) => void;
+}): ReactElement {
+  const { row } = props;
   const needs = row.attention?.count ?? 0;
   const release = row.currentRelease === undefined ? null : releasePill(row.currentRelease);
   return (
     <>
       {needs > 0 ? (
-        <span className="release-pill release-tone-you">
+        <button
+          type="button"
+          className="release-pill release-tone-you project-pill"
+          onClick={() => {
+            props.onSelectTab("overview");
+          }}
+        >
           ▲ {needs} {needs === 1 ? "needs" : "need"} you
-        </span>
+        </button>
       ) : null}
       {release === null ? null : (
-        <span className={`release-pill release-tone-${release.tone}`}>{release.text}</span>
+        <button
+          type="button"
+          className={`release-pill release-tone-${release.tone} project-pill`}
+          onClick={() => {
+            props.onSelectTab("releases");
+          }}
+        >
+          {release.text}
+        </button>
       )}
     </>
   );
@@ -60,7 +82,7 @@ export default function ProjectWindow(props: ProjectWindowProps): ReactElement {
           <span className="state-chip">
             {botCount} {botCount === 1 ? "bot" : "bots"}
           </span>
-          {row === undefined || row === null ? null : <Pills row={row} />}
+          {row === undefined || row === null ? null : <Pills row={row} onSelectTab={onSelectTab} />}
         </div>
         <ProjectTabs active={tab} onSelect={onSelectTab} />
       </header>

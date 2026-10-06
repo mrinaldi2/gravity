@@ -20,6 +20,56 @@ export interface MeetingsState {
   readonly select: (meetingId: string) => void;
 }
 
+/** The words a meeting type goes by; an ad-hoc meeting goes by its own name. */
+const TYPE_WORD: Readonly<Record<string, string>> = {
+  standup: "Stand-up",
+  refinement: "Refinement",
+  demo: "Demo",
+  retro: "Retro",
+};
+
+/** "Stand-up minutes", "Retro minutes", "Pairing on H-117 minutes". */
+export function minutesTitle(meeting: Pick<MeetingSummary, "type" | "name">): string {
+  return `${TYPE_WORD[meeting.type] ?? meeting.name} minutes`;
+}
+
+/**
+ * One meeting, by id, for naming where a summary came from. Null until it
+ * loads, and when it can't be read (off the board's home).
+ */
+export function useMeeting(
+  client: DaemonApi,
+  projectId: string,
+  meetingId: string | undefined,
+  connected: boolean,
+): MeetingSummary | null {
+  const [meeting, setMeeting] = useState<MeetingSummary | null>(null);
+  useEffect(() => {
+    if (meetingId === undefined || meetingId.length === 0 || !connected) {
+      return undefined;
+    }
+    let live = true;
+    const load = async (): Promise<void> => {
+      try {
+        const reply = await client.request(
+          { type: "meeting_get", project_id: projectId, meeting_id: meetingId },
+          "meeting",
+        );
+        if (live) {
+          setMeeting(reply.meeting);
+        }
+      } catch {
+        // The row says "Meeting minutes" without it.
+      }
+    };
+    void load();
+    return () => {
+      live = false;
+    };
+  }, [client, connected, meetingId, projectId]);
+  return meeting?.id === meetingId ? meeting : null;
+}
+
 /** The meeting to show first: the newest held, else the newest of any kind. */
 function firstToOpen(meetings: readonly MeetingSummary[]): string | null {
   return (meetings.find((m) => m.status === "held") ?? meetings[0])?.id ?? null;

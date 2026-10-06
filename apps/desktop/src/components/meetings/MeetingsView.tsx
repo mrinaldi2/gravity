@@ -24,6 +24,20 @@ function heading(m: MeetingSummary): string {
   return at === null ? m.name : `${m.name} · ${when(at)}`;
 }
 
+/** "Held", or "Collecting · 4 of 6 contributed" as the dashboard says it. */
+function statusLine(m: MeetingSummary): string {
+  const word = STATUS[m.status].slice(2);
+  return m.status === "collecting"
+    ? `${word} · ${m.contributed} of ${m.attendee_count} contributed`
+    : word;
+}
+
+/** "blockers" → "Blockers", "action_items" → "Action items" (glossary rule 1). */
+function sentenceCase(key: string): string {
+  const words = key.replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 function nameOf(bots: readonly Bot[], id: string): string {
   return id === OWNER ? "You" : (bots.find((b) => b.id === id)?.name ?? "a bot");
 }
@@ -52,7 +66,7 @@ function Minutes(props: {
       )}
       {sections.map(([section, text]) => (
         <section key={section} className="meeting-section">
-          <h3>{section.replaceAll("_", " ")}</h3>
+          <h3>{sentenceCase(section)}</h3>
           <p>{text}</p>
         </section>
       ))}
@@ -139,7 +153,7 @@ export default function MeetingsView(props: MeetingsViewProps): ReactElement {
                       }}
                     >
                       <span className="dash-row-title">{heading(m)}</span>
-                      <span className="dash-row-meta">{STATUS[m.status].slice(2)}</span>
+                      <span className="dash-row-meta">{statusLine(m)}</span>
                     </button>
                   </li>
                 ))}

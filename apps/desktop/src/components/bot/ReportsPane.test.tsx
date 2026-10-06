@@ -35,9 +35,30 @@ describe("ReportsPane", () => {
     const latest = screen
       .getByRole("heading", { name: "Latest report" })
       .closest("section") as HTMLElement;
-    expect(within(latest).getByText(/restart the services/)).toBeInTheDocument();
+    // The open question isn't repeated as the latest report (UX-027).
+    expect(within(latest).getByText(/Pushed 058a4f7/)).toBeInTheDocument();
+    expect(within(latest).queryByText(/restart the services/)).not.toBeInTheDocument();
     await user.click(within(asked).getByRole("button", { name: "Reply" }));
     expect(onReply).toHaveBeenCalledWith("Should Resume now also restart the services?");
+  });
+
+  it("says when a bot has reported nothing yet", async () => {
+    const fake = daemon().onRequest("owner_thread_get", () => ({
+      type: "owner_thread",
+      req_id: "1",
+      owner_thread: { messages: [] },
+    }));
+    const bot = fx.bot({ id: "b3", name: "Architect", project_id: "p1" });
+    render(
+      <ReportsPane
+        client={fake}
+        bot={bot}
+        connected
+        onReply={vi.fn<(quote: string) => void>()}
+        now={HOME_NOW}
+      />,
+    );
+    expect(await screen.findByText("Nothing reported yet.")).toBeInTheDocument();
   });
 
   it("says what the bot is doing on the board", async () => {

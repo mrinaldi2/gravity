@@ -22,7 +22,9 @@ describe("MeetingsView", () => {
     expect(await screen.findByText("Stand-up")).toBeInTheDocument();
     expect(await screen.findByText(/Summary \(Scrum Master\):/)).toBeInTheDocument();
     expect(screen.getByText(/Verify is full/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "blockers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Blockers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Action items" })).toBeInTheDocument();
+    expect(screen.getByText("Collecting · 4 of 6 contributed")).toBeInTheDocument();
     expect(screen.getByText("Split H-014")).toBeInTheDocument();
   });
 

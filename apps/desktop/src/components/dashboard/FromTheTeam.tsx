@@ -6,9 +6,16 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import type { ReactElement } from "react";
 import type { Bot } from "../../protocol/entities";
-import type { OwnerThread, ProjectRow } from "../../protocol/gen/hermes/home/v1/home_pb";
+import type {
+  OwnerThread,
+  ProjectRow,
+  SummaryBrief,
+} from "../../protocol/gen/hermes/home/v1/home_pb";
+import type { MeetingSummary } from "../../protocol/meetings";
+import { OWNER } from "../../protocol/meetings";
 import BotAvatar from "../BotAvatar";
 import { clock } from "../home/homeText";
+import { minutesTitle } from "../meetings/useMeetings";
 import { Widget } from "./Widgets";
 
 /** Opens a message to a bot, quoting what it said. */
@@ -16,50 +23,69 @@ export type ReplyTo = (botId: string, quote: string) => void;
 
 interface Report {
   readonly key: string;
+  /** Who Reply answers, and whose avatar shows. */
   readonly bot: Bot | undefined;
+  /** "Desktop Dev · asks you", "Stand-up minutes · Scrum Master". */
+  readonly title: string;
+  /** Names the Reply button: "Reply to Desktop Dev". */
   readonly who: string;
-  readonly what: string;
   readonly text: string;
   readonly at: Timestamp | undefined;
   readonly asks: boolean;
   readonly meeting: boolean;
 }
 
-/** The reports to show: the summary, then each bot's last word to the owner. */
-function reports(
-  row: ProjectRow | null,
-  threads: readonly OwnerThread[],
+/**
+ * The latest summary, named by its meeting and signed by its facilitator, as
+ * the Meetings tab signs it (UX-027); "Meeting minutes · <lead>" until the
+ * meeting loads.
+ */
+function summaryReport(
+  summary: SummaryBrief,
+  meeting: MeetingSummary | null,
   bots: readonly Bot[],
   lead: Bot | undefined,
-): Report[] {
+): Report {
+  const facilitator = meeting === null ? undefined : bots.find((b) => b.id === meeting.facilitator);
+  const bot = facilitator ?? lead;
+  const signed =
+    meeting?.facilitator === OWNER ? "You" : (facilitator?.name ?? lead?.name ?? "Lead");
+  return {
+    key: `summary:${summary.meetingId}`,
+    bot,
+    title: `${meeting === null ? "Meeting minutes" : minutesTitle(meeting)} · ${signed}`,
+    who: bot?.name ?? signed,
+    text: summary.text,
+    at: summary.at,
+    asks: false,
+    meeting: true,
+  };
+}
+
+/** The reports to show: the summary, then each bot's last word to the owner. */
+function reports(props: FromTheTeamProps, lead: Bot | undefined): Report[] {
+  const { bots } = props;
   const out: Report[] = [];
-  const summary = row?.latestSummary;
+  const summary = props.row?.latestSummary;
   if (summary !== undefined && summary.text.length > 0) {
-    out.push({
-      key: `summary:${summary.meetingId}`,
-      bot: lead,
-      who: lead?.name ?? "Lead",
-      what: "meeting summary",
-      text: summary.text,
-      at: summary.at,
-      asks: false,
-      meeting: true,
-    });
+    out.push(summaryReport(summary, props.summaryMeeting ?? null, bots, lead));
   }
-  for (const thread of threads) {
+  for (const thread of props.threads) {
     const last = thread.last;
     if (last === undefined || last.fromOwner) {
       continue;
     }
     const bot = bots.find((b) => b.id === thread.bot?.botId);
+    const who = bot?.name ?? thread.bot?.name ?? "A bot";
+    const asks = last.asks && thread.openQuestion;
     out.push({
       key: `thread:${thread.bot?.daemonId}:${thread.bot?.botId}`,
       bot,
-      who: bot?.name ?? thread.bot?.name ?? "A bot",
-      what: last.asks && thread.openQuestion ? "asks you" : "message",
+      title: `${who} · ${asks ? "asks you" : "sent you"}`,
+      who,
       text: last.text,
       at: last.at,
-      asks: last.asks && thread.openQuestion,
+      asks,
       meeting: false,
     });
   }
@@ -80,6 +106,8 @@ export interface FromTheTeamProps {
   readonly now: number;
   readonly onReply: ReplyTo;
   readonly onOpenMeetings: () => void;
+  /** The meeting the latest summary came from, to name and sign it. */
+  readonly summaryMeeting?: MeetingSummary | null;
 }
 
 function ReportRow(props: {
@@ -101,7 +129,7 @@ function ReportRow(props: {
       )}
       <div className="dash-row-text">
         <span className="dash-row-title">
-          {report.who} · {report.what}
+          {report.title}
           {report.at === undefined ? "" : ` · ${clock(report.at, now)}`}
         </span>
         <span className="team-report-text">{report.text}</span>
@@ -131,7 +159,7 @@ function ReportRow(props: {
 
 export default function FromTheTeam(props: FromTheTeamProps): ReactElement {
   const lead = props.bots.find((b) => b.id === props.leadBotId);
-  const list = reports(props.row, props.threads, props.bots, lead);
+  const list = reports(props, lead);
   return (
     <Widget id="dash-from-team" title="From the team">
       {list.length === 0 ? (

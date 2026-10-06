@@ -57,6 +57,17 @@ function Message(props: {
   );
 }
 
+/** The newest message (oldest first in `messages`) that isn't an open question. */
+function newestReport(messages: readonly ThreadMessage[]): ThreadMessage | undefined {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message !== undefined && !(message.asks && message.open)) {
+      return message;
+    }
+  }
+  return undefined;
+}
+
 export default function ReportsPane(props: ReportsPaneProps): ReactElement {
   const { client, bot, connected } = props;
   const page = useOwnerThread(client, bot.id, connected);
@@ -65,9 +76,12 @@ export default function ReportsPane(props: ReportsPaneProps): ReactElement {
   const now = props.now ?? clockNow;
   const doing = row?.doing.filter((d) => d.assigneeBotId === bot.id) ?? [];
   const fromBot = (page?.messages ?? []).filter((m) => !m.fromOwner);
-  // Messages are oldest first; the latest report is the last one the bot sent.
-  const latest = fromBot.at(-1);
   const open = fromBot.filter((m) => m.asks && m.open);
+  // Messages are oldest first. The latest report is the newest one that isn't
+  // an open question: those are listed under "Asked you" alone (UX-027).
+  const latest = newestReport(fromBot);
+  // Only questions so far: the section is left out rather than empty.
+  const showLatest = latest !== undefined || fromBot.length === 0;
   return (
     <div className="tab-pane tab-pane-scroll reports-pane">
       <Section title="Doing now">
@@ -83,13 +97,15 @@ export default function ReportsPane(props: ReportsPaneProps): ReactElement {
           </ul>
         )}
       </Section>
-      <Section title="Latest report">
-        {latest === undefined ? (
-          <p className="dash-empty">{bot.name} hasn't sent you anything yet.</p>
-        ) : (
-          <Message message={latest} now={now} onReply={props.onReply} />
-        )}
-      </Section>
+      {showLatest ? (
+        <Section title="Latest report">
+          {latest === undefined ? (
+            <p className="dash-empty">Nothing reported yet.</p>
+          ) : (
+            <Message message={latest} now={now} onReply={props.onReply} />
+          )}
+        </Section>
+      ) : null}
       <Section title={open.length > 0 ? `Asked you · ${open.length}` : "Asked you"}>
         {open.length === 0 ? (
           <p className="dash-empty">No open questions.</p>

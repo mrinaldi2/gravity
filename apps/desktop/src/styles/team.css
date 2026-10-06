@@ -163,7 +163,6 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--text-dim);
-  text-transform: capitalize;
 }
 
 .meeting-section p {

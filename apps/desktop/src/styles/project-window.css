@@ -145,3 +145,14 @@
 .project-chevron + .project-name {
   padding-left: 4px;
 }
+
+/* The header pills are actions: they open Needs you or the release. */
+.project-pill {
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.project-pill:hover {
+  filter: brightness(1.15);
+}

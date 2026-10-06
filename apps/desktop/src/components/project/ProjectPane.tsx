@@ -19,6 +19,8 @@ import FromTheTeam from "../dashboard/FromTheTeam";
 import { useOwnerThreads } from "../home/useOwnerThreads";
 import { useProjectRow } from "../home/useProjectsOverview";
 import MeetingsView from "../meetings/MeetingsView";
+import { useMeeting } from "../meetings/useMeetings";
+import type { MeetingSummary } from "../../protocol/meetings";
 import ProjectView from "../ProjectView";
 import ReleasesView from "../releases/ReleasesView";
 import TeamView from "../team/TeamView";
@@ -68,6 +70,7 @@ interface TabContext extends ProjectPaneProps {
   readonly bots: readonly Bot[];
   readonly row: ProjectRow | null;
   readonly threads: readonly OwnerThread[];
+  readonly summaryMeeting: MeetingSummary | null;
   readonly now: number;
   readonly onSelectTab: (tab: ProjectTab) => void;
 }
@@ -98,6 +101,7 @@ function Overview({ ctx }: { readonly ctx: TabContext }): ReactElement {
           now={ctx.now}
           onReply={ctx.onReply}
           onOpenMeetings={() => ctx.onSelectTab("meetings")}
+          summaryMeeting={ctx.summaryMeeting}
         />
       }
     />
@@ -193,6 +197,7 @@ export default function ProjectPane(props: ProjectPaneProps): ReactElement {
   const row = useProjectRow(client, project.id, connected);
   const threads = useOwnerThreads(client, connected).filter((t) => t.projectId === project.id);
   const now = useNow();
+  const summaryMeeting = useMeeting(client, project.id, row?.latestSummary?.meetingId, connected);
   const onSelectTab = useCallback(
     (next: ProjectTab): void => {
       select({ kind: "project", projectId: project.id, tab: next });
@@ -210,7 +215,7 @@ export default function ProjectPane(props: ProjectPaneProps): ReactElement {
       onHome={() => select({ kind: "home" })}
       onSelectTab={onSelectTab}
     >
-      <TabView ctx={{ ...props, bots, row, threads, now, onSelectTab }} />
+      <TabView ctx={{ ...props, bots, row, threads, now, onSelectTab, summaryMeeting }} />
     </ProjectWindow>
   );
 }

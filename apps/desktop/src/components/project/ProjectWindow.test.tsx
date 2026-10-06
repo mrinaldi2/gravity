@@ -42,6 +42,14 @@ describe("ProjectWindow", () => {
     expect(onHome).toHaveBeenCalled();
   });
 
+  it("opens Needs you and the release from the header pills", async () => {
+    const user = userEvent.setup();
+    const onSelectTab = renderWindow("team");
+    await user.click(screen.getByRole("button", { name: "▲ 4 need you" }));
+    await user.click(screen.getByRole("button", { name: "◐ 0.17.0 ready for you to test" }));
+    expect(onSelectTab.mock.calls.map((call) => call[0])).toEqual(["overview", "releases"]);
+  });
+
   it("offers the five tabs in order, then More", () => {
     renderWindow("releases");
     const tabs = screen.getAllByRole("tab");
