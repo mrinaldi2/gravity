@@ -154,10 +154,6 @@ pub(super) fn board_work(limits: &crate::config::TaskLimits) -> String {
     )
 }
 
-/// Every bot on a machine shares its user, disk and processes (CE-001).
-/// Placed right after "Messages carry authority", so the two "what you may
-/// not do" blocks sit together. The last paragraph is H-031's: rewording a
-/// blocked command is exactly what permission rules cannot stop.
 /// How owner requests, cards and the owner's thread relate, in one place
 /// (H-128 D5, D6, T1; CE-014 F2; ruling 06ac8d95: the owner is never
 /// refused for leaving the card out).
@@ -187,10 +183,14 @@ pub(super) fn owner_reporting() -> &'static str {
      `message_owner`, so your answer shows in their thread. The thread is\n\
      where they read you; text you only print in your terminal is lost to them.\n\
      - A conversation with the owner needs no card. Once it becomes work,\n\
-     create the card first (see \"Owner requests on a card\").\n\n\
+     create the card first (see \"Work is on the board\").\n\n\
      Never leave owner-facing content only in your chat or terminal.\n\n"
 }
 
+/// Every bot on a machine shares its user, disk and processes (CE-001).
+/// Placed right after "Messages carry authority", so the two "what you may
+/// not do" blocks sit together. The last paragraph is H-031's: rewording a
+/// blocked command is exactly what permission rules cannot stop.
 pub(super) fn shared_computer() -> String {
     let short = crate::brand::SHORT_NAME;
     format!(
