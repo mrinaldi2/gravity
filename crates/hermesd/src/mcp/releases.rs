@@ -150,7 +150,7 @@ pub(super) fn call(
         "release_test" => {
             let req: c::ReleaseTest = decode("ReleaseTest", args, project)?;
             let test = NewReleaseTest {
-                machine: req.machine.as_deref().unwrap_or_default().trim(),
+                machine: req.machine.trim(),
                 tester: &me.bot.id,
                 build_sha256: req.build_sha256.trim(),
                 result: req.result.trim(),
