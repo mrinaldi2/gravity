@@ -23,6 +23,8 @@ interface BotViewProps {
   readonly client: DaemonApi;
   readonly bot: Bot;
   readonly bots: readonly Bot[];
+  /** The tab to open on, when the bot offers it (H-192: Chat from the main chat). */
+  readonly initialTab?: BotTab;
   readonly connected: boolean;
   readonly canControl: boolean;
   readonly onBotUpdated: (bot: Bot) => void;
@@ -59,7 +61,18 @@ export default function BotView(props: BotViewProps): ReactElement {
     },
     bot.peer != null,
   );
-  const [tab, setTab] = useState<BotTab>(tabs[0] ?? "terminal");
+  const asked = props.initialTab !== undefined && tabs.includes(props.initialTab);
+  const [tab, setTab] = useState<BotTab>(
+    asked && props.initialTab !== undefined ? props.initialTab : (tabs[0] ?? "terminal"),
+  );
+  // Asked again for the bot already on screen: go to that tab. Keyed on the
+  // ask and the tab set, so the owner's own picks stay in between.
+  const offered = tabs.join(" ");
+  useEffect(() => {
+    if (props.initialTab !== undefined && offered.split(" ").includes(props.initialTab)) {
+      setTab(props.initialTab);
+    }
+  }, [props.initialTab, offered]);
   const [side, setSide] = useState<SideTab>("info");
   const [openFile, setOpenFile] = useState<string | null>(null);
   const [infoPanel, setInfoPanel] = useState(loadBotInfoPanel);
@@ -203,6 +216,7 @@ export default function BotView(props: BotViewProps): ReactElement {
             onOpenDecision={props.onOpenDecision}
             onRoutinesChanged={props.onRoutinesChanged}
             onToast={onToast}
+            onSelectTab={setTab}
             onReply={(quote) => {
               if (props.onReply === undefined) {
                 setTab("chat");

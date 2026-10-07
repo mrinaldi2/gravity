@@ -17,12 +17,23 @@ interface TurnViewProps {
   readonly onOpenDecision?: (decisionId: string) => void;
   /** Opens every folded step group, e.g. while searching. */
   readonly expandAll?: boolean;
+  /** Opens the bot's Chat, from a text tagged "In Chat" (H-192). */
+  readonly onOpenChat?: () => void;
+}
+
+/** The text of the turn that was posted to the owner's Chat, if one was. */
+function postedTextId(turn: ChatTurn): string | undefined {
+  if (turn.answer_num === undefined) {
+    return undefined;
+  }
+  return [...turn.items].reverse().find((item) => item.type === "text")?.id;
 }
 
 /** One turn: what woke the bot, what it did, and how it ended. */
 export default function TurnView(props: TurnViewProps): ReactElement {
   const { client, turn, onOpenFile } = props;
   const trigger = triggerView(turn.trigger);
+  const posted = postedTextId(turn);
   const stats = statsLine(turn.stats);
   const meta = [fmtTimestamp(turn.started_at), durationLabel(turn.duration_ms)]
     .filter((part) => part !== "")
@@ -52,6 +63,8 @@ export default function TurnView(props: TurnViewProps): ReactElement {
           connected={props.connected}
           onOpenDecision={props.onOpenDecision}
           expandAll={props.expandAll}
+          inChat={block.kind === "item" && block.item.id === posted}
+          onOpenChat={props.onOpenChat}
         />
       ))}
       {turn.open ? <div className="chat-working">Working…</div> : null}
@@ -69,6 +82,20 @@ interface BlockProps {
   readonly connected: boolean;
   readonly onOpenDecision?: (decisionId: string) => void;
   readonly expandAll?: boolean;
+  /** This text is the answer posted to the owner's Chat. */
+  readonly inChat?: boolean;
+  readonly onOpenChat?: () => void;
+}
+
+/** The tag on an answer posted to the owner's Chat: a link there when it can be. */
+function InChat({ onOpen }: { readonly onOpen?: () => void }): ReactElement {
+  return onOpen === undefined ? (
+    <span className="chat-in-chat">In Chat</span>
+  ) : (
+    <button type="button" className="chat-in-chat" onClick={onOpen}>
+      In Chat
+    </button>
+  );
 }
 
 function Block(props: BlockProps): ReactElement {
@@ -90,9 +117,19 @@ function Block(props: BlockProps): ReactElement {
       return (
         <div className="chat-text">
           <ChatMarkdown>{item.markdown}</ChatMarkdown>
+          {props.inChat === true ? <InChat onOpen={props.onOpenChat} /> : null}
         </div>
       );
     case "sent":
+      // `message_owner`: a note in the owner's Chat (H-192).
+      if (item.msg_kind === "owner") {
+        return (
+          <div className="chat-aside chat-sent chat-sent-owner">
+            <span className="chat-aside-label">Sent you</span>
+            <div className="chat-aside-body">{item.body}</div>
+          </div>
+        );
+      }
       return (
         <div className="chat-aside chat-sent">
           <span className="chat-aside-label">

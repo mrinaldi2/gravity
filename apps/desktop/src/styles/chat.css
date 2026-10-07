@@ -169,6 +169,38 @@
   color: var(--text);
 }
 
+/* A note the bot sent the owner's Chat, and the answer posted there (H-192). */
+.chat-sent-owner {
+  border-left-color: var(--accent);
+}
+
+.chat-in-chat {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* Activity's one-line caption, and the links between Chat and Activity. */
+.chat-caption {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.chat-link {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .chat-card {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -259,12 +291,14 @@
 }
 
 .chat-search-count,
-.chat-composer-hint {
+.chat-composer-hint,
+.chat-composer-foot {
   font-size: 11px;
   color: var(--text-faint);
 }
 
-.chat-composer-hint {
+.chat-composer-hint,
+.chat-composer-foot {
   padding: 0 20px;
 }
 

@@ -108,6 +108,7 @@ export default function MainPane(props: MainPaneProps): ReactElement {
         client={client}
         bot={bot}
         bots={bots}
+        initialTab={selection.tab}
         connected={connected}
         canControl={canControl}
         onBotUpdated={daemon.applyBotUpdate}

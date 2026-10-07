@@ -142,6 +142,13 @@ export default function App(): ReactElement {
     },
     [select],
   );
+  // From the main chat the owner lands where they were: the bot's Chat (H-192).
+  const openBotChat = useCallback(
+    (botId: string): void => {
+      select({ kind: "bot", botId, tab: "chat" });
+    },
+    [select],
+  );
 
   const inbox = usePermissionInbox({
     client,
@@ -219,7 +226,7 @@ export default function App(): ReactElement {
           threads={threads}
           chat={chat}
           addToast={addToast}
-          onOpenBot={openBot}
+          onOpenBot={openBotChat}
         />
         {overlays.paletteOpen ? (
           <CommandPalette
