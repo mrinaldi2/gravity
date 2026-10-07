@@ -29,6 +29,21 @@ pub mod repo;
 pub mod tasks;
 pub mod team;
 
+/// How long a test waits for a frame it expects.
+pub const FRAME_WAIT: Duration = Duration::from_secs(5);
+
+/// How long a test waits for a frame while it sets up: the hello, projects
+/// and bots. The first run after a build is cold, and every test binary
+/// starts its daemons at once, so a bot's workspace can take far longer to
+/// provision than [`FRAME_WAIT`] on a slow disk or under a virus scan.
+/// `HERMES_TEST_SETUP_WAIT_SECS` overrides it.
+pub fn setup_wait() -> Duration {
+    std::env::var("HERMES_TEST_SETUP_WAIT_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .map_or(Duration::from_secs(60), Duration::from_secs)
+}
+
 pub struct TestDaemon {
     pub app: Arc<AppState>,
     pub addr: SocketAddr,
@@ -132,14 +147,19 @@ impl WsClient {
             rx,
             next_req: 1,
         };
+        // The hello is the first frame a fresh daemon answers: once it is
+        // back, the daemon is serving.
         let reply = c
-            .request(json!({
-                "type": "hello",
-                "protocol_version": 2,
-                "token": token,
-                "client": "test/0",
-                "features": features
-            }))
+            .request_within(
+                setup_wait(),
+                json!({
+                    "type": "hello",
+                    "protocol_version": 2,
+                    "token": token,
+                    "client": "test/0",
+                    "features": features
+                }),
+            )
             .await;
         assert_eq!(reply["type"], "hello_ok", "handshake failed: {reply}");
         c
@@ -159,13 +179,18 @@ impl WsClient {
     /// Send a request and wait for the frame carrying its req_id, buffering
     /// nothing (pushes are skipped).
     pub async fn request(&mut self, req: Value) -> Value {
+        self.request_within(FRAME_WAIT, req).await
+    }
+
+    /// `request` with a deadline of its own, such as [`setup_wait`].
+    pub async fn request_within(&mut self, within: Duration, req: Value) -> Value {
         let req_id = self.send(req).await;
-        self.wait_for(|v| v["req_id"] == json!(req_id.clone()))
+        self.wait_for_within(within, |v| v["req_id"] == json!(req_id.clone()))
             .await
     }
 
     pub async fn wait_for(&mut self, pred: impl Fn(&Value) -> bool) -> Value {
-        self.wait_for_within(Duration::from_secs(5), pred).await
+        self.wait_for_within(FRAME_WAIT, pred).await
     }
 
     /// `wait_for` with a deadline of its own, for a frame behind heavy traffic.
@@ -193,10 +218,13 @@ impl WsClient {
 
 pub async fn create_bot(c: &mut WsClient, project_id: &str, name: &str) -> Value {
     let bot = c
-        .request(json!({
-            "type": "create_bot", "project_id": project_id, "name": name,
-            "description": format!("{name} bot"), "instructions": "be helpful"
-        }))
+        .request_within(
+            setup_wait(),
+            json!({
+                "type": "create_bot", "project_id": project_id, "name": name,
+                "description": format!("{name} bot"), "instructions": "be helpful"
+            }),
+        )
         .await;
     assert_eq!(bot["type"], "bot", "{bot}");
     bot["bot"].clone()

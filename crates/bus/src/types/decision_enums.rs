@@ -115,6 +115,9 @@ impl Priority {
 pub enum CommentAuthorKind {
     Bot,
     User,
+    /// Hermes itself: what the daemon notes on a thread, such as the grants
+    /// a ruling applied (H-173). Never shown as the owner's words.
+    System,
 }
 
 impl CommentAuthorKind {
@@ -122,6 +125,7 @@ impl CommentAuthorKind {
         match self {
             CommentAuthorKind::Bot => "bot",
             CommentAuthorKind::User => "user",
+            CommentAuthorKind::System => "system",
         }
     }
 
@@ -129,6 +133,7 @@ impl CommentAuthorKind {
         match s {
             "bot" => Some(CommentAuthorKind::Bot),
             "user" => Some(CommentAuthorKind::User),
+            "system" => Some(CommentAuthorKind::System),
             _ => None,
         }
     }

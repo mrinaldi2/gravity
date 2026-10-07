@@ -283,6 +283,14 @@ async fn decide(
     }
 }
 
+/// No card decided the prompt, so the bot's own terminal asks now. Its state
+/// names the masked command, for its Needs-you row (H-172); the
+/// notification that follows changes nothing.
+pub(crate) fn terminal_asks(app: &AppState, bot_id: &str, tool: &str, input: &Value) {
+    app.supervisor
+        .set_state(bot_id, BotState::WaitingForApproval, &summary(tool, input));
+}
+
 /// What an owner-command card is filed under: a terminal, not a bot (H-044).
 pub const TERMINAL: &str = "terminal";
 

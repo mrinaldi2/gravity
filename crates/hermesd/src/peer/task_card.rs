@@ -5,11 +5,12 @@
 
 use std::sync::Arc;
 
-use bus::Bot;
+use bus::{Bot, Peer};
 
 use crate::actor::Actor;
 use crate::app::AppState;
 use crate::board::feed::{card_after_commit, Change, ChangeKind};
+use crate::db::Db;
 
 /// Record the card on the task mirrored here: linked on the item when this
 /// machine holds the board, named on the task otherwise.
@@ -46,11 +47,50 @@ pub(super) fn received(
     Ok(())
 }
 
+/// The release a forwarded deploy or rollback task is for (H-158), but only
+/// from the project's board home, where releases live (ARCH-R63 S1). From any
+/// other peer the claim is ignored, and the task stays subject to G4 as any
+/// other. The receiver stores it with the task, in one transaction (H-181).
+pub(super) fn accepted_release<'a>(
+    app: &Arc<AppState>,
+    peer: &Peer,
+    to: &Bot,
+    release: Option<&'a str>,
+) -> anyhow::Result<Option<&'a str>> {
+    let Some(release) = release else {
+        return Ok(None);
+    };
+    if !from_board_home(&app.db, &peer.id, &to.project_id)? {
+        tracing::info!(
+            peer = %peer.name, bot = %to.name, release,
+            "task names a release but its peer is not the board home: ignored"
+        );
+        return Ok(None);
+    }
+    Ok(Some(release))
+}
+
+fn from_board_home(db: &Db, peer_id: &str, project_id: &str) -> anyhow::Result<bool> {
+    Ok(db.board_home(project_id)?.as_deref() == Some(peer_id))
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
     use super::super::frames::TaskFrame;
+    use crate::db::Db;
+
+    /// ARCH-R63 S1: only the board home's word on a release counts.
+    #[test]
+    fn only_the_board_home_names_a_tasks_release() {
+        let db = Db::open_in_memory().expect("open");
+        assert!(!super::from_board_home(&db, "peer-a", "p1").expect("none"));
+        db.set_board_home("p1", "peer-a").expect("set");
+        assert!(super::from_board_home(&db, "peer-a", "p1").expect("home"));
+        assert!(!super::from_board_home(&db, "peer-b", "p1").expect("other peer"));
+        assert!(!super::from_board_home(&db, "peer-a", "p2").expect("other project"));
+    }
 
     #[test]
     fn a_task_frame_carries_its_card_and_an_older_one_has_none() {

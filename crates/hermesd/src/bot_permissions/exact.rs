@@ -8,7 +8,7 @@
 //! first. So a rule names this binary by its exact path, in each way a bot
 //! may quote it, and only the subcommand's arguments are a wildcard.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// `Bash(<this binary> <sub> *)` for every spelling of the path, plus the
 /// PowerShell forms on Windows. None when the path itself holds a character
@@ -42,6 +42,52 @@ pub(super) fn rules(hermesd: &Path, sub: &str) -> Vec<String> {
     rules
 }
 
+/// Whether a bot could rebuild or replace the binary at `hermesd` (CE-023
+/// F2): a cargo target (a dev daemon), anything under `~/Developer`, the
+/// trusted paths, the bots' own folders, `~/.cargo` or a temp dir. A rule
+/// naming such a binary would pre-approve whatever a bot puts there, so it
+/// gets none and the call goes to the classifier.
+pub(super) fn bot_writable(
+    hermesd: &Path,
+    home: &Path,
+    user_home: &Path,
+    trusted: &[PathBuf],
+) -> bool {
+    let cargo_target = hermesd.ancestors().skip(1).any(|dir| {
+        dir.file_name().is_some_and(|n| n == "target")
+            || dir.join(".rustc_info.json").exists()
+            || dir.join("CACHEDIR.TAG").exists()
+    });
+    let mut roots: Vec<PathBuf> = trusted.to_vec();
+    roots.extend([
+        user_home.join("Developer"),
+        user_home.join(".cargo"),
+        home.join("projects"),
+        std::env::temp_dir(),
+    ]);
+    roots.extend(
+        [
+            "/tmp",
+            "/private/tmp",
+            "/var/folders",
+            "/private/var/folders",
+        ]
+        .into_iter()
+        .map(PathBuf::from),
+    );
+    let real = hermesd.canonicalize().ok();
+    cargo_target
+        || roots.iter().any(|root| {
+            let real_root = root.canonicalize().ok();
+            [Some(hermesd), real.as_deref()]
+                .into_iter()
+                .flatten()
+                .any(|p| {
+                    p.starts_with(root) || real_root.as_ref().is_some_and(|r| p.starts_with(r))
+                })
+        })
+}
+
 /// The command line a bot runs, in the first spelling `rules` allows:
 /// `"/Applications/The Hermes.app/Contents/MacOS/hermesd" release install <id>`.
 pub fn command(hermesd: &Path, args: &str) -> String {
@@ -54,7 +100,7 @@ pub fn command(hermesd: &Path, args: &str) -> String {
 }
 
 /// This daemon's binary, as `rules` and `command` take it.
-pub fn this_binary() -> std::path::PathBuf {
+pub fn this_binary() -> PathBuf {
     std::env::current_exe().unwrap_or_else(|_| "hermesd".into())
 }
 
@@ -102,5 +148,23 @@ mod tests {
         ] {
             assert!(rules(Path::new(odd), "quiesce").is_empty(), "{odd}");
         }
+    }
+
+    #[test]
+    fn a_binary_a_bot_could_rebuild_is_bot_writable() {
+        let (home, user) = (Path::new("/Users/me/.thehermes"), Path::new("/Users/me"));
+        let trusted = [PathBuf::from("/Users/me/Code")];
+        for dev in [
+            "/Users/me/Developer/gravity/target/debug/hermesd",
+            "/Users/me/Developer/hermesd",
+            "/Users/me/elsewhere/target/release/hermesd",
+            "/Users/me/Code/gravity/out/hermesd",
+            "/Users/me/.cargo/bin/hermesd",
+            "/Users/me/.thehermes/projects/p/bots/dev/workspace/hermesd",
+            "/tmp/hermesd",
+        ] {
+            assert!(bot_writable(Path::new(dev), home, user, &trusted), "{dev}");
+        }
+        assert!(!bot_writable(Path::new(APP), home, user, &trusted));
     }
 }

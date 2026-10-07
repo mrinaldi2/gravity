@@ -17,9 +17,12 @@ pub struct SettingsInput<'a> {
     pub project_name: &'a str,
     /// The daemon's home (`~/.gravity`).
     pub home: &'a Path,
+    /// The owner's home folder.
+    pub user_home: &'a Path,
     pub workspace: &'a Path,
-    /// This daemon's own binary: the install and quiesce extras allow it,
-    /// by this exact path, and nothing else named `hermesd` (H-166).
+    /// This daemon's own binary: the extras allow its commands by this exact
+    /// path, and nothing else named `hermesd` (H-166); none when a bot could
+    /// rebuild or replace it (CE-023 F2).
     pub hermesd: &'a Path,
     pub artifacts: Option<&'a Path>,
     /// Folders outside the bot's own that it works in (`~/Developer`, …).
@@ -65,8 +68,15 @@ pub fn generate(input: &SettingsInput<'_>) -> Value {
     let mut allow = artifacts_allow(input.artifacts);
     if input.profile != PermissionProfile::Standard {
         allow.extend(TRUSTED_ALLOW.iter().map(|r| (*r).to_string()));
+        let hermesd = (!super::exact::bot_writable(
+            input.hermesd,
+            input.home,
+            input.user_home,
+            input.trusted_paths,
+        ))
+        .then_some(input.hermesd);
         for extra in input.extras {
-            allow.extend(extra_allow(*extra, input.workspace, input.hermesd));
+            allow.extend(extra_allow(*extra, input.workspace, hermesd));
         }
     }
     if !input.extras.contains(&PermissionExtra::DaemonRestart) {
@@ -202,6 +212,9 @@ fn hard_deny(input: &SettingsInput<'_>) -> Vec<String> {
         "Edit(~/.claude/settings.local.json)".to_string(),
         "Edit(~/.claude.json)".to_string(),
         format!("Edit({home}/bot-settings.json)"),
+        // The daemon's own state: the install-pending flag, the IPC
+        // endpoint, install status (CE-023 M1).
+        format!("Edit({home}/run/**)"),
         format!("Edit({home}/projects/**/.claude/settings.json)"),
         format!("Edit({home}/projects/**/.claude/settings.local.json)"),
         format!("Edit({home}/projects/**/settings.gen.json)"),
@@ -292,7 +305,13 @@ fn artifacts_allow(artifacts: Option<&Path>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn extra_allow(extra: PermissionExtra, workspace: &Path, hermesd: &Path) -> Vec<String> {
+fn extra_allow(extra: PermissionExtra, workspace: &Path, hermesd: Option<&Path>) -> Vec<String> {
+    // This daemon's own command, by its exact path (H-166, CE-023).
+    let exact = |sub: &str| {
+        hermesd
+            .map(|p| super::exact::rules(p, sub))
+            .unwrap_or_default()
+    };
     match extra {
         PermissionExtra::Publish => {
             // As Git Bash spells the command on Windows: `/`, never `\`.
@@ -305,7 +324,7 @@ fn extra_allow(extra: PermissionExtra, workspace: &Path, hermesd: &Path) -> Vec<
             rules.push("Bash(serve/publish.sh *)".to_string());
             rules.push(format!("Bash({serve}/publish.sh *)"));
             // The daemon checks the role and this extra again (H-020 §6.6).
-            rules.push("Bash(hermesd release publish *)".to_string());
+            rules.extend(exact("release publish"));
             rules
         }
         PermissionExtra::DaemonRestart => daemon_restart_allow(),
@@ -316,22 +335,16 @@ fn extra_allow(extra: PermissionExtra, workspace: &Path, hermesd: &Path) -> Vec<
         // Lifts the main denies above. The one push to main allowed without
         // review is the daemon-checked land (H-117 X2): approved release,
         // fast-forward only, never force.
-        PermissionExtra::ReleaseMain => vec![
-            "Bash(hermesd release land *)".to_string(),
-            "PowerShell(hermesd release land *)".to_string(),
-        ],
+        PermissionExtra::ReleaseMain => exact("release land"),
         // Only the command, which runs the script as committed; never the
         // script itself, which the bot could edit (H-117 X3, H-104).
-        PermissionExtra::BuildInstallers => vec![
-            "Bash(hermesd release build-installer *)".to_string(),
-            "PowerShell(hermesd release build-installer *)".to_string(),
-        ],
+        PermissionExtra::BuildInstallers => exact("release build-installer"),
         // The daemon checks the extra, the role and the release again (H-117).
-        PermissionExtra::Quiesce => super::exact::rules(hermesd, "quiesce"),
+        PermissionExtra::Quiesce => exact("quiesce"),
         PermissionExtra::Install => {
             // The supported install, with no owner prompt; the daemon checks
             // the gate and swaps the app from its own job (H-117 X1).
-            let mut rules = super::exact::rules(hermesd, "release install");
+            let mut rules = exact("release install");
             if cfg!(windows) {
                 rules.extend([
                     "PowerShell(Start-Process msiexec *)".to_string(),

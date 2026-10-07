@@ -41,6 +41,10 @@ mod watchdog;
 
 pub use watchdog::{StartupConfig, DIDNT_CONNECT};
 
+/// The state reason of a bot stopped on a permission prompt in its own
+/// terminal: Claude Code's notification names no command.
+pub(crate) const APPROVAL_NOTIFICATION: &str = "notification";
+
 pub use crate::brand::BOT_TOKEN_ENV;
 /// Caps how large a bot's conversation grows before Claude Code compacts it.
 /// Set from the daemon rather than the workspace settings so a bot editing its

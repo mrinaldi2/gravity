@@ -129,11 +129,9 @@ impl Conn {
             .and_then(|v| v.as_str())
             .map(str::to_string);
         let app = self.app.clone();
-        let out = self.out.clone();
-        let req_id = req_id.clone();
-        tokio::task::spawn_blocking(move || {
+        self.spawn_blocking_reply(req_id, move |req_id| {
             let home = &app.cfg.user_home;
-            let reply = match app.db.list_bots(project_id.as_deref()) {
+            match app.db.list_bots(project_id.as_deref()) {
                 Ok(bots) => {
                     let items: Vec<activity::BotActivity> = bots
                         .iter()
@@ -149,8 +147,7 @@ impl Conn {
                     "type": "error", "req_id": req_id, "code": "internal",
                     "message": e.to_string()
                 }),
-            };
-            let _ = out.send(reply);
+            }
         });
         Ok(())
     }

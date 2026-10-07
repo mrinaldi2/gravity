@@ -32,9 +32,9 @@ pub struct ConfigLocked(pub PathBuf);
 /// except for a directory inside a git checkout, which it keys on the repo
 /// root instead. A workspace under one would keep asking.
 pub fn trust_workspace(user_home: &Path, workspace: &Path) -> anyhow::Result<()> {
-    let _guard = CLAUDE_CONFIG_LOCK
-        .lock()
-        .map_err(|_| anyhow::anyhow!("Claude config lock is poisoned"))?;
+    // The lock guards no data (the file is read again below), so one a
+    // panic poisoned still serves: it must not refuse every later bot.
+    let _guard = CLAUDE_CONFIG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let workspace = workspace
         .canonicalize()
         .with_context(|| format!("resolving workspace {}", workspace.display()))?;

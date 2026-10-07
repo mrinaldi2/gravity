@@ -59,15 +59,15 @@ impl Conn {
         home: String,
         request: Request,
     ) {
-        let (app, out) = (self.app.clone(), self.bin.clone());
-        tokio::spawn(async move {
+        let app = self.app.clone();
+        self.spawn_frame(req_id, "board_read", async move {
             let item_id = item_of(&request).to_string();
             let frame = json!({
                 "type": "board_read", "project_id": project_id,
                 "request": c::BoardRequest { request: Some(request) },
             });
             let name = home_name(&app, &home);
-            let reply = match app.peers.request(&home, frame).await {
+            match app.peers.request(&home, frame).await {
                 Ok(mut value) => match app.db.project_link(&project_id, &home) {
                     Ok(Some(link)) => {
                         ids_from_home(&app, &link, &mut value["response"]);
@@ -98,8 +98,7 @@ impl Conn {
                     let e = anyhow::Error::from(e);
                     binary::error(req_id, error_code(&e, "internal"), e.to_string())
                 }
-            };
-            let _ = out.send(reply);
+            }
         });
     }
 }

@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use super::paths::Scope;
-use super::{cargo, full, git, powershell, ps_launch, targets, GuardContext};
+use super::{cargo, daemon_cli, full, git, powershell, ps_launch, targets, GuardContext};
 use crate::bot_permissions::shell::{self, Words};
 
 /// Why the line must not run, or `None`.
@@ -135,6 +135,9 @@ pub(super) fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Optio
         if let Some(reason) = full::only(name, rest, &args, scope) {
             return Some(reason);
         }
+    }
+    if let Some(reason) = daemon_cli::redirected(words, at, scope) {
+        return Some(reason);
     }
     if starts_vm(name, &args) {
         if let Some(reason) = crate::quiesce::pending::blocking(&ctx.home) {

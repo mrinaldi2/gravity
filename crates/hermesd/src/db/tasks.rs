@@ -3,7 +3,7 @@
 use anyhow::bail;
 use bus::*;
 use chrono::{DateTime, Utc};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 
 use super::{parse_ts, ts, Db};
 
@@ -19,39 +19,50 @@ impl Db {
         hop_count: i64,
         origin_chain: &str,
     ) -> anyhow::Result<Task> {
-        if hop_count > MAX_TASK_HOPS {
-            bail!(
-                "task hop limit exceeded ({hop_count} > {MAX_TASK_HOPS}) — do the \
-                 work yourself, or report what you have with complete_task"
-            );
-        }
-        let t = Task {
-            id: new_id(),
-            origin_message_id: origin_message_id.to_string(),
-            from_bot_id: from_bot_id.map(|s| s.to_string()),
-            to_bot_id: to_bot_id.to_string(),
-            state: TaskState::Open,
+        insert_task(
+            &self.lock(),
+            origin_message_id,
+            from_bot_id,
+            to_bot_id,
             deadline_at,
             hop_count,
-            origin_chain: origin_chain.to_string(),
-            reply_count: 0,
-            created_at: now(),
-        };
-        self.lock().execute(
-            "INSERT INTO task(id, origin_message_id, from_bot_id, to_bot_id, state, deadline_at, hop_count, origin_chain, created_at)
-             VALUES (?1, ?2, ?3, ?4, 'open', ?5, ?6, ?7, ?8)",
-            params![
-                t.id,
-                t.origin_message_id,
-                t.from_bot_id,
-                t.to_bot_id,
-                t.deadline_at.map(ts),
-                t.hop_count,
-                t.origin_chain,
-                ts(t.created_at)
-            ],
+            origin_chain,
+        )
+    }
+
+    /// Open a task and name the release it deploys or rolls back in one
+    /// transaction (H-181), so no reader ever sees the task without its
+    /// release: G4 would briefly count a forwarded deploy task off the board.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_task_with_release(
+        &self,
+        origin_message_id: &str,
+        from_bot_id: Option<&str>,
+        to_bot_id: &str,
+        deadline_at: Option<DateTime<Utc>>,
+        hop_count: i64,
+        origin_chain: &str,
+        release_id: Option<&str>,
+    ) -> anyhow::Result<Task> {
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let task = insert_task(
+            &tx,
+            origin_message_id,
+            from_bot_id,
+            to_bot_id,
+            deadline_at,
+            hop_count,
+            origin_chain,
         )?;
-        Ok(t)
+        if let Some(release_id) = release_id {
+            tx.execute(
+                "INSERT OR REPLACE INTO task_release(task_id, release_id) VALUES (?1, ?2)",
+                params![task.id, release_id],
+            )?;
+        }
+        tx.commit()?;
+        Ok(task)
     }
 
     pub fn get_task(&self, task_id: &str) -> anyhow::Result<Option<Task>> {
@@ -279,4 +290,48 @@ impl Db {
         }
         Ok(())
     }
+}
+
+fn insert_task(
+    conn: &Connection,
+    origin_message_id: &str,
+    from_bot_id: Option<&str>,
+    to_bot_id: &str,
+    deadline_at: Option<DateTime<Utc>>,
+    hop_count: i64,
+    origin_chain: &str,
+) -> anyhow::Result<Task> {
+    if hop_count > MAX_TASK_HOPS {
+        bail!(
+            "task hop limit exceeded ({hop_count} > {MAX_TASK_HOPS}) — do the \
+             work yourself, or report what you have with complete_task"
+        );
+    }
+    let t = Task {
+        id: new_id(),
+        origin_message_id: origin_message_id.to_string(),
+        from_bot_id: from_bot_id.map(|s| s.to_string()),
+        to_bot_id: to_bot_id.to_string(),
+        state: TaskState::Open,
+        deadline_at,
+        hop_count,
+        origin_chain: origin_chain.to_string(),
+        reply_count: 0,
+        created_at: now(),
+    };
+    conn.execute(
+        "INSERT INTO task(id, origin_message_id, from_bot_id, to_bot_id, state, deadline_at, hop_count, origin_chain, created_at)
+         VALUES (?1, ?2, ?3, ?4, 'open', ?5, ?6, ?7, ?8)",
+        params![
+            t.id,
+            t.origin_message_id,
+            t.from_bot_id,
+            t.to_bot_id,
+            t.deadline_at.map(ts),
+            t.hop_count,
+            t.origin_chain,
+            ts(t.created_at)
+        ],
+    )?;
+    Ok(t)
 }

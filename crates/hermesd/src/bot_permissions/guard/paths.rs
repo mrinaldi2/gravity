@@ -264,7 +264,7 @@ impl GuardContext {
         {
             return true;
         }
-        if self.in_served(path) {
+        if self.in_served(path) || self.in_run(path) {
             return false;
         }
         let inside = |root: &PathBuf| path.starts_with(real(root));
