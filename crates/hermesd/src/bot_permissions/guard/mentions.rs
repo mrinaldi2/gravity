@@ -1,7 +1,7 @@
 //! Words that are text or redirections rather than paths a command opens
 //! (H-155).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::commands::is_redirect;
 use super::paths::Scope;
@@ -31,9 +31,16 @@ pub(super) fn prints_to_file(words: &Words, scope: &Scope, ctx: &GuardContext) -
         };
         let expanded = ctx.expand(target, scope);
         let device = |p: &Path| p.starts_with("/dev") || p.starts_with("/proc");
+        // A named pipe, a socket or any other file that isn't a plain one
+        // hands what is written on to its reader (CE-032 S1).
+        let special = |p: &PathBuf| p.metadata().is_ok_and(|m| !m.is_file() && !m.is_dir());
         if expanded.contains('$')
+            || scope.changes.fifo
             || device(Path::new(&expanded))
-            || ctx.candidates(&expanded, scope).iter().any(|p| device(p))
+            || ctx
+                .candidates(&expanded, scope)
+                .iter()
+                .any(|p| device(p) || special(p))
         {
             return false;
         }
@@ -45,8 +52,9 @@ pub(super) fn prints_to_file(words: &Words, scope: &Scope, ctx: &GuardContext) -
 /// The words of an `echo` or `printf` writing into a file that are only
 /// text: `echo "refused: touches ~/.ssh" >> notes.md` names a path without
 /// opening it. A glob still lists a folder, and `printf -v` sets a variable
-/// a later command may open, so those stay judged as paths. The caller says
-/// whether the output feeds the next command.
+/// a later command may open, so those stay judged as paths, and so does
+/// every word when the line may redefine `echo` or `printf` (CE-032 M2).
+/// The caller says whether the output feeds the next command.
 pub(super) fn echoed_text(
     words: &Words,
     feeds_next: bool,
@@ -59,6 +67,7 @@ pub(super) fn echoed_text(
     let printer = matches!(shell::program(&words[at]), "echo" | "printf");
     if feeds_next
         || !printer
+        || scope.changes.redefines
         || words.iter().any(|w| w.starts_with("-v"))
         || !prints_to_file(words, scope, ctx)
     {
@@ -74,7 +83,12 @@ pub(super) fn echoed_text(
             target = bare(word);
             continue;
         }
-        if !ctx.expand(word, scope).contains(['*', '?', '[']) {
+        let wild: &[char] = if scope.changes.globbing {
+            &['*', '?', '[', '(', '^', '#', '~']
+        } else {
+            &['*', '?', '[', '(']
+        };
+        if !ctx.expand(word, scope).contains(wild) {
             text.push(i);
         }
     }

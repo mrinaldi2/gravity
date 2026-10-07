@@ -21,6 +21,9 @@ pub struct Command {
     pub words: Words,
     pub then: Then,
     pub heredocs: Vec<Heredoc>,
+    /// An empty `()` follows the words: they name a function being
+    /// defined (`cd () { … }`; zsh may define several at once) (CE-032).
+    pub defines: bool,
 }
 
 /// What joins a command to the next one.
@@ -63,6 +66,7 @@ pub fn parse(line: &str) -> Vec<Command> {
                 words: std::mem::take(words),
                 then,
                 heredocs: Vec::new(),
+                defines: false,
             });
         }
     };
@@ -124,6 +128,18 @@ pub fn parse(line: &str) -> Vec<Command> {
                 in_word = true;
                 word.push(c);
             }
+            // `*(D)`, `~/.ss(h|x)`, `@(a|b)`: a group glued to an argument is
+            // a zsh (or extglob) pattern, part of the word (CE-032 M3).
+            '(' if in_word
+                && !words.is_empty()
+                && !word.ends_with(['$', '<', '>', '='])
+                && glob_group(&chars).is_some() =>
+            {
+                word.push('(');
+                for _ in 0..glob_group(&chars).unwrap_or(0) {
+                    word.extend(chars.next());
+                }
+            }
             ';' | '\n' | '|' | '&' | '(' | ')' | '`' | '{' | '}' => {
                 // `2>&1` and `&>` are redirections, not separators.
                 if c == '&' && (word.ends_with('>') || chars.peek() == Some(&'>')) {
@@ -141,7 +157,11 @@ pub fn parse(line: &str) -> Vec<Command> {
                     chars.next();
                 }
                 end_word(&mut word, &mut in_word, &mut words);
+                let defines = c == '(' && !words.is_empty() && empty_parens(&chars);
                 end_command(&mut words, &mut out, then);
+                if let Some(command) = out.last_mut().filter(|_| defines) {
+                    command.defines = true;
+                }
                 // The heredocs opened on this line follow it.
                 if c == '\n' {
                     for (delimiter, tabs, expands, at) in pending.drain(..) {
@@ -200,6 +220,33 @@ pub fn parse(line: &str) -> Vec<Command> {
         .collect();
     out.extend(nested);
     out
+}
+
+type Chars<'a> = std::iter::Peekable<std::str::Chars<'a>>;
+
+/// How many characters after a `(` close it as a pattern group: none of
+/// blanks, quotes, separators, redirections or substitutions inside.
+fn glob_group(chars: &Chars<'_>) -> Option<usize> {
+    let mut depth = 1;
+    for (n, c) in chars.clone().enumerate() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return (n > 0).then_some(n + 1);
+                }
+            }
+            c if c.is_whitespace() || ";&'\"`$<>{}\\".contains(c) => return None,
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The rest of a `(` is `)`, blanks aside: a function definition.
+fn empty_parens(chars: &Chars<'_>) -> bool {
+    chars.clone().find(|c| !matches!(c, ' ' | '\t')) == Some(')')
 }
 
 /// The body of a `$'…'` string, escapes decoded, up to its closing quote.

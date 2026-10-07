@@ -17,6 +17,7 @@ pub(super) fn line(line: &str, scope: &mut Scope, ctx: &GuardContext) -> Option<
         return Some(reason);
     }
     let commands = shell::parse(line);
+    scope.changes.note(&commands);
     // What an `xargs` later on the line may be fed: every path it names.
     for words in commands.iter().map(|c| &c.words) {
         let program = shell::program_index(words);

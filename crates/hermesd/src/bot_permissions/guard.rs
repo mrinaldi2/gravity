@@ -47,6 +47,7 @@ use serde_json::{json, Value};
 mod cargo;
 mod cargo_alias;
 mod cd;
+mod changes;
 mod cmdlets;
 mod commands;
 mod daemon_cli;

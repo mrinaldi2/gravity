@@ -27,7 +27,11 @@ pub(super) fn moved(args: &[String], scope: &Scope, ctx: &GuardContext) -> Moved
     // text in the current path.
     let searched =
         !expanded.starts_with(['/', '.']) && std::env::var("CDPATH").is_ok_and(|p| !p.is_empty());
+    // A `CDPATH` set on the line, or a `cd` that may be a function now,
+    // goes where the guard can't see (CE-032 M1, M2).
+    let changed = scope.changes.cdpath || scope.changes.redefines;
     let known = args.len() == 1
+        && !changed
         && !matches!(target, "" | "-")
         && !target.starts_with(['+', '-'])
         && !searched

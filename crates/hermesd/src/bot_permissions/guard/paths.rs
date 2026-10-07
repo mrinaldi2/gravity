@@ -31,14 +31,17 @@ pub(super) struct Scope {
     pub named: Vec<String>,
     /// `for name in a b c`: each value the loop variable takes.
     pub lists: HashMap<String, Vec<String>>,
+    /// What the line changes in the shell the guard models (CE-032).
+    pub changes: super::changes::Changes,
 }
 
 /// More directories than this means the line is playing games.
 const MAX_DIRS: usize = 16;
 
 /// Characters that make a word match more than its own spelling. `$` is a
-/// variable the guard could not expand.
-pub(super) const WILD: &[char] = &['*', '?', '[', '{', '$'];
+/// variable the guard could not expand; `(` a zsh or extglob pattern group
+/// (`*(D)`, `.ss(h|x)`).
+pub(super) const WILD: &[char] = &['*', '?', '[', '{', '$', '('];
 
 impl Scope {
     pub fn new(cwd: &Path) -> Self {
@@ -49,6 +52,7 @@ impl Scope {
             substitutes: false,
             named: Vec::new(),
             lists: HashMap::new(),
+            changes: Default::default(),
         }
     }
 
@@ -202,6 +206,15 @@ impl GuardContext {
         if let Some(device) = words.iter().find(|w| super::words::is_device_path(w)) {
             return Some(device.clone());
         }
+        // A zsh or extglob group (`*(D)`, `.ss(h|x)`) is one pattern, which
+        // `pieces` would cut apart at its brackets (CE-032 M3).
+        if let Some(path) = words
+            .iter()
+            .filter(|w| w.contains('('))
+            .find_map(|w| self.glob_reaches(w, scope, Glob::Shell))
+        {
+            return Some(path);
+        }
         let found = words.iter().flat_map(|w| pieces(w)).find_map(|piece| {
             let expanded = self.expand(piece, scope);
             self.candidates(&expanded, scope)
@@ -292,6 +305,7 @@ impl GuardContext {
             if Path::new(wild)
                 .components()
                 .any(|c| c == Component::ParentDir)
+                || (wild.contains('(') && wild.contains(".."))
             {
                 return Err(PathBuf::from(&expanded));
             }

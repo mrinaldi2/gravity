@@ -2,8 +2,9 @@
 //! by name, the way the shell expands it, so `/[Ss]creen` or `/\*` (an awk
 //! regex, a C comment in a script) no longer reads as every path under `/`
 //! (H-155). What the guard can't follow still counts as reaching anything:
-//! a variable it couldn't expand, `**`, braces left unexpanded, or `..`
-//! after a wildcard.
+//! a variable it couldn't expand, `**`, braces left unexpanded, `..`
+//! after a wildcard, a zsh or extglob group (`*(D)`, `.ss(h|x)`), or any
+//! glob on a line that changes glob options (CE-032 M3).
 
 use std::path::{Path, PathBuf};
 
@@ -30,7 +31,10 @@ impl GuardContext {
     /// resolved like a plain path, so a glob through a symlink (`~/.gravity`
     /// → `~/.thehermes`) is judged by where it lands.
     pub(super) fn glob_reaches(&self, expanded: &str, scope: &Scope, glob: Glob) -> Option<String> {
+        // Glob options may make `^`, `#` and `~` patterns (CE-032 M3).
+        let options = glob == Glob::Shell && scope.changes.globbing;
         let wild: &[char] = match glob {
+            Glob::Shell if options => &['*', '?', '[', '{', '$', '(', '^', '#', '~'],
             Glob::Shell => WILD,
             Glob::Script => &['*', '?', '['],
         };
@@ -62,7 +66,7 @@ impl GuardContext {
         folders.iter().find_map(|dir| {
             protected.iter().find_map(|p| {
                 let below = names_below(p, dir)?;
-                reaches(&pattern, &below, glob).then(|| p.display().to_string())
+                (options || reaches(&pattern, &below, glob)).then(|| p.display().to_string())
             })
         })
     }
@@ -86,7 +90,9 @@ fn reaches(pattern: &[String], below: &[String], glob: Glob) -> bool {
         let unknown = part == ".."
             || part.contains("**")
             || (glob == Glob::Shell
-                && (variable(part) || (part.contains('{') && part.contains(','))));
+                && (variable(part)
+                    || part.contains('(')
+                    || (part.contains('{') && part.contains(','))));
         if unknown {
             return true;
         }
