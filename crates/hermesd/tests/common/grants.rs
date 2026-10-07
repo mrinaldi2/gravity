@@ -10,7 +10,7 @@ use super::peers::{wait_until, Team};
 use super::{TestDaemon, WsClient};
 
 pub async fn desktop(d: &TestDaemon) -> WsClient {
-    WsClient::connect_with(d, d.app.secrets.client_token(), &["decision_grants"]).await
+    WsClient::connect_with(d, &d.app.owner.mint(), &["decision_grants"]).await
 }
 
 /// The lead asks for `extras` for the linked Windev; the owner grants them,

@@ -167,6 +167,16 @@ impl Conn {
         Ok(())
     }
 
+    /// A run or reject of an owner action refused at the gate is on its
+    /// record too: the owner token is a bot's way in (ARCH-R51 M1).
+    pub(super) fn audit_refused_action(&self, kind: &str, req: &Value, why: &str) {
+        let id = req.get("id").and_then(Value::as_str);
+        if let (Some(id), "owner_action_run" | "owner_action_reject") = (id, kind) {
+            let actor = self.actor().as_stored();
+            owner_action::audit(&self.app, id, &actor, "refused", json!({ "why": why }));
+        }
+    }
+
     /// `{id, sha256}`: the hash the client showed the owner.
     pub(super) fn owner_action_run(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let id = Self::str_field(req, "id")?;
