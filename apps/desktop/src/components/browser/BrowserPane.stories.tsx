@@ -1,8 +1,9 @@
 import type { Story } from "@ladle/react";
 import frame from "../../test/browserFrame.jpg?inline";
 import { browserActivity, browserTabs } from "../../test/agentFixtures";
+import { bot } from "../../test/fixtures";
 import BrowserActivityList from "./BrowserActivityList";
-import { BrowserScreen, TabStrip } from "./BrowserPane";
+import { BrowserScreen, ControlBar, TabStrip } from "./BrowserPane";
 
 const FRAME = {
   type: "browser_frame",
@@ -16,9 +17,13 @@ const FRAME = {
 export const Live: Story = () => (
   <div className="browser-pane" style={{ width: 1024, height: 640 }}>
     <div className="browser-main">
-      <div className="browser-note muted">
-        lead uses a browser of its own; your Chrome is off limits.
-      </div>
+      {/* The pane's own bar, so the story keeps its layout (H-174). */}
+      <ControlBar
+        bot={bot({ name: "lead" })}
+        offered={false}
+        controlling={false}
+        onToggle={() => undefined}
+      />
       <TabStrip tabs={browserTabs} onPick={() => undefined} />
       <BrowserScreen tabs={browserTabs} frame={FRAME} name="lead" />
     </div>
