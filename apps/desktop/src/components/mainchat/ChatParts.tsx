@@ -220,14 +220,16 @@ export function BotHeading(props: {
         {props.projectName}
         {props.lead ? " · lead" : ""}
       </span>
+      {/* The intended way to the bot's page, which opens on its Chat (H-192). */}
       <button
         type="button"
         className="btn btn-small mc-open-bot"
+        aria-label={`Open ${bot.name}'s page`}
         onClick={() => {
           props.onOpenBot(bot.id);
         }}
       >
-        Open bot
+        Open {bot.name}
       </button>
     </div>
   );

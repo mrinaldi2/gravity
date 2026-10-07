@@ -1,10 +1,11 @@
 import type { ReactElement } from "react";
 
-export type BotTab = "reports" | "chat" | "terminal" | "browser" | "routines";
+export type BotTab = "reports" | "chat" | "activity" | "terminal" | "browser" | "routines";
 
 const TAB_LABEL: Readonly<Record<BotTab, string>> = {
   reports: "Reports",
   chat: "Chat",
+  activity: "Activity",
   terminal: "Terminal",
   browser: "Browser",
   routines: "Routines",
@@ -19,24 +20,37 @@ export interface TabSupport {
   readonly peerTerminal?: boolean;
   /** A linked bot's browser, relayed from its machine. */
   readonly peerBrowser?: boolean;
-  /** The owner threads (H-132) that Reports reads; the page opens there (UX-024). */
+  /**
+   * The owner threads (H-132) that Reports reads; the page opens there
+   * (UX-024). With them, Chat is the owner thread and the session's
+   * transcript is Activity (H-192).
+   */
   readonly reports?: boolean;
 }
 
 /**
  * The tabs a bot offers: Reports first where the daemon keeps owner threads,
- * then chat and terminal. A linked bot has its chat, and its terminal and
- * browser when the daemon relays them from its machine.
+ * then Chat, Activity and the terminal. A linked bot has its chat, and its
+ * terminal and browser when the daemon relays them from its machine.
  */
 export function botTabs(support: TabSupport, linked: boolean): readonly BotTab[] {
   const lead: BotTab[] = support.reports === true ? ["reports"] : [];
-  return [...lead, ...workTabs(support, linked)];
+  return [...lead, ...talkTabs(support, linked), ...workTabs(support, linked)];
+}
+
+/** Chat, and Activity beside it once Chat is the owner thread (H-192). */
+function talkTabs(support: TabSupport, linked: boolean): readonly BotTab[] {
+  const transcript = support.chat || linked;
+  if (support.reports === true) {
+    return transcript ? ["chat", "activity"] : ["chat"];
+  }
+  return transcript ? ["chat"] : [];
 }
 
 function workTabs(support: TabSupport, linked: boolean): readonly BotTab[] {
-  const { chat, browser = false, peerTerminal = false, peerBrowser = false } = support;
+  const { browser = false, peerTerminal = false, peerBrowser = false } = support;
   if (linked) {
-    const tabs: BotTab[] = ["chat"];
+    const tabs: BotTab[] = [];
     if (peerTerminal) {
       tabs.push("terminal");
     }
@@ -45,7 +59,7 @@ function workTabs(support: TabSupport, linked: boolean): readonly BotTab[] {
     }
     return tabs;
   }
-  const tabs: BotTab[] = chat ? ["chat", "terminal"] : ["terminal"];
+  const tabs: BotTab[] = ["terminal"];
   if (browser) {
     tabs.push("browser");
   }

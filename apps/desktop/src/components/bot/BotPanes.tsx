@@ -12,6 +12,7 @@ import type { BrowserWatch } from "../browser/useBrowserWatch";
 import RoutinesPanel from "../RoutinesPanel";
 import TerminalPane from "../TerminalPane";
 import type { BotTab } from "./BotTabs";
+import BotChat from "./BotChat";
 import ReportsPane from "./ReportsPane";
 
 interface BotPanesProps {
@@ -30,6 +31,8 @@ interface BotPanesProps {
   readonly onToast: AddToast;
   /** Reply on Reports: answers the bot, quoting what it said. */
   readonly onReply: (quote: string) => void;
+  /** Moves to another tab, e.g. from Activity to Chat. */
+  readonly onSelectTab: (tab: BotTab) => void;
 }
 
 /** Why the owner cannot write to a bot right now, or null when they can. */
@@ -55,18 +58,43 @@ function paneClass(shown: boolean): string {
   return shown ? "tab-pane" : "tab-pane tab-pane-hidden";
 }
 
-/** The Chat tab: a linked bot's chat read from its machine, else the bot's own. */
-function ChatTab(
+/** Activity's caption (UX-033): what it holds, and where the conversation is. */
+function ActivityCaption(props: {
+  readonly bot: Bot;
+  readonly onOpenChat: () => void;
+}): ReactElement {
+  return (
+    <>
+      Everything {props.bot.name} did: tasks, messages from other bots and the steps it took. Your
+      conversation is in{" "}
+      <button type="button" className="chat-link" onClick={props.onOpenChat}>
+        Chat
+      </button>
+      .
+    </>
+  );
+}
+
+/**
+ * The bot's session read from its transcript: a linked bot's from its
+ * machine, else its own. It is Activity where Chat is the owner thread
+ * (H-192), and the Chat tab itself on an older service.
+ */
+function TranscriptTab(
   props: Pick<
     BotPanesProps,
-    "client" | "bot" | "connected" | "canControl" | "active" | "onOpenFile" | "onOpenDecision"
-  >,
+    "client" | "bot" | "connected" | "canControl" | "onOpenFile" | "onOpenDecision"
+  > & {
+    readonly shown: boolean;
+    /** Opens Chat; given only when this is Activity. */
+    readonly onOpenChat?: () => void;
+  },
 ): ReactElement {
-  const { client, bot, connected } = props;
+  const { client, bot, connected, onOpenChat } = props;
   const writeBlocked = writeBlockedReason(connected, props.canControl, bot);
   const linked = bot.peer != null;
   return (
-    <div className={paneClass(props.active === "chat")}>
+    <div className={paneClass(props.shown)}>
       {linked && !client.capabilities.includes("peer_chat") ? (
         <LinkedChat client={client} bot={bot} connected={connected} writeBlocked={writeBlocked} />
       ) : (
@@ -77,11 +105,93 @@ function ChatTab(
           writeBlocked={writeBlocked}
           onOpenFile={props.onOpenFile}
           onOpenDecision={props.onOpenDecision}
-          active={props.active === "chat"}
+          active={props.shown}
           note={linked ? machineNote(bot) : undefined}
+          caption={
+            onOpenChat === undefined ? undefined : (
+              <ActivityCaption bot={bot} onOpenChat={onOpenChat} />
+            )
+          }
+          composerNote={onOpenChat === undefined ? undefined : "Shows in Chat too."}
+          onOpenChat={onOpenChat}
         />
       )}
     </div>
+  );
+}
+
+/** On a service without owner threads, Chat is still the transcript: say so (UX-033). */
+function OldServiceNote(props: {
+  readonly client: DaemonApi;
+  readonly active: BotTab;
+}): ReactElement | null {
+  if (props.active !== "chat" || props.client.capabilities.includes("owner_threads")) {
+    return null;
+  }
+  return (
+    <div className="chat-note bot-old-service">
+      This computer's Hermes service shows Chat and Activity together. Update it to keep your
+      conversation separate.
+    </div>
+  );
+}
+
+/**
+ * Chat and Activity (H-192): where the service keeps owner threads, Chat is
+ * the owner thread and the transcript is Activity; otherwise Chat is the
+ * transcript.
+ */
+function TalkPanes(
+  props: Pick<
+    BotPanesProps,
+    | "client"
+    | "bot"
+    | "tabs"
+    | "active"
+    | "connected"
+    | "canControl"
+    | "onOpenFile"
+    | "onOpenDecision"
+    | "onSelectTab"
+  >,
+): ReactElement {
+  const { client, bot, tabs, active, connected, canControl } = props;
+  const transcript = {
+    client,
+    bot,
+    connected,
+    canControl,
+    onOpenFile: props.onOpenFile,
+    onOpenDecision: props.onOpenDecision,
+  };
+  if (!tabs.includes("activity")) {
+    return tabs.includes("chat") ? (
+      <TranscriptTab {...transcript} shown={active === "chat"} />
+    ) : (
+      <></>
+    );
+  }
+  return (
+    <>
+      <div className={paneClass(active === "chat")}>
+        <BotChat
+          client={client}
+          bot={bot}
+          connected={connected}
+          writeBlocked={writeBlockedReason(connected, canControl, bot)}
+          onOpenActivity={() => {
+            props.onSelectTab("activity");
+          }}
+        />
+      </div>
+      <TranscriptTab
+        {...transcript}
+        shown={active === "activity"}
+        onOpenChat={() => {
+          props.onSelectTab("chat");
+        }}
+      />
+    </>
   );
 }
 
@@ -97,21 +207,12 @@ export default function BotPanes(props: BotPanesProps): ReactElement {
     <>
       {/* Above every tab: a prompt waits whether the owner reads the chat or the terminal. */}
       <PermissionCards permissions={permissions} canAnswer={connected && canControl} />
+      <OldServiceNote client={client} active={active} />
       <div className="bot-view-body">
         {active === "reports" ? (
           <ReportsPane client={client} bot={bot} connected={connected} onReply={props.onReply} />
         ) : null}
-        {tabs.includes("chat") ? (
-          <ChatTab
-            client={client}
-            bot={bot}
-            connected={connected}
-            canControl={canControl}
-            active={active}
-            onOpenFile={props.onOpenFile}
-            onOpenDecision={props.onOpenDecision}
-          />
-        ) : null}
+        <TalkPanes {...props} />
         {tabs.includes("terminal") ? (
           <div className={paneClass(active === "terminal")}>
             {/* The terminal belongs to the user: any `control` connection may type while the bot runs. */}

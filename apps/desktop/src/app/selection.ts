@@ -24,7 +24,18 @@ export const MORE_TABS = PROJECT_TABS.slice(5);
 export type Selection =
   /** The projects home, ranked by what needs the owner: where the app opens (H-133). */
   | { readonly kind: "home" }
-  | { readonly kind: "bot"; readonly botId: string }
+  /**
+   * A bot's page. `tab: "chat"` opens it on its Chat, the way back from the
+   * main chat (H-192); without it, the page opens on its first tab. `press`
+   * counts those asks, so a second one lands on Chat even when the page is
+   * already open and the owner moved to another tab (UX-034).
+   */
+  | {
+      readonly kind: "bot";
+      readonly botId: string;
+      readonly tab?: "chat";
+      readonly press?: number;
+    }
   /**
    * A project window. Without `tab` it reopens on the tab last used there,
    * which is the Dashboard the first time.

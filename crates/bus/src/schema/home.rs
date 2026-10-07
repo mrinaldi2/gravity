@@ -35,3 +35,18 @@ CREATE TABLE IF NOT EXISTS project_pin (
     pinned_at  TEXT NOT NULL
 );
 "#;
+
+/// The owner thread's answers taken from a bot's session (H-192): a turn the
+/// owner started from chat that ended without `message_owner` has its final
+/// text posted to the thread once. Keyed by the turn, so a re-read of the
+/// transcript never posts it twice; `message_num` ties the turn to the
+/// message for the Activity view's "In Chat" tag.
+pub(super) const MIGRATION_OWNER_ANSWER: &str = r#"
+CREATE TABLE IF NOT EXISTS owner_answer (
+    bot_id      TEXT NOT NULL,
+    turn_id     TEXT NOT NULL,
+    message_num INTEGER,
+    posted_at   TEXT NOT NULL,
+    PRIMARY KEY (bot_id, turn_id)
+);
+"#;

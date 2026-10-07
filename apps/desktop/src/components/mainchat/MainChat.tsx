@@ -3,7 +3,6 @@
 // H-132) and a composer that reaches any bot. Reply on a report opens it on
 // that bot with the report quoted.
 
-import { useEffect, useRef } from "react";
 import type { ReactElement } from "react";
 import type { AddToast } from "../../app/useToasts";
 import type { DaemonApi } from "../../protocol/api";
@@ -11,8 +10,8 @@ import type { Bot, Project } from "../../protocol/entities";
 import type { OwnerThread } from "../../protocol/gen/hermes/home/v1/home_pb";
 import { errText } from "../../util";
 import { useNow } from "../control/useNow";
-import { useOwnerThread } from "../home/useOwnerThreads";
-import { BotHeading, Bubble, Composer, ThreadRow, withQuote } from "./ChatParts";
+import OwnerThreadView from "./OwnerThreadView";
+import { BotHeading, Composer, ThreadRow, withQuote } from "./ChatParts";
 import type { MainChatApi } from "./useMainChat";
 
 interface MainChatProps {
@@ -31,58 +30,6 @@ interface MainChatProps {
 
 function projectName(projects: readonly Project[], id: string | undefined): string {
   return projects.find((p) => p.id === id)?.name ?? "";
-}
-
-/** Marks a thread read up to its newest message once the owner has it open. */
-function useMarkRead(
-  client: DaemonApi,
-  botId: string,
-  newest: bigint | undefined,
-  lastRead: bigint | undefined,
-): void {
-  useEffect(() => {
-    if (newest === undefined || (lastRead !== undefined && lastRead >= newest)) {
-      return;
-    }
-    client
-      .request(
-        { type: "owner_thread_read", bot_id: botId, up_to_num: Number(newest) },
-        "owner_thread_marked",
-      )
-      .catch(() => {
-        // Read state is a convenience; the badge clears on the next read.
-      });
-  }, [client, botId, newest, lastRead]);
-}
-
-/** One bot's thread with the owner, oldest first, scrolled to the newest. */
-function Thread(props: {
-  readonly client: DaemonApi;
-  readonly botId: string;
-  readonly connected: boolean;
-  readonly now: number;
-}): ReactElement {
-  const page = useOwnerThread(props.client, props.botId, props.connected);
-  const end = useRef<HTMLDivElement | null>(null);
-  const messages = page?.messages ?? [];
-  useMarkRead(props.client, props.botId, messages.at(-1)?.num, page?.lastReadNum);
-  const newest = messages.at(-1)?.id;
-  useEffect(() => {
-    // Each new message scrolls the thread to it.
-    if (newest !== undefined) {
-      end.current?.scrollIntoView?.({ block: "end" });
-    }
-  }, [newest]);
-  return (
-    <div className="mc-messages" aria-label="Messages">
-      {messages.length === 0 ? (
-        <p className="dash-empty">No messages yet. What you send shows here, and the answer too.</p>
-      ) : (
-        messages.map((m) => <Bubble key={m.id} message={m} now={props.now} />)
-      )}
-      <div ref={end} />
-    </div>
-  );
 }
 
 function blockedReason(connected: boolean, canControl: boolean): string | null {
@@ -170,7 +117,7 @@ export default function MainChat(props: MainChatProps): ReactElement | null {
         {chat.botId === null ? (
           <p className="dash-empty">Pick who to write to.</p>
         ) : (
-          <Thread
+          <OwnerThreadView
             key={chat.botId}
             client={client}
             botId={chat.botId}

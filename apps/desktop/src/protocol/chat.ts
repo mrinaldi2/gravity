@@ -101,6 +101,8 @@ export interface ChatTurn {
   readonly trigger: Trigger;
   readonly items: readonly ChatItem[];
   readonly stats: TurnStats;
+  /** The owner-thread message the turn's final text was posted as (H-192). */
+  readonly answer_num?: number;
 }
 
 /** The heavy half of a step, fetched when it is opened. */

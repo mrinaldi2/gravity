@@ -61,6 +61,9 @@ pub enum BusCall {
     },
 }
 
+/// The `to` and `msg_kind` of a `message_owner` note shown as a sent item.
+pub const OWNER: &str = "owner";
+
 pub fn bus_call(name: &str, input: &Value) -> Option<BusCall> {
     let tool = crate::brand::bus_tool(name)?;
     let text = |key: &str| {
@@ -78,6 +81,13 @@ pub fn bus_call(name: &str, input: &Value) -> Option<BusCall> {
                 .and_then(Value::as_str)
                 .unwrap_or("note")
                 .to_string(),
+            body: text("body"),
+        }),
+        // A note to the owner's thread (H-192): a sent message to the owner,
+        // which also tells the answer capture this turn answered already.
+        "message_owner" => Some(BusCall::Sent {
+            to: OWNER.to_string(),
+            kind: OWNER.to_string(),
             body: text("body"),
         }),
         "complete_task" => Some(BusCall::Completed {
