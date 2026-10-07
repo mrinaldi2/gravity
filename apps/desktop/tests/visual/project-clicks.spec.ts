@@ -19,9 +19,13 @@ test("each tab and each bot card takes its own click (H-189)", async ({ page }) 
   await page.getByRole("article", { name: "Desktop Dev" }).locator("h3").click({ force: true });
   await expect(opened).toHaveText("Opened: b2");
 
+  // One tab after another on purpose: each click must land on the page the
+  // previous one left, as the owner's clicks do.
   for (const name of ["Overview", "Board", "Releases", "Meetings", "Team"]) {
     const tab = page.getByRole("tab", { name, exact: true });
+    // oxlint-disable-next-line no-await-in-loop
     await tab.click();
+    // oxlint-disable-next-line no-await-in-loop
     await expect(tab).toHaveAttribute("aria-selected", "true");
   }
   await expect(opened).toHaveText("Opened: b2");
