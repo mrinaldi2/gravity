@@ -748,6 +748,11 @@ runs through the tester the same way.
   - `release_machines` (every bot; WS read) returns `{project_id, machine_name, required, deploys_to, set, set_by, testers: [{bot_id, machine}]}`.
   - `release_machines_set {machines?, machine_name?}` sets the list: MCP for the lead (narrowing testing only), WS for the owner (approve, on the board's home; narrows deploys too). Each entry must be a computer some tester tests on, and an empty list goes back to every tester's computer.
   - Migration 033: `release_machine`, `release_machine_setter`, `release_target`, `daemon_name`.
+  - **iOS packages (H-176).** A package whose every build is `ios` freezes its own targets: it is tested on `ios` and deployed to `iphone`, the owner's phone.
+    - The tester whose role names `ios` (iOS QA) reports its `release_test`, and gets the `iphone` deploy task and confirms it.
+    - `ios` and `iphone` never count as desktop computers. The project's list, and `required` and `deploys_to` in `release_machines`, stay desktop-only, so desktop packages keep needing every desktop tester's computer.
+    - Besides the roles it already assigns, the lead may give, or take away, a `tester` role on `ios` with `role_set {bot, role: "tester", machine: "ios"}`. That's only for a bot that isn't already testing a desktop computer. Every other tester, DevOps or lead role stays the owner's (ARCH-R30).
+    - The migration `MIGRATION_IOS_DEPLOY_TARGET` (re-runnable) re-freezes, to `iphone`, the deploy targets of iOS packages submitted before this change. That applies only to packages whose targets nobody set and that haven't started a deploy.
 - **Hold:** `release_hold` keeps the decision open and holds it (`remind_at` becomes its `held_until`). When the reminder comes due, the decision sweep resumes it and the package goes back to `awaiting_owner`. `release_unhold` does the same on request.
 - **Pause:** `release_pause` (owner, or DevOps over MCP) pauses a rollout in progress. Deploys and installs are refused with the reason, and every tester holding an open deploy task gets a note. `release_resume` returns it to `deploying`.
 - **Who may rule:** `can_rule` says whether this connection may rule (the approve grant, on the board's home). When it can't, `rule_on` names the home computer. `BoardSnapshot.can_rule` carries the same flag.
