@@ -46,13 +46,17 @@ use serde_json::{json, Value};
 
 mod cargo;
 mod cargo_alias;
+mod cd;
 mod cmdlets;
 mod commands;
 mod daemon_cli;
 mod dotnet;
 mod full;
 mod git;
+mod glob;
+mod heredoc;
 mod links;
+mod mentions;
 mod path_key;
 pub(super) mod paths;
 mod powershell;

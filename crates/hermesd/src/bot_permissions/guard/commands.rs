@@ -1,11 +1,14 @@
 //! The guard's verdict on one command line, simple command by simple
 //! command, carrying `cd`, variables and symlinks from one to the next.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use super::mentions::{echoed_text, without_redirects};
 use super::paths::Scope;
-use super::{cargo, daemon_cli, full, git, powershell, ps_launch, targets, GuardContext};
-use crate::bot_permissions::shell::{self, Words};
+use super::{
+    cargo, cd, daemon_cli, full, git, heredoc, powershell, ps_launch, targets, GuardContext,
+};
+use crate::bot_permissions::shell::{self, Then, Words};
 
 /// Why the line must not run, or `None`.
 pub(super) fn line(line: &str, scope: &mut Scope, ctx: &GuardContext) -> Option<String> {
@@ -13,9 +16,9 @@ pub(super) fn line(line: &str, scope: &mut Scope, ctx: &GuardContext) -> Option<
     if let Some(reason) = cargo::computed_target(line, scope.substitutes) {
         return Some(reason);
     }
-    let commands = shell::commands(line);
+    let commands = shell::parse(line);
     // What an `xargs` later on the line may be fed: every path it names.
-    for words in &commands {
+    for words in commands.iter().map(|c| &c.words) {
         let program = shell::program_index(words);
         scope.named.extend(
             words
@@ -25,11 +28,24 @@ pub(super) fn line(line: &str, scope: &mut Scope, ctx: &GuardContext) -> Option<
                 .map(|(_, w)| w.clone()),
         );
     }
-    for words in commands {
-        if let Some(reason) = command(&words, scope, ctx) {
-            return Some(reason);
+    // `cd X && …` runs what follows in X, and nowhere else, until the chain
+    // of `&&` and `|` ends (H-155). Elsewhere a `cd` may not have happened,
+    // so every directory the line may be in counts.
+    let mut certain: Option<Vec<PathBuf>> = None;
+    for cmd in &commands {
+        let all = std::mem::take(&mut scope.dirs);
+        scope.dirs = certain.clone().unwrap_or_else(|| all.clone());
+        let reason = command_as(&cmd.words, cmd.then == Then::Pipe, scope, ctx)
+            .or_else(|| heredoc::judge(cmd, scope, ctx));
+        let moved = reason
+            .is_none()
+            .then(|| remember(&cmd.words, scope, ctx))
+            .flatten();
+        scope.dirs = all;
+        if reason.is_some() {
+            return reason;
         }
-        remember(&words, scope, ctx);
+        certain = cd::next(certain, moved, cmd.then, scope);
     }
     None
 }
@@ -38,8 +54,9 @@ fn looks_like_path(word: &str) -> bool {
     !word.starts_with('-') && (word.contains('/') || word.starts_with('~') || word.starts_with('.'))
 }
 
-/// What a command changes for the ones after it: `cd`, `name=value`, `ln -s`.
-fn remember(words: &Words, scope: &mut Scope, ctx: &GuardContext) {
+/// What a command changes for the ones after it: `name=value`, `ln -s`,
+/// and where a `cd` went, which the caller tracks.
+fn remember(words: &Words, scope: &mut Scope, ctx: &GuardContext) -> Option<cd::Moved> {
     let skip = usize::from(matches!(
         words.first().map(String::as_str),
         Some("export" | "local" | "declare" | "readonly" | "typeset")
@@ -51,21 +68,17 @@ fn remember(words: &Words, scope: &mut Scope, ctx: &GuardContext) {
                 scope.vars.insert(name.to_string(), value);
             }
         }
-        return;
+        return None;
     }
     if words.first().is_some_and(|w| w == "for") && words.get(2).is_some_and(|w| w == "in") {
         scope.lists.insert(words[1].clone(), words[3..].to_vec());
-        return;
+        return None;
     }
-    let Some(at) = shell::program_index(words) else {
-        return;
-    };
+    let at = shell::program_index(words)?;
     let args = positional(&words[at + 1..]);
     match shell::program(&words[at]) {
-        "cd" | "pushd" => {
-            let dirs = ctx.resolve(scope, args.first().map_or("", String::as_str));
-            scope.enter(dirs);
-        }
+        "cd" | "pushd" => return Some(cd::moved(&args, scope, ctx)),
+        "popd" => return Some(cd::Moved::Somewhere(Vec::new())),
         "ln" if args.len() >= 2 => {
             let (target, link) = (&args[0], &args[args.len() - 1]);
             for dir in ctx.resolve(scope, link) {
@@ -84,6 +97,7 @@ fn remember(words: &Words, scope: &mut Scope, ctx: &GuardContext) {
         }
         _ => {}
     }
+    None
 }
 
 /// Arguments that are not options; everything after `--` counts.
@@ -102,6 +116,16 @@ pub(super) fn positional(args: &[String]) -> Vec<String> {
 }
 
 pub(super) fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
+    command_as(words, true, scope, ctx)
+}
+
+/// One command's verdict; `feeds_next` when its output is piped on.
+fn command_as(
+    words: &Words,
+    feeds_next: bool,
+    scope: &Scope,
+    ctx: &GuardContext,
+) -> Option<String> {
     // `tar -C ~ …`, `make --directory=…`: later words are relative to it.
     let mut local = scope.clone();
     for (i, w) in words.iter().enumerate() {
@@ -119,7 +143,13 @@ pub(super) fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Optio
         }
     }
     let scope = &local;
-    if let Some(path) = words.iter().find_map(|w| ctx.protected_word(w, scope)) {
+    let text = echoed_text(words, feeds_next, scope, ctx);
+    if let Some(path) = words
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !text.contains(i))
+        .find_map(|(_, w)| ctx.protected_word(w, scope))
+    {
         return Some(format!(
             "this command touches {path}, which is protected; don't reword it, ask the owner"
         ));
@@ -181,7 +211,10 @@ pub(super) fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Optio
         bin if bin.len() > 6 && bin.starts_with("cargo-") => {
             return cargo::check_binary(words, at, &bin[6..], scope, ctx)
         }
-        _ => targets::of(name, rest, &args),
+        _ => {
+            let plain = without_redirects(rest);
+            targets::of(name, &plain, &positional(&plain))
+        }
     };
     let target = targets
         .iter()
