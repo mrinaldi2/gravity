@@ -77,8 +77,11 @@ fn heredoc_scripts_are_not_read_as_shell() {
             "python3 <<'EOF'\nprint(1)",
         ]),
     );
+    // The reason names the path as this platform spells it: on Windows with
+    // backslashes, perhaps a drive, and case folded.
+    let named = reasons[0].replace('\\', "/").to_lowercase();
     assert!(
-        reasons[0].contains("/Users/me/.gravity/secrets"),
+        named.contains("/users/me/.gravity/secrets"),
         "{}",
         reasons[0]
     );

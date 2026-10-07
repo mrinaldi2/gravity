@@ -43,17 +43,7 @@ impl GuardContext {
             Some(i) => &expanded[..=i],
             None => "",
         };
-        let pattern: Vec<String> = expanded[folder.len()..]
-            .split(|c| c == '/' || (cfg!(windows) && c == '\\'))
-            .filter(|name| !name.is_empty() && *name != ".")
-            .map(|name| {
-                if cfg!(windows) {
-                    name.to_lowercase()
-                } else {
-                    name.to_string()
-                }
-            })
-            .collect();
+        let pattern = pattern_names(&expanded[folder.len()..]);
         let rooted = Path::new(folder).has_root() || Path::new(folder).is_absolute();
         let dirs: Vec<PathBuf> = if rooted {
             vec![PathBuf::from("/")]
@@ -70,6 +60,21 @@ impl GuardContext {
             })
         })
     }
+}
+
+/// A glob's names after its folder. On Windows a backslash is a separator,
+/// never an escape, so `\*` is a `*` that names every entry (fail-closed).
+fn pattern_names(rest: &str) -> Vec<String> {
+    rest.split(|c| c == '/' || (cfg!(windows) && c == '\\'))
+        .filter(|name| !name.is_empty() && *name != ".")
+        .map(|name| {
+            if cfg!(windows) {
+                name.to_lowercase()
+            } else {
+                name.to_string()
+            }
+        })
+        .collect()
 }
 
 /// The names that lead from `dir` down to `path`, when `path` is in it.
@@ -204,7 +209,6 @@ mod tests {
             (".s?h", ".ssh"),
             ("[]a]", "]"),
             ("[a-z]*", "secrets"),
-            ("\\*", "*"),
             ("gravityd.to?", "gravityd.toml"),
             ("sec", "secrets"),
         ] {
@@ -215,11 +219,31 @@ mod tests {
             ("*", ".ssh"),
             ("?sh", ".ssh"),
             ("[!s]ecrets", "secrets"),
-            ("\\*", "Users"),
             ("[a-z]", "Users"),
             ("sex", "secrets"),
         ] {
             assert!(!name_matches(pattern, name), "{pattern} {name}");
         }
+    }
+
+    /// A Unix shell reads `\*` as a literal `*`.
+    #[cfg(unix)]
+    #[test]
+    fn a_backslash_escapes_a_wildcard_on_unix() {
+        assert!(name_matches("\\*", "*"));
+        assert!(!name_matches("\\*", "Users"));
+    }
+
+    /// On Windows `\` separates names, so `\*` is a `*` that names every
+    /// entry: it reaches more, and is refused more (fail-closed).
+    #[cfg(windows)]
+    #[test]
+    fn a_backslash_is_a_separator_on_windows_so_star_stays_a_glob() {
+        use super::{pattern_names, reaches, Glob};
+        let names = pattern_names("\\*");
+        assert_eq!(names, ["*"]);
+        let below = ["users".to_string()];
+        assert!(reaches(&names, &below, Glob::Shell));
+        assert!(reaches(&names, &below, Glob::Script));
     }
 }
