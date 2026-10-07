@@ -169,7 +169,9 @@ export function Activity(props: {
   const [filter, setFilter] = useState<Filter>("all");
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
+  // The comment on its way, shown at once (H-201); `posted` says it landed.
+  const [sending, setSending] = useState<string | null>(null);
+  const [posted, setPosted] = useState(false);
   const entries: Entry[] = [
     ...props.detail.comments.map((c) => ({
       kind: "comment" as const,
@@ -191,18 +193,23 @@ export function Activity(props: {
   );
   const send = async (): Promise<void> => {
     const body = draft.trim();
-    if (!body || props.onComment === undefined) {
+    if (!body || props.onComment === undefined || sending !== null) {
       return;
     }
-    setSending(true);
+    setSending(body);
+    setDraft("");
+    setError(null);
+    setPosted(false);
     try {
       await props.onComment(body);
-      setDraft("");
-      setError(null);
+      setPosted(true);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
+      // Not posted: the text comes back to try again.
+      setDraft(body);
+      const why = failure instanceof Error ? failure.message : String(failure);
+      setError(`Your comment wasn't posted. ${why}`);
     } finally {
-      setSending(false);
+      setSending(null);
     }
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -226,7 +233,7 @@ export function Activity(props: {
           </button>
         ))}
       </div>
-      {shown.length === 0 ? (
+      {shown.length === 0 && sending === null ? (
         <p className="drawer-empty">Nothing here yet.</p>
       ) : (
         <ol className="drawer-timeline" aria-label="Timeline">
@@ -234,7 +241,7 @@ export function Activity(props: {
             e.kind === "comment" ? (
               <li
                 key={`c-${e.comment.id}`}
-                className={e.comment.author === "user" ? "drawer-owner" : ""}
+                className={props.who(e.comment.author) === "You" ? "drawer-owner" : ""}
               >
                 <span className="drawer-dim">{when(e.comment.at)}</span>{" "}
                 <b>{props.who(e.comment.author)}</b>: {e.comment.body}
@@ -244,6 +251,11 @@ export function Activity(props: {
                 {when(e.event.at)} {eventLine(e.event, props.who, props.columnName)}
               </li>
             ),
+          )}
+          {sending === null ? null : (
+            <li className="drawer-owner drawer-sending">
+              <span className="drawer-dim">Sending…</span> <b>{props.who("user")}</b>: {sending}
+            </li>
           )}
         </ol>
       )}
@@ -260,11 +272,14 @@ export function Activity(props: {
           <button
             type="button"
             className="btn btn-small btn-primary"
-            disabled={sending || draft.trim() === ""}
+            disabled={sending !== null || draft.trim() === ""}
             onClick={() => void send()}
           >
             Send <span className="drawer-dim">⌘↩</span>
           </button>
+          <p className="drawer-posted" role="status">
+            {posted ? "Comment posted. The assignee and the lead are told." : ""}
+          </p>
           {error === null ? null : (
             <p className="drawer-error" role="alert">
               {error}

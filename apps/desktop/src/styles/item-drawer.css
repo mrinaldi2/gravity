@@ -260,6 +260,21 @@
   resize: vertical;
 }
 
+.drawer-sending {
+  opacity: 0.7;
+}
+
+.drawer-posted {
+  align-self: stretch;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.drawer-posted:empty {
+  display: none;
+}
+
 .drawer-error {
   align-self: stretch;
   margin: 0;

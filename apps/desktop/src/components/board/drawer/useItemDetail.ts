@@ -65,10 +65,17 @@ export function useItemDetail(
     // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [api, itemId, version, reads]);
 
+  // Resolves once the item read back holds the comment (H-201), so the
+  // drawer swaps "Sending…" for the posted comment without a gap.
   const comment = useCallback(
     async (body: string): Promise<void> => {
       await boardCall(api, { case: "itemComment", value: { id: itemId, body } }, "edited");
-      setReads((n) => n + 1);
+      try {
+        setDetail(await boardCall(api, { case: "itemGet", value: { id: itemId } }, "item"));
+      } catch {
+        // Posted all the same: the next read shows it.
+        setReads((n) => n + 1);
+      }
     },
     [api, itemId],
   );

@@ -15,6 +15,7 @@ use crate::app::AppState;
 
 mod board;
 pub use board::Conflict;
+mod board_comments;
 mod board_edit;
 mod board_import;
 mod board_remote;

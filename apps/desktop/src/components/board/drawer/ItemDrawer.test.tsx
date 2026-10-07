@@ -127,6 +127,34 @@ describe("ItemDrawer", () => {
     expect(box).toHaveValue("");
   });
 
+  it("shows the comment at once while it is sent, then as posted", async () => {
+    const user = userEvent.setup();
+    const { fake } = setup();
+    let answer: (() => void) | undefined;
+    fake.onBoard(
+      "itemComment",
+      () =>
+        new Promise((resolve) => {
+          answer = () => resolve({ case: "edited", value: create(EditResultSchema, {}) });
+        }),
+    );
+    await user.click(await screen.findByRole("tab", { name: "Activity 3" }));
+    await user.type(screen.getByRole("textbox", { name: "Comment on H-017" }), "Ship it");
+    await user.click(screen.getByRole("button", { name: /Send/ }));
+    const timeline = screen.getByRole("list", { name: "Timeline" });
+    expect(timeline).toHaveTextContent("Sending… You: Ship it");
+
+    const after = itemDetail();
+    after.comments.push({ ...after.comments[0], id: "c2", author: "user", body: "Ship it" });
+    fake.onBoard("itemGet", () => ({ case: "item", value: after }));
+    answer?.();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Comment posted. The assignee and the lead are told.",
+    );
+    expect(timeline).not.toHaveTextContent("Sending…");
+    expect(within(timeline).getAllByRole("listitem").at(-1)).toHaveTextContent("You: Ship it");
+  });
+
   it("shows a refused comment, and no composer without the control grant", async () => {
     const user = userEvent.setup();
     const { fake } = setup();
@@ -135,9 +163,15 @@ describe("ItemDrawer", () => {
       throw new DaemonError("no_board", refusal);
     });
     await user.click(await screen.findByRole("tab", { name: "Activity 3" }));
-    await user.type(screen.getByRole("textbox", { name: "Comment on H-017" }), "x");
+    const box = screen.getByRole("textbox", { name: "Comment on H-017" });
+    await user.type(box, "x");
     await user.click(screen.getByRole("button", { name: /Send/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(refusal);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      `Your comment wasn't posted. ${refusal}`,
+    );
+    // The text comes back to try again, and nothing shows as sent.
+    expect(box).toHaveValue("x");
+    expect(screen.getByRole("list", { name: "Timeline" })).not.toHaveTextContent("Sending…");
   });
 
   it("shows the move refusal off the board's home", async () => {

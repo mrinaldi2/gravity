@@ -75,6 +75,12 @@ typed surface:
 | `item_query {project_id, text?, column_keys, assignee?, types, priorities, platforms, blocked?}` | read | `items`: matching cards |
 | `item_move_check {id}` | read | `move_check`: every other column with its unmet guards |
 | `item_move {id, to, expected_version, reason?, override_reason?}` | control | `moved`: `done` (the item), `refused` (unmet guards) or `conflict` (the current item) |
+| `item_comment {id, body, reply_to?}` | control | `edited`: `done` (the item). The owner's comment is also delivered to the card's assignee and the project's lead, once each, as the owner's chat message `[card <id>] Owner commented on the card: <body>` (H-201). A bot's comment (MCP) tells no one. |
+
+Bots read a card's comments in MCP `item_get`: `comments` lists the latest 50,
+oldest first, each `{id, author, author_name, body, reply_to, at}`. `author` is
+stored form (`user`, `device:<id>`, `bot:<id>`); `author_name` is `owner` for
+the owner on any client, else the bot's name (H-201).
 
 `board_watch` answers with the snapshot the pushes continue from, and no push
 for that project is sent before it. Each committed board change is then pushed
