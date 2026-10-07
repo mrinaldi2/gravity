@@ -17,6 +17,7 @@ impl Supervisor {
         message: Option<&str>,
         transcript_path: Option<&str>,
     ) {
+        self.composer_event(bot_id, event);
         match event {
             "SessionStart" => {
                 // Socket registration happens in the HTTP handler. A session
@@ -103,7 +104,7 @@ fn requested_tool(message: &str) -> Option<String> {
 /// The "waiting for your input" notification means nobody is typing, not that
 /// something needs approving. Everything else (permission prompts above all)
 /// is treated as an approval stop.
-fn is_idle_notification(message: &str) -> bool {
+pub(super) fn is_idle_notification(message: &str) -> bool {
     let m = message.to_ascii_lowercase();
     m.contains("waiting for your input") || m.contains("waiting for user input")
 }

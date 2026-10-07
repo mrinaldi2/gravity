@@ -60,6 +60,10 @@ async fn main() -> anyhow::Result<()> {
     if args.first().map(String::as_str) == Some("bus-proxy") {
         std::process::exit(hermesd::bus_auth::proxy::run(&args[1..]).await);
     }
+    // A bot's stdio MCP server, detached from its terminal (H-195 D2b).
+    if args.first().map(String::as_str) == Some("mcp-exec") {
+        std::process::exit(hermesd::bus_auth::detach::mcp_exec(&args[1..]));
+    }
     // Claude Code's hooks (H-044): over the local endpoint, not curl.
     if args.first().map(String::as_str) == Some("hook") {
         std::process::exit(hermesd::bus_auth::hook::run(&args[1..]).await);

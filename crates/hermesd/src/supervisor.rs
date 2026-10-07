@@ -30,6 +30,7 @@ use crate::secrets::Secrets;
 use crate::terminal::TermBuffer;
 
 mod claim;
+mod composer;
 mod hooks;
 mod lifecycle;
 mod quiesce;
@@ -37,8 +38,11 @@ mod restart;
 mod session_events;
 mod start;
 mod termio;
+mod typing;
 mod watchdog;
 
+pub use composer::{digest as prompt_digest, typed_body};
+pub use typing::{opens_modal, TypeError};
 pub use watchdog::{StartupConfig, DIDNT_CONNECT};
 
 /// The state reason of a bot stopped on a permission prompt in its own
@@ -210,6 +214,8 @@ struct SupervisorInner {
     roots: crate::bus_auth::session::SessionRoots,
     /// Bots the watchdog gave up on, told to the owner in one toast (H-041).
     gave_up: Mutex<watchdog::GaveUp>,
+    /// Each bot's composer, for the owner's typed chat (H-195 D2).
+    composers: Mutex<HashMap<String, Arc<typing::BotComposer>>>,
 }
 
 /// What runs before a bot's session starts: the bot id, and whether the
@@ -237,6 +243,7 @@ impl Supervisor {
                 before_start: std::sync::OnceLock::new(),
                 roots: crate::bus_auth::session::SessionRoots::default(),
                 gave_up: Mutex::new(watchdog::GaveUp::default()),
+                composers: Mutex::new(HashMap::new()),
             }),
         }
     }

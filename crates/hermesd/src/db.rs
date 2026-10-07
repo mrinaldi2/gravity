@@ -93,6 +93,7 @@ mod task_views;
 mod tasks;
 #[cfg(test)]
 mod tests;
+mod typed_prompts;
 mod workers;
 #[cfg(test)]
 mod workers_tests;

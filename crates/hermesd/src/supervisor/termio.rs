@@ -19,7 +19,9 @@ impl Supervisor {
     }
 
     /// Forward raw terminal input. Grant checks happen at the control plane;
-    /// there is no input lease — the terminal belongs to the user.
+    /// there is no input lease — the terminal belongs to the user. Callers
+    /// are the owner's verified terminals only: the WS `input` of a device
+    /// or ticket, and a peer's frame that says its owner proved themselves.
     pub fn input(&self, bot_id: &str, data: &[u8]) -> anyhow::Result<()> {
         let session = {
             let mut bots = self.lock_bots();
@@ -30,6 +32,11 @@ impl Supervisor {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .send_input(data);
+        // Only a verified terminal reaches here (H-195 D5, CE-029 M3), so
+        // its Enter is the owner's (D2b keyed tokens).
+        if result.is_ok() {
+            self.composer_owner_input(bot_id, data);
+        }
         result
     }
 

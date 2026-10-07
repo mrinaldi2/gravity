@@ -16,6 +16,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub mod app_identity;
+pub mod detach;
 pub mod hook;
 pub mod inbox;
 pub mod ipc;
@@ -145,7 +146,14 @@ impl BearerLog {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HookTransport {
     /// `<command> hook <event> --endpoint <endpoint>`, identified by process.
-    Ipc { command: String, endpoint: String },
+    /// With `provenance`, a `user` prompt the daemon didn't vouch for is
+    /// blocked, and the hooks that precede a dialog wait for the composer
+    /// (H-195 D2b).
+    Ipc {
+        command: String,
+        endpoint: String,
+        provenance: bool,
+    },
     /// curl / PowerShell with the bearer token in `token_env`: the rollback.
     Http { port: u16, token_env: String },
 }
@@ -161,8 +169,44 @@ pub fn hook_transport(cfg: &crate::config::Config) -> HookTransport {
         BotTransport::Stdio => HookTransport::Ipc {
             command: proxy_command(),
             endpoint: ipc::hook_endpoint(cfg),
+            provenance: composer_delivery(cfg),
         },
     }
+}
+
+/// Whether the owner's chat is typed into bots' composers (H-195). One
+/// switch for D2 and D2b together, so typing never ships without the
+/// provenance check: it needs the hooks over the local endpoint, which carry
+/// that check, and a terminal CLI in a PTY. Windows waits for S0 on ConPTY.
+pub fn composer_delivery(cfg: &crate::config::Config) -> bool {
+    cfg.delivery.composer
+        && cfg!(unix)
+        && cfg.auth.bot_transport == BotTransport::Stdio
+        && cfg.runtime == crate::config::RuntimeKind::Pty
+}
+
+/// A stdio MCP server's entry, started through `hermesd mcp-exec` when the
+/// composer is vouched for: detached from the bot's terminal, it can't push
+/// keystrokes into the composer (TIOCSTI, CE-029 M1). The provenance check
+/// still covers a server a bot adds itself.
+pub fn detached(cfg: &crate::config::Config, mut entry: serde_json::Value) -> serde_json::Value {
+    let Some(command) = entry.get("command").and_then(|c| c.as_str()) else {
+        return entry;
+    };
+    if !composer_delivery(cfg) {
+        return entry;
+    }
+    let mut args = vec![
+        serde_json::json!("mcp-exec"),
+        serde_json::json!("--"),
+        serde_json::json!(command),
+    ];
+    if let Some(rest) = entry.get("args").and_then(|a| a.as_array()) {
+        args.extend(rest.iter().cloned());
+    }
+    entry["command"] = serde_json::json!(proxy_command());
+    entry["args"] = serde_json::Value::Array(args);
+    entry
 }
 
 /// Whether bot sessions still get their bearer token in the environment:
@@ -194,11 +238,14 @@ pub fn http_entry(port: u16, token_env: &str) -> serde_json::Value {
 pub fn server_entry(cfg: &crate::config::Config) -> serde_json::Value {
     match cfg.auth.bot_transport {
         BotTransport::Http => http_entry(cfg.port, crate::brand::BOT_TOKEN_ENV),
-        BotTransport::Stdio => serde_json::json!({
-            "type": "stdio",
-            "command": proxy_command(),
-            "args": ipc::proxy_args(cfg),
-        }),
+        BotTransport::Stdio => detached(
+            cfg,
+            serde_json::json!({
+                "type": "stdio",
+                "command": proxy_command(),
+                "args": ipc::proxy_args(cfg),
+            }),
+        ),
     }
 }
 

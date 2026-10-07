@@ -122,11 +122,12 @@ pub fn server(cfg: &Config, bot_root: &Path) -> Option<Value> {
         browser.config().display().to_string(),
     ];
     let (command, args) = launch(&npx.display().to_string(), args, cfg!(windows));
-    Some(json!({
+    let entry = json!({
         "command": command,
         "args": args,
         "env": { "PATH": path.to_string_lossy() }
-    }))
+    });
+    Some(crate::bus_auth::detached(cfg, entry))
 }
 
 /// How a session runs `npx`. On Windows it is a batch script, which neither

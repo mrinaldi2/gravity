@@ -174,6 +174,9 @@ pub struct DeliveryConfig {
     pub lease_seconds: i64,
     pub max_attempts: i64,
     pub base_backoff_seconds: i64,
+    /// Type the owner's app chat into a bot's composer as their own turn
+    /// (H-195 D2 + D2b, one switch). See `bus_auth::composer_delivery`.
+    pub composer: bool,
 }
 
 impl Default for DeliveryConfig {
@@ -183,6 +186,7 @@ impl Default for DeliveryConfig {
             lease_seconds: 60,
             max_attempts: 10,
             base_backoff_seconds: 5,
+            composer: false,
         }
     }
 }

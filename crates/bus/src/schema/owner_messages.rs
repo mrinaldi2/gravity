@@ -27,3 +27,17 @@ BEGIN
     SELECT RAISE(ABORT, 'an owner message record is immutable');
 END;
 "#;
+
+/// The owner's chat typed into a bot's composer (H-195 D2b): the digest of
+/// each prompt that spent a typed token, so the bot's turn it starts is shown
+/// and answered as the owner's chat by the token, never by its text
+/// (architect S2). Written by the daemon at UserPromptSubmit.
+pub(super) const MIGRATION_TYPED_PROMPTS: &str = r#"
+CREATE TABLE IF NOT EXISTS typed_prompt (
+    bot_id     TEXT NOT NULL,
+    digest     TEXT NOT NULL,
+    message_id TEXT NOT NULL REFERENCES message(id) ON DELETE CASCADE,
+    at         TEXT NOT NULL,
+    PRIMARY KEY (bot_id, digest, message_id)
+);
+"#;
