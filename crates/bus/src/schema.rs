@@ -18,6 +18,7 @@ mod history;
 mod home;
 mod meetings;
 mod owner_actions;
+mod owner_messages;
 mod peers;
 mod permissions;
 mod quiesce;
@@ -39,6 +40,7 @@ use history::{
 use home::{MIGRATION_OWNER_READ, MIGRATION_PROJECT_PIN};
 use meetings::MIGRATION_MEETINGS;
 use owner_actions::MIGRATION_OWNER_ACTIONS;
+use owner_messages::{MIGRATION_OWNER_MESSAGES, MIGRATION_TYPED_PROMPTS};
 use peers::{MIGRATION_14, MIGRATION_15, MIGRATION_16};
 use permissions::{
     MIGRATION_PERMISSIONS, MIGRATION_PERMISSION_EXTRAS_QUIESCE,
@@ -94,6 +96,8 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_PEER_GRANTS,
     MIGRATION_TASK_RELEASE,
     MIGRATION_COMMENT_SYSTEM_AUTHOR,
+    MIGRATION_OWNER_MESSAGES,
+    MIGRATION_TYPED_PROMPTS,
 ];
 
 #[cfg(test)]

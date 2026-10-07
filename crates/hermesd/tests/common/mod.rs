@@ -115,18 +115,22 @@ pub struct WsClient {
 }
 
 impl WsClient {
-    /// Connects as the desktop app: it shows permission and terminal cards.
+    /// Connects as the desktop app: on its one-time ticket, showing
+    /// permission and terminal cards. Only a ticket or a device types into a
+    /// bot or answers its prompts (H-195 D5).
     pub async fn connect(d: &TestDaemon) -> Self {
-        match d.app.secrets.client_token() {
-            // Phase 2 has no client token: the owner's app gets a ticket.
-            "" => Self::connect_as(d, &d.app.owner.mint()).await,
-            token => Self::connect_as(d, token).await,
-        }
+        Self::connect_as(d, &d.app.owner.mint()).await
     }
 
-    /// Connects as the owner, saying it supports these hello features only.
+    /// Connects on the owner token file, as a bot of the same user could.
+    pub async fn connect_owner_token(d: &TestDaemon) -> Self {
+        Self::connect_as(d, d.app.secrets.client_token()).await
+    }
+
+    /// Connects as the owner on a ticket, saying it supports these hello
+    /// features only.
     pub async fn connect_with_features(d: &TestDaemon, features: &[&str]) -> Self {
-        Self::connect_with(d, d.app.secrets.client_token(), features).await
+        Self::connect_with(d, &d.app.owner.mint(), features).await
     }
 
     /// Connects on `token` as the desktop app does: the client token, a

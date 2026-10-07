@@ -198,6 +198,7 @@ fn the_hook_is_installed_with_a_timeout_longer_than_the_window() {
     let ipc = hermesd::bus_auth::HookTransport::Ipc {
         command: "/bin/hermesd".to_string(),
         endpoint: "/home/run/bus.sock".to_string(),
+        provenance: false,
     };
     hermesd::paths::write_hook_settings(dir.path(), &ipc).expect("write");
     let settings = read();

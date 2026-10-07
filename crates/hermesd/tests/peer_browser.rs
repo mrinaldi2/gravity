@@ -134,3 +134,52 @@ async fn the_other_machines_bot_browser_log_is_read_from_there() {
     assert_eq!(log["bot_id"], t.linked_windev.as_str());
     assert_eq!(log["activity"][0]["title"], "Opened store.example.com");
 }
+
+#[tokio::test]
+async fn the_peer_types_into_a_bot_browser_only_for_an_owner_it_verified() {
+    let mut t = team().await;
+    let windev = t.linked_windev.clone();
+    let mac_peer = t
+        .mac
+        .app
+        .db
+        .get_bot(&windev)
+        .expect("db")
+        .expect("stand-in")
+        .peer_id
+        .expect("peer");
+    let (port, calls) = recording_devtools("Sign in").await;
+    start_browser(&t.win, &t.windev_id, port);
+    t.mac_client
+        .request(json!({"type": "watch_browser", "bot_id": windev}))
+        .await;
+    t.mac_client
+        .wait_for(|v| v["type"] == "browser_frame")
+        .await;
+
+    // A frame without the origin's word (an older or forging peer), and one
+    // that says no, are dropped (CE-030); the app's typing after them lands.
+    let remote = t.windev_id.clone();
+    for verified in [None, Some(false)] {
+        let mut frame = json!({"type": "browser_input", "bot_id": remote, "tab_id": "tab-1",
+                               "event": {"kind": "text", "text": "forged"}});
+        if let Some(verified) = verified {
+            frame["owner_verified"] = json!(verified);
+        }
+        t.mac.app.peers.notify(&mac_peer, frame);
+    }
+    t.mac_client
+        .send(
+            json!({"type": "browser_input", "bot_id": windev, "tab_id": "tab-1",
+                     "event": {"kind": "text", "text": "by-the-owner"}}),
+        )
+        .await;
+    let seen = calls.clone();
+    wait_until("the PC's tab gets the owner's typing", || {
+        !seen.lock().expect("calls").is_empty()
+    })
+    .await;
+    let calls = calls.lock().expect("calls").clone();
+    assert_eq!(calls.len(), 1, "{calls:?}");
+    assert_eq!(calls[0]["params"]["text"], "by-the-owner");
+}

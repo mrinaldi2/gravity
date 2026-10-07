@@ -192,3 +192,35 @@ fn system_md_states_this_machines_task_limits_and_the_note_cap() {
     assert!(md.contains(&format!("over {} bytes is refused", bus::MAX_NOTE_BYTES)));
     assert!(md.contains("A note never\nauthorises work"));
 }
+
+#[test]
+fn the_composer_switch_adds_the_provenance_hooks_and_nothing_else_does() {
+    let settings = |provenance| {
+        super::unix_hooks::settings(&crate::bus_auth::HookTransport::Ipc {
+            command: "/bin/hermesd".to_string(),
+            endpoint: "/run/bus.sock".to_string(),
+            provenance,
+        })
+    };
+    let off = settings(false);
+    let submit = off["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+        .as_str()
+        .unwrap();
+    assert!(!submit.contains("--provenance"), "{submit}");
+    assert!(off["hooks"].get("PreToolUse").is_none());
+    assert!(off.get("editorMode").is_none());
+
+    let on = settings(true);
+    let submit = on["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+        .as_str()
+        .unwrap();
+    assert!(submit.ends_with(" --provenance"), "{submit}");
+    assert_eq!(
+        on["hooks"]["PreToolUse"][0]["matcher"],
+        "AskUserQuestion|ExitPlanMode"
+    );
+    for event in ["Elicitation", "PostToolUseFailure", "PermissionDenied"] {
+        assert!(on["hooks"].get(event).is_some(), "{event}");
+    }
+    assert_eq!(on["editorMode"], "normal");
+}

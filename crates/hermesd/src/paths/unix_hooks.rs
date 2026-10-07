@@ -10,10 +10,21 @@ use crate::bus_auth::HookTransport;
 /// denial.
 pub fn settings(transport: &HookTransport) -> serde_json::Value {
     let hooks = match transport {
-        HookTransport::Ipc { command, endpoint } => super::ipc_hooks(command, endpoint),
+        HookTransport::Ipc {
+            command,
+            endpoint,
+            provenance,
+        } => super::ipc_hooks(command, endpoint, *provenance),
         HookTransport::Http { port, token_env } => curl_hooks(*port, token_env),
     };
-    serde_json::json!({
+    let typed = matches!(
+        transport,
+        HookTransport::Ipc {
+            provenance: true,
+            ..
+        }
+    );
+    let mut settings = serde_json::json!({
         // Bus deliveries arrive over the cross-session inbox socket; accept
         // them unattended so bot-to-bot traffic flows without approval stops.
         "crossSessionInbound": "accept",
@@ -31,7 +42,14 @@ pub fn settings(transport: &HookTransport) -> serde_json::Value {
             ]
         },
         "hooks": hooks
-    })
+    });
+    // The owner's chat is pasted into the composer (H-195 S3): in vim mode a
+    // paste could run as commands, so the composer stays in normal editing.
+    // PENDING S0: that Claude Code 2.1.292 reads `editorMode` from here.
+    if typed {
+        settings["editorMode"] = serde_json::json!("normal");
+    }
+    settings
 }
 
 /// The pre-H-044 hooks: curl with the bearer token from the environment.

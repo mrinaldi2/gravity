@@ -172,8 +172,14 @@ async fn relay(
     }
 }
 
-/// The owner's mouse and keyboard from the peer, for a tab it watches.
+/// The owner's mouse and keyboard from the peer, for a tab it watches. Only
+/// when the peer says its owner proved themselves there, as for terminal
+/// input (CE-029 M3, CE-030); an older peer never says so and is refused.
 pub(super) fn serve_input(app: &AppState, peer: &Peer, frame: &Value) {
+    if frame["owner_verified"] != json!(true) {
+        tracing::warn!(peer = %peer.name, "unverified peer browser input dropped");
+        return;
+    }
     let bot_id = frame["bot_id"].as_str().unwrap_or_default();
     let Ok(Some(bot)) = app.db.get_live_bot(bot_id) else {
         return;
@@ -275,11 +281,16 @@ async fn feed(
 }
 
 /// The owner's mouse and keyboard here, for the browser on the bot's machine.
+/// Only a client that proved it is the owner sends it (`ws::owner_auth`), so
+/// the frame says so.
 pub fn input(app: &AppState, stand_in: &Bot, tab_id: &str, event: &Value) {
     if let (Some(peer), Some(remote)) = (&stand_in.peer_id, &stand_in.remote_bot_id) {
         app.peers.notify(
             peer,
-            json!({ "type": "browser_input", "bot_id": remote, "tab_id": tab_id, "event": event }),
+            json!({
+                "type": "browser_input", "bot_id": remote, "tab_id": tab_id, "event": event,
+                "owner_verified": true
+            }),
         );
     }
 }

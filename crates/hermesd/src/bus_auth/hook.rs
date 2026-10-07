@@ -36,22 +36,56 @@ pub async fn run(args: &[String]) -> i32 {
         eprintln!("hook: usage: hook <event> --endpoint <socket or pipe>");
         return 2;
     };
+    // Our own code, but run detached from the bot's terminal all the same
+    // (CE-029b): nothing here should be able to type into the composer.
+    super::detach::setsid();
+    let provenance = args.iter().any(|a| a == "--provenance");
     let endpoint = full_endpoint(endpoint);
     let body = read_stdin().await;
+    let user_prompt = event == "UserPromptSubmit" && is_user(&body);
     let (request, wait) = request(event, body, |key| std::env::var(key).ok());
     match send(&endpoint, &request, event == "SessionStart", wait).await {
         Ok(reply) => {
             let output = &reply["result"];
-            if event == "PermissionRequest" && output.is_object() {
+            let answers = event == "PermissionRequest" || event == "UserPromptSubmit";
+            if answers && output.as_object().is_some_and(|o| !o.is_empty()) {
                 println!("{output}");
             }
             if let Some(error) = reply.get("error") {
                 eprintln!("hook {event}: {error}");
+                if provenance && user_prompt {
+                    println!("{}", blocked(UNANSWERED));
+                }
             }
         }
-        Err(e) => eprintln!("hook {event}: {e:#}"),
+        Err(e) => {
+            eprintln!("hook {event}: {e:#}");
+            // The daemon vouches for every `user` prompt (H-195 D2b): one it
+            // can't ask about is blocked. The PTY is the daemon's, so a
+            // session without it is broken anyway.
+            if provenance && user_prompt {
+                println!("{}", blocked(UNANSWERED));
+            }
+        }
     }
     0
+}
+
+/// Why a `user` prompt was blocked when the daemon couldn't be asked.
+const UNANSWERED: &str = "Hermes isn't answering, so this prompt can't be shown to be the owner's.";
+
+/// UserPromptSubmit's output that blocks the prompt, with the reason the bot
+/// and the terminal see.
+pub(crate) fn blocked(reason: &str) -> Value {
+    json!({ "decision": "block", "reason": reason })
+}
+
+/// Whether a UserPromptSubmit payload is `user` input: from the composer,
+/// or from a Claude Code that doesn't say (checked as `user`, fail closed).
+pub(crate) fn is_user(body: &Value) -> bool {
+    body.get("source")
+        .and_then(Value::as_str)
+        .is_none_or(|s| s == "user")
 }
 
 /// On Windows the settings name the pipe without its `\\.\pipe\` prefix,
@@ -154,14 +188,27 @@ pub(super) async fn serve(app: &Arc<AppState>, bot_id: &str, request: &Value) ->
                 .get("event")
                 .and_then(Value::as_str)
                 .unwrap_or_default();
+            // A dialog mounts when this hook returns: first let any owner
+            // message being typed finish, so no keystroke lands in it (M4).
+            if crate::supervisor::opens_modal(event, &body) {
+                app.supervisor.before_modal(bot_id).await;
+            }
+            if event == "UserPromptSubmit" {
+                if let Some(blocked) = app.supervisor.check_prompt(bot_id, &body) {
+                    return Some(json!({ "jsonrpc": "2.0", "id": id, "result": blocked }));
+                }
+            }
             if !crate::mcp::on_hook(app, bot_id, event, &body) {
                 return Some(super::ipc::error(id, -32602, "a hook needs an event"));
             }
             json!({})
         }
-        PERMISSION => crate::approval::permission_output(app, bot_id, &body)
-            .await
-            .unwrap_or(Value::Null),
+        PERMISSION => {
+            app.supervisor.before_modal(bot_id).await;
+            crate::approval::permission_output(app, bot_id, &body)
+                .await
+                .unwrap_or(Value::Null)
+        }
         _ => return None,
     };
     Some(json!({ "jsonrpc": "2.0", "id": id, "result": result }))
@@ -201,6 +248,14 @@ mod tests {
         assert_eq!(sent["method"], PERMISSION);
         assert_eq!(sent["params"]["body"], prompt);
         assert_eq!(wait.as_secs(), crate::approval::HOOK_TIMEOUT_SECS - 10);
+    }
+
+    #[test]
+    fn a_user_prompt_is_from_the_composer_or_doesnt_say() {
+        assert!(is_user(&json!({"source": "user", "prompt": "x"})));
+        assert!(is_user(&json!({"prompt": "x"})));
+        assert!(!is_user(&json!({"source": "system", "prompt": "x"})));
+        assert_eq!(blocked("why")["decision"], "block");
     }
 
     #[test]

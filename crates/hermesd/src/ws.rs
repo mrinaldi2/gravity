@@ -41,6 +41,7 @@ mod meetings;
 mod messaging;
 mod origin;
 mod owner_actions;
+mod owner_auth;
 mod owner_card;
 #[cfg(test)]
 mod panic_tests;
@@ -177,11 +178,16 @@ fn handshake(
     if owner_token {
         app.owner.note_client_token();
     }
-    let (caps, device_id) = if owner_token || via_ticket {
+    // The owner token is readable by every bot of the same user, so it
+    // reads and runs the fleet but never rules for the owner (CE-030 N1):
+    // `approve` comes only with the app's ticket or a device granted it.
+    let (caps, device_id) = if via_ticket {
         (
             vec![Capability::Read, Capability::Control, Capability::Approve],
             None,
         )
+    } else if owner_token {
+        (vec![Capability::Read, Capability::Control], None)
     } else if let Some(device_id) = app.secrets.device_for_token(token) {
         match app.db.get_device(&device_id) {
             Ok(Some(d)) if d.revoked_at.is_none() => (d.capabilities, Some(device_id)),

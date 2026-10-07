@@ -31,11 +31,12 @@ impl Conn {
             Some((item_id, ..)) => owner_card::with_card(item_id, body),
             None => body.to_string(),
         };
-        let msg = messaging::send_dm(
-            &self.app.db,
-            &self.app.events,
-            messaging::Dm::new(bot_id, &sender, MessageKind::Chat, &stored),
-        )?;
+        // Recorded as the owner's own only when this connection proved it
+        // is the owner: never on the owner token a bot can read (H-195 D1).
+        let proof = self.owner_proof();
+        let mut dm = messaging::Dm::new(bot_id, &sender, MessageKind::Chat, &stored);
+        dm.owner = proof.as_ref();
+        let msg = messaging::send_dm(&self.app.db, &self.app.events, dm)?;
         let Some((item_id, board, bot)) = card else {
             self.send(json!({ "type": "message", "req_id": req_id, "message": msg }));
             return Ok(());

@@ -170,11 +170,22 @@ pub(super) fn serve_session(app: &AppState, peer: &Peer, frame: &Value) -> anyho
 }
 
 /// Typing and resizes from the peer's clients, for a bot linked to it.
+///
+/// Typing, and a forced resize, count only when the peer says its owner
+/// proved themselves there (a device or the app's ticket): a bot on the peer
+/// holding that computer's owner token must not type here either (H-195 D5,
+/// CE-029 M3). A peer older than that never says so, and is refused.
 pub(super) fn serve_event(app: &AppState, peer: &Peer, frame: &Value) {
     let Ok(bot) = exposed_bot(app, peer, frame) else {
         return;
     };
-    match frame["type"].as_str().unwrap_or_default() {
+    let kind = frame["type"].as_str().unwrap_or_default();
+    let forced = kind == "term_resize" && frame["force"].as_bool().unwrap_or(false);
+    if (kind == "term_input" || forced) && frame["owner_verified"] != json!(true) {
+        tracing::warn!(peer = %peer.name, bot = %bot.name, kind, "unverified peer input dropped");
+        return;
+    }
+    match kind {
         "term_input" => {
             let data = frame["data"].as_str().unwrap_or_default();
             if let Err(e) = app.supervisor.input(&bot.id, data.as_bytes()) {
@@ -348,22 +359,30 @@ pub(super) async fn link_up(app: Arc<AppState>, peer_id: String) {
     }
 }
 
-/// Typing from a client here, for the real terminal on the peer.
+/// Typing from a client here, for the real terminal on the peer. Only a
+/// client that proved it is the owner types (`ws::owner_auth`), so the frame
+/// says so.
 pub fn input(app: &AppState, stand_in: &Bot, data: &str) {
     if let (Some(peer), Some(remote)) = (&stand_in.peer_id, &stand_in.remote_bot_id) {
         app.peers.notify(
             peer,
-            json!({ "type": "term_input", "bot_id": remote, "data": data }),
+            json!({ "type": "term_input", "bot_id": remote, "data": data, "owner_verified": true }),
         );
     }
 }
 
-/// A client's terminal size, for the real terminal on the peer.
-pub fn resize(app: &AppState, stand_in: &Bot, cols: u16, rows: u16, force: bool) {
+/// A client's terminal size, for the real terminal on the peer. `verified`
+/// when the client proved it is the owner: the peer takes a forced resize
+/// only then.
+pub fn resize(app: &AppState, stand_in: &Bot, size: (u16, u16), force: bool, verified: bool) {
     if let (Some(peer), Some(remote)) = (&stand_in.peer_id, &stand_in.remote_bot_id) {
+        let (cols, rows) = size;
         app.peers.notify(
             peer,
-            json!({ "type": "term_resize", "bot_id": remote, "cols": cols, "rows": rows, "force": force }),
+            json!({
+                "type": "term_resize", "bot_id": remote, "cols": cols, "rows": rows,
+                "force": force, "owner_verified": verified
+            }),
         );
     }
 }

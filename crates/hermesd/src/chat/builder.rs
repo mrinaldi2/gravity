@@ -3,7 +3,7 @@
 //! turn or starts the next one. Heavy content (tool input and output, image
 //! bytes) is not kept; the builder records where it lives in the file.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -37,6 +37,9 @@ pub struct Builder {
     bot_id: String,
     /// Upper-case envelope names to the bots' real names.
     names: HashMap<String, String>,
+    /// Digests of the prompts typed for the owner (H-195 S2), kept current
+    /// by the store.
+    pub typed: HashSet<String>,
     pub turns: Vec<ChatTurn>,
     /// tool_use id → (turn, item).
     calls: HashMap<String, (usize, usize)>,
@@ -51,6 +54,7 @@ impl Builder {
         Self {
             bot_id: bot_id.to_string(),
             names,
+            typed: HashSet::new(),
             turns: Vec::new(),
             calls: HashMap::new(),
             steps: HashMap::new(),
@@ -125,7 +129,7 @@ impl Builder {
 
     /// A user record that starts a turn, unless it is runtime bookkeeping.
     fn prompt(&mut self, id: &str, at: DateTime<Utc>, record: &Value, text: &str) {
-        if let Some(trigger) = triggers::of_prompt(record, text, &self.names) {
+        if let Some(trigger) = triggers::of_prompt(record, text, &self.names, &self.typed) {
             self.start(id, at, trigger);
         }
     }

@@ -102,6 +102,16 @@ const APPROVE_ONLY: &[&str] = &[
     "owner_action_reject",
     // Closing an owner question for the owner (H-128 R2.2).
     "attention_dismiss",
+    // Pairing a device or linking a computer mints an owner credential
+    // (CE-030 N1); see `owner_auth::CREDENTIALS`.
+    "create_device",
+    "revoke_device",
+    "create_peer_invite",
+    "add_peer",
+    "revoke_peer",
+    "link_peer_bot",
+    "link_project",
+    "unlink_project",
 ];
 
 /// Capability required for each request type.
@@ -172,12 +182,24 @@ impl Conn {
         let req_id = req.get("req_id").cloned().unwrap_or(Value::Null);
         let kind = req.get("type").and_then(|t| t.as_str()).unwrap_or("");
         let cap = required_cap(kind);
-        if !self.caps.contains(&cap) {
-            self.reply_err(
-                &req_id,
-                "forbidden",
-                &format!("'{kind}' requires the {} capability", cap.as_str()),
-            );
+        // Typing into a bot or answering its prompt is the owner driving it,
+        // and a ruling is the owner's word: never from the owner token a bot
+        // can read (H-195 D5, CE-029 M2, CE-030 N1). That token holds no
+        // `approve` either; this is the second lock on the same door.
+        let owners_only = super::owner_auth::owner_driven(kind) || cap == Capability::Approve;
+        let refused = if !self.caps.contains(&cap) {
+            Some(format!("'{kind}' requires the {} capability", cap.as_str()))
+        } else if owners_only && self.owner_proof().is_none() {
+            Some(format!(
+                "'{kind}' is taken only from the app or a paired device, not with the owner \
+                 token"
+            ))
+        } else {
+            None
+        };
+        if let Some(why) = refused {
+            self.audit_refused_action(kind, req, &why);
+            self.reply_err(&req_id, "forbidden", &why);
             return;
         }
         #[cfg(test)]

@@ -54,6 +54,9 @@ impl ChatStore {
             };
         }
         if let Some(path) = &path {
+            if let Ok(typed) = app.db.typed_prompt_digests(&bot.id) {
+                chat.builder.typed = typed;
+            }
             let offset = chat.offset;
             let chat = &mut *chat;
             let (builder, commands, writes) =

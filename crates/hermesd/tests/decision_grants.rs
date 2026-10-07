@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 /// The owner's desktop: it says it shows what an option grants.
 async fn desktop(d: &TestDaemon) -> WsClient {
-    WsClient::connect_with(d, d.app.secrets.client_token(), &["decision_grants"]).await
+    WsClient::connect_with(d, &d.app.owner.mint(), &["decision_grants"]).await
 }
 
 /// The `grants_sha` of option `key` as the client was shown it.

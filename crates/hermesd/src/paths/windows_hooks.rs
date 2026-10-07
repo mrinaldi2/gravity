@@ -8,7 +8,11 @@ use crate::bus_auth::HookTransport;
 
 pub fn settings(workspace: &Path, transport: &HookTransport) -> anyhow::Result<serde_json::Value> {
     let hooks = match transport {
-        HookTransport::Ipc { command, endpoint } => super::ipc_hooks(command, endpoint),
+        HookTransport::Ipc {
+            command,
+            endpoint,
+            provenance,
+        } => super::ipc_hooks(command, endpoint, *provenance),
         HookTransport::Http { port, token_env } => powershell_hooks(workspace, *port, token_env)?,
     };
     Ok(serde_json::json!({
