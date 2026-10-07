@@ -28,10 +28,12 @@ fn folder_link(target: &Path, link: &Path) {
     std::os::unix::fs::symlink(target, link).unwrap();
     #[cfg(windows)]
     {
+        // cmd's `mklink` reads `/` as a switch: only `\` in its paths.
+        let backslashed = |path: &Path| path.to_string_lossy().replace('/', "\\");
         let status = std::process::Command::new("cmd")
             .args(["/C", "mklink", "/J"])
-            .arg(link)
-            .arg(target)
+            .arg(backslashed(link))
+            .arg(backslashed(target))
             .stdout(std::process::Stdio::null())
             .status()
             .unwrap();
@@ -72,7 +74,7 @@ async fn a_bot_start_writes_nothing_through_links_the_bot_planted() {
     let d = spawn_daemon_with(move |cfg| cfg.user_home = user_home).await;
     let db = &d.app.db;
     let project = db.create_project("p", "p").unwrap();
-    let root = d.app.cfg.projects_dir().join("p/bots/dev");
+    let root = d.app.cfg.projects_dir().join("p").join("bots").join("dev");
     let workspace = root.join("workspace");
     std::fs::create_dir_all(&workspace).unwrap();
     // What the bot planted: its .claude is the owner's, its mcp.json and

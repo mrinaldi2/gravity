@@ -7,7 +7,7 @@
 
 use std::path::{Component, Path, PathBuf};
 
-use super::paths::Scope;
+use super::paths::{real, within, Scope};
 use super::GuardContext;
 
 const WHY: &str = "a link at a .claude folder, or to the owner's Claude config, isn't allowed: \
@@ -60,7 +60,13 @@ pub(super) fn check(
         ctx.user_home.join(".claude.json"),
     ];
     for target in &targets {
-        let is_config = |path: &PathBuf| owner_config.iter().any(|c| path.starts_with(c));
+        // Compared by key: on Windows `resolve` gives `\\?\C:\Users\…`,
+        // which no raw `starts_with` of `/Users/…` matches (WIN-CHK-19).
+        let is_config = |path: &PathBuf| {
+            owner_config
+                .iter()
+                .any(|c| within(path, c) || within(path, &real(c)))
+        };
         if ctx
             .resolve(scope, &home_spelled(target))
             .iter()
@@ -97,8 +103,14 @@ fn file_name(path: &str) -> Option<String> {
 }
 
 /// The home in a Windows shell's spelling (`$env:USERPROFILE\.claude`,
-/// `%USERPROFILE%\…`, `$HOME\…`, `~\…`) as `~/…`, which `resolve` reads.
+/// `%USERPROFILE%\…`, `$HOME\…`, `~\…`) as `~/…`, which `resolve` reads;
+/// also when the word still carries its single or double quotes, which
+/// PowerShell's `~` and cmd's `%…%` see through.
 fn home_spelled(word: &str) -> String {
+    let word = ['\'', '"']
+        .iter()
+        .find_map(|q| word.strip_prefix(*q)?.strip_suffix(*q))
+        .unwrap_or(word);
     let lower = word.to_ascii_lowercase();
     for home in [
         "${env:userprofile}",
