@@ -133,6 +133,17 @@ Also check the release notes: the workflow appends a Gatekeeper/`xattr`
 warning when notarization was unavailable. That is expected for builds without
 Apple credentials; official notarized distributions should treat it as a failure.
 
+## Swapping only the app never restarts the service
+
+Rule (H-193): opening a newer app on a machine whose Hermes service answers never replaces that service, and so never restarts its bots. The app offers the bundled service as the "Update Hermes service" toast, and nothing happens until someone clicks it.
+
+The service, and every bot with it, is replaced only in these cases:
+- that click;
+- a release install (`hermesd release install`, with its quiesce);
+- the app's launch-time self-heal, when the service is broken (its binary is missing, or a switch-over was interrupted) **and** nothing answers on its port.
+
+To find out what restarted a service, read `<home>/logs/service-install.log`. Every `service install` appends one line there, with the time, version and arguments, plus the executable that ran it and what launched that executable.
+
 ## Dry runs
 
 `workflow_dispatch` on `release.yml` builds from `tauri.conf.json`'s version
