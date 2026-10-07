@@ -99,10 +99,9 @@ pub fn server(cfg: &Config, bot_root: &Path) -> Option<Value> {
         "capabilities": ["vision"],
         "outputDir": browser.output()
     });
-    if let Err(e) = std::fs::create_dir_all(&browser.dir)
-        .map_err(anyhow::Error::from)
-        .and_then(|()| crate::paths::atomic_write_json(&browser.config(), &config))
-    {
+    // In the bot's own folder: through no link it planted (H-182).
+    let rel = Path::new("browser/playwright.json");
+    if let Err(e) = crate::paths::no_follow::write_json(bot_root, rel, &config) {
         tracing::warn!(error = %e, "browser config not written; starting without a browser");
         return None;
     }

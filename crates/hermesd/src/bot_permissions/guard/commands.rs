@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use super::paths::Scope;
-use super::{cargo, daemon_cli, full, git, targets, GuardContext};
+use super::{cargo, daemon_cli, full, git, powershell, ps_launch, targets, GuardContext};
 use crate::bot_permissions::shell::{self, Words};
 
 /// Why the line must not run, or `None`.
@@ -87,7 +87,7 @@ fn remember(words: &Words, scope: &mut Scope, ctx: &GuardContext) {
 }
 
 /// Arguments that are not options; everything after `--` counts.
-fn positional(args: &[String]) -> Vec<String> {
+pub(super) fn positional(args: &[String]) -> Vec<String> {
     let mut out = Vec::new();
     let mut ended = false;
     for arg in args {
@@ -101,7 +101,7 @@ fn positional(args: &[String]) -> Vec<String> {
     out
 }
 
-fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
+pub(super) fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
     // `tar -C ~ …`, `make --directory=…`: later words are relative to it.
     let mut local = scope.clone();
     for (i, w) in words.iter().enumerate() {
@@ -147,6 +147,9 @@ fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
     if let Some(reason) = reads_tree(name, rest, &args, scope, ctx) {
         return Some(reason);
     }
+    if let Some(reason) = super::links::check(name, rest, scope, ctx) {
+        return Some(reason);
+    }
     let targets: Vec<String> = match name {
         "sh" | "bash" | "zsh" | "dash" | "ksh" => {
             let script = rest
@@ -165,6 +168,10 @@ fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
             return git::git(rest, scope, ctx, &check);
         }
         "gh" => return git::gh(rest, ctx),
+        // `powershell -c …`, `pwsh -EncodedCommand …`, `cmd /c …` (H-187).
+        n if powershell::is_launcher(&powershell::program(n)) => {
+            return ps_launch::launch(&powershell::program(n), rest, scope, ctx)
+        }
         "xcrun" if rest.first().is_some_and(|w| w == "simctl") => return simctl(&rest[1..]),
         "simctl" => return simctl(rest),
         "find" => return find(rest, scope, ctx),

@@ -32,7 +32,7 @@ impl Supervisor {
         if workspace.exists() {
             let hooks = crate::bus_auth::hook_transport(&self.inner.cfg);
             if let Err(e) = crate::paths::write_hook_settings(&workspace, &hooks) {
-                tracing::warn!(bot_id, error = %e, "failed to refresh hook settings");
+                tracing::error!(bot_id, error = %e, "failed to refresh hook settings");
             }
             // Re-assert trust on every start, not just at creation: bots
             // provisioned before trust marking existed (or whose entry in
@@ -47,7 +47,7 @@ impl Supervisor {
             // Only fills in what is missing, so a bot provisioned before
             // `FACTS.md` existed gets one without losing what it has written.
             if let Err(e) = crate::paths::seed_memory_files(&workspace, &bot.name) {
-                tracing::warn!(bot_id, error = %e, "failed to seed memory files");
+                tracing::error!(bot_id, error = %e, "failed to seed memory files");
             }
         }
         // Refresh `mcp.json` so a change to the daemon's port reaches existing
@@ -61,7 +61,7 @@ impl Supervisor {
         if let Some(root) = &bot_root {
             let bus = crate::bus_auth::server_entry(&self.inner.cfg);
             if let Err(e) = crate::paths::write_mcp_config(root, &bus, browser.as_ref()) {
-                tracing::warn!(bot_id, error = %e, "failed to refresh mcp config");
+                tracing::error!(bot_id, error = %e, "failed to refresh mcp config");
             }
         }
 

@@ -210,7 +210,8 @@ impl BotStart<'_> {
             interim: interim.as_ref(),
         });
         let path = self.bot_root.join(SETTINGS_FILE);
-        crate::paths::atomic_write_json(&path, &settings)?;
+        // Never through a link the bot left at that name (H-182).
+        crate::paths::no_follow::write_json(self.bot_root, Path::new(SETTINGS_FILE), &settings)?;
         args.push("--settings".to_string());
         args.push(path.display().to_string());
         if let Some(mode) = mode(self.profile) {

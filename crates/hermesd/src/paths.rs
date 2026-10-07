@@ -30,6 +30,7 @@ use crate::config::Config;
 use ipc_hooks::ipc_hooks;
 
 mod ipc_hooks;
+pub mod no_follow;
 mod own;
 mod prompt;
 mod prompt_sections;
@@ -116,8 +117,9 @@ pub fn write_project_manifest(
 /// unreadable is skipped: the manifest is descriptive, and a rename should not
 /// fail over it.
 pub fn set_bot_project_name(root: &Path, project_name: &str) -> anyhow::Result<()> {
-    let path = root.join("bot.json");
-    let Ok(text) = fs::read_to_string(&path) else {
+    // Read through no link: a `bot.json` linked to an owner file would
+    // otherwise be copied into the bot's folder (H-182).
+    let Some(text) = no_follow::read(root, Path::new("bot.json")) else {
         return Ok(());
     };
     let Ok(mut manifest) = serde_json::from_str::<serde_json::Value>(&text) else {
@@ -127,7 +129,7 @@ pub fn set_bot_project_name(root: &Path, project_name: &str) -> anyhow::Result<(
         return Ok(());
     };
     object.insert("project".to_string(), project_name.into());
-    atomic_write_json(&path, &manifest)
+    no_follow::write_json(root, Path::new("bot.json"), &manifest)
 }
 
 /// Everything the daemon needs to lay out or refresh a bot's files.
@@ -171,7 +173,9 @@ pub struct BotProvision<'a> {
 pub fn provision_bot(cfg: &Config, spec: &BotProvision<'_>) -> anyhow::Result<BotDirs> {
     let root = bot_dir(cfg, spec.project_dir_name, spec.dir_name);
     let workspace = root.join("workspace");
-    fs::create_dir_all(workspace.join(".claude").join("skills"))?;
+    fs::create_dir_all(&root)?;
+    // Below the bot's folder, nothing is written through a link (H-182).
+    no_follow::create_dirs(&root, Path::new("workspace/.claude/skills"))?;
 
     let bot_file = BotFile {
         version: 1,
@@ -181,7 +185,11 @@ pub fn provision_bot(cfg: &Config, spec: &BotProvision<'_>) -> anyhow::Result<Bo
         project: spec.project_name.to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
     };
-    atomic_write_json(&root.join("bot.json"), &serde_json::to_value(&bot_file)?)?;
+    no_follow::write_json(
+        &root,
+        Path::new("bot.json"),
+        &serde_json::to_value(&bot_file)?,
+    )?;
 
     write_system_md(&root, spec)?;
 
@@ -225,7 +233,7 @@ pub fn write_mcp_config(
         server["type"] = serde_json::json!("stdio");
         mcp["mcpServers"][crate::browser::setup::SERVER] = server;
     }
-    atomic_write_json(&root.join("mcp.json"), &mcp)
+    no_follow::write_json(root, Path::new("mcp.json"), &mcp)
 }
 
 /// Rewrite `system.md` after an identity change. Cheap and idempotent, so it is
@@ -242,10 +250,7 @@ pub fn write_system_md(root: &Path, spec: &BotProvision<'_>) -> anyhow::Result<(
         }
     }
     fs::create_dir_all(root)?;
-    let tmp = path.with_extension("md.tmp");
-    fs::write(&tmp, content).with_context(|| format!("writing {}", tmp.display()))?;
-    fs::rename(&tmp, &path).with_context(|| format!("renaming into {}", path.display()))?;
-    Ok(())
+    no_follow::write(root, Path::new("system.md"), content.as_bytes())
 }
 
 /// Seed the bot-owned memory files: `CLAUDE.md` (living context) and the
@@ -257,10 +262,8 @@ pub fn seed_memory_files(workspace: &Path, name: &str) -> anyhow::Result<()> {
         ("CLAUDE.md", prompt::claude_md(name)),
         ("FACTS.md", prompt::facts_md(name)),
     ] {
-        let path = workspace.join(file);
-        if !path.exists() {
-            fs::write(&path, body).with_context(|| format!("writing {}", path.display()))?;
-        }
+        // Only when nothing is there, a link included (H-182).
+        no_follow::create_new(workspace, Path::new(file), body.as_bytes())?;
     }
     Ok(())
 }
@@ -271,13 +274,14 @@ pub fn write_hook_settings(
     workspace: &Path,
     transport: &crate::bus_auth::HookTransport,
 ) -> anyhow::Result<()> {
-    let dir = workspace.join(".claude");
-    fs::create_dir_all(&dir)?;
+    // Never through a `.claude` the bot linked elsewhere, such as the owner's
+    // `~/.claude` (H-182).
+    no_follow::create_dirs(workspace, Path::new(".claude"))?;
     #[cfg(unix)]
     let settings = unix_hooks::settings(transport);
     #[cfg(windows)]
     let settings = windows_hooks::settings(workspace, transport)?;
-    atomic_write_json(&dir.join("settings.json"), &settings)
+    no_follow::write_json(workspace, Path::new(".claude/settings.json"), &settings)
 }
 
 /// Permission rules granting access to the project's shared artifacts
