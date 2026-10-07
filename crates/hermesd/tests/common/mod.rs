@@ -21,6 +21,7 @@ pub mod board;
 pub mod deployed_via;
 pub mod devtools;
 pub mod grants;
+pub mod ios_targets;
 pub mod peer_board;
 pub mod peers;
 pub mod proxy;
