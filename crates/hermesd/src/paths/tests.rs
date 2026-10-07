@@ -193,6 +193,7 @@ fn system_md_states_this_machines_task_limits_and_the_note_cap() {
     assert!(md.contains("A note never\nauthorises work"));
 }
 
+#[cfg(unix)]
 #[test]
 fn the_composer_switch_adds_the_provenance_hooks_and_nothing_else_does() {
     let settings = |provenance| {
