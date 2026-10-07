@@ -67,7 +67,9 @@ impl ChatStore {
         let changed = chat.builder.take_changed();
         // The first read is a snapshot, not news.
         let changed = if fresh { Vec::new() } else { changed };
-        Ok(settle(changed, &chat.builder.turns, busy(app, bot)))
+        let mut changed = settle(changed, &chat.builder.turns, busy(app, bot));
+        super::answers::mark(app, &bot.id, &mut changed);
+        Ok(changed)
     }
 
     /// Up to `limit` turns before `before` (or the newest), oldest first,
@@ -88,8 +90,23 @@ impl ChatStore {
             None => turns.len(),
         };
         let start = end.saturating_sub(limit);
-        let page = settle(turns[start..end].to_vec(), turns, busy(app, bot));
+        let mut page = settle(turns[start..end].to_vec(), turns, busy(app, bot));
+        super::answers::mark(app, &bot.id, &mut page);
         Ok((page, start > 0))
+    }
+
+    /// The bot's turns its transcript has ended, newest last (H-192).
+    pub fn finished_turns(&self, app: &AppState, bot: &Bot) -> anyhow::Result<Vec<ChatTurn>> {
+        self.refresh(app, bot)?;
+        let (chat, _) = self.entry(app, bot)?;
+        let chat = lock(&chat);
+        Ok(chat
+            .builder
+            .turns
+            .iter()
+            .filter(|t| !t.open)
+            .cloned()
+            .collect())
     }
 
     /// What started the bot's last turn, when that turn never ended: the

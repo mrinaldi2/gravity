@@ -20,7 +20,12 @@ impl Db {
     }
 
     /// The thread message the turn's answer became.
-    pub fn set_owner_answer_num(&self, bot_id: &str, turn_id: &str, num: i64) -> anyhow::Result<()> {
+    pub fn set_owner_answer_num(
+        &self,
+        bot_id: &str,
+        turn_id: &str,
+        num: i64,
+    ) -> anyhow::Result<()> {
         self.lock().execute(
             "UPDATE owner_answer SET message_num = ?3 WHERE bot_id = ?1 AND turn_id = ?2",
             params![bot_id, turn_id, num],

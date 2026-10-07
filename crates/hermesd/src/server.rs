@@ -145,6 +145,7 @@ pub fn spawn_workers(app: &Arc<AppState>) {
     tokio::spawn(crate::activity::watch(app.clone()));
     tokio::spawn(crate::chat::watch(app.clone()));
     tokio::spawn(crate::offboard::watch(app.clone()));
+    tokio::spawn(crate::chat::watch_answers(app.clone()));
     tokio::spawn(crate::quiesce::pending::watch(app.clone()));
     tokio::spawn(crate::approval::watch(app.clone()));
     tokio::spawn(crate::peer::chat::forward(app.clone()));
