@@ -81,7 +81,11 @@ async fn the_owner_token_mints_no_owner_credential_and_rules_nothing() {
         let reply = forger.request(request.clone()).await;
         assert!(forbidden(&reply), "{request} → {reply}");
         // The app's ticket gets past the gate (whatever the request itself
-        // then makes of its made-up arguments).
+        // then makes of its made-up arguments). Browser input is fire and
+        // forget: it answers only when refused.
+        if request["type"] == "browser_input" {
+            continue;
+        }
         let reply = app.request(request.clone()).await;
         assert!(!forbidden(&reply), "{request} → {reply}");
     }
