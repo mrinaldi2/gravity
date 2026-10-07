@@ -178,3 +178,49 @@ fn an_interrupted_switch_over_after_the_move_needs_repair() {
     assert!(!repair_needed(&home, &user_home, false));
     std::fs::remove_dir_all(root).expect("test cleanup");
 }
+
+/// H-193: opening a newer app once replaced a healthy, running daemon
+/// because the files on disk looked like an interrupted switch-over. A
+/// launch repairs only a service that doesn't answer.
+#[test]
+fn a_launch_never_repairs_a_service_that_answers() {
+    let asked = std::cell::Cell::new(false);
+    assert!(
+        !should_repair(false, || {
+            asked.set(true);
+            false
+        }),
+        "nothing to repair"
+    );
+    assert!(!asked.get(), "a healthy layout doesn't probe at all");
+    assert!(!should_repair(true, || true), "it answers: left running");
+    assert!(should_repair(true, || false), "broken and silent: repaired");
+}
+
+/// A `/health` that answers like a daemon, once per connection, on the
+/// port the home publishes.
+#[test]
+fn a_daemon_answering_on_the_homes_port_counts_as_running() {
+    use std::io::{Read, Write};
+    let home = daemon_test_home("answers");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener");
+    let port = listener.local_addr().expect("address").port();
+    std::fs::write(home.join("hermesd.port"), format!("{port}\n")).expect("port file");
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut request = [0_u8; 1024];
+        let _ = stream.read(&mut request);
+        let body = r#"{"status":"ok","version":"0.17.2"}"#;
+        let reply = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(reply.as_bytes()).expect("reply");
+    });
+    assert!(daemon_answers(&home));
+    server.join().expect("server");
+
+    // Nothing listens there any more: a broken service gets its repair.
+    assert!(!daemon_answers(&home));
+    std::fs::remove_dir_all(home).expect("test cleanup");
+}

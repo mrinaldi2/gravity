@@ -777,6 +777,12 @@ runs through the tester the same way.
 
     The job writes `<home>/logs/release-install-<release>.log` and its exit code to `<home>/run/release-install-<release>.status`, then removes the stage and itself. The command exits at once.
   - **After the restart.** From the next session, `--status` prints how it ended and the end of the log. The open deploy task in the session's resume note is the reminder. The tester smoke-tests and reports with `deploy_confirm`. `--dry-run` stops after the checksum and signature checks.
+  - **Who may replace a running service (H-193).** Opening the app never replaces a daemon that answers on its port:
+    - Its launch repair (`service install --no-migrate`) runs only when the files say the service is broken (binary missing, or an interrupted switch-over) and nothing answers `/health`.
+    - A newer bundled daemon is offered as the "Update Hermes service" toast, a click.
+    - Otherwise the service is replaced only by a release install, with its quiesce.
+
+    Runbook: to find out what restarted the service, read `<home>/logs/service-install.log`. Each `service install` appends a line with the time, version, arguments, the executable that ran it (with its pid), and what launched that executable.
   - **Deny rules, advisory only.** Every bot but the project's DevOps gets deny rules in its generated Claude Code settings for direct installer and service commands: `hermesd service install/uninstall`, `installer -pkg`, `msiexec`, `xcrun devicectl device install`, `ios-deploy`, and a silent `*-setup.exe /S`.
     - They are **advisory, not a boundary**. They match command text, so a script, an alias, a renamed binary or a Codex-runtime bot gets past them.
     - What enforces the gate is the daemon: `install_release`, the approval, the frozen hash and the signature check. Every deploy carries its task and decision ids for the audit trail.
