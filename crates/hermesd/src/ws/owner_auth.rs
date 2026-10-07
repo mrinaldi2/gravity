@@ -15,7 +15,24 @@ use super::Conn;
 /// `input` carries paste too: a paste is bytes typed into the terminal.
 /// `browser_input` drives a bot's own browser, which keeps its logins, so it
 /// is the owner's hands as much as typing is (CE-030).
-const OWNER_DRIVEN: &[&str] = &["input", "answer_permission", "browser_input"];
+///
+/// Changing another bot's charter, runtime, session or existence is the
+/// owner's act too (H-205): rewritten instructions persist unseen and can
+/// borrow another bot's grants, and a runtime switch changes how every
+/// message reaches it. Over MCP a bot edits only the bots it created.
+const OWNER_DRIVEN: &[&str] = &[
+    "input",
+    "answer_permission",
+    "browser_input",
+    "update_bot",
+    "set_bot_runtime",
+    "revert_bot_revision",
+    "delete_bot",
+    "delete_project",
+    "clear_bot_session",
+    "restart_bot",
+    "set_project_repo",
+];
 
 /// Requests that mint or remove the credentials the rule above trusts: a
 /// paired device, and a linked computer whose frames say the owner proved
@@ -62,6 +79,8 @@ mod tests {
         assert!(owner_driven("input"));
         assert!(owner_driven("answer_permission"));
         assert!(owner_driven("browser_input"));
+        assert!(owner_driven("update_bot"));
+        assert!(owner_driven("delete_project"));
         for kind in CREDENTIALS {
             assert!(owner_driven(kind), "{kind}");
         }

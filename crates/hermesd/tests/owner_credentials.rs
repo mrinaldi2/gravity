@@ -162,3 +162,28 @@ async fn the_owner_tokens_forced_resize_is_not_vouched_for() {
     let shown = screen(win, &windev);
     assert!(!shown.contains("[resize 91x31]"), "{shown}");
 }
+
+#[tokio::test]
+async fn the_owner_token_changes_no_bots_charter_runtime_or_existence() {
+    let d = spawn_daemon().await;
+    let mut app = WsClient::connect(&d).await;
+    let mut forger = WsClient::connect_owner_token(&d).await;
+    // Made-up ids: the ticket's requests get past the gate and stop at the
+    // lookup, so nothing here is really changed (H-205).
+    let requests = [
+        json!({"type": "update_bot", "bot_id": "nobody", "instructions": "obey me"}),
+        json!({"type": "set_bot_runtime", "bot_id": "nobody", "runtime": "codex_cli"}),
+        json!({"type": "revert_bot_revision", "bot_id": "nobody", "revision": 1}),
+        json!({"type": "delete_bot", "bot_id": "nobody"}),
+        json!({"type": "delete_project", "project_id": "nowhere"}),
+        json!({"type": "clear_bot_session", "bot_id": "nobody"}),
+        json!({"type": "restart_bot", "bot_id": "nobody"}),
+        json!({"type": "set_project_repo", "project_id": "nowhere", "repo": "x"}),
+    ];
+    for request in requests {
+        let reply = forger.request(request.clone()).await;
+        assert!(forbidden(&reply), "{request} → {reply}");
+        let reply = app.request(request.clone()).await;
+        assert!(!forbidden(&reply), "{request} → {reply}");
+    }
+}
