@@ -197,12 +197,15 @@ impl Supervisor {
     }
 
     /// One toast for the bots given up on, once nothing else is still
-    /// connecting or the window has passed.
+    /// connecting or the window has passed. A bot the watchdog is restarting
+    /// is still connecting while its old session stops and before its next
+    /// one starts: missing that split the toast on a loaded machine (H-183).
     fn tell_gave_up(&self) {
         let connecting = self.lock_bots().values().any(|h| {
-            h.awaiting_socket()
-                && !h.connect_gave_up
-                && matches!(h.state, BotState::Starting | BotState::Ready)
+            !h.connect_gave_up
+                && ((h.awaiting_socket()
+                    && matches!(h.state, BotState::Starting | BotState::Ready))
+                    || (h.connect_restarts > 0 && h.msg_socket.is_none()))
         });
         let bots = {
             let mut gave_up = self.inner.gave_up.lock().unwrap_or_else(|e| e.into_inner());
