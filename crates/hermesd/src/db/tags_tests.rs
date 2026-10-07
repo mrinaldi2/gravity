@@ -318,11 +318,15 @@ fn the_grant_notes_hermes_already_wrote_become_its_own() {
         "Granted on it",
     )
     .unwrap();
-    // Rewind to just before the migration and run it again.
+    // Rewind to just before the migration and run it, and any after it, again.
+    let before = MIGRATIONS
+        .iter()
+        .position(|sql| sql.contains("decision_comment_new"))
+        .expect("the comment author migration");
     db.lock()
         .execute(
             "UPDATE meta SET value = ?1 WHERE key = 'schema_version'",
-            [(MIGRATIONS.len() - 1).to_string()],
+            [before.to_string()],
         )
         .unwrap();
     db.migrate().unwrap();

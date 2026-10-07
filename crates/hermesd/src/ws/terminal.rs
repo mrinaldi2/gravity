@@ -1,7 +1,8 @@
 //! Terminal attach, detach, input and resize requests. There is no input
-//! lease: the terminal belongs to the user, and typing is gated only by the
-//! `control` grant. Bus deliveries go through each session's inbox socket
-//! and never touch the terminal.
+//! lease: the terminal belongs to the user, and typing takes the `control`
+//! grant from the app or a paired device, never the owner token
+//! (`owner_auth`, H-195 D5). Bus deliveries go through each session's inbox
+//! socket and never touch the terminal.
 //!
 //! A linked bot's terminal is its peer's, mirrored into the stand-in's buffer
 //! while anyone watches (see `crate::peer::term`): attaching works the same,
@@ -191,7 +192,8 @@ impl Conn {
         // replay alone cannot rebuild a screen older than the ring buffer.
         let force = req.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
         if let Some(bot) = self.app.db.get_bot(bot_id)?.filter(bus::Bot::is_linked) {
-            crate::peer::term::resize(&self.app, &bot, cols, rows, force);
+            let verified = self.owner_proof().is_some();
+            crate::peer::term::resize(&self.app, &bot, (cols, rows), force, verified);
             return Ok(());
         }
         let _ = self.app.supervisor.resize(bot_id, cols, rows, force);

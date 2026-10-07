@@ -21,6 +21,10 @@ pub struct Dm<'a> {
     /// The decision this is about. Set on ruling, comment and hold notices, so
     /// the envelope renderer and the client can link back to the record.
     pub decision_id: Option<&'a str>,
+    /// Proof the owner sent it (H-195 D1), recorded before it is queued for
+    /// delivery so the delivery sees it. Only the WS chat handler and the
+    /// peer receiver set it.
+    pub owner: Option<&'a crate::db::OwnerProof>,
 }
 
 impl<'a> Dm<'a> {
@@ -32,6 +36,7 @@ impl<'a> Dm<'a> {
             body,
             ref_message_id: None,
             decision_id: None,
+            owner: None,
         }
     }
 
@@ -59,6 +64,9 @@ pub fn send_dm(db: &Db, events: &Events, dm: Dm<'_>) -> anyhow::Result<Message> 
         dm.ref_message_id,
         dm.decision_id,
     )?;
+    if let Some(proof) = dm.owner {
+        db.record_owner_message(&msg.id, proof)?;
+    }
     events.push(Push::MessageNew {
         message: msg.clone(),
     });

@@ -62,6 +62,11 @@ impl Client {
         }
     }
 
+    /// It holds the app's one-time ticket (H-044 T4).
+    pub(super) fn via_ticket(&self) -> bool {
+        self.via_ticket
+    }
+
     /// Whether this client gets `push`: owner action pushes only reach a
     /// client that renders them.
     pub(super) fn sees(&self, push: &Push) -> bool {

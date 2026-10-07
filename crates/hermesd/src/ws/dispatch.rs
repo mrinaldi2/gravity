@@ -180,6 +180,19 @@ impl Conn {
             );
             return;
         }
+        // Typing into a bot or answering its prompt is the owner driving it:
+        // never from the owner token a bot can read (H-195 D5, CE-029 M2).
+        if super::owner_auth::owner_driven(kind) && self.owner_proof().is_none() {
+            self.reply_err(
+                &req_id,
+                "forbidden",
+                &format!(
+                    "'{kind}' is taken only from the app or a paired device, not with the \
+                     owner token"
+                ),
+            );
+            return;
+        }
         #[cfg(test)]
         if let Some(result) = self.probe(kind, &req_id) {
             return result.unwrap_or(());

@@ -17,6 +17,7 @@ pub use decisions::NewDecision;
 pub use decisions_edit::DecisionEdit;
 pub use decisions_list::DecisionFilter;
 pub use overview::LatestSummary;
+pub use owner_messages::{OwnerProof, OwnerVia};
 pub use owner_threads::{Asked, OwnerQuestion};
 pub use peer_grants::{GrantEnd, GrantRuling, PeerGrant};
 pub use quiesce::{NewQuiesce, Quiesce};
@@ -60,6 +61,7 @@ mod meetings;
 pub mod metrics;
 mod overview;
 mod owner_actions;
+mod owner_messages;
 mod owner_threads;
 #[cfg(test)]
 mod owner_threads_tests;

@@ -41,6 +41,7 @@ mod meetings;
 mod messaging;
 mod origin;
 mod owner_actions;
+mod owner_auth;
 mod owner_card;
 #[cfg(test)]
 mod panic_tests;
