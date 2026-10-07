@@ -19,7 +19,7 @@ mod rows;
 mod tests;
 mod waiting;
 
-pub(crate) use legacy::{needs_you, routines_without_card};
+pub(crate) use legacy::{needs_you, routines_without_card, NeedsYou};
 pub(crate) use rows::{rows, Scope};
 pub(crate) use waiting::waiting_bots;
 
