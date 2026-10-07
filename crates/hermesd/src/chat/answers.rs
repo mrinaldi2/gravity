@@ -146,17 +146,17 @@ fn body(text: &str) -> String {
     format!("{}{CUT}", &text[..end])
 }
 
-/// Sets each turn's `answer_num` from the answers posted for the bot.
-pub fn mark(app: &AppState, bot_id: &str, turns: &mut [ChatTurn]) {
+/// The turns with each one's `answer_num` set from the bot's posted answers.
+pub fn marked(app: &AppState, bot_id: &str, mut turns: Vec<ChatTurn>) -> Vec<ChatTurn> {
     if turns.is_empty() {
-        return;
+        return turns;
     }
-    let Ok(answers) = app.db.owner_answers(bot_id) else {
-        return;
-    };
-    for turn in turns {
-        turn.answer_num = answers.get(&turn.id).copied();
+    if let Ok(answers) = app.db.owner_answers(bot_id) {
+        for turn in &mut turns {
+            turn.answer_num = answers.get(&turn.id).copied();
+        }
     }
+    turns
 }
 
 #[cfg(test)]

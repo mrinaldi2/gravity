@@ -67,9 +67,8 @@ impl ChatStore {
         let changed = chat.builder.take_changed();
         // The first read is a snapshot, not news.
         let changed = if fresh { Vec::new() } else { changed };
-        let mut changed = settle(changed, &chat.builder.turns, busy(app, bot));
-        super::answers::mark(app, &bot.id, &mut changed);
-        Ok(changed)
+        let changed = settle(changed, &chat.builder.turns, busy(app, bot));
+        Ok(super::answers::marked(app, &bot.id, changed))
     }
 
     /// Up to `limit` turns before `before` (or the newest), oldest first,
@@ -90,9 +89,8 @@ impl ChatStore {
             None => turns.len(),
         };
         let start = end.saturating_sub(limit);
-        let mut page = settle(turns[start..end].to_vec(), turns, busy(app, bot));
-        super::answers::mark(app, &bot.id, &mut page);
-        Ok((page, start > 0))
+        let page = settle(turns[start..end].to_vec(), turns, busy(app, bot));
+        Ok((super::answers::marked(app, &bot.id, page), start > 0))
     }
 
     /// The bot's turns its transcript has ended, newest last (H-192).
