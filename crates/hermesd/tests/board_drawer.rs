@@ -16,6 +16,7 @@ fn comment(id: &str, body: &str) -> Request {
         id: id.to_string(),
         body: body.to_string(),
         reply_to: None,
+        asks_owner: None,
     })
 }
 

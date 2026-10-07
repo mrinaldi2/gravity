@@ -119,7 +119,7 @@ fn decode(value: &serde_json::Value, home: &str, id: &str) -> Option<c::BoardRes
         for column in &mut check.columns {
             column.unmet.push(c::Unmet {
                 code: "board.elsewhere".into(),
-                text: format!("The board lives on {home}. Move {id} from there."),
+                text: format!("The board is kept on {home}. Move {id} from there."),
                 fix: None,
             });
         }

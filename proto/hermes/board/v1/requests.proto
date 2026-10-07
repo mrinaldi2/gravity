@@ -223,6 +223,9 @@ message ItemAddComment {
   string body = 2;
   // The comment this answers.
   optional string reply_to = 3;
+  // A bot's question for the owner (H-211): the board's home keeps it, so
+  // the owner's answer on the card reaches the bot.
+  optional bool asks_owner = 4;
 }
 
 // Link an item to a task, decision, artifact, branch, PR or other item.
@@ -380,6 +383,8 @@ message EditResult {
     // The item changed since `expected_version`; the item as it is now.
     Item conflict = 3;
   }
+  // The owner's comment: the bots it was delivered to, by id (H-201).
+  repeated string told = 4;
 }
 
 message MoveRefused {

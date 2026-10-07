@@ -118,7 +118,7 @@ async fn the_home_relays_its_changes_to_a_linked_computers_clients() {
         .columns
         .iter()
         .all(|col| col.unmet.iter().any(|u| u.code == "board.elsewhere"
-            && u.text == format!("The board lives on mac. Move {} from there.", b.item))));
+            && u.text == format!("The board is kept on mac. Move {} from there.", b.item))));
     let body = call(
         &mut b.p.win_client,
         move_to(&b.item, "doing", item.version, None),
@@ -130,7 +130,7 @@ async fn the_home_relays_its_changes_to_a_linked_computers_clients() {
     assert_eq!(e.code, "no_board");
     assert_eq!(
         e.message,
-        format!("The board lives on mac. Move {} from there.", b.item)
+        format!("The board is kept on mac. Move {} from there.", b.item)
     );
     let body = call(
         &mut b.p.win_client,
@@ -138,6 +138,7 @@ async fn the_home_relays_its_changes_to_a_linked_computers_clients() {
             id: b.item.clone(),
             body: "hi".into(),
             reply_to: None,
+            asks_owner: None,
         }),
     )
     .await;
@@ -147,7 +148,7 @@ async fn the_home_relays_its_changes_to_a_linked_computers_clients() {
     assert_eq!(
         e.message,
         format!(
-            "The board for {} lives on mac. Comment on it from there.",
+            "The board for {} is kept on mac. Comment on it from there.",
             b.item
         )
     );

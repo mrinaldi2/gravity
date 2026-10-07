@@ -89,6 +89,7 @@ impl From<m::ItemCard> for c::ItemCard {
             ac_checked: v.ac_checked,
             ac_total: v.ac_total,
             version: v.version,
+            owner_commented_at: v.owner_commented_at.and_then(stamp),
         }
     }
 }
@@ -113,6 +114,7 @@ impl TryFrom<c::ItemCard> for m::ItemCard {
             ac_checked: v.ac_checked,
             ac_total: v.ac_total,
             version: v.version,
+            owner_commented_at: maybe_at(v.owner_commented_at, "owner_commented_at")?,
         })
     }
 }

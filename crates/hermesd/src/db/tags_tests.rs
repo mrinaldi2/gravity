@@ -318,11 +318,16 @@ fn the_grant_notes_hermes_already_wrote_become_its_own() {
         "Granted on it",
     )
     .unwrap();
-    // Rewind to just before the migration and run it again.
+    // Rewind to just before the migration and run it again. Found by its
+    // SQL: later migrations are appended after it.
+    let index = MIGRATIONS
+        .iter()
+        .position(|sql| sql.contains("author_kind IN ('bot', 'user', 'system')"))
+        .expect("the system-author migration");
     db.lock()
         .execute(
             "UPDATE meta SET value = ?1 WHERE key = 'schema_version'",
-            [(MIGRATIONS.len() - 1).to_string()],
+            [index.to_string()],
         )
         .unwrap();
     db.migrate().unwrap();

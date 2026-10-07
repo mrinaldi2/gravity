@@ -26,6 +26,25 @@ CREATE INDEX IF NOT EXISTS idx_owner_question_open
     ON owner_question(project_id, bot_id) WHERE dismissed_at IS NULL;
 "#;
 
+/// Card questions (H-211). `card_question` lives on the board's home: the
+/// comment that asked and its bot (a stand-in for a bot on a linked
+/// computer), so the owner's answer reaches every bot that asked.
+/// `owner_question_comment` lives on the asking bot's computer: the comment
+/// its question is, for the attention row and for replies to it.
+pub(super) const MIGRATION_CARD_QUESTIONS: &str = r#"
+CREATE TABLE IF NOT EXISTS card_question (
+    comment_id TEXT PRIMARY KEY,
+    item_id    TEXT NOT NULL,
+    bot_id     TEXT NOT NULL,
+    at         TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_card_question_item ON card_question(item_id);
+CREATE TABLE IF NOT EXISTS owner_question_comment (
+    question_id TEXT PRIMARY KEY,
+    comment_id  TEXT NOT NULL
+);
+"#;
+
 /// A pinned project ranks first on the home (D7). Stored per computer, in a
 /// table of its own rather than a `project` column so the migration can run
 /// again.

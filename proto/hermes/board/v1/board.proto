@@ -255,6 +255,9 @@ message ItemCard {
   uint32 ac_checked = 13;
   uint32 ac_total = 14;
   uint64 version = 15;
+  // The owner's latest comment on it (H-211): a computer mirroring the board
+  // closes its card questions asked before it.
+  google.protobuf.Timestamp owner_commented_at = 16;
 }
 
 message ItemLink {
