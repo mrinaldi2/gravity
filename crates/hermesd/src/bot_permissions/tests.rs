@@ -10,6 +10,7 @@ mod bypass_table;
 mod exact_rules;
 mod guard_cases;
 mod guard_h155;
+mod guard_h155_ce032;
 mod guard_install;
 mod guard_links;
 mod guard_powershell;
