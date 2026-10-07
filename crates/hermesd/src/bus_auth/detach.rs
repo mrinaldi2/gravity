@@ -49,15 +49,11 @@ pub fn setsid() {
 mod tests {
     use serde_json::json;
 
-    use crate::config::Config;
-
     #[test]
     fn mcp_servers_are_detached_only_under_the_composer_switch() {
         let entry = json!({"type": "stdio", "command": "npx", "args": ["-y", "pkg"]});
-        let mut cfg = Config::default();
-        assert_eq!(crate::bus_auth::detached(&cfg, entry.clone()), entry);
-        cfg.delivery.composer = true;
-        let wrapped = crate::bus_auth::detached(&cfg, entry);
+        assert_eq!(crate::bus_auth::detached(false, entry.clone()), entry);
+        let wrapped = crate::bus_auth::detached(true, entry);
         if cfg!(unix) {
             assert_eq!(
                 wrapped["args"],

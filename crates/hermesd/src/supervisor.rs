@@ -36,13 +36,17 @@ mod lifecycle;
 mod quiesce;
 mod restart;
 mod session_events;
+mod session_hooks;
 mod start;
 mod termio;
+#[cfg(test)]
+mod test_logs;
 mod typing;
+mod typing_kinds;
 mod watchdog;
 
 pub use composer::{digest as prompt_digest, typed_body};
-pub use typing::{opens_modal, TypeError};
+pub use typing_kinds::{opens_modal, Outcome, TypeError};
 pub use watchdog::{StartupConfig, DIDNT_CONNECT};
 
 /// The state reason of a bot stopped on a permission prompt in its own

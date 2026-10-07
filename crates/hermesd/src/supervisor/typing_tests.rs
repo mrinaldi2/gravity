@@ -3,6 +3,7 @@
 
 use serde_json::json;
 
+use super::test_logs::Logs;
 use super::*;
 use crate::overrides::AutoCompactOverride;
 use crate::runtime::double::DoubleAdapter;
@@ -34,13 +35,19 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
+        Self::with(true)
+    }
+
+    /// A bot whose session takes the owner's chat in its composer when
+    /// `on`, while the global switch is off (H-209).
+    fn with(on: bool) -> Self {
         let home = tempfile::tempdir().expect("tempdir");
         let mut cfg = Config {
             home: home.path().to_path_buf(),
             user_home: home.path().join("user"),
             ..Config::default()
         };
-        cfg.delivery.composer = true;
+        cfg.delivery.composer_bots = vec!["dev".to_string()];
         let db = Db::open(&home.path().join("bus.sqlite")).expect("db");
         let project_id = db.create_project("p", "p").expect("project").id;
         let bot_id = db
@@ -77,7 +84,7 @@ impl Fixture {
             h.terminal_runtime = Some(bus::BotRuntime::ClaudeCode);
             h.state = BotState::Ready;
         }
-        sup.composer_reset(&bot_id);
+        sup.composer_reset(&bot_id, "dev", on);
         sup.composer_output(&bot_id, b"\x1b[?2004h");
         Self {
             sup,
@@ -278,4 +285,80 @@ async fn deliveries_to_one_bot_are_serialised() {
         .type_into(&f.bot_id, &second.id, second.num, &second.body)
         .await;
     assert!(matches!(typed, Err(TypeError::NotReady(_))), "{typed:?}");
+}
+
+/// H-209: a bot `composer_bots` doesn't name keeps inbox delivery: nothing
+/// is typed, its prompts aren't checked and its dialogs don't wait.
+#[tokio::test]
+async fn a_bot_not_named_keeps_inbox_delivery() {
+    let f = Fixture::with(false);
+    assert!(!f.sup.typed_delivery(&f.bot_id));
+    let msg = f.message("hello");
+    let typed = f
+        .sup
+        .type_into(&f.bot_id, &msg.id, msg.num, &msg.body)
+        .await;
+    assert!(matches!(typed, Err(TypeError::Unsupported(_))), "{typed:?}");
+    assert!(f.written().is_empty());
+    assert!(f.prompt("typed in its terminal").is_none());
+    let started = Instant::now();
+    f.sup.before_modal(&f.bot_id).await;
+    assert!(started.elapsed() < MODAL_SETTLE);
+
+    let named = Fixture::new();
+    assert!(named.sup.typed_delivery(&named.bot_id));
+    assert!(named.prompt("typed in its terminal").is_some());
+}
+
+/// H-209: each composer delivery is logged with the bot, the prompt's
+/// `source` and the outcome, never with the message's text.
+#[tokio::test]
+async fn a_typed_delivery_logs_its_source_and_outcome_without_the_text() {
+    let logs = Logs::default();
+    let _guard = logs.capture();
+    let f = Fixture::new();
+    let msg = f.message("the secret plan");
+    let (typed, ()) = tokio::join!(
+        f.sup.type_into(&f.bot_id, &msg.id, msg.num, &msg.body),
+        async {
+            f.until_pasted().await;
+            f.echo();
+        }
+    );
+    let confirmed = typed.expect("typed");
+    assert!(f.prompt(&f.pasted()).is_none());
+    assert_eq!(confirmed.await.unwrap(), Ok(()));
+
+    let lines = logs.lines("composer delivery");
+    assert_eq!(lines.len(), 1, "{lines:?}");
+    let line = &lines[0];
+    for field in [
+        "bot=\"dev\"".to_string(),
+        "source=\"user\"".to_string(),
+        "outcome=\"typed\"".to_string(),
+        format!("message_id=\"{}\"", msg.id),
+    ] {
+        assert!(line.contains(&field), "{field} missing: {line}");
+    }
+    let all = logs.lines("");
+    assert!(all.iter().all(|l| !l.contains("secret plan")), "{all:?}");
+}
+
+/// H-209: a deferred or refused delivery says why, with no source yet.
+#[tokio::test]
+async fn deferred_and_refused_deliveries_say_why() {
+    let logs = Logs::default();
+    let _guard = logs.capture();
+    let f = Fixture::new();
+    f.sup
+        .log_delivery(&f.bot_id, "m1", Outcome::Deferred, None, "bot is working");
+    f.sup
+        .log_delivery(&f.bot_id, "m2", Outcome::Refused, None, "couldn't type it");
+    let lines = logs.lines("composer delivery");
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert!(lines[0].contains("outcome=\"deferred\"") && lines[0].contains("bot is working"));
+    assert!(lines[1].contains("outcome=\"refused\"") && lines[1].contains("couldn't type it"));
+    assert!(lines
+        .iter()
+        .all(|l| l.contains("bot=\"dev\"") && !l.contains("source=")));
 }

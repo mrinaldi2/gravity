@@ -79,6 +79,10 @@ poll_interval_ms = 1000
 lease_seconds = 60
 max_attempts = 10
 base_backoff_seconds = 5
+# Type the owner's app chat into bots' composers (H-195). Off until S0 runs.
+# composer = false
+# The same for these bots only (name or id), while `composer` stays off:
+# composer_bots = ["Composer Test"]
 
 [scheduler]
 tick_interval_ms = 30000
