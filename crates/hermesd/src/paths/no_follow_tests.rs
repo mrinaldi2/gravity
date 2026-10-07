@@ -38,13 +38,19 @@ fn file_link(target: &Path, link: &Path) -> bool {
 fn junction(target: &Path, link: &Path) -> bool {
     let status = std::process::Command::new("cmd")
         .args(["/C", "mklink", "/J"])
-        .arg(link)
-        .arg(target)
+        .arg(backslashed(link))
+        .arg(backslashed(target))
         .stdout(std::process::Stdio::null())
         .status()
         .unwrap();
     assert!(status.success(), "mklink /J {}", link.display());
     true
+}
+
+/// A path as cmd's `mklink` takes it: it reads `/` as a switch.
+#[cfg(windows)]
+fn backslashed(path: &Path) -> String {
+    path.to_string_lossy().replace('/', "\\")
 }
 
 /// A symlink made, or skipped (false) when the account lacks the privilege.
@@ -69,14 +75,14 @@ fn refused(error: anyhow::Error) {
 fn writes_plain_folders_and_refuses_a_link_at_any_part() {
     for (kind, link) in folder_links() {
         let dir = tempfile::tempdir().unwrap();
-        let base = dir.path().join("bot/workspace");
+        let base = dir.path().join("bot").join("workspace");
         std::fs::create_dir_all(&base).unwrap();
         let rel = Path::new(".claude/settings.json");
         write(&base, rel, b"{}").unwrap();
         assert_eq!(std::fs::read(base.join(rel)).unwrap(), b"{}");
 
         // The owner's config, faked: a bot links its .claude there.
-        let owner = dir.path().join("owner/.claude");
+        let owner = dir.path().join("owner").join(".claude");
         std::fs::create_dir_all(&owner).unwrap();
         std::fs::write(owner.join("settings.json"), "owner").unwrap();
         std::fs::remove_dir_all(base.join(".claude")).unwrap();
@@ -98,7 +104,7 @@ fn writes_plain_folders_and_refuses_a_link_at_any_part() {
         );
 
         // `base` itself a link: refused too.
-        let linked = dir.path().join("bot/linked");
+        let linked = dir.path().join("bot").join("linked");
         assert!(link(&owner, &linked));
         refused(write(&linked, Path::new("settings.json"), b"bot").unwrap_err());
         assert_eq!(

@@ -96,6 +96,54 @@ fn windows_links_at_claude_or_to_the_owners_config_are_refused() {
 }
 
 #[test]
+fn the_owners_home_is_seen_in_every_quoting_and_slash() {
+    let homes = [
+        "~",
+        "$env:USERPROFILE",
+        "${env:USERPROFILE}",
+        "%USERPROFILE%",
+        "$HOME",
+    ];
+    for home in homes {
+        for slash in ['\\', '/'] {
+            for config in [".claude", ".claude.json"] {
+                let target = format!("{home}{slash}{config}");
+                for quoted in [
+                    target.clone(),
+                    format!("'{target}'"),
+                    format!("\"{target}\""),
+                ] {
+                    for command in [
+                        format!("mklink /J mine {quoted}"),
+                        format!("cmd /c mklink /D mine {quoted}"),
+                        format!("New-Item -ItemType Junction -Path mine -Target {quoted}"),
+                        format!("ni mine -ItemType SymbolicLink -Value {quoted}"),
+                    ] {
+                        let why = powershell(&command)
+                            .unwrap_or_else(|| panic!("{command} was let through"));
+                        assert!(why.contains("H-182"), "{command}: {why}");
+                    }
+                }
+            }
+        }
+    }
+    // From the Bash tool, where quotes keep `\` and `~` literal for bash but
+    // not for the cmd or PowerShell that runs the link.
+    for home in homes {
+        for target in [format!("{home}\\.claude"), format!("{home}/.claude")] {
+            for command in [
+                format!("mklink /J mine '{target}'"),
+                format!("cmd /c mklink /J mine '{target}'"),
+                format!("pwsh -c 'ni mine -ItemType Junction -Target \"{target}\"'"),
+            ] {
+                let why = bash(&command).unwrap_or_else(|| panic!("{command} was let through"));
+                assert!(why.contains("H-182"), "{command}: {why}");
+            }
+        }
+    }
+}
+
+#[test]
 fn other_windows_links_and_items_still_pass() {
     for command in [
         "New-Item -ItemType Junction -Path notes -Target ..\\notes",
