@@ -343,6 +343,24 @@ describe("TerminalPane", () => {
     expect(fake.fired.every((f) => f.type !== "resize" || f.force === false)).toBe(true);
   });
 
+  it("sends no size before its attach answers, then exactly one forced resize", async () => {
+    const fake = daemon();
+    fake.deferAttach = true;
+    render(<TerminalPane client={fake} botId="b1" canWrite onToast={onToast} />);
+    await vi.waitFor(() => {
+      expect(resizeObserved).not.toBeNull();
+    });
+    // The container reports its size while the attach is still in flight.
+    resizeObserved?.();
+    expect(fake.fired.filter((f) => f.type === "resize")).toHaveLength(0);
+
+    fake.releaseAttaches();
+    await vi.waitFor(() => {
+      expect(fake.fired.filter((f) => f.type === "resize")).toHaveLength(1);
+    });
+    expect(fake.fired.find((f) => f.type === "resize")).toMatchObject({ force: true });
+  });
+
   it("only forwards input and resize while writable", async () => {
     const fake = daemon();
     const view = render(

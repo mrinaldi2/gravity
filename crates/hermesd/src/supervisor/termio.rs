@@ -18,6 +18,16 @@ impl Supervisor {
             .clone()
     }
 
+    /// Bots whose runtime is still coming up. Terminal timings taken during
+    /// a boot burst (a daemon restart starts every bot at once) measure a
+    /// loaded machine, so their log lines carry this count.
+    pub fn booting_count(&self) -> usize {
+        let bots = self.lock_bots();
+        bots.values()
+            .filter(|h| h.starting || h.state == BotState::Starting)
+            .count()
+    }
+
     /// Forward raw terminal input. Grant checks happen at the control plane;
     /// there is no input lease — the terminal belongs to the user.
     pub fn input(&self, bot_id: &str, data: &[u8]) -> anyhow::Result<()> {
@@ -78,7 +88,16 @@ impl Supervisor {
             let bot_id = bot_id.to_string();
             let restore_bot_id = bot_id.clone();
             let restore = runtime.spawn(async move {
-                wait_for_repaint(&term, quiet_since).await;
+                let started = tokio::time::Instant::now();
+                let answered = wait_for_repaint(&term, quiet_since).await;
+                // H-190: how long the runtime took to repaint for an attach.
+                tracing::info!(
+                    bot_id = %restore_bot_id,
+                    answered,
+                    repaint_ms = started.elapsed().as_millis() as u64,
+                    booting = sup.booting_count(),
+                    "terminal repaint nudge"
+                );
                 sup.restore_nudged_size(&restore_bot_id, cols, rows, repaint_generation);
             });
             let abort = restore.abort_handle();
@@ -132,11 +151,31 @@ const REPAINT_NUDGE_POLL: Duration = Duration::from_millis(20);
 /// SIGWINCH, and a restore that lands first coalesces the two signals into one
 /// wakeup that reads the original size and repaints nothing — the attached
 /// terminal then stays blank until something else makes the runtime draw.
-/// Output after the shrink is the proof that it woke up.
-async fn wait_for_repaint(term: &TermBuffer, quiet_since: u64) {
+/// Output after the shrink is the proof that it woke up; returns whether
+/// there was any.
+async fn wait_for_repaint(term: &TermBuffer, quiet_since: u64) -> bool {
     let started = tokio::time::Instant::now();
     tokio::time::sleep(REPAINT_NUDGE_DELAY).await;
     while term.latest_seq() == quiet_since && started.elapsed() < REPAINT_NUDGE_TIMEOUT {
         tokio::time::sleep(REPAINT_NUDGE_POLL).await;
+    }
+    term.latest_seq() != quiet_since
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(start_paused = true)]
+    async fn the_repaint_wait_says_whether_the_runtime_answered() {
+        let term = TermBuffer::new(1024);
+        let quiet_since = term.latest_seq();
+        assert!(
+            !wait_for_repaint(&term, quiet_since).await,
+            "silent runtime"
+        );
+
+        term.push(b"repainted".to_vec());
+        assert!(wait_for_repaint(&term, quiet_since).await, "runtime wrote");
     }
 }

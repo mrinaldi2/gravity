@@ -84,10 +84,13 @@ async fn forward_live(
 fn replay(
     out: &UnboundedSender<Value>,
     term: &TermBuffer,
-    bot_id: &str,
+    bot: &bus::Bot,
     after_seq: u64,
     req_id: &Value,
+    booting: usize,
 ) -> (u64, Receiver<TermFrame>) {
+    let started = std::time::Instant::now();
+    let bot_id = bot.id.as_str();
     // Subscribe before the replay and pass this receiver to the forwarder,
     // so a frame landing in between is in the replay or wakes the forwarder,
     // which skips anything at or below the replay cursor.
@@ -97,9 +100,24 @@ fn replay(
         "type": "attached", "req_id": req_id, "bot_id": bot_id,
         "seq": replay.latest, "resumed": replay.resumed
     }));
+    let bytes: usize = replay.frames.iter().map(|f| f.data.len()).sum();
+    let mut pushes = 0;
     for frame in coalesce(replay.frames, MAX_TERM_PUSH_BYTES) {
         let _ = out.send(term_push(bot_id, &frame));
+        pushes += 1;
     }
+    // H-190: what a terminal open cost the daemon, and on how loaded a
+    // machine. The runtime's repaint is timed in `terminal repaint nudge`.
+    tracing::info!(
+        bot = %bot.name,
+        bot_id,
+        resumed = replay.resumed,
+        bytes,
+        pushes,
+        replay_ms = started.elapsed().as_millis() as u64,
+        booting,
+        "terminal attach"
+    );
     (replay.latest, rx)
 }
 
@@ -132,7 +150,8 @@ impl Conn {
                 match crate::peer::term::view(&app, &bot).await {
                     Ok(viewer) => {
                         let term = app.supervisor.ensure_term(&bot.id);
-                        let (latest, rx) = replay(&out, &term, &bot.id, after_seq, &req_id);
+                        let booting = app.supervisor.booting_count();
+                        let (latest, rx) = replay(&out, &term, &bot, after_seq, &req_id, booting);
                         forward_live(out, term, bot.id, latest, rx).await;
                         drop(viewer);
                     }
@@ -153,7 +172,8 @@ impl Conn {
             })
         } else {
             let term = app.supervisor.ensure_term(&bot_id);
-            let (latest, rx) = replay(&out, &term, &bot_id, after_seq, &req_id);
+            let booting = app.supervisor.booting_count();
+            let (latest, rx) = replay(&out, &term, &bot, after_seq, &req_id, booting);
             tokio::spawn(forward_live(out, term, bot_id.clone(), latest, rx))
         };
         self.attachments.insert(bot_id, task);
