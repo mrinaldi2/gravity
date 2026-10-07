@@ -10,12 +10,49 @@
 /// (`>`, `>>`, `2>`, or glued like `>out.txt`).
 pub type Words = Vec<String>;
 
+mod heredoc;
+pub use heredoc::Heredoc;
+use heredoc::{body, delimiter};
+
+/// One simple command, how it hands on to the next, and the heredocs it
+/// reads (H-155).
+#[derive(Debug, Default)]
+pub struct Command {
+    pub words: Words,
+    pub then: Then,
+    pub heredocs: Vec<Heredoc>,
+    /// An empty `()` follows the words: they name a function being
+    /// defined (`cd () { … }`; zsh may define several at once) (CE-032).
+    pub defines: bool,
+}
+
+/// What joins a command to the next one.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum Then {
+    /// `&&`: the next one runs only if this one succeeded, in the same shell.
+    And,
+    /// `|`: this one's output is the next one's input.
+    Pipe,
+    /// `;`, `||`, `&`, a newline, a bracket or the end of the line.
+    #[default]
+    Other,
+}
+
+/// A heredoc whose body starts after the current line: (delimiter, `<<-`,
+/// expands, the command it belongs to).
+type Pending = (String, bool, bool, usize);
+
 pub fn commands(line: &str) -> Vec<Words> {
-    let mut out: Vec<Words> = Vec::new();
+    parse(line).into_iter().map(|c| c.words).collect()
+}
+
+pub fn parse(line: &str) -> Vec<Command> {
+    let mut out: Vec<Command> = Vec::new();
     let mut words: Words = Vec::new();
     let mut word = String::new();
     let mut in_word = false;
     let mut chars = line.chars().peekable();
+    let mut pending: Vec<Pending> = Vec::new();
 
     let end_word = |word: &mut String, in_word: &mut bool, words: &mut Words| {
         if *in_word {
@@ -23,9 +60,14 @@ pub fn commands(line: &str) -> Vec<Words> {
             *in_word = false;
         }
     };
-    let end_command = |words: &mut Words, out: &mut Vec<Words>| {
+    let end_command = |words: &mut Words, out: &mut Vec<Command>, then: Then| {
         if !words.is_empty() {
-            out.push(std::mem::take(words));
+            out.push(Command {
+                words: std::mem::take(words),
+                then,
+                heredocs: Vec::new(),
+                defines: false,
+            });
         }
     };
 
@@ -86,6 +128,18 @@ pub fn commands(line: &str) -> Vec<Words> {
                 in_word = true;
                 word.push(c);
             }
+            // `*(D)`, `~/.ss(h|x)`, `@(a|b)`: a group glued to an argument is
+            // a zsh (or extglob) pattern, part of the word (CE-032 M3).
+            '(' if in_word
+                && !words.is_empty()
+                && !word.ends_with(['$', '<', '>', '='])
+                && glob_group(&chars).is_some() =>
+            {
+                word.push('(');
+                for _ in 0..glob_group(&chars).unwrap_or(0) {
+                    word.extend(chars.next());
+                }
+            }
             ';' | '\n' | '|' | '&' | '(' | ')' | '`' | '{' | '}' => {
                 // `2>&1` and `&>` are redirections, not separators.
                 if c == '&' && (word.ends_with('>') || chars.peek() == Some(&'>')) {
@@ -93,13 +147,50 @@ pub fn commands(line: &str) -> Vec<Words> {
                     word.push(c);
                     continue;
                 }
+                let then = match (c, chars.peek()) {
+                    ('&', Some('&')) => Then::And,
+                    ('|', Some('|')) => Then::Other,
+                    ('|', _) => Then::Pipe,
+                    _ => Then::Other,
+                };
+                if then == Then::And || (c == '|' && then == Then::Other) {
+                    chars.next();
+                }
                 end_word(&mut word, &mut in_word, &mut words);
-                end_command(&mut words, &mut out);
+                let defines = c == '(' && !words.is_empty() && empty_parens(&chars);
+                end_command(&mut words, &mut out, then);
+                if let Some(command) = out.last_mut().filter(|_| defines) {
+                    command.defines = true;
+                }
+                // The heredocs opened on this line follow it.
+                if c == '\n' {
+                    for (delimiter, tabs, expands, at) in pending.drain(..) {
+                        let heredoc = body(&mut chars, &delimiter, tabs, expands);
+                        if let Some(command) = out.get_mut(at) {
+                            command.heredocs.push(heredoc);
+                        }
+                    }
+                }
             }
             '$' if chars.peek() == Some(&'(') => {
                 chars.next();
                 end_word(&mut word, &mut in_word, &mut words);
-                end_command(&mut words, &mut out);
+                end_command(&mut words, &mut out, Then::Other);
+            }
+            // `<<WORD`, `<<-WORD`, `<<'WORD'`; `<<<` is a here-string.
+            '<' if chars.peek() == Some(&'<') => {
+                chars.next();
+                if chars.next_if_eq(&'<').is_some() {
+                    in_word = true;
+                    word.push_str("<<<");
+                    continue;
+                }
+                let tabs = chars.next_if_eq(&'-').is_some();
+                while chars.next_if(|c| matches!(c, ' ' | '\t')).is_some() {}
+                let (delimiter, quoted) = delimiter(&mut chars);
+                end_word(&mut word, &mut in_word, &mut words);
+                words.push(format!("<<{delimiter}"));
+                pending.push((delimiter, tabs, !quoted, out.len()));
             }
             _ => {
                 in_word = true;
@@ -108,17 +199,54 @@ pub fn commands(line: &str) -> Vec<Words> {
         }
     }
     end_word(&mut word, &mut in_word, &mut words);
-    end_command(&mut words, &mut out);
+    end_command(&mut words, &mut out, Then::Other);
+    // A heredoc on the last line has no body and no end.
+    for (_, _, expands, at) in pending {
+        if let Some(command) = out.get_mut(at) {
+            command.heredocs.push(Heredoc {
+                body: String::new(),
+                expands,
+                closed: false,
+            });
+        }
+    }
 
     // `$(` kept inside a quoted word: run its inside as commands too.
-    let nested: Vec<Words> = out
+    let nested: Vec<Command> = out
         .iter()
-        .flatten()
+        .flat_map(|c| c.words.iter())
         .filter_map(|w| w.find("$(").map(|i| w[i + 2..].to_string()))
-        .flat_map(|inner| commands(&inner))
+        .flat_map(|inner| parse(&inner))
         .collect();
     out.extend(nested);
     out
+}
+
+type Chars<'a> = std::iter::Peekable<std::str::Chars<'a>>;
+
+/// How many characters after a `(` close it as a pattern group: none of
+/// blanks, quotes, separators, redirections or substitutions inside.
+fn glob_group(chars: &Chars<'_>) -> Option<usize> {
+    let mut depth = 1;
+    for (n, c) in chars.clone().enumerate() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return (n > 0).then_some(n + 1);
+                }
+            }
+            c if c.is_whitespace() || ";&'\"`$<>{}\\".contains(c) => return None,
+            _ => {}
+        }
+    }
+    None
+}
+
+/// The rest of a `(` is `)`, blanks aside: a function definition.
+fn empty_parens(chars: &Chars<'_>) -> bool {
+    chars.clone().find(|c| !matches!(c, ' ' | '\t')) == Some(')')
 }
 
 /// The body of a `$'…'` string, escapes decoded, up to its closing quote.

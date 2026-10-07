@@ -47,7 +47,9 @@ pub(super) fn only(name: &str, rest: &[String], args: &[String], scope: &Scope) 
                 | "ksh"
         );
     let shell_script = matches!(name, "sh" | "bash" | "zsh" | "dash" | "ksh") && cluster("c");
-    if interpreter && args.is_empty() && !info && !shell_script && !asks(&["-m"]) {
+    // `python3 -` reads its code from stdin too (H-155).
+    let stdin = args.is_empty() || args.iter().all(|a| a == "-");
+    if interpreter && stdin && !info && !shell_script && !asks(&["-m"]) {
         return Some(format!(
             "in Full `{name}` may not read code from stdin or a heredoc, so it is blocked; don't work around it, report what you needed"
         ));
