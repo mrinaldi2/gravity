@@ -70,11 +70,18 @@ pub(super) fn command(raw: &[String], scope: &mut Scope, ctx: &GuardContext) -> 
     if let Some(reason) = super::links::check(&program, rest, scope, ctx) {
         return Some(reason);
     }
-    // Before the launchers below return: `pwsh -File ~\.ssh\x.ps1`.
-    if let Some(path) = words.iter().find_map(|w| ctx.protected_word(w, scope)) {
-        return Some(format!(
+    // The arms below return before the Bash rules read every word; a
+    // launcher's script is judged first, so a link in it gets its own reason.
+    let touches = || {
+        let path = words.iter().find_map(|w| ctx.protected_word(w, scope))?;
+        Some(format!(
             "this command touches {path}, which is protected; don't reword it, ask the owner"
-        ));
+        ))
+    };
+    if !is_launcher(&program) {
+        if let Some(reason) = touches() {
+            return Some(reason);
+        }
     }
     match program.as_str() {
         "cd" | "chdir" | "sl" | "set-location" | "pushd" | "push-location" => {
@@ -106,7 +113,8 @@ pub(super) fn command(raw: &[String], scope: &mut Scope, ctx: &GuardContext) -> 
         "taskkill" if rest.iter().any(|w| is_cmd_flag(w, &["im", "fi"])) => {
             return commands::command(&vec!["pkill".to_string()], scope, ctx)
         }
-        name if is_launcher(name) => return launch(name, raw_rest, scope, ctx),
+        // `pwsh -File ~\.ssh\x.ps1`: the script runs unread, its path doesn't.
+        name if is_launcher(name) => return launch(name, raw_rest, scope, ctx).or_else(touches),
         _ => {}
     }
     // The Bash rules on the words as they are: protected paths, redirects,
