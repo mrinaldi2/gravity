@@ -8,6 +8,7 @@ use bus::contract::board as c;
 
 use super::feed::{Change, ChangeKind};
 use super::model::{ProjectRole, Role};
+use super::release::machines::is_ios_target;
 use crate::app::AppState;
 
 /// A bot of the project by id or name, stand-ins for a peer's bots included.
@@ -36,12 +37,12 @@ pub fn set_role(
     by_owner: bool,
 ) -> anyhow::Result<()> {
     let role = Role::from_wire(req.role)?;
+    let bot_id = project_bot(app, project_id, req.bot.trim())?;
     anyhow::ensure!(
-        by_owner || LEAD_ASSIGNS.contains(&role),
+        by_owner || LEAD_ASSIGNS.contains(&role) || lead_ios_tester(app, project_id, req, &bot_id)?,
         "only the owner assigns {}",
         role.as_str()
     );
-    let bot_id = project_bot(app, project_id, req.bot.trim())?;
     anyhow::ensure!(
         app.db.board_settings(project_id)?.is_some(),
         "this project has no board yet"
@@ -68,6 +69,32 @@ pub fn set_role(
     }
     feed.publish(changed(project_id, ChangeKind::SettingsChanged));
     Ok(())
+}
+
+/// The one tester role the lead may give or take away (H-176): a tester on
+/// `ios`, who records iOS packages' results and carries the iPhone deploy.
+/// It reaches no desktop build, so it stays out of ARCH-R30's owner-only
+/// set. A bot that already tests a desktop computer isn't moved off it.
+fn lead_ios_tester(
+    app: &AppState,
+    project_id: &str,
+    req: &c::RoleSet,
+    bot_id: &str,
+) -> anyhow::Result<bool> {
+    if Role::from_wire(req.role)? != Role::Tester {
+        return Ok(false);
+    }
+    let current = app
+        .db
+        .project_roles(project_id)?
+        .into_iter()
+        .find(|r| r.role == Role::Tester && r.bot_id == bot_id);
+    let on_ios = |machine: Option<&str>| machine.is_some_and(is_ios_target);
+    if req.remove == Some(true) {
+        return Ok(current.is_some_and(|r| on_ios(r.machine.as_deref())));
+    }
+    Ok(on_ios(req.machine.as_deref().map(str::trim))
+        && current.is_none_or(|r| on_ios(r.machine.as_deref())))
 }
 
 /// Sets a column's WIP limit, or clears it. Zero is no limit too.

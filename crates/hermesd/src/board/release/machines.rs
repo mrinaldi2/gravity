@@ -9,6 +9,12 @@
 //! computer unless the owner narrowed it: a lead's list narrows testing
 //! only, so no release counts as deployed while a computer runs the old
 //! version. Both sets are frozen into the package at submit.
+//!
+//! An iOS package (every build `ios`) has targets of its own instead
+//! (H-176): it is tested on `ios`, by the tester whose role names that
+//! target (iOS QA), and deployed to `iphone`, the owner's phone, through the
+//! same tester. Those names never count as desktop computers, so desktop
+//! packages keep needing every desktop tester's computer.
 
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
@@ -22,6 +28,34 @@ use super::model::{Release, ReleaseTargets};
 
 /// The name when even the host has none.
 const FALLBACK_NAME: &str = "this computer";
+/// An iOS package's test target: iOS QA's simulator and device run (H-176).
+pub const IOS_TEST: &str = "ios";
+/// An iOS package's deploy target: the owner's iPhone.
+pub const IOS_DEVICE: &str = "iphone";
+
+/// A target of iOS packages, never a desktop computer.
+pub fn is_ios_target(machine: &str) -> bool {
+    machine.eq_ignore_ascii_case(IOS_TEST) || machine.eq_ignore_ascii_case(IOS_DEVICE)
+}
+
+/// A package whose every build is for iOS.
+pub fn is_ios_package(release: &Release) -> bool {
+    !release.builds.is_empty()
+        && release
+            .builds
+            .iter()
+            .all(|b| b.platform.eq_ignore_ascii_case(IOS_TEST))
+}
+
+/// The targets an iOS package freezes: tested on `ios`, deployed to `iphone`.
+fn ios_targets() -> ReleaseTargets {
+    ReleaseTargets {
+        tested_on: vec![IOS_TEST.to_string()],
+        tested_set_by: None,
+        deploys_to: vec![IOS_DEVICE.to_string()],
+        deploys_set_by: None,
+    }
+}
 /// The longest list the owner or lead may set, and the longest name.
 const MAX: usize = 20;
 const MAX_NAME: usize = 40;
@@ -84,12 +118,23 @@ pub fn testers(t: &BoardTx<'_>, project_id: &str) -> anyhow::Result<Vec<(String,
         .collect())
 }
 
+/// Every desktop tester's computer: an iOS target isn't one.
 fn every_tester(t: &BoardTx<'_>, project_id: &str) -> anyhow::Result<Vec<String>> {
     let all: BTreeSet<String> = testers(t, project_id)?
         .into_iter()
         .map(|(_, machine)| machine)
+        .filter(|machine| !is_ios_target(machine))
         .collect();
     Ok(all.into_iter().collect())
+}
+
+/// The sets `release` would freeze if submitted now: an iOS package's own,
+/// else the project's desktop ones.
+pub fn targets_for(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<ReleaseTargets> {
+    if is_ios_package(release) {
+        return Ok(ios_targets());
+    }
+    targets_now(t, &release.project_id)
 }
 
 /// The sets a package submitted now would freeze: tested on the set list,
@@ -115,7 +160,7 @@ pub fn targets_now(t: &BoardTx<'_>, project_id: &str) -> anyhow::Result<ReleaseT
 /// The computers `release` must pass on: frozen at submit, or as now.
 pub fn tested_on(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<Vec<String>> {
     if release.targets.tested_on.is_empty() {
-        Ok(targets_now(t, &release.project_id)?.tested_on)
+        Ok(targets_for(t, release)?.tested_on)
     } else {
         Ok(release.targets.tested_on.clone())
     }
@@ -124,7 +169,7 @@ pub fn tested_on(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<Vec<Strin
 /// The computers `release` must reach before it counts as deployed.
 pub fn deploys_to(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<Vec<String>> {
     if release.targets.deploys_to.is_empty() {
-        Ok(targets_now(t, &release.project_id)?.deploys_to)
+        Ok(targets_for(t, release)?.deploys_to)
     } else {
         Ok(release.targets.deploys_to.clone())
     }
