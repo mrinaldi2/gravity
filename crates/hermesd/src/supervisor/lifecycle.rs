@@ -27,18 +27,11 @@ impl Supervisor {
             .as_ref()
             .map(|p| crate::paths::artifacts_dir(&self.inner.cfg, &p.dir_name));
 
-        // Whether this session's composer takes the owner's chat (H-195,
-        // H-209): decided once, for its hooks, its MCP servers and the
-        // supervisor, so typing never runs without the provenance check.
-        let composer = crate::bus_auth::composer_delivery(&self.inner.cfg, &bot.id, &bot.name);
-
-        // Refresh the cooperative settings so existing bots pick up current
-        // hooks (inbox-socket reporting, crossSessionInbound) on every start.
+        // Hooks refreshed each start; the composer (H-195, H-209) is on only
+        // when they were written (CE M1), for MCP and the supervisor alike.
+        let wanted = crate::bus_auth::composer_delivery(&self.inner.cfg, &bot.id, &bot.name);
+        let composer = super::session_hooks::start(&self.inner.cfg, bot_id, &workspace, wanted).on;
         if workspace.exists() {
-            let hooks = crate::bus_auth::hook_transport(&self.inner.cfg, composer);
-            if let Err(e) = crate::paths::write_hook_settings(&workspace, &hooks) {
-                tracing::warn!(bot_id, error = %e, "failed to refresh hook settings");
-            }
             // Re-assert trust on every start, not just at creation: bots
             // provisioned before trust marking existed (or whose entry in
             // `~/.claude.json` was lost) would otherwise greet every daemon
