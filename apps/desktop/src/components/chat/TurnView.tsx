@@ -26,7 +26,13 @@ function postedTextId(turn: ChatTurn): string | undefined {
   if (turn.answer_num === undefined) {
     return undefined;
   }
-  return [...turn.items].reverse().find((item) => item.type === "text")?.id;
+  for (let i = turn.items.length - 1; i >= 0; i -= 1) {
+    const item = turn.items[i];
+    if (item?.type === "text") {
+      return item.id;
+    }
+  }
+  return undefined;
 }
 
 /** One turn: what woke the bot, what it did, and how it ended. */

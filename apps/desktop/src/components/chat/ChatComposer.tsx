@@ -100,9 +100,11 @@ export default function ChatComposer(props: ChatComposerProps): ReactElement {
           Send
         </button>
       </div>
-      {props.footnote === undefined ? null : (
-        <div className="chat-composer-foot">{props.footnote}</div>
-      )}
+      <Footnote text={props.footnote} />
     </div>
   );
+}
+
+function Footnote({ text }: { readonly text: string | undefined }): ReactElement | null {
+  return text === undefined ? null : <div className="chat-composer-foot">{text}</div>;
 }

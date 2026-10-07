@@ -104,7 +104,7 @@ export default function MainPane(props: MainPaneProps): ReactElement {
       <EmptyState daemon={daemon} onCreateProject={props.onCreateProject} />
     ) : (
       <BotView
-        key={bot.id}
+        key={`${bot.id}:${selection.tab ?? ""}`}
         client={client}
         bot={bot}
         bots={bots}

@@ -3,7 +3,6 @@
 // H-132) and a composer that reaches any bot. Reply on a report opens it on
 // that bot with the report quoted.
 
-
 import type { ReactElement } from "react";
 import type { AddToast } from "../../app/useToasts";
 import type { DaemonApi } from "../../protocol/api";

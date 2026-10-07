@@ -59,7 +59,10 @@ function paneClass(shown: boolean): string {
 }
 
 /** Activity's caption (UX-033): what it holds, and where the conversation is. */
-function ActivityCaption(props: { readonly bot: Bot; readonly onOpenChat: () => void }): ReactElement {
+function ActivityCaption(props: {
+  readonly bot: Bot;
+  readonly onOpenChat: () => void;
+}): ReactElement {
   return (
     <>
       Everything {props.bot.name} did: tasks, messages from other bots and the steps it took. Your
@@ -117,16 +120,42 @@ function TranscriptTab(
   );
 }
 
+/** On a service without owner threads, Chat is still the transcript: say so (UX-033). */
+function OldServiceNote(props: {
+  readonly client: DaemonApi;
+  readonly active: BotTab;
+}): ReactElement | null {
+  if (props.active !== "chat" || props.client.capabilities.includes("owner_threads")) {
+    return null;
+  }
+  return (
+    <div className="chat-note bot-old-service">
+      This computer's Hermes service shows Chat and Activity together. Update it to keep your
+      conversation separate.
+    </div>
+  );
+}
+
 /**
- * The bot's tab bodies. Chat and terminal stay mounted when hidden, so
- * switching back keeps the loaded conversation and the terminal buffer.
+ * Chat and Activity (H-192): where the service keeps owner threads, Chat is
+ * the owner thread and the transcript is Activity; otherwise Chat is the
+ * transcript.
  */
-export default function BotPanes(props: BotPanesProps): ReactElement {
-  const { client, bot, tabs, active, connected, canControl, onToast } = props;
-  const linked = bot.peer != null;
-  const permissions = usePermissions(client, bot.id, connected && !linked);
-  // Chat is the owner thread, and the transcript Activity (H-192).
-  const threads = tabs.includes("activity");
+function TalkPanes(
+  props: Pick<
+    BotPanesProps,
+    | "client"
+    | "bot"
+    | "tabs"
+    | "active"
+    | "connected"
+    | "canControl"
+    | "onOpenFile"
+    | "onOpenDecision"
+    | "onSelectTab"
+  >,
+): ReactElement {
+  const { client, bot, tabs, active, connected, canControl } = props;
   const transcript = {
     client,
     bot,
@@ -135,45 +164,55 @@ export default function BotPanes(props: BotPanesProps): ReactElement {
     onOpenFile: props.onOpenFile,
     onOpenDecision: props.onOpenDecision,
   };
+  if (!tabs.includes("activity")) {
+    return tabs.includes("chat") ? (
+      <TranscriptTab {...transcript} shown={active === "chat"} />
+    ) : (
+      <></>
+    );
+  }
+  return (
+    <>
+      <div className={paneClass(active === "chat")}>
+        <BotChat
+          client={client}
+          bot={bot}
+          connected={connected}
+          writeBlocked={writeBlockedReason(connected, canControl, bot)}
+          onOpenActivity={() => {
+            props.onSelectTab("activity");
+          }}
+        />
+      </div>
+      <TranscriptTab
+        {...transcript}
+        shown={active === "activity"}
+        onOpenChat={() => {
+          props.onSelectTab("chat");
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * The bot's tab bodies. Chat and terminal stay mounted when hidden, so
+ * switching back keeps the loaded conversation and the terminal buffer.
+ */
+export default function BotPanes(props: BotPanesProps): ReactElement {
+  const { client, bot, tabs, active, connected, canControl, onToast } = props;
+  const linked = bot.peer != null;
+  const permissions = usePermissions(client, bot.id, connected && !linked);
   return (
     <>
       {/* Above every tab: a prompt waits whether the owner reads the chat or the terminal. */}
       <PermissionCards permissions={permissions} canAnswer={connected && canControl} />
-      {active === "chat" && !client.capabilities.includes("owner_threads") ? (
-        <div className="chat-note bot-old-service">
-          This computer's Hermes service shows Chat and Activity together. Update it to keep your
-          conversation separate.
-        </div>
-      ) : null}
+      <OldServiceNote client={client} active={active} />
       <div className="bot-view-body">
         {active === "reports" ? (
           <ReportsPane client={client} bot={bot} connected={connected} onReply={props.onReply} />
         ) : null}
-        {tabs.includes("chat") && threads ? (
-          <div className={paneClass(active === "chat")}>
-            <BotChat
-              client={client}
-              bot={bot}
-              connected={connected}
-              writeBlocked={writeBlockedReason(connected, canControl, bot)}
-              onOpenActivity={() => {
-                props.onSelectTab("activity");
-              }}
-            />
-          </div>
-        ) : null}
-        {tabs.includes("chat") && !threads ? (
-          <TranscriptTab {...transcript} shown={active === "chat"} />
-        ) : null}
-        {threads ? (
-          <TranscriptTab
-            {...transcript}
-            shown={active === "activity"}
-            onOpenChat={() => {
-              props.onSelectTab("chat");
-            }}
-          />
-        ) : null}
+        <TalkPanes {...props} />
         {tabs.includes("terminal") ? (
           <div className={paneClass(active === "terminal")}>
             {/* The terminal belongs to the user: any `control` connection may type while the bot runs. */}

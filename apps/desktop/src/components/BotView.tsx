@@ -49,6 +49,14 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
+/**
+ * The tab the page opens on: the one asked for when the bot offers it, else
+ * its first. The page is keyed on the bot and the ask, so a new ask opens it.
+ */
+function startTab(tabs: readonly BotTab[], asked: BotTab | undefined): BotTab {
+  return asked !== undefined && tabs.includes(asked) ? asked : (tabs[0] ?? "terminal");
+}
+
 export default function BotView(props: BotViewProps): ReactElement {
   const { client, bot, bots, connected, canControl, onToast } = props;
   const tabs = botTabs(
@@ -61,18 +69,7 @@ export default function BotView(props: BotViewProps): ReactElement {
     },
     bot.peer != null,
   );
-  const asked = props.initialTab !== undefined && tabs.includes(props.initialTab);
-  const [tab, setTab] = useState<BotTab>(
-    asked && props.initialTab !== undefined ? props.initialTab : (tabs[0] ?? "terminal"),
-  );
-  // Asked again for the bot already on screen: go to that tab. Keyed on the
-  // ask and the tab set, so the owner's own picks stay in between.
-  const offered = tabs.join(" ");
-  useEffect(() => {
-    if (props.initialTab !== undefined && offered.split(" ").includes(props.initialTab)) {
-      setTab(props.initialTab);
-    }
-  }, [props.initialTab, offered]);
+  const [tab, setTab] = useState<BotTab>(() => startTab(tabs, props.initialTab));
   const [side, setSide] = useState<SideTab>("info");
   const [openFile, setOpenFile] = useState<string | null>(null);
   const [infoPanel, setInfoPanel] = useState(loadBotInfoPanel);
