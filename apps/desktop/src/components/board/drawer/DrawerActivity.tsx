@@ -4,10 +4,11 @@
 // keeps its text with Retry (H-201).
 
 import { useEffect, useState } from "react";
-import type { KeyboardEvent, ReactElement } from "react";
+import type { ReactElement } from "react";
 import type { ItemComment, ItemEvent } from "../../../protocol/gen/hermes/board/v1/board_pb";
 import { ItemEventKind } from "../../../protocol/gen/hermes/board/v1/board_pb";
 import type { ItemDetail } from "../../../protocol/gen/hermes/board/v1/requests_pb";
+import { sendOnCmdEnter } from "../../../util";
 import { eventLine, when } from "./drawerText";
 
 /** How long "✓ Posted" stays. */
@@ -19,8 +20,44 @@ type Entry =
   | { readonly kind: "comment"; readonly at: number; readonly comment: ItemComment }
   | { readonly kind: "event"; readonly at: number; readonly event: ItemEvent };
 
-/** Posts a comment, a reply when `replyTo` is set; rejects with the refusal. */
-export type PostComment = (body: string, replyTo?: string) => Promise<void>;
+/**
+ * Posts a comment, a reply when `replyTo` is set, and resolves with the bots
+ * told; rejects with the refusal. A retry passes the comment ids seen before
+ * the first try: a comment that landed meanwhile isn't posted twice (S4).
+ */
+export type PostComment = (
+  body: string,
+  replyTo?: string,
+  seenBefore?: ReadonlySet<string>,
+) => Promise<readonly string[]>;
+
+/** A send that failed, kept for Retry. */
+interface Failed {
+  readonly body: string;
+  readonly replyTo: ItemComment | null;
+  readonly seenBefore: ReadonlySet<string>;
+}
+
+/** "A", "A and B", "A, B and C". */
+function names(list: readonly string[]): string {
+  return list.length < 2
+    ? (list[0] ?? "")
+    : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+}
+
+function postedText(told: readonly string[], who: (actor: string) => string): string {
+  if (told.length === 0) {
+    return "✓ Posted.";
+  }
+  const list = told.map((id) => who(`bot:${id}`));
+  return `✓ Posted. ${names(list)} ${list.length === 1 ? "is" : "are"} told.`;
+}
+
+/** Whose comment, in a label: yours, or the bot's by name. */
+function whose(comment: ItemComment, who: (actor: string) => string): string {
+  const name = who(comment.author);
+  return name === "You" ? "your comment" : name;
+}
 
 function stamp(at: { readonly seconds: bigint } | undefined): number {
   return at === undefined ? 0 : Number(at.seconds);
@@ -64,7 +101,7 @@ function CommentLine(props: {
         <button
           type="button"
           className="drawer-reply"
-          aria-label={`Reply to ${who(comment.author)}`}
+          aria-label={`Reply to ${whose(comment, who)}`}
           onClick={() => onReply(comment)}
         >
           Reply
@@ -88,54 +125,61 @@ function Composer(props: {
   readonly onCancelReply: () => void;
   readonly onComment: PostComment;
   readonly onSending: (body: string | null) => void;
+  /** The ids of the comments on the card now. */
+  readonly seen: () => ReadonlySet<string>;
 }): ReactElement {
   const [draft, setDraft] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState<(Failed & { readonly why: string }) | null>(null);
   const [busy, setBusy] = useState(false);
-  const [posted, setPosted] = useState(false);
+  const [posted, setPosted] = useState<string | null>(null);
   useEffect(() => {
-    if (!posted) {
+    if (posted === null) {
       return undefined;
     }
-    const timer = setTimeout(() => setPosted(false), POSTED_MS);
+    const timer = setTimeout(() => setPosted(null), POSTED_MS);
     return () => clearTimeout(timer);
   }, [posted]);
 
-  const send = async (): Promise<void> => {
-    const body = draft.trim();
-    if (!body || busy) {
-      return;
-    }
+  const post = async (attempt: Failed, retry: boolean): Promise<void> => {
     setBusy(true);
-    props.onSending(body);
+    props.onSending(attempt.body);
     setDraft("");
-    setError(null);
-    setPosted(false);
+    setFailed(null);
+    setPosted(null);
     try {
-      await props.onComment(body, props.replyTo?.id);
-      setPosted(true);
+      const told = await props.onComment(
+        attempt.body,
+        attempt.replyTo?.id,
+        retry ? attempt.seenBefore : undefined,
+      );
+      setPosted(postedText(told, props.who));
       props.onCancelReply();
     } catch (failure) {
       // Not posted: the text comes back, with Retry.
-      setDraft(body);
+      setDraft(attempt.body);
       const why = failure instanceof Error ? failure.message : String(failure);
-      setError(`Your comment wasn't posted. ${why}`);
+      setFailed({ ...attempt, why });
     } finally {
       props.onSending(null);
       setBusy(false);
     }
   };
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault();
-      void send();
+  const send = async (): Promise<void> => {
+    const body = draft.trim();
+    if (!body || busy) {
+      return;
     }
+    // The same text again after a failure is a retry.
+    const retry = failed !== null && failed.body === body;
+    const attempt = retry ? failed : { body, replyTo: props.replyTo, seenBefore: props.seen() };
+    await post(attempt, retry);
   };
+  const onKeyDown = sendOnCmdEnter(send);
   return (
     <div className="drawer-composer">
       {props.replyTo === null ? null : (
         <p className="drawer-replying">
-          Replying to {props.who(props.replyTo.author)}{" "}
+          Replying to {whose(props.replyTo, props.who)}{" "}
           <button type="button" className="btn btn-small" onClick={props.onCancelReply}>
             Cancel
           </button>
@@ -144,7 +188,7 @@ function Composer(props: {
       <textarea
         rows={2}
         aria-label={`Comment on ${props.itemId}`}
-        placeholder="Write a comment…"
+        placeholder={`Comment on ${props.itemId}`}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={onKeyDown}
@@ -158,12 +202,17 @@ function Composer(props: {
         Send <span className="drawer-dim">⌘↩</span>
       </button>
       <p className="drawer-posted" role="status">
-        {posted ? "✓ Posted. The assignee and the lead are told." : ""}
+        {posted ?? ""}
       </p>
-      {error === null ? null : (
+      {failed === null ? null : (
         <p className="drawer-error" role="alert">
-          {error}{" "}
-          <button type="button" className="btn btn-small" onClick={() => void send()}>
+          Couldn't post your comment. {failed.why}{" "}
+          <button
+            type="button"
+            className="btn btn-small"
+            disabled={busy}
+            onClick={() => void post(failed, true)}
+          >
             Retry
           </button>
         </p>
@@ -233,6 +282,7 @@ export function Activity(props: {
           onCancelReply={() => setReplyTo(null)}
           onComment={props.onComment}
           onSending={setSending}
+          seen={() => new Set(props.detail.comments.map((c) => c.id))}
         />
       )}
     </div>

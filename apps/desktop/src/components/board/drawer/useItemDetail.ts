@@ -8,14 +8,31 @@ import type { BoardApi } from "../../../protocol/board";
 import { boardCall } from "../../../protocol/board";
 import type { ItemDetail, MoveCheck } from "../../../protocol/gen/hermes/board/v1/requests_pb";
 import { errText } from "../../../util";
+import type { PostComment } from "./DrawerActivity";
 
 export interface ItemDetailState {
   readonly detail: ItemDetail | null;
   readonly check: MoveCheck | null;
   readonly error: string | null;
-  /** Posts the owner's comment, a reply when `replyTo` is set; rejects with
-   * the daemon's refusal. */
-  readonly comment: (body: string, replyTo?: string) => Promise<void>;
+  /** Posts the owner's comment, a reply when `replyTo` is set, and resolves
+   * with the bots told; rejects with the daemon's refusal. */
+  readonly comment: PostComment;
+}
+
+/** The owner's comment with this text is on the card and wasn't before. */
+function landed(
+  detail: ItemDetail,
+  body: string,
+  replyTo: string | undefined,
+  seenBefore: ReadonlySet<string>,
+): boolean {
+  return detail.comments.some(
+    (c) =>
+      !seenBefore.has(c.id) &&
+      (c.author === "user" || c.author.startsWith("device:")) &&
+      c.body === body &&
+      c.replyTo === replyTo,
+  );
 }
 
 export function useItemDetail(
@@ -67,16 +84,36 @@ export function useItemDetail(
   }, [api, itemId, version, reads]);
 
   // Resolves once the item read back holds the comment (H-201), so the
-  // drawer swaps "Sending…" for the posted comment without a gap.
+  // drawer swaps "Sending…" for the posted comment without a gap. A retry
+  // first looks for the comment: a try whose answer was lost may have
+  // posted it (S4).
   const comment = useCallback(
-    async (body: string, replyTo?: string): Promise<void> => {
-      await boardCall(api, { case: "itemComment", value: { id: itemId, body, replyTo } }, "edited");
+    async (
+      body: string,
+      replyTo?: string,
+      seenBefore?: ReadonlySet<string>,
+    ): Promise<readonly string[]> => {
+      const read = (): Promise<ItemDetail> =>
+        boardCall(api, { case: "itemGet", value: { id: itemId } }, "item");
+      if (seenBefore !== undefined) {
+        const now = await read();
+        if (landed(now, body, replyTo, seenBefore)) {
+          setDetail(now);
+          return [];
+        }
+      }
+      const edited = await boardCall(
+        api,
+        { case: "itemComment", value: { id: itemId, body, replyTo } },
+        "edited",
+      );
       try {
-        setDetail(await boardCall(api, { case: "itemGet", value: { id: itemId } }, "item"));
+        setDetail(await read());
       } catch {
         // Posted all the same: the next read shows it.
         setReads((n) => n + 1);
       }
+      return edited.told;
     },
     [api, itemId],
   );

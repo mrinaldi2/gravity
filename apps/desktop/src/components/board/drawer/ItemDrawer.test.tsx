@@ -115,7 +115,7 @@ describe("ItemDrawer", () => {
     expect(within(moves).getAllByRole("listitem")).toHaveLength(1);
 
     const box = screen.getByRole("textbox", { name: "Comment on H-017" });
-    expect(box).toHaveAttribute("placeholder", "Write a comment…");
+    expect(box).toHaveAttribute("placeholder", "Comment on H-017");
     await user.type(box, "Ship it after the demo");
     await user.keyboard("{Meta>}{Enter}{/Meta}");
     await waitFor(() => {
@@ -135,7 +135,8 @@ describe("ItemDrawer", () => {
       "itemComment",
       () =>
         new Promise((resolve) => {
-          answer = () => resolve({ case: "edited", value: create(EditResultSchema, {}) });
+          const told = ["dd", "lead"];
+          answer = () => resolve({ case: "edited", value: create(EditResultSchema, { told }) });
         }),
     );
     await user.click(await screen.findByRole("tab", { name: "Activity 3" }));
@@ -148,11 +149,14 @@ describe("ItemDrawer", () => {
     after.comments.push({ ...after.comments[0], id: "c2", author: "user", body: "Ship it" });
     fake.onBoard("itemGet", () => ({ case: "item", value: after }));
     answer?.();
+    // It says who heard (UX-041), and the tab counts the new comment.
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "✓ Posted. The assignee and the lead are told.",
+      "✓ Posted. Desktop Dev and Team Lead are told.",
     );
+    expect(screen.getByRole("tab", { name: "Activity 4" })).toBeInTheDocument();
     expect(timeline).not.toHaveTextContent("Sending…");
     expect(within(timeline).getAllByRole("listitem").at(-1)).toHaveTextContent("You: Ship it");
+    expect(screen.getByRole("button", { name: "Reply to your comment" })).toBeInTheDocument();
   });
 
   it("replies to a comment and nests the reply under it", async () => {
@@ -186,7 +190,7 @@ describe("ItemDrawer", () => {
   it("shows a refused comment, and no composer without the control grant", async () => {
     const user = userEvent.setup();
     const { fake } = setup();
-    const refusal = "The board for H-017 lives on mac. Comment on it from there.";
+    const refusal = "The board for H-017 is kept on mac. Comment on it from there.";
     fake.onBoard("itemComment", () => {
       throw new DaemonError("no_board", refusal);
     });
@@ -195,7 +199,7 @@ describe("ItemDrawer", () => {
     await user.type(box, "x");
     await user.click(screen.getByRole("button", { name: /Send/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      `Your comment wasn't posted. ${refusal}`,
+      `Couldn't post your comment. ${refusal}`,
     );
     // The text comes back to try again, and nothing shows as sent.
     expect(box).toHaveValue("x");
@@ -211,14 +215,34 @@ describe("ItemDrawer", () => {
     expect(fake.boardCalls.filter((c) => c.case === "itemComment")).toHaveLength(2);
   });
 
+  it("doesn't post twice when the answer was lost but the comment landed", async () => {
+    const user = userEvent.setup();
+    const { fake } = setup();
+    fake.onBoard("itemComment", () => {
+      throw new DaemonError("timeout", "The service didn't answer in time.");
+    });
+    await user.click(await screen.findByRole("tab", { name: "Activity 3" }));
+    await user.type(screen.getByRole("textbox", { name: "Comment on H-017" }), "Ship it");
+    await user.click(screen.getByRole("button", { name: /Send/ }));
+    await screen.findByRole("alert");
+    // It did land: the card now holds it.
+    const after = itemDetail();
+    after.comments.push({ ...after.comments[0], id: "c2", author: "user", body: "Ship it" });
+    fake.onBoard("itemGet", () => ({ case: "item", value: after }));
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("✓ Posted.");
+    expect(fake.boardCalls.filter((c) => c.case === "itemComment")).toHaveLength(1);
+    expect(screen.getByRole("list", { name: "Timeline" })).toHaveTextContent("You: Ship it");
+  });
+
   it("shows the move refusal off the board's home", async () => {
     const check = drawerCheck();
     for (const column of check.columns) {
-      column.unmet = [unmet("board.elsewhere", "The board lives on mac. Move H-017 from there.")];
+      column.unmet = [unmet("board.elsewhere", "The board is kept on mac. Move H-017 from there.")];
     }
     setup({ check });
     const next = await screen.findByRole("region", { name: "Next step" });
-    expect(next).toHaveTextContent("The board lives on mac. Move H-017 from there.");
+    expect(next).toHaveTextContent("The board is kept on mac. Move H-017 from there.");
   });
 
   it("puts focus on the title once the item loads", async () => {

@@ -1,3 +1,17 @@
+import type { KeyboardEvent } from "react";
+
+/** A composer's key handler: ⌘↩ (Ctrl+↩ elsewhere) sends. */
+export function sendOnCmdEnter(
+  send: () => Promise<void>,
+): (event: KeyboardEvent<HTMLTextAreaElement>) => void {
+  return (event) => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      void send();
+    }
+  };
+}
+
 /**
  * Case-insensitive subsequence match for palette filtering.
  * Returns a score (higher = tighter match) or null when `query` is not a

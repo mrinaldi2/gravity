@@ -11,6 +11,7 @@ import { escapeIsTheDrawers } from "../../../hooks/useDrawerEscape";
 import type { BoardApi } from "../../../protocol/board";
 import type { Bot } from "../../../protocol/entities";
 import type { BoardColumn } from "../../../protocol/gen/hermes/board/v1/board_pb";
+import { ItemEventKind } from "../../../protocol/gen/hermes/board/v1/board_pb";
 import type { ItemDetail } from "../../../protocol/gen/hermes/board/v1/requests_pb";
 import type { Anchor } from "../useBoardMoves";
 import { DrawerHeader, MetaLine, NextStepView, Stepper } from "./DrawerParts";
@@ -137,10 +138,12 @@ function DrawerTabs(props: {
 }): ReactElement {
   const { detail, who } = props;
   const [tab, setTab] = useState<Tab>(props.initialTab ?? "overview");
+  // What Activity lists: each comment once, not again as its history event.
+  const moves = detail.history.filter((e) => e.kind !== ItemEventKind.COMMENTED).length;
   const tabs: readonly (readonly [Tab, string])[] = [
     ["overview", "Overview"],
     ["links", `Links ${detail.links.length}`],
-    ["activity", `Activity ${detail.history.length + detail.comments.length}`],
+    ["activity", `Activity ${moves + detail.comments.length}`],
   ];
   return (
     <>
