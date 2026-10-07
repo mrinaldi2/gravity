@@ -149,10 +149,38 @@ describe("ItemDrawer", () => {
     fake.onBoard("itemGet", () => ({ case: "item", value: after }));
     answer?.();
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Comment posted. The assignee and the lead are told.",
+      "✓ Posted. The assignee and the lead are told.",
     );
     expect(timeline).not.toHaveTextContent("Sending…");
     expect(within(timeline).getAllByRole("listitem").at(-1)).toHaveTextContent("You: Ship it");
+  });
+
+  it("replies to a comment and nests the reply under it", async () => {
+    const user = userEvent.setup();
+    const { fake } = setup();
+    fake.onBoard("itemComment", () => ({
+      case: "edited",
+      value: create(EditResultSchema, {}),
+    }));
+    const after = itemDetail();
+    after.comments.push({ ...after.comments[0], id: "c2", author: "user", body: "Agreed" });
+    after.comments[1].replyTo = "c1";
+    await user.click(await screen.findByRole("tab", { name: "Activity 3" }));
+    await user.click(screen.getByRole("button", { name: "Reply to Architect" }));
+    expect(screen.getByText(/Replying to Architect/)).toBeInTheDocument();
+    fake.onBoard("itemGet", () => ({ case: "item", value: after }));
+    await user.type(screen.getByRole("textbox", { name: "Comment on H-017" }), "Agreed");
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    await waitFor(() => {
+      expect(fake.boardCalls.find((c) => c.case === "itemComment")?.value).toMatchObject({
+        id: "H-017",
+        body: "Agreed",
+        replyTo: "c1",
+      });
+    });
+    const replies = await screen.findByRole("list", { name: "Replies" });
+    expect(replies).toHaveTextContent("You: Agreed");
+    expect(screen.queryByText(/Replying to/)).not.toBeInTheDocument();
   });
 
   it("shows a refused comment, and no composer without the control grant", async () => {
@@ -172,6 +200,15 @@ describe("ItemDrawer", () => {
     // The text comes back to try again, and nothing shows as sent.
     expect(box).toHaveValue("x");
     expect(screen.getByRole("list", { name: "Timeline" })).not.toHaveTextContent("Sending…");
+    // Retry sends it again; this time it lands.
+    fake.onBoard("itemComment", () => ({
+      case: "edited",
+      value: create(EditResultSchema, {}),
+    }));
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("✓ Posted");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(fake.boardCalls.filter((c) => c.case === "itemComment")).toHaveLength(2);
   });
 
   it("shows the move refusal off the board's home", async () => {

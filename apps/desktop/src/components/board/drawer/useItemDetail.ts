@@ -13,8 +13,9 @@ export interface ItemDetailState {
   readonly detail: ItemDetail | null;
   readonly check: MoveCheck | null;
   readonly error: string | null;
-  /** Posts the owner's comment; rejects with the daemon's refusal. */
-  readonly comment: (body: string) => Promise<void>;
+  /** Posts the owner's comment, a reply when `replyTo` is set; rejects with
+   * the daemon's refusal. */
+  readonly comment: (body: string, replyTo?: string) => Promise<void>;
 }
 
 export function useItemDetail(
@@ -68,8 +69,8 @@ export function useItemDetail(
   // Resolves once the item read back holds the comment (H-201), so the
   // drawer swaps "Sending…" for the posted comment without a gap.
   const comment = useCallback(
-    async (body: string): Promise<void> => {
-      await boardCall(api, { case: "itemComment", value: { id: itemId, body } }, "edited");
+    async (body: string, replyTo?: string): Promise<void> => {
+      await boardCall(api, { case: "itemComment", value: { id: itemId, body, replyTo } }, "edited");
       try {
         setDetail(await boardCall(api, { case: "itemGet", value: { id: itemId } }, "item"));
       } catch {
