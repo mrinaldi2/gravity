@@ -170,28 +170,3 @@ CREATE TABLE IF NOT EXISTS release_plan (
     planned_at TEXT NOT NULL
 );
 "#;
-
-/// iOS packages frozen before per-platform targets (H-176) froze the desktop
-/// testers' computers as deploy targets, which an iPhone build never
-/// reaches, so they could never close. One with no deploy yet, and targets
-/// nobody set, deploys to the owner's iPhone instead. Safe to run again: the
-/// rows it writes are the ones it would write.
-pub(super) const MIGRATION_IOS_DEPLOY_TARGET: &str = r#"
-DELETE FROM release_target
- WHERE kind = 'deploy' AND set_by IS NULL
-   AND release_id IN (
-     SELECT r.id FROM release r
-      WHERE EXISTS (SELECT 1 FROM release_build b WHERE b.release_id = r.id)
-        AND NOT EXISTS (SELECT 1 FROM release_build b
-                         WHERE b.release_id = r.id AND lower(b.platform) <> 'ios')
-        AND NOT EXISTS (SELECT 1 FROM release_deployment d WHERE d.release_id = r.id));
-INSERT OR IGNORE INTO release_target (release_id, machine, kind, set_by)
- SELECT r.id, 'iphone', 'deploy', NULL FROM release r
-  WHERE EXISTS (SELECT 1 FROM release_target x WHERE x.release_id = r.id)
-    AND NOT EXISTS (SELECT 1 FROM release_target x
-                     WHERE x.release_id = r.id AND x.kind = 'deploy')
-    AND EXISTS (SELECT 1 FROM release_build b WHERE b.release_id = r.id)
-    AND NOT EXISTS (SELECT 1 FROM release_build b
-                     WHERE b.release_id = r.id AND lower(b.platform) <> 'ios')
-    AND NOT EXISTS (SELECT 1 FROM release_deployment d WHERE d.release_id = r.id);
-"#;

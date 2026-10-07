@@ -8,7 +8,7 @@ use bus::contract::board as c;
 
 use super::feed::{Change, ChangeKind};
 use super::model::{ProjectRole, Role};
-use super::release::machines::is_ios_target;
+use super::release::machines::IOS_TEST;
 use crate::app::AppState;
 
 /// A bot of the project by id or name, stand-ins for a peer's bots included.
@@ -74,7 +74,10 @@ pub fn set_role(
 /// The one tester role the lead may give or take away (H-176): a tester on
 /// `ios`, who records iOS packages' results and carries the iPhone deploy.
 /// It reaches no desktop build, so it stays out of ARCH-R30's owner-only
-/// set. A bot that already tests a desktop computer isn't moved off it.
+/// set. Only on `ios` itself (not the iPhone), and never for a bot that
+/// leads, ships or builds (the lead itself, DevOps, a dev): those keep the
+/// separation of duties the owner's rule protects. A bot that already tests
+/// a desktop computer isn't moved off it.
 fn lead_ios_tester(
     app: &AppState,
     project_id: &str,
@@ -84,16 +87,25 @@ fn lead_ios_tester(
     if Role::from_wire(req.role)? != Role::Tester {
         return Ok(false);
     }
-    let current = app
+    let lead = app.db.get_project(project_id)?.and_then(|p| p.lead_bot_id);
+    let roles: Vec<_> = app
         .db
         .project_roles(project_id)?
         .into_iter()
-        .find(|r| r.role == Role::Tester && r.bot_id == bot_id);
-    let on_ios = |machine: Option<&str>| machine.is_some_and(is_ios_target);
+        .filter(|r| r.bot_id == bot_id)
+        .collect();
+    let separated = lead.as_deref() != Some(bot_id)
+        && !roles
+            .iter()
+            .any(|r| matches!(r.role, Role::Lead | Role::Devops | Role::Dev));
+    let current = roles.iter().find(|r| r.role == Role::Tester);
+    let on_ios =
+        |machine: Option<&str>| machine.is_some_and(|m| m.trim().eq_ignore_ascii_case(IOS_TEST));
     if req.remove == Some(true) {
-        return Ok(current.is_some_and(|r| on_ios(r.machine.as_deref())));
+        return Ok(separated && current.is_some_and(|r| on_ios(r.machine.as_deref())));
     }
-    Ok(on_ios(req.machine.as_deref().map(str::trim))
+    Ok(separated
+        && on_ios(req.machine.as_deref())
         && current.is_none_or(|r| on_ios(r.machine.as_deref())))
 }
 

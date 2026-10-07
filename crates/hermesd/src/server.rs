@@ -85,6 +85,12 @@ pub fn spawn_workers(app: &Arc<AppState>) {
         tracing::warn!(error = %e, "artifacts dir backfill failed");
     }
 
+    // iOS packages frozen with desktop deploy targets before H-176 deploy
+    // to the iPhone; a no-op once none is left.
+    if let Err(e) = crate::board::release::ios_repair::repair_ios_deploy_targets(&app.db) {
+        tracing::warn!(error = %e, "iOS deploy target repair failed");
+    }
+
     // Bots are always-on: the first tick fires at once and brings every live
     // bot up, later ones bring crashes back so nothing waits on a Start.
     // Not run inline: `serve` must be serving before the first session's

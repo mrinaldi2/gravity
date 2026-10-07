@@ -17,9 +17,10 @@ const LEAD: usize = 0;
 const DEVOPS: usize = 1;
 const TESTER_IMAC: usize = 3;
 const IOS_QA: usize = 4;
+const IOS_DEV: usize = 5;
 
-/// Team Lead, DevOps, a Tester here ("mac"), Tester iMac and iOS QA (no
-/// role yet), with one item of `platform` in Verify.
+/// Team Lead, DevOps, a Tester here ("mac"), Tester iMac, iOS QA (no role
+/// yet) and iOS Dev (a dev), with one item of `platform` in Verify.
 struct Team {
     pair: Pair,
     bots: Vec<McpClient>,
@@ -27,8 +28,15 @@ struct Team {
 }
 
 async fn team(platform: Platform) -> Team {
-    let (pair, mut bots) =
-        project_with_bots(&["Team Lead", "DevOps", "Tester", "Tester iMac", "iOS QA"]).await;
+    let (pair, mut bots) = project_with_bots(&[
+        "Team Lead",
+        "DevOps",
+        "Tester",
+        "Tester iMac",
+        "iOS QA",
+        "iOS Dev",
+    ])
+    .await;
     let db = &pair.d.app.db;
     let project = db.get_bot(&pair.ids[LEAD]).unwrap().unwrap().project_id;
     db.ensure_board(&project, &db.daemon_id().unwrap(), Some("H"))
@@ -39,6 +47,13 @@ async fn team(platform: Platform) -> Team {
         project_id: project.clone(),
         role: Role::Devops,
         bot_id: pair.ids[DEVOPS].clone(),
+        machine: None,
+    })
+    .unwrap();
+    db.set_project_role(&ProjectRole {
+        project_id: project.clone(),
+        role: Role::Dev,
+        bot_id: pair.ids[IOS_DEV].clone(),
         machine: None,
     })
     .unwrap();
@@ -213,4 +228,116 @@ async fn the_lead_removes_only_an_ios_tester() {
             json!({"bot": "iOS QA", "role": "tester", "remove": true}),
         )
         .await;
+}
+
+/// The lead's iOS tester grant keeps separation of duties (H-176 M2): only
+/// on `ios`, never for the lead itself, DevOps or a dev, whether giving the
+/// role or taking it away.
+#[tokio::test]
+async fn the_lead_gives_the_ios_tester_role_only_to_a_bot_that_neither_leads_ships_nor_builds() {
+    let mut t = team(Platform::Ios).await;
+    for (bot, machine) in [
+        ("iOS QA", "iphone"),
+        ("Team Lead", "ios"),
+        ("DevOps", "ios"),
+        ("iOS Dev", "ios"),
+    ] {
+        let raw = t.bots[LEAD]
+            .call_raw(
+                "role_set",
+                json!({"bot": bot, "role": "tester", "machine": machine}),
+            )
+            .await;
+        assert!(
+            error_text(&raw).contains("only the owner"),
+            "{bot} on {machine}: {raw}"
+        );
+    }
+    // The owner may still make one of them a tester; the lead can't undo it.
+    let db = &t.pair.d.app.db;
+    let project = db.get_bot(&t.pair.ids[LEAD]).unwrap().unwrap().project_id;
+    db.set_project_role(&ProjectRole {
+        project_id: project,
+        role: Role::Tester,
+        bot_id: t.pair.ids[IOS_DEV].clone(),
+        machine: Some("ios".into()),
+    })
+    .unwrap();
+    let raw = t.bots[LEAD]
+        .call_raw(
+            "role_set",
+            json!({"bot": "iOS Dev", "role": "tester", "remove": true}),
+        )
+        .await;
+    assert!(error_text(&raw).contains("only the owner"), "{raw}");
+    ios_qa_tests_ios(&mut t).await;
+}
+
+/// iOS 0.5.0 (package 0eff48ae) froze the desktop computers as its deploy
+/// targets before H-176. The boot repair re-freezes it to the iPhone and
+/// rehashes it, once, so the deploy there passes `check_frozen` (M1).
+#[tokio::test]
+async fn an_ios_package_frozen_on_desktop_computers_deploys_to_the_iphone_after_the_repair() {
+    use hermesd::board::release::ios_repair::repair_ios_deploy_targets;
+    use hermesd::board::release::model::ReleaseTargets;
+    use hermesd::board::release::{check_frozen, frozen_hash};
+
+    let mut t = team(Platform::Ios).await;
+    ios_qa_tests_ios(&mut t).await;
+    let id = package(&mut t, "iOS 0.5.0", "ios").await;
+    t.bots[IOS_QA].call("release_test", pass(&id)).await;
+    let submitted = t.bots[DEVOPS]
+        .call("release_submit", json!({"release_id": id}))
+        .await;
+    let mut owner = WsClient::connect(&t.pair.d).await;
+    let ruled = owner
+        .request(json!({"type": "release_rule", "release_id": id,
+                        "verdicts": [{"item_id": t.item, "verdict": "ship"}],
+                        "expected_version": submitted["release"]["version"]}))
+        .await;
+    assert_eq!(ruled["release"]["status"], "approved", "{ruled}");
+
+    // As frozen before H-176: deployed to every desktop tester's computer.
+    let db = &t.pair.d.app.db;
+    let legacy = ReleaseTargets {
+        tested_on: vec!["ios".into()],
+        tested_set_by: None,
+        deploys_to: vec!["imac".into(), "mac".into()],
+        deploys_set_by: None,
+    };
+    db.board_tx(|tx| {
+        tx.set_release_targets(&id, &legacy)?;
+        let r = tx.release(&id)?.unwrap();
+        tx.refreeze_release(&id, &frozen_hash(&r))
+    })
+    .unwrap();
+    let release = || db.board_read(|tx| tx.release(&id)).unwrap().unwrap();
+    assert!(check_frozen(&release()).is_ok(), "the legacy freeze holds");
+
+    assert_eq!(repair_ios_deploy_targets(db).unwrap(), vec![id.clone()]);
+    assert!(
+        repair_ios_deploy_targets(db).unwrap().is_empty(),
+        "a second boot repairs nothing"
+    );
+    let repaired = release();
+    assert!(check_frozen(&repaired).is_ok(), "rehashed");
+    assert_eq!(repaired.targets.deploys_to, vec!["iphone".to_string()]);
+    assert_eq!(
+        repaired.targets.tested_on, legacy.tested_on,
+        "tests as frozen"
+    );
+
+    t.bots[DEVOPS]
+        .call(
+            "release_deploy",
+            json!({"release_id": id, "machine": "iphone"}),
+        )
+        .await;
+    let confirmed = t.bots[IOS_QA]
+        .call(
+            "deploy_confirm",
+            json!({"release_id": id, "machine": "iphone", "result": "ok", "smoke": "pass"}),
+        )
+        .await;
+    assert_eq!(confirmed["release"]["status"], "deployed", "{confirmed}");
 }

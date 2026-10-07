@@ -132,3 +132,61 @@ fn the_plan_is_not_part_of_the_frozen_hash() {
     moved.tests_required = vec!["mac".into()];
     assert_eq!(frozen_hash(&moved), before);
 }
+
+/// The boot repair (H-176 M1) touches only an iOS package submitted, still
+/// as frozen, not deploying, whose default deploy targets aren't the iPhone.
+#[test]
+fn the_ios_repair_leaves_every_other_package_alone() {
+    use super::ios_repair::needs_repair;
+    use super::model::{DeployAction, ReleaseDeployment, ReleaseTargets};
+    let frozen = |mut r: Release| {
+        r.frozen_hash = Some(frozen_hash(&r));
+        r
+    };
+    let mut ios = release();
+    ios.status = ReleaseStatus::Approved;
+    ios.builds[0].platform = "ios".into();
+    ios.targets = ReleaseTargets {
+        tested_on: vec!["mac".into()],
+        tested_set_by: Some("lead".into()),
+        deploys_to: vec!["imac".into(), "mac".into(), "win-pc".into()],
+        deploys_set_by: None,
+    };
+    assert!(needs_repair(&frozen(ios.clone())));
+
+    let mut desktop = ios.clone();
+    desktop.builds[0].platform = "desktop-mac".into();
+    let mut owners = ios.clone();
+    owners.targets.deploys_set_by = Some("owner".into());
+    let mut done = ios.clone();
+    done.targets.deploys_to = vec!["iphone".into()];
+    let mut deploying = ios.clone();
+    deploying.deployments.push(ReleaseDeployment {
+        machine: "mac".into(),
+        action: DeployAction::Deploy,
+        executor: "ops".into(),
+        task_id: None,
+        result: None,
+        smoke: None,
+        log_artifact: None,
+        started_at: Utc::now(),
+        at: None,
+    });
+    let mut over = ios.clone();
+    over.status = ReleaseStatus::Rejected;
+    let mut unsubmitted = ios.clone();
+    unsubmitted.status = ReleaseStatus::Built;
+    for (what, r) in [
+        ("desktop", desktop),
+        ("owner's list", owners),
+        ("already the iPhone", done),
+        ("deploying", deploying),
+        ("over", over),
+        ("unsubmitted", unsubmitted),
+    ] {
+        assert!(!needs_repair(&frozen(r)), "{what}");
+    }
+    let mut changed = ios;
+    changed.frozen_hash = Some("stale".into());
+    assert!(!needs_repair(&changed), "changed since it was frozen");
+}

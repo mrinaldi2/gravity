@@ -31,6 +31,7 @@ pub mod gates;
 pub mod git;
 pub mod git_cache;
 pub mod install;
+pub mod ios_repair;
 pub mod land;
 pub mod lifecycle;
 pub mod machines;

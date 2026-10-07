@@ -318,16 +318,11 @@ fn the_grant_notes_hermes_already_wrote_become_its_own() {
         "Granted on it",
     )
     .unwrap();
-    // Rewind to just before the migration and run it again, with every later
-    // one (each runs again safely). Found by its SQL: it needn't be the last.
-    let index = MIGRATIONS
-        .iter()
-        .position(|sql| sql.contains("author_kind IN ('bot', 'user', 'system')"))
-        .expect("the comment author migration");
+    // Rewind to just before the migration and run it again.
     db.lock()
         .execute(
             "UPDATE meta SET value = ?1 WHERE key = 'schema_version'",
-            [index.to_string()],
+            [(MIGRATIONS.len() - 1).to_string()],
         )
         .unwrap();
     db.migrate().unwrap();
