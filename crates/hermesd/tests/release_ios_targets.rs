@@ -273,6 +273,56 @@ async fn the_lead_gives_the_ios_tester_role_only_to_a_bot_that_neither_leads_shi
     ios_qa_tests_ios(&mut t).await;
 }
 
+/// Separation of duties holds in both orders (H-176 S1): the lead can't
+/// make a dev its iOS tester, nor make its iOS tester a dev afterwards.
+#[tokio::test]
+async fn the_lead_keeps_the_ios_tester_and_a_dev_apart_in_either_order() {
+    let mut t = team(Platform::Ios).await;
+    // A dev first, then the iOS tester: refused.
+    let raw = t.bots[LEAD]
+        .call_raw(
+            "role_set",
+            json!({"bot": "iOS Dev", "role": "tester", "machine": "ios"}),
+        )
+        .await;
+    assert!(error_text(&raw).contains("only the owner"), "{raw}");
+    // The iOS tester first, then a dev: refused too.
+    ios_qa_tests_ios(&mut t).await;
+    let raw = t.bots[LEAD]
+        .call_raw("role_set", json!({"bot": "iOS QA", "role": "dev"}))
+        .await;
+    assert!(
+        error_text(&raw).contains("only the owner makes the iOS tester a dev"),
+        "{raw}"
+    );
+    let db = &t.pair.d.app.db;
+    let project = db.get_bot(&t.pair.ids[LEAD]).unwrap().unwrap().project_id;
+    let qa_roles = || -> Vec<Role> {
+        db.project_roles(&project)
+            .unwrap()
+            .into_iter()
+            .filter(|r| r.bot_id == t.pair.ids[IOS_QA])
+            .map(|r| r.role)
+            .collect()
+    };
+    assert_eq!(qa_roles(), vec![Role::Tester], "still only the tester");
+    // A desktop tester isn't the iOS tester: the lead may make it a dev.
+    t.bots[LEAD]
+        .call("role_set", json!({"bot": "Tester iMac", "role": "dev"}))
+        .await;
+    // Once the lead takes the iOS tester role back, the bot may build.
+    t.bots[LEAD]
+        .call(
+            "role_set",
+            json!({"bot": "iOS QA", "role": "tester", "remove": true}),
+        )
+        .await;
+    t.bots[LEAD]
+        .call("role_set", json!({"bot": "iOS QA", "role": "dev"}))
+        .await;
+    assert_eq!(qa_roles(), vec![Role::Dev]);
+}
+
 /// iOS 0.5.0 (package 0eff48ae) froze the desktop computers as its deploy
 /// targets before H-176. The boot repair re-freezes it to the iPhone and
 /// rehashes it, once, so the deploy there passes `check_frozen` (M1).
@@ -325,6 +375,18 @@ async fn an_ios_package_frozen_on_desktop_computers_deploys_to_the_iphone_after_
     assert_eq!(
         repaired.targets.tested_on, legacy.tested_on,
         "tests as frozen"
+    );
+    // The repair is on the package's record, once (S2).
+    let repairs: Vec<_> = repaired
+        .events
+        .iter()
+        .filter(|e| e.kind == "targets_repaired")
+        .collect();
+    assert_eq!(repairs.len(), 1, "{:?}", repaired.events);
+    assert_eq!(repairs[0].actor, "daemon");
+    assert_eq!(
+        repairs[0].detail,
+        json!({"from": ["imac", "mac"], "to": ["iphone"]})
     );
 
     t.bots[DEVOPS]

@@ -4,10 +4,12 @@
 //! 0.5.0, package 0eff48ae). A migration can't fix them: the targets are
 //! part of the frozen hash, so `check_frozen` would refuse the deploy.
 
+use serde_json::json;
+
 use crate::db::Db;
 
 use super::machines::{is_ios_package, IOS_DEVICE};
-use super::model::{Release, ReleaseTargets};
+use super::model::{Release, ReleaseEvent, ReleaseTargets};
 use super::{check_frozen, frozen_hash};
 
 /// Whether `release` is one to repair: an iOS package submitted, not over,
@@ -26,8 +28,9 @@ pub(super) fn needs_repair(release: &Release) -> bool {
 }
 
 /// Re-freezes each such package to deploy to the owner's iPhone, its tests
-/// as they were, and rehashes it so its deploy passes `check_frozen`. Logs
-/// each one it repairs; once repaired, a package no longer matches, so a
+/// as they were, and rehashes it so its deploy passes `check_frozen`. Each
+/// repair is a `targets_repaired` event on the package, by the daemon, with
+/// the targets it had and has; once repaired, a package no longer matches, so a
 /// later boot does nothing. Returns the ids repaired.
 pub fn repair_ios_deploy_targets(db: &Db) -> anyhow::Result<Vec<String>> {
     let projects = db.list_projects()?;
@@ -46,6 +49,20 @@ pub fn repair_ios_deploy_targets(db: &Db) -> anyhow::Result<Vec<String>> {
                 t.set_release_targets(&release.id, &targets)?;
                 let fixed = t.release(&release.id)?.expect("just updated");
                 t.refreeze_release(&release.id, &frozen_hash(&fixed))?;
+                let event = ReleaseEvent {
+                    release_id: release.id.clone(),
+                    release_name: release.name.clone(),
+                    related_id: None,
+                    kind: "targets_repaired".into(),
+                    actor: "daemon".into(),
+                    note: Some("frozen before per-platform targets (H-176)".into()),
+                    detail: json!({
+                        "from": release.targets.deploys_to,
+                        "to": targets.deploys_to,
+                    }),
+                    at: bus::now(),
+                };
+                t.record_release_event(&event, &project.id)?;
                 tracing::info!(
                     release_id = %release.id,
                     name = %release.name,

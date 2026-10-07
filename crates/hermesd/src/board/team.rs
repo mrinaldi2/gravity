@@ -43,6 +43,16 @@ pub fn set_role(
         "only the owner assigns {}",
         role.as_str()
     );
+    // The other order of H-176 M2's separation: the lead can't make its
+    // iOS tester a bot that leads, ships or builds either.
+    anyhow::ensure!(
+        by_owner
+            || req.remove == Some(true)
+            || !matches!(role, Role::Lead | Role::Devops | Role::Dev)
+            || !tests_ios(app, project_id, &bot_id)?,
+        "only the owner makes the iOS tester a {}",
+        role.as_str()
+    );
     anyhow::ensure!(
         app.db.board_settings(project_id)?.is_some(),
         "this project has no board yet"
@@ -99,14 +109,25 @@ fn lead_ios_tester(
             .iter()
             .any(|r| matches!(r.role, Role::Lead | Role::Devops | Role::Dev));
     let current = roles.iter().find(|r| r.role == Role::Tester);
-    let on_ios =
-        |machine: Option<&str>| machine.is_some_and(|m| m.trim().eq_ignore_ascii_case(IOS_TEST));
     if req.remove == Some(true) {
         return Ok(separated && current.is_some_and(|r| on_ios(r.machine.as_deref())));
     }
     Ok(separated
         && on_ios(req.machine.as_deref())
         && current.is_none_or(|r| on_ios(r.machine.as_deref())))
+}
+
+fn on_ios(machine: Option<&str>) -> bool {
+    machine.is_some_and(|m| m.trim().eq_ignore_ascii_case(IOS_TEST))
+}
+
+/// Whether the bot is a tester on `ios`.
+fn tests_ios(app: &AppState, project_id: &str, bot_id: &str) -> anyhow::Result<bool> {
+    Ok(app
+        .db
+        .project_roles(project_id)?
+        .iter()
+        .any(|r| r.bot_id == bot_id && r.role == Role::Tester && on_ios(r.machine.as_deref())))
 }
 
 /// Sets a column's WIP limit, or clears it. Zero is no limit too.
