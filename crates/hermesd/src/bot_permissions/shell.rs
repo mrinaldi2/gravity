@@ -45,11 +45,15 @@ pub fn commands(line: &str) -> Vec<Words> {
                 while let Some(q) = chars.next() {
                     match q {
                         '"' => break,
-                        '\\' => {
-                            if let Some(n) = chars.next() {
-                                word.push(n);
+                        // Only `$`, `` ` ``, `"`, `\` and a newline are escaped;
+                        // `"C:\Users\me"` keeps its `\` (H-187).
+                        '\\' => match chars.peek() {
+                            Some('$' | '`' | '"' | '\\') => word.extend(chars.next()),
+                            Some('\n') => {
+                                chars.next();
                             }
-                        }
+                            _ => word.push('\\'),
+                        },
                         // A substitution inside double quotes still runs.
                         '$' if chars.peek() == Some(&'(') => {
                             word.push_str("$(");

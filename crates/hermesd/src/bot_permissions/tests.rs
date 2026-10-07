@@ -10,6 +10,7 @@ mod bypass_table;
 mod guard_cases;
 mod guard_install;
 mod guard_links;
+mod guard_powershell;
 mod guard_targets;
 #[cfg(windows)]
 mod guard_windows;
