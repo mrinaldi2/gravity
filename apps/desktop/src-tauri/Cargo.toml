@@ -1,6 +1,6 @@
 [package]
 name = "hermes-desktop"
-version = "0.17.3"
+version = "0.17.4"
 description = "The Hermes desktop client"
 license = "MIT"
 edition = "2021"
