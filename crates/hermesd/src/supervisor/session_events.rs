@@ -20,7 +20,6 @@ pub(super) async fn consume(
     mut rx: mpsc::UnboundedReceiver<SessionEvent>,
 ) {
     let mut saw_output = false;
-    sup.composer_reset(&bot_id);
     while let Some(event) = rx.recv().await {
         match event {
             SessionEvent::Output(data) => {

@@ -13,7 +13,7 @@ use crate::app::AppState;
 use crate::config::DeliveryConfig;
 use crate::db::Db;
 use crate::events::{Events, Push};
-use crate::supervisor::{Supervisor, TypeError};
+use crate::supervisor::{Outcome, Supervisor, TypeError};
 
 /// Ceiling on the wait between attempts at a bot that is not ready. Deliveries
 /// are durable, so one that never becomes ready waits at this interval rather
@@ -180,30 +180,51 @@ impl DeliveryWorker {
         let owners = msg.kind == bus::MessageKind::Chat
             && msg.sender.kind == bus::SenderKind::User
             && self.db.owner_message_via(&msg.id)?.is_some();
-        if !owners || !crate::bus_auth::composer_delivery(&self.app.cfg) {
+        if !owners || !self.supervisor.typed_delivery(bot_id) {
             return Ok(Typed::NotOwners);
         }
         let typed = self
             .supervisor
             .type_into(bot_id, &msg.id, msg.num, &msg.body)
             .await;
+        let log = |outcome, reason: &str| {
+            self.supervisor
+                .log_delivery(bot_id, &msg.id, outcome, None, reason);
+        };
         match typed {
             Ok(confirmed) => {
                 let (db, events) = (self.db.clone(), self.events.clone());
-                let (delivery_id, bot_id, num) =
-                    (delivery_id.to_string(), bot_id.to_string(), msg.num);
+                let supervisor = self.supervisor.clone();
+                let (delivery_id, bot_id, num, message_id) = (
+                    delivery_id.to_string(),
+                    bot_id.to_string(),
+                    msg.num,
+                    msg.id.clone(),
+                );
                 tokio::spawn(async move {
+                    // `typed` is logged by the prompt that spends the token.
                     if let Ok(Err(reason)) = confirmed.await {
+                        supervisor.log_delivery(
+                            &bot_id,
+                            &message_id,
+                            Outcome::Refused,
+                            None,
+                            &reason,
+                        );
                         couldnt_type(&db, &events, &delivery_id, &bot_id, num, &reason);
                     }
                 });
                 Ok(Typed::Handled(Ok(())))
             }
-            Err(TypeError::NotReady(reason)) => Ok(Typed::Handled(Err(
-                crate::supervisor::DeliverError::NotReady(reason),
-            ))),
+            Err(TypeError::NotReady(reason)) => {
+                log(Outcome::Deferred, &reason);
+                Ok(Typed::Handled(Err(
+                    crate::supervisor::DeliverError::NotReady(reason),
+                )))
+            }
             // Never retried: a second paste could make a second turn.
             Err(TypeError::Failed(reason)) => {
+                log(Outcome::Refused, &reason);
                 couldnt_type(
                     &self.db,
                     &self.events,
@@ -216,8 +237,10 @@ impl DeliveryWorker {
             }
             // PENDING U1: shown to the owner as "Delivered as a message".
             Err(TypeError::Unsupported(reason)) => {
-                tracing::info!(bot_id, message_id = %msg.id, reason, wrapped = true,
-                    "owner chat delivered as a message");
+                log(
+                    Outcome::Refused,
+                    &format!("{reason}; delivered as a message (wrapped)"),
+                );
                 Ok(Typed::NotOwners)
             }
         }

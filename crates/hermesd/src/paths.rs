@@ -187,12 +187,13 @@ pub fn provision_bot(cfg: &Config, spec: &BotProvision<'_>) -> anyhow::Result<Bo
 
     // The browser entry is added at spawn, when the session's config is
     // refreshed with whatever Node and Chrome the machine has then.
-    let bus = crate::bus_auth::server_entry(cfg);
+    let composer = crate::bus_auth::composer_delivery(cfg, spec.bot_id, spec.name);
+    let bus = crate::bus_auth::server_entry(cfg, composer);
     write_mcp_config(&root, &bus, None)?;
 
     seed_memory_files(&workspace, spec.name)?;
 
-    write_hook_settings(&workspace, &crate::bus_auth::hook_transport(cfg))?;
+    write_hook_settings(&workspace, &crate::bus_auth::hook_transport(cfg, composer))?;
 
     Ok(BotDirs { root, workspace })
 }

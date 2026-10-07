@@ -177,6 +177,10 @@ pub struct DeliveryConfig {
     /// Type the owner's app chat into a bot's composer as their own turn
     /// (H-195 D2 + D2b, one switch). See `bus_auth::composer_delivery`.
     pub composer: bool,
+    /// The same, for these bots only (by name or id) while `composer` is
+    /// off: the live check on one test bot (H-209). Every other bot keeps
+    /// inbox delivery.
+    pub composer_bots: Vec<String>,
 }
 
 impl Default for DeliveryConfig {
@@ -187,6 +191,7 @@ impl Default for DeliveryConfig {
             max_attempts: 10,
             base_backoff_seconds: 5,
             composer: false,
+            composer_bots: Vec::new(),
         }
     }
 }
@@ -391,5 +396,14 @@ mod tests {
         assert!(Config::default().classic_renderer);
         let cfg: Config = toml::from_str("classic_renderer = false").unwrap();
         assert!(!cfg.classic_renderer);
+    }
+
+    #[test]
+    fn composer_bots_parse_beside_the_global_switch() {
+        let cfg: Config =
+            toml::from_str("[delivery]\ncomposer_bots = [\"Composer Test\"]").unwrap();
+        assert!(!cfg.delivery.composer);
+        assert_eq!(cfg.delivery.composer_bots, ["Composer Test"]);
+        assert!(Config::default().delivery.composer_bots.is_empty());
     }
 }

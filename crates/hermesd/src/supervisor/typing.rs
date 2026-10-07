@@ -29,6 +29,11 @@ const TYPE_WHILE_WORKING: bool = false;
 
 /// One bot's composer and the lock type_into and the pre-modal hooks share.
 pub(super) struct BotComposer {
+    /// Whether this session's composer takes the owner's chat, fixed at its
+    /// start with its hook settings (`bus_auth::composer_delivery`).
+    on: bool,
+    /// The bot's name at that start, for the delivery log.
+    bot: String,
     state: Mutex<Composer>,
     lock: tokio::sync::Mutex<()>,
     /// Pre-modal hooks in flight; type_into sends no CR while any is (K4 a).
@@ -37,8 +42,10 @@ pub(super) struct BotComposer {
 }
 
 impl BotComposer {
-    fn new() -> Self {
+    fn new(bot: &str, on: bool) -> Self {
         Self {
+            on,
+            bot: bot.to_string(),
             state: Mutex::new(Composer::default()),
             lock: tokio::sync::Mutex::new(()),
             modal_pending: AtomicUsize::new(0),
@@ -56,6 +63,28 @@ impl BotComposer {
 
     fn wrote(&self) {
         *self.last_write.lock().unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+    }
+}
+
+/// What became of an owner chat bound for a composer, as the delivery log
+/// says it (H-209). The log never carries the message's text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outcome {
+    /// Submitted, and its prompt spent the token.
+    Typed,
+    /// Not now; tried again later.
+    Deferred,
+    /// Not typed: it failed, or went through the inbox instead.
+    Refused,
+}
+
+impl Outcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Typed => "typed",
+            Self::Deferred => "deferred",
+            Self::Refused => "refused",
+        }
     }
 }
 
@@ -96,34 +125,66 @@ impl Supervisor {
             .unwrap_or_else(|e| e.into_inner());
         composers
             .entry(bot_id.to_string())
-            .or_insert_with(|| Arc::new(BotComposer::new()))
+            .or_insert_with(|| Arc::new(BotComposer::new("", false)))
             .clone()
     }
 
-    /// Whether this daemon vouches for its bots' composers at all.
-    fn typed_delivery(&self) -> bool {
-        crate::bus_auth::composer_delivery(&self.inner.cfg)
+    /// Whether `bot_id`'s current session takes the owner's chat in its
+    /// composer: every bot under `[delivery] composer`, or the named ones
+    /// (H-209). Off for a bot with no session started.
+    pub fn typed_delivery(&self, bot_id: &str) -> bool {
+        let composers = self
+            .inner
+            .composers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        composers.get(bot_id).is_some_and(|c| c.on)
     }
 
-    /// A new session: a fresh composer, nothing vouched for yet.
-    pub(super) fn composer_reset(&self, bot_id: &str) {
+    /// A new session of the bot `name`: a fresh composer, nothing vouched
+    /// for yet, typed into only when `on`.
+    pub(super) fn composer_reset(&self, bot_id: &str, name: &str, on: bool) {
         let mut composers = self
             .inner
             .composers
             .lock()
             .unwrap_or_else(|e| e.into_inner());
-        composers.insert(bot_id.to_string(), Arc::new(BotComposer::new()));
+        composers.insert(bot_id.to_string(), Arc::new(BotComposer::new(name, on)));
+    }
+
+    /// One line per owner chat bound for `bot_id`'s composer and per thing
+    /// that happened to it, so the live check reads from the log: the bot,
+    /// the UserPromptSubmit `source` once a prompt came, the outcome and
+    /// why. Never the message's text.
+    pub fn log_delivery(
+        &self,
+        bot_id: &str,
+        message_id: &str,
+        outcome: Outcome,
+        source: Option<&str>,
+        reason: &str,
+    ) {
+        let bot = self.composer(bot_id).bot.clone();
+        tracing::info!(
+            bot,
+            bot_id,
+            message_id,
+            source,
+            outcome = outcome.as_str(),
+            reason,
+            "composer delivery"
+        );
     }
 
     pub(super) fn composer_output(&self, bot_id: &str, data: &[u8]) {
-        if self.typed_delivery() {
+        if self.typed_delivery(bot_id) {
             self.composer(bot_id).state().on_output(data);
         }
     }
 
     /// Bytes the owner typed through a verified terminal (D5, M3).
     pub(super) fn composer_owner_input(&self, bot_id: &str, data: &[u8]) {
-        if self.typed_delivery() {
+        if self.typed_delivery(bot_id) {
             let c = self.composer(bot_id);
             let pending = c.pending();
             c.state().on_owner_input(data, pending, Instant::now());
@@ -133,7 +194,7 @@ impl Supervisor {
     /// Lifecycle events that end a dialog or a turn. Bot-forgeable (K2):
     /// they only steer when type_into tries, never whether a CR goes out.
     pub(super) fn composer_event(&self, bot_id: &str, event: &str) {
-        if !self.typed_delivery() {
+        if !self.typed_delivery(bot_id) {
             return;
         }
         let ended = matches!(event, "Stop" | "TurnInterrupted");
@@ -152,7 +213,7 @@ impl Supervisor {
     /// [`MODAL_WAIT`], and for [`MODAL_SETTLE`] after our last write; then
     /// the dialog counts as open until a tool boundary.
     pub async fn before_modal(&self, bot_id: &str) {
-        if !self.typed_delivery() {
+        if !self.typed_delivery(bot_id) {
             return;
         }
         let c = self.composer(bot_id);
@@ -172,7 +233,7 @@ impl Supervisor {
     /// The provenance check (D2b): the hook output that blocks a `user`
     /// prompt the daemon didn't vouch for, or `None` to let it through.
     pub fn check_prompt(&self, bot_id: &str, body: &Value) -> Option<Value> {
-        if !self.typed_delivery() {
+        if !self.typed_delivery(bot_id) {
             return None;
         }
         let source = body["source"].as_str();
@@ -181,8 +242,23 @@ impl Supervisor {
         let verdict = c.state().check_prompt(source, prompt, Instant::now());
         let digest = composer::digest(prompt);
         match &verdict {
-            Verdict::NotChecked => return None,
+            Verdict::NotChecked => {
+                // What a typed message turned into, if not a `user` prompt.
+                let awaiting = c.state().awaiting.clone();
+                if let Some(message_id) = awaiting {
+                    tracing::info!(bot = c.bot, bot_id, message_id, source, digest,
+                        "composer delivery: a prompt that needs no token came while one was awaited");
+                }
+                return None;
+            }
             Verdict::Typed { message_id } => {
+                self.log_delivery(
+                    bot_id,
+                    message_id,
+                    Outcome::Typed,
+                    source,
+                    "its prompt spent the token",
+                );
                 // The turn is the owner's chat, by its token, not its text
                 // (architect S2): H-192 answers it in the owner thread.
                 if let Err(e) = self
@@ -218,7 +294,7 @@ impl Supervisor {
         num: i64,
         body: &str,
     ) -> Result<oneshot::Receiver<Result<(), String>>, TypeError> {
-        if !self.typed_delivery() {
+        if !self.typed_delivery(bot_id) {
             return Err(TypeError::Unsupported("typed delivery is off".to_string()));
         }
         let body = composer::sanitize(body.as_bytes())

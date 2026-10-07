@@ -42,7 +42,7 @@ mod typing;
 mod watchdog;
 
 pub use composer::{digest as prompt_digest, typed_body};
-pub use typing::{opens_modal, TypeError};
+pub use typing::{opens_modal, Outcome, TypeError};
 pub use watchdog::{StartupConfig, DIDNT_CONNECT};
 
 /// The state reason of a bot stopped on a permission prompt in its own

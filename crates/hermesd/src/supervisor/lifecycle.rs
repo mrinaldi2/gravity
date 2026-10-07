@@ -27,10 +27,15 @@ impl Supervisor {
             .as_ref()
             .map(|p| crate::paths::artifacts_dir(&self.inner.cfg, &p.dir_name));
 
+        // Whether this session's composer takes the owner's chat (H-195,
+        // H-209): decided once, for its hooks, its MCP servers and the
+        // supervisor, so typing never runs without the provenance check.
+        let composer = crate::bus_auth::composer_delivery(&self.inner.cfg, &bot.id, &bot.name);
+
         // Refresh the cooperative settings so existing bots pick up current
         // hooks (inbox-socket reporting, crossSessionInbound) on every start.
         if workspace.exists() {
-            let hooks = crate::bus_auth::hook_transport(&self.inner.cfg);
+            let hooks = crate::bus_auth::hook_transport(&self.inner.cfg, composer);
             if let Err(e) = crate::paths::write_hook_settings(&workspace, &hooks) {
                 tracing::warn!(bot_id, error = %e, "failed to refresh hook settings");
             }
@@ -57,9 +62,9 @@ impl Supervisor {
         // installed since the last start is picked up.
         let browser = bot_root
             .as_deref()
-            .and_then(|root| crate::browser::setup::server(&self.inner.cfg, root));
+            .and_then(|root| crate::browser::setup::server(&self.inner.cfg, root, composer));
         if let Some(root) = &bot_root {
-            let bus = crate::bus_auth::server_entry(&self.inner.cfg);
+            let bus = crate::bus_auth::server_entry(&self.inner.cfg, composer);
             if let Err(e) = crate::paths::write_mcp_config(root, &bus, browser.as_ref()) {
                 tracing::warn!(bot_id, error = %e, "failed to refresh mcp config");
             }
@@ -183,6 +188,8 @@ impl Supervisor {
             };
             hook(bot_id, continues);
         }
+        // Before the session can raise its first hook.
+        self.composer_reset(bot_id, &bot.name, composer);
         let started = self.start_session(bot_id, &spec)?;
         // From here on the workspace has a conversation to come back to.
         if let Err(e) = self.inner.db.mark_bot_session(bot_id) {
