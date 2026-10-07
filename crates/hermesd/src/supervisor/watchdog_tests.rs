@@ -97,11 +97,20 @@ impl Fixture {
         self.adapter.starts.load(Ordering::SeqCst)
     }
 
-    /// Supervision ticks until `done` holds, failing after a few seconds.
+    /// Supervision ticks until `done` holds. The cap only stops a hung test:
+    /// how long the ticks take is no part of what is tested (the watchdog's
+    /// clock is each session's own start), and three bots' nine session
+    /// starts outran a 5 s cap on a loaded Windows machine (H-183).
     async fn tick_until(&self, what: &str, done: impl Fn(&Self) -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let started = Instant::now();
+        let mut ticks = 0;
         while !done(self) {
-            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            assert!(
+                started.elapsed() < Duration::from_secs(60),
+                "timed out waiting for {what} after {ticks} ticks, {} starts",
+                self.starts()
+            );
+            ticks += 1;
             self.sup.reconcile();
             tokio::time::sleep(Duration::from_millis(20)).await;
         }

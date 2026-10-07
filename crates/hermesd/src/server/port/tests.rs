@@ -110,24 +110,65 @@ async fn a_freed_configured_port_wakes_the_reclaim_watch() {
     assert!(waited.is_ok(), "the watch should end once the port is free");
 }
 
+/// A daemon on 0.8.0 holding the port, answering `/health` as a real one
+/// does: it reads each request before answering and keeps listening. Its
+/// first `ignored` probes go unanswered, as from a daemon too busy to reply.
+/// (H-183: an occupant that answered once without reading the request was
+/// reset on Windows, which drops the unread reply, and then left the port.)
+fn occupant(reserved: tokio::net::TcpListener, ignored: usize) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    tokio::spawn(async move {
+        let mut unanswered = Vec::new();
+        loop {
+            let (mut stream, _) = reserved.accept().await.expect("occupant accept");
+            if unanswered.len() < ignored {
+                unanswered.push(stream);
+                continue;
+            }
+            let mut request = Vec::new();
+            let mut chunk = [0_u8; 256];
+            while !request.ends_with(b"\r\n\r\n") {
+                match stream.read(&mut chunk).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => request.extend_from_slice(&chunk[..n]),
+                }
+            }
+            let body = "{\"status\":\"ok\",\"version\":\"0.8.0\"}";
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(response.as_bytes()).await;
+            let _ = stream.shutdown().await;
+        }
+    });
+}
+
 #[tokio::test]
 async fn refuses_to_move_aside_for_another_daemon() {
     let reserved = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("reserve port");
     let configured = reserved.local_addr().expect("reserved address").port();
-    tokio::spawn(async move {
-        let (stream, _) = reserved.accept().await.expect("occupant accept");
-        let body = "{\"status\":\"ok\",\"version\":\"0.8.0\"}";
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
-            body.len()
-        );
-        let mut stream = stream;
-        tokio::io::AsyncWriteExt::write_all(&mut stream, response.as_bytes())
-            .await
-            .expect("occupant write");
-    });
+    occupant(reserved, 0);
+
+    let error = bind(&[LOOPBACK], configured, PortPolicy::Negotiate)
+        .await
+        .err()
+        .expect("a live daemon must stop the launch");
+
+    assert!(error.to_string().contains("0.8.0"), "{error}");
+}
+
+/// A daemon that misses the first probe (a loaded machine) is asked again
+/// while the port is waited out, and still stops the launch.
+#[tokio::test]
+async fn a_daemon_too_busy_for_the_first_probe_still_stops_the_launch() {
+    let reserved = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("reserve port");
+    let configured = reserved.local_addr().expect("reserved address").port();
+    occupant(reserved, 1);
 
     let error = bind(&[LOOPBACK], configured, PortPolicy::Negotiate)
         .await
