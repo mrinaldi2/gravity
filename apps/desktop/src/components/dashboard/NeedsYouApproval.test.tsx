@@ -83,3 +83,38 @@ describe("Needs you, a bot waiting on an approval", () => {
     expect(rows).toHaveLength(5);
   });
 });
+
+// H-178: what another linked computer counts is listed here too, as the
+// projects home counts it, each acted on that computer.
+describe("Needs you, rows from another linked computer", () => {
+  it("lists a prompt and a decision from win-pc, each to act on there, sorted with the rest", async () => {
+    const prompt: NeedsYouRow = {
+      kind: "elsewhere",
+      elsewhere: "win-pc",
+      row: {
+        kind: "permission_prompt",
+        id: "permission_prompt:win:req-1",
+        title: "Tester asks: Bash: cargo test",
+        request_id: "req-1",
+      },
+    };
+    const decision: NeedsYouRow = {
+      kind: "elsewhere",
+      elsewhere: "win-pc",
+      row: { kind: "decision", id: "decision:win:d9", title: "Which PC test plan?" },
+    };
+    setup([...dashboard().needs_you, decision, prompt], 6);
+    const needs = await screen.findByRole("region", { name: "Needs you · 6" });
+    const rows = within(nth(within(needs).getAllByRole("list"), 0)).getAllByRole("listitem");
+    const text = rows.map((r) => r.textContent ?? "");
+    const at = (needle: string): number => text.findIndex((t) => t.includes(needle));
+    expect(text[at("Tester asks: Bash: cargo test")]).toContain("Answer on win-pc");
+    expect(text[at("Which PC test plan?")]).toContain("Answer on win-pc");
+    expect(text[at("Which PC test plan?")]).toContain("A decision waits for you");
+    // Neither has a button here: they're answered on win-pc.
+    expect(within(nth(rows, at("Which PC test plan?"))).queryByRole("button")).toBeNull();
+    expect(within(nth(rows, at("Tester asks"))).queryByRole("button")).toBeNull();
+    // Sorted as the kinds they carry: decisions before the P0.
+    expect(at("Which PC test plan?")).toBeLessThan(at("P0 · H-021"));
+  });
+});

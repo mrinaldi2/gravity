@@ -946,7 +946,13 @@ A bot proposes an exact command for the owner to run; only the owner runs it.
   - `serving_off`: `{title, reason}`, listed first: the served folder is refused, so no build can be published until `[releases] dir` is fixed (H-100). It has no action in the app.
   - With `all_kinds: true` in the request, the kinds the projects home added are listed too (`owner_action`, `permission_prompt`, `bot_waiting`), each as its typed `AttentionRow` in proto3 JSON with `kind` its lowercase name. An older client leaves `all_kinds` out and sees only the kinds above.
 - **`wip_overrides`:** moves made over a WIP limit in the last seven days, with their notes. They're the lead's call, so they sit beside Needs you, not in it.
-- **Off the board's home:** this computer's own decisions are listed, and the daemon adds the home's rows (asked as peer request `dashboard_needs_you`), each with `elsewhere` naming the home, where they're acted on; `wip_overrides` are the home's too. When the home can't be reached, `needs_you_note` says so and names it.
+- **Other linked computers (H-178):** the rows are those `attention_rows` lists, so the dashboard and the projects home always agree.
+  - This computer's own rows come in the shapes above.
+  - Each linked computer's last good part, the board's home included, is added as `{kind: "elsewhere", row, elsewhere}` (only with `all_kinds`). `row` is the typed `AttentionRow` in proto3 JSON with `kind` its lowercase name, and `elsewhere` is the computer to act on it.
+  - `needs_you_count` is the projects home's count for the project: this computer's rows plus every linked computer's.
+  - When a linked computer isn't answering, its last good rows are still listed, and `needs_you_note` names it ("Can't reach … right now, so this may not be everything that needs you.").
+  - `wip_overrides` are this computer's only.
+  - The peer request `dashboard_needs_you` is gone. An older peer that still sends it gets an "unknown request" refusal and shows its own note.
 - **`board`:** null without a board. Otherwise:
   - `columns`: each visible column with its `count`, `wip_limit` and `wip_scope`.
   - `blocked` and `stale`: counts of open items.

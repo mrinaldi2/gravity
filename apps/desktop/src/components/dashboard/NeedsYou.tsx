@@ -16,6 +16,7 @@ import RelayedDialog from "./RelayedDialog";
 import type { ConfirmOutcome } from "./useConfirmRelayed";
 import { attentionRow } from "./attentionRows";
 import type { AttentionActions } from "./attentionRows";
+import { elsewhereKind, elsewhereRow } from "./elsewhereRows";
 
 interface NeedsYouActions extends AttentionActions {
   readonly onReview: (release: Release) => void;
@@ -61,7 +62,18 @@ const ORDER: Readonly<Record<Shown["kind"], number>> = {
   bot_waiting: 1,
   off_board: 6,
   routines_without_card: 7,
+  // Sorted by the kind it carries (`orderOf`); this is the fallback.
+  elsewhere: 5,
 };
+
+/** A row's place; another computer's row sorts as the kind it carries. */
+function orderOf(r: Shown): number {
+  if (r.kind !== "elsewhere") {
+    return ORDER[r.kind];
+  }
+  const inner = elsewhereKind(r.row);
+  return inner in ORDER ? ORDER[inner as Shown["kind"]] : ORDER.elsewhere;
+}
 
 /** "bot:<id>", "user", "device:…": who made a move, in words. */
 function actorName(actor: string, botName: (id: string) => string): string {
@@ -236,6 +248,8 @@ function rowProps(
       return p0Row(r, props);
     case "routines_without_card":
       return cardlessRow(r, props);
+    case "elsewhere":
+      return elsewhereRow(r.row, props);
     default:
       return attentionRow(r, props);
   }
@@ -251,6 +265,8 @@ function rowKey(r: Shown): string {
       return `serving-${r.elsewhere ?? "here"}`;
     case "routines_without_card":
       return `cardless-${r.elsewhere ?? "here"}`;
+    case "elsewhere":
+      return `elsewhere-${r.elsewhere}-${r.row.id}`;
     default:
       return `${r.kind}-${r.id}`;
   }
@@ -306,7 +322,7 @@ export default function NeedsYou(props: NeedsYouProps): ReactElement {
     (r): r is Shown => r.kind !== "wip_override" && r.kind !== "owner_action",
   );
   // oxlint-disable-next-line unicorn/no-array-sort
-  rows.sort((a, b) => ORDER[a.kind] - ORDER[b.kind]);
+  rows.sort((a, b) => orderOf(a) - orderOf(b));
   const relayed = localRelayed(rows);
   // Every ruling confirmed or answered meanwhile: nothing left to review,
   // and a later relay doesn't reopen the dialog by itself.

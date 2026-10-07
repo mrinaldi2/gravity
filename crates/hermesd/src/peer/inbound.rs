@@ -32,7 +32,6 @@ pub(super) fn handle(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> anyho
         "board_call" => super::board_home::serve_call(app, &peer, frame),
         "board_snapshot" => super::board_home::serve_snapshot(app, &peer, frame),
         "board_read" => super::board_home::serve_read(app, &peer, frame),
-        "dashboard_needs_you" => super::board_home::serve_needs_you(app, &peer, frame),
         "owner_action_offer" => super::owner_actions::serve_offer(app, &peer, frame),
         "owner_action_run" => super::owner_actions::serve_run(app, &peer, frame),
         "owner_action_close" => super::owner_actions::serve_close(app, &peer, frame),
