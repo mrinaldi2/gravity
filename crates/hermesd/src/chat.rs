@@ -19,6 +19,7 @@ pub mod files;
 pub mod model;
 mod steps;
 mod store;
+mod transcript_lines;
 mod triggers;
 pub mod writes;
 
