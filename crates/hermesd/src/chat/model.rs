@@ -19,6 +19,10 @@ pub struct ChatTurn {
     pub trigger: Trigger,
     pub items: Vec<ChatItem>,
     pub stats: Stats,
+    /// The owner thread message the turn's final text was posted as (H-192):
+    /// the Activity view tags that text "In Chat".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answer_num: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

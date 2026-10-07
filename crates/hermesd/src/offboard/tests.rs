@@ -17,6 +17,7 @@ fn turn(trigger: Trigger, items: Vec<ChatItem>, edits: u32) -> ChatTurn {
             edits,
             ..Stats::default()
         },
+        answer_num: None,
     }
 }
 

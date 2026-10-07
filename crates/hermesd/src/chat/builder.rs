@@ -358,6 +358,7 @@ impl Builder {
             trigger,
             items: Vec::new(),
             stats: Default::default(),
+            answer_num: None,
         });
         self.changed.insert(self.turns.len() - 1);
     }
