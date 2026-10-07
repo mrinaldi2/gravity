@@ -190,6 +190,8 @@ async fn main() -> anyhow::Result<()> {
                             );
                         }
                     }
+                    // Who restarted the service, on record (H-193).
+                    hermesd::service_audit::record(&paths.log_dir(), &args);
                     hermesd::service::install_and_start(
                         &source,
                         &paths,

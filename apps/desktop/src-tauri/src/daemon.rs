@@ -200,9 +200,20 @@ pub(crate) fn update_local_daemon_if_installed() -> Result<(), String> {
 /// pending it does nothing, and the install that migrates runs only after
 /// the user confirmed it ([`install_local_daemon`]); `--no-migrate` makes the
 /// sidecar refuse rather than migrate should the two checks ever disagree.
+///
+/// A daemon that answers on its port is never replaced here, whatever the
+/// files on disk suggest (H-193): opening a newer app once swapped a healthy
+/// 0.17.2 service for the bundled 0.17.3 and restarted every bot. Updating a
+/// running service is the owner's choice (the "Update Hermes service" toast)
+/// or a release install with its quiesce.
 pub(crate) fn repair_local_daemon_if_broken() -> Result<(), String> {
     let user_home = user_home()?;
-    if !repair_needed(&daemon_home()?, &user_home, migration_pending(&user_home)) {
+    let home = daemon_home()?;
+    let repair = should_repair(
+        repair_needed(&home, &user_home, migration_pending(&user_home)),
+        || daemon_answers(&home),
+    );
+    if !repair {
         return Ok(());
     }
     let out = run_sidecar(&["service", "install", "--no-migrate"])?;
@@ -217,6 +228,24 @@ fn repair_needed(home: &Path, user_home: &Path, migration_pending: bool) -> bool
     !migration_pending
         && (managed_daemon_needs_repair(home, user_home)
             || switch_over_interrupted(home, user_home))
+}
+
+/// A launch repairs only a broken service: one the files say needs it and
+/// that doesn't answer. `answers` is asked only when the files say so.
+fn should_repair(needed: bool, answers: impl FnOnce() -> bool) -> bool {
+    if !needed {
+        return false;
+    }
+    if answers() {
+        eprintln!("hermes: the service answers, so the launch repair leaves it running (H-193)");
+        return false;
+    }
+    true
+}
+
+/// Whether a daemon answers `/health` on this home's port.
+fn daemon_answers(home: &Path) -> bool {
+    daemon_health("127.0.0.1".to_string(), daemon_port_from_home(home)).is_some()
 }
 
 /// Must match `hermesd`'s own config default and `DEFAULT_ENDPOINT` in the
