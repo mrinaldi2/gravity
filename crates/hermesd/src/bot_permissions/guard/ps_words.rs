@@ -184,7 +184,7 @@ impl GuardContext {
 
 /// The variable name starting at `at` (after a `$`), lower-cased with its
 /// qualifier, and where the text after it starts.
-fn variable_at(chars: &[char], at: usize) -> (String, usize) {
+pub(super) fn variable_at(chars: &[char], at: usize) -> (String, usize) {
     if chars.get(at) == Some(&'{') {
         let close = chars[at..].iter().position(|c| *c == '}');
         return match close {
@@ -268,4 +268,45 @@ pub(super) fn assignment(words: &[String]) -> Option<(String, bool, Vec<String>)
         None => name,
     };
     Some((name, plain, value))
+}
+
+/// Whether an expanded word holds a path the pipeline feeds in (M1): `$_`,
+/// `$PSItem`, `$input`, or a variable [`pipeline_variables`] marked.
+pub(super) fn piped(word: &str) -> bool {
+    word.match_indices(PIPED).any(|(at, _)| {
+        let name: String = word[at + PIPED.len()..]
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        matches!(name.as_str(), "_" | "psitem" | "input")
+    })
+}
+
+/// What [`GuardContext::ps_word`] makes of `$_`.
+const PIPED: &str = "$?";
+
+/// `foreach ($f in …)` and `-PipelineVariable f` (`-pv`): their variables
+/// hold what the pipeline feeds in, as `$_` does. Each is set to read as `$_`.
+pub(super) fn pipeline_variables(line: &str, scope: &mut Scope) {
+    for words in split(line, false) {
+        let lower: Vec<String> = words.iter().map(|w| w.to_ascii_lowercase()).collect();
+        for (i, word) in lower.iter().enumerate() {
+            let (key, glued) = word.split_once(':').unwrap_or((word, ""));
+            let name = if word == "foreach" && lower.get(i + 2).is_some_and(|w| w == "in") {
+                lower.get(i + 1).and_then(|w| w.strip_prefix('$'))
+            } else if key.len() >= 5 && "-pipelinevariable".starts_with(key) || key == "-pv" {
+                Some(glued)
+                    .filter(|g| !g.is_empty())
+                    .or(lower.get(i + 1).map(String::as_str))
+            } else {
+                None
+            };
+            if let Some(name) = name
+                .map(|n| n.trim_start_matches('$'))
+                .filter(|n| !n.is_empty())
+            {
+                scope.vars.insert(format!("ps:{name}"), "$?_".to_string());
+            }
+        }
+    }
 }

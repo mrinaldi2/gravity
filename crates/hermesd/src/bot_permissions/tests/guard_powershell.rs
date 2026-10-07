@@ -24,17 +24,17 @@ fn powershell_as(command: &str, ctx: &GuardContext) -> Option<String> {
 }
 
 /// The guard's verdict on a call of the PowerShell tool, run in the workspace.
-fn ps(command: &str) -> Option<String> {
+pub(super) fn ps(command: &str) -> Option<String> {
     powershell_as(command, &ctx())
 }
 
-fn refused(commands: &[&str]) {
+pub(super) fn refused(commands: &[&str]) {
     for command in commands {
         assert!(ps(command).is_some(), "{command} was let through");
     }
 }
 
-fn allowed(commands: &[&str]) {
+pub(super) fn allowed(commands: &[&str]) {
     for command in commands {
         assert_eq!(ps(command), None, "{command} was blocked");
     }

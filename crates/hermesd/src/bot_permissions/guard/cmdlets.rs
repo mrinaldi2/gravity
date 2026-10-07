@@ -3,6 +3,8 @@
 //! `Copy-Item -Recurse` a `cp -r`, `Get-ChildItem -Recurse` a `find`,
 //! `Stop-Process -Name` a `pkill`. The rule tables stay the Bash guard's.
 
+use super::ps_words::piped;
+
 /// What a parameter's value is to the guard.
 #[derive(Clone, Copy, PartialEq)]
 enum Role {
@@ -271,6 +273,13 @@ pub(super) fn translate(name: &str, rest: &[String]) -> Option<(&'static str, Ve
     let words: Vec<String> = match cmdlet.posix {
         "find" if recurse => [vec!["find".to_string()], of(Source)].concat(),
         "find" => return None,
+        // Paths from the pipeline (`% { Remove-Item $_ }`): like `xargs rm`.
+        _ if [Change, Source, Dest]
+            .iter()
+            .any(|r| of(*r).iter().any(|v| piped(v))) =>
+        {
+            vec!["xargs".to_string(), cmdlet.posix.to_string()]
+        }
         "cp" => {
             let mut sources = of(Source);
             if sources.is_empty() {

@@ -8,13 +8,16 @@
 //! `-EncodedCommand` is decoded and judged; one that can't be is refused.
 
 use super::paths::Scope;
+use super::ps_fold::fold;
 use super::ps_launch::{is_cmd_switch, launch, start_process};
-use super::ps_words::{assignment, split};
-use super::{cmdlets, commands, GuardContext};
+use super::ps_words::{assignment, pipeline_variables, split};
+use super::{cmdlets, commands, dotnet, GuardContext};
 use crate::bot_permissions::shell;
 
 /// Why the PowerShell line must not run, or `None`.
 pub(super) fn line(line: &str, scope: &mut Scope, ctx: &GuardContext) -> Option<String> {
+    let line = &fold(line);
+    pipeline_variables(line, scope);
     let commands = split(line, true);
     // What a cmdlet fed by the pipeline may act on: every path the line names.
     for words in &commands {
@@ -35,11 +38,16 @@ pub(super) fn line(line: &str, scope: &mut Scope, ctx: &GuardContext) -> Option<
         }
     }
     // `Remove-Item (Join-Path …)`, `Remove-Item @('a','b')`: the cmdlet with
-    // what its brackets hold as its arguments.
+    // what its brackets hold as its arguments; so are a .NET call's.
     for words in split(line, false) {
         let words: Vec<String> = words.iter().map(|w| ctx.ps_word(w, scope)).collect();
         if let Some(reason) = as_posix(&words, scope, ctx) {
             return Some(reason);
+        }
+        for (display, posix) in dotnet::calls(&words) {
+            if let Some(reason) = judged(&display, &posix, scope, ctx) {
+                return Some(reason);
+            }
         }
     }
     None
@@ -133,8 +141,13 @@ pub(super) fn command(raw: &[String], scope: &mut Scope, ctx: &GuardContext) -> 
 fn as_posix(words: &[String], scope: &Scope, ctx: &GuardContext) -> Option<String> {
     let (first, rest) = words.split_first()?;
     let (display, posix) = cmdlets::translate(&program(first), rest)?;
-    let reason = commands::command(&posix, scope, ctx)?;
-    let spelled = match &posix[..] {
+    judged(display, &posix, scope, ctx)
+}
+
+/// The POSIX words judged, the refusal naming `display` as the command.
+fn judged(display: &str, posix: &[String], scope: &Scope, ctx: &GuardContext) -> Option<String> {
+    let reason = commands::command(&posix.to_vec(), scope, ctx)?;
+    let spelled = match posix {
         [xargs, inner, ..] if xargs == "xargs" => format!("`xargs {inner}`"),
         [name, ..] => format!("`{name}`"),
         [] => return Some(reason),

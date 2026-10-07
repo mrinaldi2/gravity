@@ -150,6 +150,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn a_binary_a_bot_could_rebuild_is_bot_writable() {
         let (home, user) = (Path::new("/Users/me/.thehermes"), Path::new("/Users/me"));
