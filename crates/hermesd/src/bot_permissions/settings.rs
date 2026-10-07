@@ -55,7 +55,7 @@ pub fn rule_path(path: &Path) -> String {
 
 /// The tools the guard hook sees: every one that runs a command or names a
 /// path to read or write.
-pub const GUARD_MATCHER: &str = "Bash|Read|Grep|Glob|Write|Edit|MultiEdit|NotebookEdit";
+pub const GUARD_MATCHER: &str = "Bash|PowerShell|Read|Grep|Glob|Write|Edit|MultiEdit|NotebookEdit";
 
 pub fn generate(input: &SettingsInput<'_>) -> Value {
     let mut deny = hard_deny(input);

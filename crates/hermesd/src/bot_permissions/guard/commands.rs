@@ -87,7 +87,7 @@ fn remember(words: &Words, scope: &mut Scope, ctx: &GuardContext) {
 }
 
 /// Arguments that are not options; everything after `--` counts.
-fn positional(args: &[String]) -> Vec<String> {
+pub(super) fn positional(args: &[String]) -> Vec<String> {
     let mut out = Vec::new();
     let mut ended = false;
     for arg in args {
@@ -144,7 +144,7 @@ fn command(words: &Words, scope: &Scope, ctx: &GuardContext) -> Option<String> {
     if let Some(reason) = reads_tree(name, rest, &args, scope, ctx) {
         return Some(reason);
     }
-    if let Some(reason) = super::links::check(name, &args, scope, ctx) {
+    if let Some(reason) = super::links::check(name, rest, scope, ctx) {
         return Some(reason);
     }
     let targets: Vec<String> = match name {

@@ -291,6 +291,29 @@ mod imp {
         Ok(at)
     }
 
+    /// A link the bot left at the file name, removed so the rename replaces
+    /// it as on Unix: the link itself, never its target. A folder link (a
+    /// junction or directory symlink) needs `remove_dir`; `remove_file` on
+    /// it fails with "Access is denied". Refused when it can't be removed.
+    fn remove_link(target: &Path, rel: &Path) -> anyhow::Result<()> {
+        let Ok(meta) = std::fs::symlink_metadata(target) else {
+            return Ok(());
+        };
+        if !meta.file_type().is_symlink() {
+            return Ok(());
+        }
+        #[cfg(windows)]
+        let folder = std::os::windows::fs::FileTypeExt::is_symlink_dir(&meta.file_type());
+        #[cfg(not(windows))]
+        let folder = false;
+        let removed = if folder {
+            std::fs::remove_dir(target)
+        } else {
+            std::fs::remove_file(target)
+        };
+        removed.map_err(|_| LinkRefused(rel.display().to_string()).into())
+    }
+
     fn create(path: &Path) -> std::io::Result<std::fs::File> {
         std::fs::OpenOptions::new()
             .write(true)
@@ -307,9 +330,7 @@ mod imp {
     ) -> anyhow::Result<()> {
         let dir = walk(base, dirs, rel)?;
         let target = dir.join(file);
-        if std::fs::symlink_metadata(&target).is_ok_and(|m| m.file_type().is_symlink()) {
-            std::fs::remove_file(&target)?;
-        }
+        remove_link(&target, rel)?;
         let tmp = dir.join(format!(
             ".{}.tmp-{}",
             file.to_string_lossy(),
@@ -353,6 +374,6 @@ mod imp {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 #[path = "no_follow_tests.rs"]
 mod tests;

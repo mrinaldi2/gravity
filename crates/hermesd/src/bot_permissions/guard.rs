@@ -49,6 +49,7 @@ mod git;
 mod links;
 mod path_key;
 pub(super) mod paths;
+mod powershell;
 mod served;
 mod targets;
 mod words;
@@ -91,6 +92,12 @@ pub fn decide(input: &Value, ctx: &GuardContext) -> Option<String> {
     let scope = Scope::new(&cwd);
     match tool {
         "Bash" => commands::line(
+            args["command"].as_str().unwrap_or_default(),
+            &mut scope.clone(),
+            ctx,
+        ),
+        // Only the links it makes (H-182); the Bash rules read POSIX words.
+        "PowerShell" => powershell::line(
             args["command"].as_str().unwrap_or_default(),
             &mut scope.clone(),
             ctx,

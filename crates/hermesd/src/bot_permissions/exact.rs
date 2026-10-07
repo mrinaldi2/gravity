@@ -62,6 +62,7 @@ pub fn this_binary() -> std::path::PathBuf {
 mod tests {
     use super::*;
 
+    #[cfg(not(windows))]
     const APP: &str = "/Applications/The Hermes.app/Contents/MacOS/hermesd";
 
     #[cfg(not(windows))]
