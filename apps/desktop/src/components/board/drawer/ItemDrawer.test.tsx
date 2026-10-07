@@ -115,7 +115,7 @@ describe("ItemDrawer", () => {
     expect(within(moves).getAllByRole("listitem")).toHaveLength(1);
 
     const box = screen.getByRole("textbox", { name: "Comment on H-017" });
-    expect(box).toHaveAttribute("placeholder", "Write a comment…");
+    expect(box).toHaveAttribute("placeholder", "Comment on H-017");
     await user.type(box, "Ship it after the demo");
     await user.keyboard("{Meta>}{Enter}{/Meta}");
     await waitFor(() => {
@@ -127,27 +127,122 @@ describe("ItemDrawer", () => {
     expect(box).toHaveValue("");
   });
 
+  it("shows the comment at once while it is sent, then as posted", async () => {
+    const user = userEvent.setup();
+    const { fake } = setup();
+    let answer: (() => void) | undefined;
+    fake.onBoard(
+      "itemComment",
+      () =>
+        new Promise((resolve) => {
+          const told = ["dd", "lead"];
+          answer = () => resolve({ case: "edited", value: create(EditResultSchema, { told }) });
+        }),
+    );
+    await user.click(await screen.findByRole("tab", { name: "Activity 3" }));
+    await user.type(screen.getByRole("textbox", { name: "Comment on H-017" }), "Ship it");
+    await user.click(screen.getByRole("button", { name: /Send/ }));
+    const timeline = screen.getByRole("list", { name: "Timeline" });
+    expect(timeline).toHaveTextContent("Sending… You: Ship it");
+
+    const after = itemDetail();
+    after.comments.push({ ...after.comments[0], id: "c2", author: "user", body: "Ship it" });
+    fake.onBoard("itemGet", () => ({ case: "item", value: after }));
+    answer?.();
+    // It says who heard (UX-041), and the tab counts the new comment.
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "✓ Posted. Desktop Dev and Team Lead are told.",
+    );
+    expect(screen.getByRole("tab", { name: "Activity 4" })).toBeInTheDocument();
+    expect(timeline).not.toHaveTextContent("Sending…");
+    expect(within(timeline).getAllByRole("listitem").at(-1)).toHaveTextContent("You: Ship it");
+    expect(screen.getByRole("button", { name: "Reply to your comment" })).toBeInTheDocument();
+  });
+
+  it("replies to a comment and nests the reply under it", async () => {
+    const user = userEvent.setup();
+    const { fake } = setup();
+    fake.onBoard("itemComment", () => ({
+      case: "edited",
+      value: create(EditResultSchema, {}),
+    }));
+    const after = itemDetail();
+    after.comments.push({ ...after.comments[0], id: "c2", author: "user", body: "Agreed" });
+    after.comments[1].replyTo = "c1";
+    await user.click(await screen.findByRole("tab", { name: "Activity 3" }));
+    await user.click(screen.getByRole("button", { name: "Reply to Architect" }));
+    expect(screen.getByText(/Replying to Architect/)).toBeInTheDocument();
+    fake.onBoard("itemGet", () => ({ case: "item", value: after }));
+    await user.type(screen.getByRole("textbox", { name: "Comment on H-017" }), "Agreed");
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    await waitFor(() => {
+      expect(fake.boardCalls.find((c) => c.case === "itemComment")?.value).toMatchObject({
+        id: "H-017",
+        body: "Agreed",
+        replyTo: "c1",
+      });
+    });
+    const replies = await screen.findByRole("list", { name: "Replies" });
+    expect(replies).toHaveTextContent("You: Agreed");
+    expect(screen.queryByText(/Replying to/)).not.toBeInTheDocument();
+  });
+
   it("shows a refused comment, and no composer without the control grant", async () => {
     const user = userEvent.setup();
     const { fake } = setup();
-    const refusal = "The board for H-017 lives on mac. Comment on it from there.";
+    const refusal = "The board for H-017 is kept on mac. Comment on it from there.";
     fake.onBoard("itemComment", () => {
       throw new DaemonError("no_board", refusal);
     });
     await user.click(await screen.findByRole("tab", { name: "Activity 3" }));
-    await user.type(screen.getByRole("textbox", { name: "Comment on H-017" }), "x");
+    const box = screen.getByRole("textbox", { name: "Comment on H-017" });
+    await user.type(box, "x");
     await user.click(screen.getByRole("button", { name: /Send/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(refusal);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      `Couldn't post your comment. ${refusal}`,
+    );
+    // The text comes back to try again, and nothing shows as sent.
+    expect(box).toHaveValue("x");
+    expect(screen.getByRole("list", { name: "Timeline" })).not.toHaveTextContent("Sending…");
+    // Retry sends it again; this time it lands.
+    fake.onBoard("itemComment", () => ({
+      case: "edited",
+      value: create(EditResultSchema, {}),
+    }));
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("✓ Posted");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(fake.boardCalls.filter((c) => c.case === "itemComment")).toHaveLength(2);
+  });
+
+  it("doesn't post twice when the answer was lost but the comment landed", async () => {
+    const user = userEvent.setup();
+    const { fake } = setup();
+    fake.onBoard("itemComment", () => {
+      throw new DaemonError("timeout", "The service didn't answer in time.");
+    });
+    await user.click(await screen.findByRole("tab", { name: "Activity 3" }));
+    await user.type(screen.getByRole("textbox", { name: "Comment on H-017" }), "Ship it");
+    await user.click(screen.getByRole("button", { name: /Send/ }));
+    await screen.findByRole("alert");
+    // It did land: the card now holds it.
+    const after = itemDetail();
+    after.comments.push({ ...after.comments[0], id: "c2", author: "user", body: "Ship it" });
+    fake.onBoard("itemGet", () => ({ case: "item", value: after }));
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("✓ Posted.");
+    expect(fake.boardCalls.filter((c) => c.case === "itemComment")).toHaveLength(1);
+    expect(screen.getByRole("list", { name: "Timeline" })).toHaveTextContent("You: Ship it");
   });
 
   it("shows the move refusal off the board's home", async () => {
     const check = drawerCheck();
     for (const column of check.columns) {
-      column.unmet = [unmet("board.elsewhere", "The board lives on mac. Move H-017 from there.")];
+      column.unmet = [unmet("board.elsewhere", "The board is kept on mac. Move H-017 from there.")];
     }
     setup({ check });
     const next = await screen.findByRole("region", { name: "Next step" });
-    expect(next).toHaveTextContent("The board lives on mac. Move H-017 from there.");
+    expect(next).toHaveTextContent("The board is kept on mac. Move H-017 from there.");
   });
 
   it("puts focus on the title once the item loads", async () => {

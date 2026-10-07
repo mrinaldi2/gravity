@@ -356,7 +356,9 @@ pub(super) fn cards_in(
                 i.platforms, i.labels, i.blocked_since IS NOT NULL, i.category,
                 i.state_entered_at, i.version,
                 (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id AND a.checked),
-                (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id)
+                (SELECT count(*) FROM item_ac a WHERE a.item_id = i.id),
+                (SELECT max(at) FROM item_comment m WHERE m.item_id = i.id
+                    AND (m.author = 'user' OR m.author LIKE 'device:%'))
          FROM item i JOIN board_column c ON c.project_id = i.project_id AND c.key = i.column_key
          WHERE i.project_id = ?1 {filter}
          ORDER BY c.ord, i.rank"
@@ -380,6 +382,7 @@ pub(super) fn cards_in(
             version: r.get(13)?,
             ac_checked: r.get(14)?,
             ac_total: r.get(15)?,
+            owner_commented_at: r.get::<_, Option<String>>(16)?.map(parse_at),
         })
     };
     let cards = match arg {

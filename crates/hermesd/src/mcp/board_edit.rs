@@ -192,6 +192,11 @@ fn comment(app: &Arc<AppState>, me: &Me, req: c::ItemAddComment) -> anyhow::Resu
             let comment = app
                 .db
                 .add_item_comment(&req.id, &req.body, reply_to, &me.actor())?;
+            // A question for the owner: kept here, on the board's home, so
+            // their answer reaches the bot that asked (H-211).
+            if req.asks_owner == Some(true) {
+                app.db.add_card_question(&comment, &me.bot.id)?;
+            }
             let out = json!({ "comment": out(c::ItemComment::from(comment))? });
             Ok((out, req.id.clone()))
         },

@@ -260,6 +260,52 @@
   resize: vertical;
 }
 
+.drawer-replies {
+  margin: 4px 0 0 16px;
+  padding: 0 0 0 10px;
+  list-style: none;
+  border-left: 2px solid var(--border);
+}
+
+.drawer-reply {
+  margin-left: 6px;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-faint);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.drawer-reply:hover,
+.drawer-reply:focus-visible {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.drawer-replying {
+  align-self: stretch;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.drawer-sending {
+  opacity: 0.7;
+}
+
+.drawer-posted {
+  align-self: stretch;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.drawer-posted:empty {
+  display: none;
+}
+
 .drawer-error {
   align-self: stretch;
   margin: 0;

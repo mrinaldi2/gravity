@@ -100,15 +100,32 @@ async fn message_owner(app: &Arc<AppState>, bot_id: &str, args: &Value) -> anyho
 async fn ask_on_card(app: &Arc<AppState>, bot_id: &str, args: &Value) -> anyhow::Result<Value> {
     let bot = caller(app, bot_id)?;
     let asks = args["asks_owner"].as_bool().unwrap_or(false);
-    let mut args = args.clone();
-    if let Some(map) = args.as_object_mut() {
+    let mut plain = args.clone();
+    if let Some(map) = plain.as_object_mut() {
         map.remove("asks_owner");
     }
-    let mut result = comment(app, bot_id, &args).await?;
+    // The board's home keeps the question too (H-211), so the owner's answer
+    // reaches this bot; a home from before that refuses the argument and
+    // takes the plain comment.
+    let mut result = if asks {
+        let mut asked = plain.clone();
+        asked["asks_owner"] = json!(true);
+        match comment(app, bot_id, &asked).await {
+            Err(e) if e.to_string().contains("unknown argument 'asks_owner'") => {
+                comment(app, bot_id, &plain).await?
+            }
+            other => other?,
+        }
+    } else {
+        comment(app, bot_id, &plain).await?
+    };
     if asks {
-        let item_id = args["id"].as_str().unwrap_or_default();
-        let body = args["body"].as_str().unwrap_or_default();
+        let item_id = plain["id"].as_str().unwrap_or_default();
+        let body = plain["body"].as_str().unwrap_or_default();
         let question = owner_threads::ask_on_card(app, &bot, item_id, body)?;
+        if let Some(comment_id) = result["comment"]["id"].as_str() {
+            app.db.set_question_comment(&question.id, comment_id)?;
+        }
         result["owner_question"] = json!(question.id);
     }
     Ok(result)

@@ -9,7 +9,6 @@
 
 use std::sync::Arc;
 
-use bus::contract::board as c;
 use bus::contract::home::{
     AttentionDismissed, BotRef, MessageBrief, OwnerThread, OwnerThreadMarked, OwnerThreadPage,
     ThreadMessage,
@@ -19,13 +18,14 @@ use serde_json::json;
 
 use crate::app::AppState;
 use crate::attention::{cut, timestamp};
-use crate::board::model::ColumnCategory;
 use crate::db::{Asked, OwnerQuestion};
 use crate::decisions::{invalid, not_found};
 use crate::events::Push;
 
+mod cards;
 mod remote;
 
+pub use cards::card_changed;
 pub use remote::{get, read, receive_updated, serve, threads};
 
 /// The longest message a bot may send the owner (R2.2): long content goes
@@ -139,46 +139,13 @@ pub fn open_questions(
     let mut open = Vec::new();
     for q in app.db.open_owner_questions(project_id, bot_id)? {
         if let Some(item_id) = &q.item_id {
-            if card_answered(app, item_id, &q)? {
+            if cards::answered(app, item_id, &q)? {
                 continue;
             }
         }
         open.push(q);
     }
     Ok(open)
-}
-
-fn card_answered(app: &AppState, item_id: &str, q: &OwnerQuestion) -> anyhow::Result<bool> {
-    let db = &app.db;
-    if let Some(item) = db.board_read(|t| t.item(item_id))? {
-        let closed = db.board_columns(&q.project_id)?.iter().any(|col| {
-            col.key == item.column_key
-                && matches!(
-                    col.category,
-                    ColumnCategory::Done | ColumnCategory::Cancelled
-                )
-        });
-        return Ok(closed || db.owner_commented_since(item_id, q.created_at)?);
-    }
-    // A mirrored card: its comments live on the board's home, so only its
-    // closing is seen here.
-    let Some(board) = app.board_mirror.get(&q.project_id) else {
-        return Ok(false);
-    };
-    let snapshot = board.snapshot;
-    Ok(snapshot
-        .cards
-        .iter()
-        .find(|card| card.id == item_id)
-        .is_some_and(|card| {
-            snapshot.columns.iter().any(|col| {
-                col.key == card.column_key
-                    && matches!(
-                        col.category(),
-                        c::ColumnCategory::Done | c::ColumnCategory::Cancelled
-                    )
-            })
-        }))
 }
 
 /// `attention_dismiss` of an owner question here.
@@ -198,7 +165,11 @@ pub fn dismiss(app: &AppState, row_id: &str) -> anyhow::Result<AttentionDismisse
         .db
         .owner_question(question_id)?
         .ok_or_else(|| not_found(format!("no open owner question {row_id}")))?;
-    app.db.dismiss_owner_question(question_id)?;
+    if app.db.dismiss_owner_question(question_id)? {
+        if let Err(e) = cards::tell_dismissed(app, &question) {
+            tracing::warn!(question_id, error = %e, "couldn't tell the bot its question was dismissed");
+        }
+    }
     if let Some(bot) = app.db.get_bot(&question.bot_id)? {
         updated(app, &bot);
     }

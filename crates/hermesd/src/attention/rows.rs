@@ -302,7 +302,13 @@ fn owner_questions(app: &AppState, b: &mut Builder<'_>) -> anyhow::Result<()> {
             created_at: q.created_at,
             target: Some(target),
         };
-        b.push(part, weight(AttentionKind::OwnerQuestion), None);
+        let comment_id = match &q.item_id {
+            Some(_) => app.db.question_comment(&q.id)?,
+            None => None,
+        };
+        let row = b.push(part, weight(AttentionKind::OwnerQuestion), None);
+        // The comment that asked, so a reply can answer it (H-211).
+        row.question_comment_id = comment_id.unwrap_or_default();
     }
     Ok(())
 }

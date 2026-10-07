@@ -73,6 +73,9 @@ pub async fn fetch(app: &AppState, link: &ProjectLink) {
                 card: None,
                 from_column: None,
             });
+            drop(feed);
+            // Answered while this computer was away (H-211).
+            crate::owner_threads::card_changed(app, &link.project_id, None);
         }
         // The peer holds no board for it (any more).
         Err(PeerError::Refused { code, .. }) if code == "no_board" || code == "not_linked" => {
@@ -156,6 +159,9 @@ fn apply_card(app: &Arc<AppState>, link: &ProjectLink, kind: ChangeKind, frame: 
             card: Some(model),
             from_column: frame["from_column"].as_str().map(str::to_string),
         });
+        drop(feed);
+        // The owner may have answered a question asked here (H-211).
+        crate::owner_threads::card_changed(app, &link.project_id, Some(&item_id));
     }
 }
 

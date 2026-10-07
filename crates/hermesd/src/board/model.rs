@@ -197,6 +197,8 @@ pub struct ItemCard {
     pub ac_checked: u32,
     pub ac_total: u32,
     pub version: u64,
+    /// The owner's latest comment on it (H-211).
+    pub owner_commented_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

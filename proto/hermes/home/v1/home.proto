@@ -129,6 +129,7 @@ message AttentionRow {
   }
   uint32 relayed_count = 20;                // relayed_rulings only
   string priority = 21;                     // decision only: P0..P3
+  string question_comment_id = 22;          // owner_question on a card: the comment that asked (H-211)
 }
 
 message AttentionRows {
