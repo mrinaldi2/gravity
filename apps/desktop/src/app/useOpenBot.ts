@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { Selection } from "./selection";
 
 /** The ways to open a bot's page. */
@@ -16,9 +16,12 @@ export function useOpenBot(select: (selection: Selection) => void): OpenBot {
     },
     [select],
   );
+  // Each press is a new ask: the page is keyed on it (UX-034).
+  const presses = useRef(0);
   const openBotChat = useCallback(
     (botId: string): void => {
-      select({ kind: "bot", botId, tab: "chat" });
+      presses.current += 1;
+      select({ kind: "bot", botId, tab: "chat", press: presses.current });
     },
     [select],
   );

@@ -26,9 +26,16 @@ export type Selection =
   | { readonly kind: "home" }
   /**
    * A bot's page. `tab: "chat"` opens it on its Chat, the way back from the
-   * main chat (H-192); without it, the page opens on its first tab.
+   * main chat (H-192); without it, the page opens on its first tab. `press`
+   * counts those asks, so a second one lands on Chat even when the page is
+   * already open and the owner moved to another tab (UX-034).
    */
-  | { readonly kind: "bot"; readonly botId: string; readonly tab?: "chat" }
+  | {
+      readonly kind: "bot";
+      readonly botId: string;
+      readonly tab?: "chat";
+      readonly press?: number;
+    }
   /**
    * A project window. Without `tab` it reopens on the tab last used there,
    * which is the Dashboard the first time.

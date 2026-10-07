@@ -89,6 +89,33 @@ fn a_turn_that_wrote_to_the_owner_is_not_answered_twice() {
     assert_eq!(answer_of(&t).as_deref(), Some("Asked Architect."));
 }
 
+/// ARCH S4: a task or a bus message landing mid-turn may be what the final
+/// text answers, so that turn isn't posted. The owner's own chat isn't one.
+#[test]
+fn a_turn_a_task_reached_midway_is_not_posted() {
+    let incoming = |text: &str| ChatItem::Aside {
+        id: "q".into(),
+        kind: AsideKind::Incoming,
+        text: text.into(),
+    };
+    let t = turn(
+        owner(OwnerVia::Chat),
+        vec![
+            incoming("From Team Lead · task: fix H-1"),
+            text("a", "Fixed H-1."),
+        ],
+    );
+    assert_eq!(answer_of(&t), None);
+    let t = turn(
+        owner(OwnerVia::Chat),
+        vec![
+            incoming("From USER · chat: and the iMac?"),
+            text("a", "Both green."),
+        ],
+    );
+    assert_eq!(answer_of(&t).as_deref(), Some("Both green."));
+}
+
 #[test]
 fn the_body_is_redacted_and_cut_to_the_thread_limit() {
     let secret = "token ghp_abcdefghijklmnopqrstuvwxyz0123456789";

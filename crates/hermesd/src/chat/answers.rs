@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 
-use super::model::{ChatItem, ChatTurn, OwnerVia, Trigger};
+use super::model::{AsideKind, ChatItem, ChatTurn, OwnerVia, Trigger};
 use super::steps::OWNER;
 use crate::app::AppState;
 use crate::events::{Internal, Push};
@@ -27,6 +27,9 @@ const POLL: Duration = Duration::from_millis(250);
 const LOOKBACK: chrono::Duration = chrono::Duration::minutes(2);
 /// The clock slack between the hook and the transcript's own timestamp.
 const SLACK: chrono::Duration = chrono::Duration::seconds(5);
+/// How the owner's own chat reads when it lands mid-turn (`builder`'s
+/// incoming aside). `user` is a reserved bot name, so no bot can be `USER`.
+const OWNER_INCOMING: &str = "From USER · chat:";
 /// What replaces the rest of an answer longer than the thread allows.
 const CUT: &str = "\n\n… The rest is in Activity.";
 
@@ -88,7 +91,14 @@ pub fn capture(app: &AppState, bot_id: &str, done_at: DateTime<Utc>) -> anyhow::
         if !app.db.claim_owner_answer(&bot.id, &turn.id)? {
             continue;
         }
-        let (msg, _) = crate::owner_threads::message_owner(app, &bot, &body(&text), false)?;
+        let msg = match crate::owner_threads::message_owner(app, &bot, &body(&text), false) {
+            Ok((msg, _)) => msg,
+            Err(error) => {
+                // Not posted: let a later pass try again (ARCH S1).
+                app.db.release_owner_answer(&bot.id, &turn.id)?;
+                return Err(error);
+            }
+        };
         app.db.set_owner_answer_num(&bot.id, &turn.id, msg.num)?;
         posted.push(ChatTurn {
             answer_num: Some(msg.num),
@@ -105,7 +115,10 @@ pub fn capture(app: &AppState, bot_id: &str, done_at: DateTime<Utc>) -> anyhow::
 }
 
 /// The turn's final text, when it is an answer the thread lacks: the owner
-/// started the turn from chat and the bot didn't write to the owner in it.
+/// started the turn from chat, the bot didn't write to the owner in it, and
+/// nothing but the owner's own chat reached it meanwhile. A task or another
+/// bot's message landing mid-turn may be what the final text answers, so
+/// that turn isn't posted (ARCH S4).
 pub fn answer_of(turn: &ChatTurn) -> Option<String> {
     if !matches!(
         turn.trigger,
@@ -116,11 +129,16 @@ pub fn answer_of(turn: &ChatTurn) -> Option<String> {
     ) {
         return None;
     }
-    let wrote = turn
-        .items
-        .iter()
-        .any(|item| matches!(item, ChatItem::Sent { msg_kind, .. } if msg_kind == OWNER));
-    if wrote {
+    let wrote_or_interrupted = turn.items.iter().any(|item| match item {
+        ChatItem::Sent { msg_kind, .. } => msg_kind == OWNER,
+        ChatItem::Aside {
+            kind: AsideKind::Incoming,
+            text,
+            ..
+        } => !text.starts_with(OWNER_INCOMING),
+        _ => false,
+    });
+    if wrote_or_interrupted {
         return None;
     }
     turn.items.iter().rev().find_map(|item| match item {

@@ -19,6 +19,16 @@ impl Db {
         Ok(added == 1)
     }
 
+    /// Gives a claim back when its post failed, so a later pass retries.
+    pub fn release_owner_answer(&self, bot_id: &str, turn_id: &str) -> anyhow::Result<()> {
+        self.lock().execute(
+            "DELETE FROM owner_answer
+              WHERE bot_id = ?1 AND turn_id = ?2 AND message_num IS NULL",
+            params![bot_id, turn_id],
+        )?;
+        Ok(())
+    }
+
     /// The thread message the turn's answer became.
     pub fn set_owner_answer_num(
         &self,

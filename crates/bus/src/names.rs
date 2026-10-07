@@ -16,7 +16,9 @@ pub const MAX_NAME_CHARS: usize = 48;
 
 /// Names that would be ambiguous as message addresses. `all` and `everyone`
 /// read as broadcasts, and the rest collide with sender kinds in rendered
-/// envelopes (`[msg #3 from user]`).
+/// envelopes (`[msg #3 from user]`). `user` also keeps `From USER · chat`
+/// the owner's alone in a transcript, which the answer capture relies on
+/// (H-192, ARCH S5).
 pub const RESERVED_NAMES: &[&str] = &["all", "everyone", "user", "system", "me", "bot", "routine"];
 
 /// Validate a bot name, returning it trimmed.
