@@ -122,6 +122,35 @@ pub(super) fn serve_metrics(
     Ok(json!({ "metrics": crate::ws::home_metrics(app, &link.project_id, days)? }))
 }
 
+/// `dashboard_needs_you {project_id}`: the dashboard's Needs you as this home
+/// has it, in the peer's ids (H-112). Rulings stay here, so no package can
+/// be ruled from there. With `all_kinds`, the kinds the projects home added
+/// too (H-128).
+///
+/// Deprecated (H-178, ARCH-R70): this daemon no longer asks it; its own
+/// dashboard reads every linked computer's part as the projects home does.
+/// Still served for one release so a linked computer on 0.17.2 or earlier
+/// keeps the home's rows. Removed by H-185 (0.18.0).
+pub(super) fn serve_needs_you(
+    app: &Arc<AppState>,
+    peer: &Peer,
+    frame: &Value,
+) -> anyhow::Result<Value> {
+    let link = home_link(app, peer, frame)?;
+    let since = chrono::Utc::now() - chrono::Duration::days(7);
+    let all_kinds = frame["all_kinds"].as_bool().unwrap_or(false);
+    let needs = crate::attention::needs_you(app, &link.project_id, since, all_kinds, &|release| {
+        let mut v = release.to_json();
+        v["can_rule"] = json!(false);
+        Ok(v)
+    })?;
+    let mut answer = json!({
+        "rows": needs.rows, "wip_overrides": needs.wip_overrides, "count": needs.count,
+    });
+    board_ids::json(&mut answer, &|id| board_ids::to_peer(&app.db, &peer.id, id));
+    Ok(answer)
+}
+
 /// `board_snapshot {project_id}`: the whole board, in the peer's ids.
 pub(super) fn serve_snapshot(
     app: &Arc<AppState>,

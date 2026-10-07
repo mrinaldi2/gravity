@@ -952,7 +952,9 @@ A bot proposes an exact command for the owner to run; only the owner runs it.
   - `needs_you_count` is the projects home's count for the project: this computer's rows plus every linked computer's.
   - When a linked computer isn't answering, its last good rows are still listed, and `needs_you_note` names it ("Can't reach … right now, so this may not be everything that needs you.").
   - `wip_overrides` are this computer's only.
-  - The peer request `dashboard_needs_you` is gone. An older peer that still sends it gets an "unknown request" refusal and shows its own note.
+  - **Deprecated** (ARCH-R70): the peer request `dashboard_needs_you {project_id, all_kinds}` (the caller's ids). A daemon no longer sends it.
+    - The board's home still answers it for one release, so a linked computer on 0.17.2 or earlier keeps the home's rows. The answer is `{rows, wip_overrides, count}` in the caller's ids.
+    - It is removed in 0.18.0 (H-185).
 - **`board`:** null without a board. Otherwise:
   - `columns`: each visible column with its `count`, `wip_limit` and `wip_scope`.
   - `blocked` and `stale`: counts of open items.

@@ -192,3 +192,38 @@ async fn a_prompt_on_a_linked_computer_shows_on_the_home_and_the_dashboard() {
     let d = dashboard_when(&mut b.p.mac_client, &mac_app, gone).await;
     assert!(gone(&d), "{d}");
 }
+
+/// ARCH-R70 M1: a linked computer on 0.17.2 or earlier still asks the home
+/// `dashboard_needs_you`; the home answers it for one release (H-185 removes
+/// it), with its rows in the asking computer's ids.
+#[tokio::test]
+async fn a_0_17_2_peer_still_gets_the_homes_rows() {
+    let b = board().await;
+    let lead = bot_named(&b.p.mac, &b.mac_app, "lead").expect("lead");
+    let token = b.p.mac.app.secrets.bot_token(&lead.id).expect("token");
+    let mut mac_lead = McpClient::new(&b.p.mac, &token);
+    mac_lead
+        .call(
+            "raise_decision",
+            json!({"title": "Freeze on Friday?", "body": "Yes or no."}),
+        )
+        .await;
+
+    // The PC asks as 0.17.2 did: its own project id.
+    let frame = json!({"type": "dashboard_needs_you", "project_id": b.win_app, "all_kinds": false});
+    let answer =
+        b.p.win
+            .app
+            .peers
+            .request(&b.p.win_peer_id, frame)
+            .await
+            .expect("still served");
+    let rows = answer["rows"].as_array().expect("rows");
+    assert!(
+        rows.iter()
+            .any(|r| r["kind"] == "decision" && r["title"] == "Freeze on Friday?"),
+        "{answer}"
+    );
+    assert!(answer["count"].as_u64().is_some_and(|n| n >= 1), "{answer}");
+    assert!(answer["wip_overrides"].is_array(), "{answer}");
+}
