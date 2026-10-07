@@ -13,11 +13,30 @@ use super::Conn;
 
 /// Requests that take a device or a ticket on top of their capability.
 /// `input` carries paste too: a paste is bytes typed into the terminal.
-const OWNER_DRIVEN: &[&str] = &["input", "answer_permission"];
+/// `browser_input` drives a bot's own browser, which keeps its logins, so it
+/// is the owner's hands as much as typing is (CE-030).
+const OWNER_DRIVEN: &[&str] = &["input", "answer_permission", "browser_input"];
+
+/// Requests that mint or remove the credentials the rule above trusts: a
+/// paired device, and a linked computer whose frames say the owner proved
+/// themselves there. From the owner token they would let a bot make itself
+/// the owner (CE-030 N1), so they take a device or a ticket, and `approve`
+/// besides (`ws::dispatch::APPROVE_ONLY`), so a phone paired with `control`
+/// can't pair a broader one.
+pub(super) const CREDENTIALS: &[&str] = &[
+    "create_device",
+    "revoke_device",
+    "create_peer_invite",
+    "add_peer",
+    "revoke_peer",
+    "link_peer_bot",
+    "link_project",
+    "unlink_project",
+];
 
 /// Whether `kind` drives a bot as the owner.
 pub(super) fn owner_driven(kind: &str) -> bool {
-    OWNER_DRIVEN.contains(&kind)
+    OWNER_DRIVEN.contains(&kind) || CREDENTIALS.contains(&kind)
 }
 
 impl Conn {
@@ -42,6 +61,10 @@ mod tests {
     fn terminal_input_and_permission_answers_are_owner_driven() {
         assert!(owner_driven("input"));
         assert!(owner_driven("answer_permission"));
+        assert!(owner_driven("browser_input"));
+        for kind in CREDENTIALS {
+            assert!(owner_driven(kind), "{kind}");
+        }
         assert!(!owner_driven("send_user_message"));
         assert!(!owner_driven("resize"));
         assert!(!owner_driven("attach"));

@@ -102,6 +102,16 @@ const APPROVE_ONLY: &[&str] = &[
     "owner_action_reject",
     // Closing an owner question for the owner (H-128 R2.2).
     "attention_dismiss",
+    // Pairing a device or linking a computer mints an owner credential
+    // (CE-030 N1); see `owner_auth::CREDENTIALS`.
+    "create_device",
+    "revoke_device",
+    "create_peer_invite",
+    "add_peer",
+    "revoke_peer",
+    "link_peer_bot",
+    "link_project",
+    "unlink_project",
 ];
 
 /// Capability required for each request type.
@@ -180,9 +190,12 @@ impl Conn {
             );
             return;
         }
-        // Typing into a bot or answering its prompt is the owner driving it:
-        // never from the owner token a bot can read (H-195 D5, CE-029 M2).
-        if super::owner_auth::owner_driven(kind) && self.owner_proof().is_none() {
+        // Typing into a bot or answering its prompt is the owner driving it,
+        // and a ruling is the owner's word: never from the owner token a bot
+        // can read (H-195 D5, CE-029 M2, CE-030 N1). That token holds no
+        // `approve` either; this is the second lock on the same door.
+        let owners_only = super::owner_auth::owner_driven(kind) || cap == Capability::Approve;
+        if owners_only && self.owner_proof().is_none() {
             self.reply_err(
                 &req_id,
                 "forbidden",
