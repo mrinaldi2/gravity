@@ -186,3 +186,86 @@ fn create_new_never_follows_a_dangling_link() {
     assert!(!create_new(&base, Path::new("CLAUDE.md"), b"y").unwrap());
     assert!(write(&base, Path::new("../escape"), b"x").is_err());
 }
+
+/// H-184 (CE-026 F1): a bot flipping a folder between a plain one and a link
+/// to the owner's folder while the daemon writes below it. Every write lands
+/// in the plain folder or is refused; none ever reaches the link's target.
+/// On Windows the old walk checked by path and then renamed by path, so a
+/// junction swapped in between was followed.
+#[test]
+fn a_folder_swapped_for_a_link_mid_write_is_never_followed() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Arc;
+    for (kind, link) in folder_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("bot");
+        let owner = dir.path().join("owner");
+        std::fs::create_dir_all(base.join("sub")).unwrap();
+        std::fs::create_dir_all(&owner).unwrap();
+        if !link(&owner, &base.join("sub.link")) {
+            continue;
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        let swaps = Arc::new(AtomicUsize::new(0));
+        let swapper = {
+            let (base, stop, swaps) = (base.clone(), stop.clone(), swaps.clone());
+            std::thread::spawn(move || {
+                let at = |name: &str| base.join(name);
+                while !stop.load(Ordering::SeqCst) {
+                    // Each step may fail while the daemon has a part open.
+                    if std::fs::rename(at("sub"), at("sub.real")).is_err() {
+                        continue;
+                    }
+                    let _ = std::fs::rename(at("sub.link"), at("sub"));
+                    let _ = std::fs::rename(at("sub"), at("sub.link"));
+                    while std::fs::rename(at("sub.real"), at("sub")).is_err() {
+                        std::thread::yield_now();
+                    }
+                    swaps.fetch_add(1, Ordering::SeqCst);
+                }
+            })
+        };
+        let rel = Path::new("sub/settings.json");
+        for _ in 0..400 {
+            if let Err(error) = write(&base, rel, b"bot") {
+                // Refused at the link, or the folder briefly not there.
+                let gone = error.chain().any(|e| {
+                    e.downcast_ref::<std::io::Error>()
+                        .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
+                });
+                assert!(
+                    gone || error.downcast_ref::<LinkRefused>().is_some(),
+                    "{kind}: {error:#}"
+                );
+            }
+        }
+        stop.store(true, Ordering::SeqCst);
+        swapper.join().unwrap();
+        assert!(
+            swaps.load(Ordering::SeqCst) > 0,
+            "{kind}: the folder was swapped"
+        );
+        assert_eq!(
+            std::fs::read_dir(&owner).unwrap().count(),
+            0,
+            "{kind}: nothing written through the link"
+        );
+    }
+}
+
+/// H-184 (CE-026 F2): a file in the bot's folder that is a hard link to a
+/// file elsewhere is not read back, so its content isn't copied around.
+#[test]
+fn a_hard_link_to_a_file_elsewhere_is_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("bot");
+    std::fs::create_dir_all(&base).unwrap();
+    let owner = dir.path().join("owner.json");
+    std::fs::write(&owner, "owner").unwrap();
+    std::fs::hard_link(&owner, base.join("mcp.json")).unwrap();
+    assert_eq!(read(&base, Path::new("mcp.json")), None);
+    // Written by the daemon, the name gets a file of its own again.
+    write(&base, Path::new("mcp.json"), b"bot").unwrap();
+    assert_eq!(read(&base, Path::new("mcp.json")).as_deref(), Some("bot"));
+    assert_eq!(std::fs::read_to_string(&owner).unwrap(), "owner");
+}
