@@ -9,72 +9,12 @@ mod common;
 
 use std::io::ErrorKind;
 use std::net::TcpListener;
-use std::path::PathBuf;
 
-use bus::PermissionExtra;
-use common::releases::{releases_on, Releases};
+use common::release_phone::{ours, published, set_status};
+use common::releases::Releases;
 use common::WsClient;
 use hermesd::board::release::model::ReleaseStatus;
 use serde_json::{json, Value};
-
-/// A port nothing listens on: the build site is off.
-const SITE: &str = "https://127.0.0.1:1/releases";
-
-fn set_status(d: &common::TestDaemon, id: &str, status: ReleaseStatus) {
-    d.app
-        .db
-        .board_tx(|t| t.set_release_status(id, status))
-        .unwrap();
-}
-
-/// A release with an iPhone build DevOps published into the served folder:
-/// its id, the served folder and the build's sha256.
-async fn published() -> (Releases, String, PathBuf, String) {
-    let d = common::spawn_daemon_with(|cfg| {
-        cfg.releases.dir = Some(cfg.home.join("releases"));
-        cfg.releases.base_url = Some(SITE.into());
-        cfg.releases.source_roots = vec![cfg.home.join("builds").display().to_string()];
-    })
-    .await;
-    let home = d.app.cfg.home.clone();
-    let mut r = releases_on(d, 1).await;
-    let builds = home.join("builds");
-    std::fs::create_dir_all(&builds).unwrap();
-    let ipa = builds.join("TheHermes.ipa");
-    std::fs::write(&ipa, "ipa bytes").unwrap();
-    r.pair
-        .d
-        .app
-        .db
-        .set_bot_permission_extras(&r.pair.ids[1], &[PermissionExtra::Publish])
-        .unwrap();
-    let item = r.items[0].clone();
-    let created = r.bots[1]
-        .call(
-            "release_create",
-            json!({"name": "R-1", "display_version": "0.6.1", "items": [item]}),
-        )
-        .await;
-    let id = created["release"]["id"].as_str().unwrap().to_string();
-    let done = r.bots[1]
-        .call(
-            "release_publish",
-            json!({"release_id": id, "file": ipa.display().to_string(),
-                   "version": "12", "bundle_id": "com.example.hermes"}),
-        )
-        .await;
-    let sha = done["published"]["sha256"].as_str().unwrap().to_string();
-    let served = std::fs::canonicalize(home.join("releases").join(&id).join("ios")).unwrap();
-    (r, id, served, sha)
-}
-
-/// The page and install links this daemon derives for the release.
-fn ours(id: &str) -> (String, String) {
-    (
-        format!("{SITE}/{id}/ios/index.html"),
-        format!("itms-services://?action=download-manifest&url={SITE}/{id}/ios/manifest.plist"),
-    )
-}
 
 #[tokio::test]
 async fn send_to_phone_reaches_only_that_device_and_waits_there() {
@@ -273,52 +213,6 @@ async fn a_build_row_never_chooses_the_link() {
         assert_eq!(refused["code"], "conflict", "{artifact}: {refused}");
         let waiting = waiting_offer(&r, &device_id);
         assert!(!waiting.contains(&evil), "{waiting}");
-    }
-}
-
-/// The served IPA swapped for other bytes of the same size, its old mtime
-/// set back: the next `release_install` hashes it again and gives no link,
-/// whether it was overwritten in place or renamed over (CE review of H-241,
-/// M1).
-#[tokio::test]
-async fn a_same_size_swap_with_the_old_mtime_loses_the_link() {
-    let (r, id, served, _) = published().await;
-    let (page_url, _) = ours(&id);
-    set_status(&r.pair.d, &id, ReleaseStatus::AwaitingOwner);
-    let ipa = served.join("TheHermes.ipa");
-    let mut owner = WsClient::connect(&r.pair.d).await;
-    let info = json!({"type": "release_install", "release_id": id});
-    let set_mtime = |path: &PathBuf, to| {
-        std::fs::File::options()
-            .write(true)
-            .open(path)
-            .unwrap()
-            .set_modified(to)
-            .unwrap()
-    };
-    let original = std::fs::read(&ipa).unwrap();
-    let mut other = original.clone();
-    other[0] ^= 0xff;
-    let swapped = served.join("swap.ipa");
-    let swaps: [&dyn Fn(); 2] = [&|| std::fs::write(&ipa, &other).unwrap(), &|| {
-        std::fs::write(&swapped, &other).unwrap();
-        std::fs::rename(&swapped, &ipa).unwrap();
-    }];
-    for swap in swaps {
-        std::fs::write(&ipa, &original).unwrap();
-        let got = owner.request(info.clone()).await;
-        assert_eq!(got["install"]["page_url"], page_url.as_str(), "{got}");
-        let mtime = std::fs::metadata(&ipa).unwrap().modified().unwrap();
-        swap();
-        set_mtime(&ipa, mtime);
-        let meta = std::fs::metadata(&ipa).unwrap();
-        assert_eq!(
-            (meta.len(), meta.modified().unwrap()),
-            (original.len() as u64, mtime)
-        );
-        let got = owner.request(info.clone()).await;
-        assert_eq!(got["install"]["page_url"], Value::Null, "{got}");
-        assert_eq!(got["install"]["install_url"], Value::Null, "{got}");
     }
 }
 
