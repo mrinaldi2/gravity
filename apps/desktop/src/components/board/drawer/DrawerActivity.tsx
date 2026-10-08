@@ -9,6 +9,7 @@ import type { ItemComment, ItemEvent } from "../../../protocol/gen/hermes/board/
 import { ItemEventKind } from "../../../protocol/gen/hermes/board/v1/board_pb";
 import type { ItemDetail } from "../../../protocol/gen/hermes/board/v1/requests_pb";
 import { sendOnCmdEnter } from "../../../util";
+import LinkedText from "../../cards/LinkedText";
 import { eventLine, when } from "./drawerText";
 
 /** How long "✓ Posted" stays. */
@@ -96,7 +97,7 @@ function CommentLine(props: {
   return (
     <li className={who(comment.author) === "You" ? "drawer-owner" : ""}>
       <span className="drawer-dim">{when(comment.at)}</span> <b>{who(comment.author)}</b>:{" "}
-      {comment.body}
+      <LinkedText text={comment.body} />
       {onReply === undefined ? null : (
         <button
           type="button"

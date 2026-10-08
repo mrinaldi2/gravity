@@ -80,7 +80,7 @@ describe("DashboardView", () => {
       expect.stringContaining("0.16.0 is ready for you to test · 2 items"),
       expect.stringContaining("Push notifications"),
       expect.stringContaining("Confirm 2 rulings Architect recorded for you"),
-      expect.stringContaining("P0 · H-021 Pairing crash on iOS 18.1"),
+      expect.stringContaining("P0 · H-021 · Pairing crash on iOS 18.1"),
     ]);
     expect(rows[3]).toHaveTextContent("Doing · iOS Dev");
     expect(rows[1]).toHaveTextContent(/Raised by Architect · Answer by /);
@@ -104,7 +104,7 @@ describe("DashboardView", () => {
     const folded = within(needs).getByText("1 WIP override this week");
     expect(folded.closest("details")).not.toHaveAttribute("open");
     expect(folded.closest("details")).toHaveTextContent(
-      "Review · H-030 Hotfix the installer — WIP override: hotfix for 0.15.2 — Desktop Dev",
+      "Review · H-030 · Hotfix the installer — WIP override: hotfix for 0.15.2 — Desktop Dev",
     );
   });
 

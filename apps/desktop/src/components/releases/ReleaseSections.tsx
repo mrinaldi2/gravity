@@ -4,6 +4,8 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
 import type { Release } from "../../protocol/releases";
+import CardLink from "../cards/CardLink";
+import LinkedText from "../cards/LinkedText";
 import type { BotName, StatusLabel } from "./labels";
 import { rolloutLabel, targetMachines, testLabel } from "./labels";
 
@@ -76,7 +78,9 @@ export function ItemsList({
         const decided = item.verdict !== "pending" ? item.verdict : null;
         return (
           <li className="release-row" key={item.item_id}>
-            <span className="mono">{item.item_id}</span>
+            <span className="mono">
+              <CardLink id={item.item_id} />
+            </span>
             <span className="release-item-title">{titles.get(item.item_id) ?? ""}</span>
             {decided ? <Outcome verdict={decided} note={item.owner_note} /> : null}
             {editable ? (
@@ -145,7 +149,9 @@ function Outcome({
 
 export function Changelog({ release }: { readonly release: Release }): ReactElement {
   return release.changelog.trim() ? (
-    <div className="release-changelog">{release.changelog}</div>
+    <div className="release-changelog">
+      <LinkedText text={release.changelog} />
+    </div>
   ) : (
     <p className="release-hint">DevOps hasn't written a changelog for this package.</p>
   );
@@ -173,7 +179,12 @@ export function HowToTest({
         <section key={`${entry.platform}-${entry.item_id ?? i}`}>
           <h4>
             {entry.platform}
-            {entry.item_id ? ` · ${entry.item_id} ${titles.get(entry.item_id) ?? ""}` : ""}
+            {entry.item_id ? (
+              <>
+                {" · "}
+                <CardLink id={entry.item_id} /> {titles.get(entry.item_id) ?? ""}
+              </>
+            ) : null}
           </h4>
           <ol>
             {entry.steps.map((step, j) => {
@@ -192,7 +203,7 @@ export function HowToTest({
                         setTried(next);
                       }}
                     />{" "}
-                    {step}
+                    <LinkedText text={step} />
                   </label>
                 </li>
               );

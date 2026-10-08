@@ -60,7 +60,7 @@ describe("FlowWidget", () => {
     expect(within(wip).getAllByRole("listitem")).toHaveLength(7);
     expect(flow()).toHaveTextContent("In progress each day");
     expect(flow()).toHaveTextContent("Now 3 · peak 4 · this week");
-    await user.click(screen.getByRole("button", { name: /H-014 Pairing over Tailscale/ }));
+    await user.click(screen.getByRole("button", { name: /Pairing over Tailscale/ }));
     expect(onBoard).toHaveBeenCalled();
     expect(flow()).toHaveTextContent("REVIEW 3.1d");
   });

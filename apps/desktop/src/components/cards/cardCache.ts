@@ -1,0 +1,123 @@
+// The card lookups behind the links (UX-035 §3): the ids asked for in one
+// tick go in `item_cards_get` requests of up to 200 each, an answer is kept
+// for 60 s, and a board push for a card marks its copy stale so the next
+// hover reads it again.
+
+import type { DaemonApi } from "../../protocol/api";
+import type { ItemCardEntry } from "../../protocol/itemCards";
+
+/** How long an answer is shown without asking again. */
+const FRESH_MS = 60_000;
+/** The most ids one `item_cards_get` takes (the service's MAX_IDS). */
+export const BATCH = 200;
+
+export interface Cached {
+  readonly entry: ItemCardEntry;
+  /** When it was answered (ms). */
+  readonly at: number;
+}
+
+export class CardCache {
+  private readonly entries = new Map<string, Cached>();
+  /** Every answer seen, for "Last seen as" once a computer is offline. */
+  private readonly titles = new Map<string, string>();
+  private readonly pending = new Set<string>();
+  private readonly inflight = new Set<string>();
+  private readonly listeners = new Set<() => void>();
+  private scheduled = false;
+  private version = 0;
+
+  constructor(
+    private readonly api: DaemonApi,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  /** Whether the service can look cards up at all. */
+  get supported(): boolean {
+    return this.api.capabilities.includes("item_cards");
+  }
+
+  get(id: string): Cached | undefined {
+    return this.entries.get(id);
+  }
+
+  /** The last title seen for `id`, from any earlier answer. */
+  lastTitle(id: string): string | undefined {
+    return this.titles.get(id);
+  }
+
+  /** Asks for `id` unless a fresh answer or a request is already there. */
+  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
+  want(id: string): void {
+    const cached = this.entries.get(id);
+    const fresh = cached !== undefined && this.now() - cached.at < FRESH_MS;
+    if (fresh || this.inflight.has(id) || !this.supported) {
+      return;
+    }
+    this.pending.add(id);
+    if (!this.scheduled) {
+      this.scheduled = true;
+      queueMicrotask(() => this.flush());
+    }
+  }
+
+  /** Marks `id`'s copy stale: the card changed, so the next hover asks again. */
+  invalidate(id: string): void {
+    const cached = this.entries.get(id);
+    if (cached !== undefined) {
+      this.entries.set(id, { ...cached, at: Number.NEGATIVE_INFINITY });
+    }
+  }
+
+  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  /** Changes on every answer, for `useSyncExternalStore`. */
+  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
+  snapshot = (): number => this.version;
+
+  private flush(): void {
+    this.scheduled = false;
+    const ids = [...this.pending];
+    this.pending.clear();
+    // The service answers at most BATCH ids a request (S2).
+    for (let at = 0; at < ids.length; at += BATCH) {
+      void this.ask(ids.slice(at, at + BATCH));
+    }
+  }
+
+  private async ask(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      this.inflight.add(id);
+    }
+    try {
+      const reply = await this.api.request({ type: "item_cards_get", ids }, "item_cards");
+      const at = this.now();
+      for (const entry of reply.cards) {
+        this.entries.set(entry.id, { entry, at });
+        if (entry.card?.title) {
+          this.titles.set(entry.id, entry.card.title);
+        }
+      }
+    } catch {
+      // Unanswered: the link says so after its wait, and the next hover asks again.
+    } finally {
+      for (const id of ids) {
+        this.inflight.delete(id);
+      }
+      this.emit();
+    }
+  }
+
+  private emit(): void {
+    this.version += 1;
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { SAFE_LINKS } from "../control/Markdown";
+import { useCardMarkdown } from "../cards/cardMarkdown";
 import CodeBlock from "./CodeBlock";
 
 interface ChatMarkdownProps {
@@ -37,9 +38,16 @@ const COMPONENTS = {
 };
 
 export default function ChatMarkdown({ children }: ChatMarkdownProps): ReactElement {
+  const cards = useCardMarkdown(SAFE_LINKS.a);
   return (
     <div className="markdown chat-markdown">
-      <ReactMarkdown components={COMPONENTS}>{children}</ReactMarkdown>
+      <ReactMarkdown
+        components={{ ...COMPONENTS, a: cards.a }}
+        remarkPlugins={cards.remarkPlugins}
+        urlTransform={cards.urlTransform}
+      >
+        {children}
+      </ReactMarkdown>
     </div>
   );
 }

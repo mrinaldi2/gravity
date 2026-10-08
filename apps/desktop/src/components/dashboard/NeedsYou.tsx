@@ -10,6 +10,8 @@ import { useCallback, useId, useState } from "react";
 import type { MouseEvent, ReactElement } from "react";
 import type { NeedsYou as Row, WipOverride } from "../../protocol/dashboard";
 import type { Release } from "../../protocol/releases";
+import CardLink from "../cards/CardLink";
+import LinkedText from "../cards/LinkedText";
 import { plural, releaseTitle, testLabel } from "../releases/labels";
 import { names, when } from "./needsYouText";
 import RelayedDialog from "./RelayedDialog";
@@ -111,8 +113,12 @@ function RowView(props: RowViewProps): ReactElement {
         {props.glyph}
       </span>
       <div className="dash-row-text">
-        <div className="dash-row-title">{props.title}</div>
-        <div className="dash-row-meta">{props.meta}</div>
+        <div className="dash-row-title">
+          {typeof props.title === "string" ? <LinkedText text={props.title} /> : props.title}
+        </div>
+        <div className="dash-row-meta">
+          <LinkedText text={props.meta} />
+        </div>
       </div>
       {away ? (
         <span id={there} className="dash-elsewhere">
@@ -198,7 +204,7 @@ function p0Row(r: Extract<Shown, { readonly kind: "p0" }>, props: NeedsYouProps)
     tone: "bad",
     title: (
       <>
-        P0 · <span className="mono">{r.id}</span> {r.title}
+        P0 · <CardLink id={r.id} /> · {r.title}
       </>
     ),
     meta: [
@@ -289,8 +295,8 @@ function Overrides(props: {
         {props.overrides.map((o) => (
           <li key={`${o.id}-${o.at}`}>
             <span>
-              {props.columnName(o.column_key)} · <span className="mono">{o.id}</span> {o.title} —{" "}
-              {o.note} — {actorName(o.actor, props.botName)} · {when(o.at)}
+              {props.columnName(o.column_key)} · <CardLink id={o.id} /> · {o.title} —{" "}
+              <LinkedText text={o.note} /> — {actorName(o.actor, props.botName)} · {when(o.at)}
             </span>
             {/* Each override opens its item, as the P0 row does (UX-016 follow-up 2). */}
             <button

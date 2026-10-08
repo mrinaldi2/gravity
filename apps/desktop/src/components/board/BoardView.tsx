@@ -24,6 +24,7 @@ import { MoveDialog, MoveMenu, RefusalPopover } from "./MovePopovers";
 import { useBoard } from "./useBoard";
 import type { Anchor } from "./useBoardMoves";
 import { useBoardMoves } from "./useBoardMoves";
+import { useOpenedItem } from "./useOpenedItem";
 import { wipSummary } from "./wip";
 
 interface BoardViewProps {
@@ -34,6 +35,8 @@ interface BoardViewProps {
   readonly connected: boolean;
   readonly canControl: boolean;
   readonly addToast: AddToast;
+  /** The card whose drawer opens with the board ("Open on the board", UX-035 §4). */
+  readonly openItem?: string;
 }
 
 function Notice({
@@ -231,7 +234,7 @@ function Board(props: BoardProps): ReactElement {
   };
 
   const canMove = canControl ? moves.openMenu : null;
-  const [opened, setOpened] = useState<string | null>(null);
+  const [opened, setOpened] = useOpenedItem(props.openItem);
   // The owner's call, on the board's home (H-099).
   const setLimit =
     (column: BoardColumn) =>

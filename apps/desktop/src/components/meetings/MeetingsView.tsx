@@ -7,6 +7,7 @@ import type { DaemonApi } from "../../protocol/api";
 import type { Bot, Project } from "../../protocol/entities";
 import type { MeetingDetail, MeetingSummary } from "../../protocol/meetings";
 import { OWNER } from "../../protocol/meetings";
+import LinkedText from "../cards/LinkedText";
 import { when } from "../dashboard/needsYouText";
 import { Widget } from "../dashboard/Widgets";
 import { minutesTitle, useMeetings } from "./useMeetings";
@@ -61,13 +62,15 @@ function Minutes(props: {
       ) : (
         <blockquote className="home-quote meeting-summary">
           <b>Summary ({nameOf(bots, meeting.facilitator)}): </b>
-          {meeting.summary}
+          <LinkedText text={meeting.summary} />
         </blockquote>
       )}
       {sections.map(([section, text]) => (
         <section key={section} className="meeting-section">
           <h3>{sentenceCase(section)}</h3>
-          <p>{text}</p>
+          <p>
+            <LinkedText text={text} />
+          </p>
         </section>
       ))}
       {actions.length === 0 ? null : (
@@ -80,7 +83,9 @@ function Minutes(props: {
                   {a.status === "done" ? "☑" : a.status === "dropped" ? "⊘" : "☐"}
                 </span>
                 <span className="dash-row-text">
-                  <span className="dash-row-title">{a.text}</span>
+                  <span className="dash-row-title">
+                    <LinkedText text={a.text} />
+                  </span>
                   <span className="dash-row-meta">
                     {nameOf(bots, a.owner)}
                     {a.due_at === null ? "" : ` · due ${when(a.due_at)}`}

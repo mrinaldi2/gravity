@@ -45,6 +45,8 @@ pub const CAPABILITIES: &[&str] = &[
     "permission_profiles",
     // The projects home (H-128): `projects_overview`, `attention_rows`.
     "projects_overview",
+    // Card ids as links (H-203): `item_cards_get`, `item_prefix` on projects.
+    "item_cards",
     // Owner threads and pins (H-128 D6, D7): `owner_threads`,
     // `owner_thread_get`, `owner_thread_read`, `project_pin`.
     "owner_threads",

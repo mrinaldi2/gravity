@@ -15,11 +15,24 @@ export function DrawerHeader(props: {
   readonly item: Item | undefined;
   readonly onMove?: (anchor: Anchor) => void;
   readonly onClose: () => void;
+  /** The card shown before this one, when the drawer has one (UX-035 §4). */
+  readonly back?: { readonly id: string; readonly onBack: () => void };
 }): ReactElement {
   const type = props.item ? typeLabel(props.item.type) : null;
   const move = props.onMove;
+  const back = props.back;
   return (
     <header className="drawer-head">
+      {back ? (
+        <button
+          type="button"
+          className="btn btn-small drawer-back"
+          aria-label={`Back to ${back.id}`}
+          onClick={back.onBack}
+        >
+          ‹ Back
+        </button>
+      ) : null}
       <span className="drawer-type">
         {type ? `${type.glyph} ${type.word}` : ""} · <span className="mono">{props.itemId}</span>
       </span>

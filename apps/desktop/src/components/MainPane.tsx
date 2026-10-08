@@ -121,6 +121,7 @@ export default function MainPane(props: MainPaneProps): ReactElement {
         onBack={() => {
           daemon.select({ kind: "project", projectId: bot.project_id, tab: "team" });
         }}
+        onTabShown={(tab) => daemon.note({ ...selection, tab })}
       />
     );
   }

@@ -20,6 +20,7 @@ import type {
 } from "./agents";
 import type { DashboardReply } from "./dashboard";
 import type { HomePush, HomeReply } from "./home";
+import type { ItemCardsReply } from "./itemCards";
 import type { MeetingReply } from "./meetings";
 import type { OwnerAction, OwnerActionReply } from "./ownerActions";
 import type { Quiesce, QuiesceReply } from "./quiesce";
@@ -65,6 +66,7 @@ interface ReplyBase {
 export type ServerReply =
   | (ReplyBase & ReleaseReply)
   | (ReplyBase & DashboardReply)
+  | (ReplyBase & ItemCardsReply)
   | (ReplyBase & MeetingReply)
   | (ReplyBase & QuiesceReply)
   | (ReplyBase & OwnerActionReply)

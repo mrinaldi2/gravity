@@ -11,6 +11,7 @@ import type { ReactElement } from "react";
 import type { Dashboard } from "../../protocol/dashboard";
 import type { DashboardAction, MeetingRow, MeetingSummary } from "../../protocol/meetings";
 import { OWNER } from "../../protocol/meetings";
+import LinkedText from "../cards/LinkedText";
 import RowContextMenu from "../sidebar/RowContextMenu";
 import { when } from "./needsYouText";
 import { Widget } from "./Widgets";
@@ -190,7 +191,9 @@ function ActionRow(
         onChange={() => props.onDone(a.id)}
       />
       <span className="dash-row-text">
-        <span className="dash-row-title">{a.text}</span>
+        <span className="dash-row-title">
+          <LinkedText text={a.text} />
+        </span>
         <ActionMeta
           action={a}
           owner={a.owner === OWNER ? "You" : props.botName(a.owner)}

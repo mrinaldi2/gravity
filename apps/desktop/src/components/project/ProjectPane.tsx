@@ -162,6 +162,7 @@ function TabView({ ctx }: { readonly ctx: TabContext }): ReactElement {
           connected={connected}
           canControl={canControl}
           addToast={ctx.addToast}
+          openItem={daemon.selection.kind === "project" ? daemon.selection.item : undefined}
         />
       );
     case "team":
