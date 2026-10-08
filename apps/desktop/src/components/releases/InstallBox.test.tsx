@@ -255,7 +255,9 @@ describe("install words", () => {
     expect(installedLine({ ...IPHONE, app_version: "0.6.1" }, NOW)).toBe("installed 0.6.1");
     expect(installedLine(IPAD, NOW)).toBeNull();
 
-    render(<Rollout release={ios({ status: "deploying" })} phones={[reported, IPAD]} now={() => NOW} />);
+    render(
+      <Rollout release={ios({ status: "deploying" })} phones={[reported, IPAD]} now={() => NOW} />,
+    );
     const rows = screen.getByRole("status");
     expect(within(rows).getByText("iPhone 16")).toBeTruthy();
     expect(within(rows).getByText("installed 0.6.1 (12) · 2m ago")).toBeTruthy();
