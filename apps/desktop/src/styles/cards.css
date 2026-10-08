@@ -1,9 +1,17 @@
 /* Card ids as links (UX-035 §2–§4): the link, its preview, and the card
    drawer over any view. */
 
+/* Above a card's stretched open-link (H-189), and the active one above its
+   neighbours so its preview isn't painted over. */
 .card-link-wrap {
   position: relative;
+  z-index: 1;
   display: inline;
+}
+
+.card-link-wrap:hover,
+.card-link-wrap:focus-within {
+  z-index: 2;
 }
 
 .card-link {

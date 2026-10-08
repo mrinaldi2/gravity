@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import type { ProjectRow, Source } from "../../protocol/gen/hermes/home/v1/home_pb";
+import CardLink from "../cards/CardLink";
 import {
   botsLine,
   clock,
@@ -86,6 +87,7 @@ function Facts({ row }: { readonly row: ProjectRow }): ReactElement {
             <ul className="home-doing">
               {row.doing.map((item) => (
                 <li key={item.itemId}>
+                  <CardLink id={item.itemId} /> ·{" "}
                   {item.assigneeName.length > 0
                     ? `${item.title} · ${item.assigneeName}`
                     : item.title}
