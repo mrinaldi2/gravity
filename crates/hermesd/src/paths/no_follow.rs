@@ -340,10 +340,37 @@ mod imp {
         out.write_all(bytes)?;
         out.sync_all()?;
         drop(out);
-        std::fs::rename(&tmp, &target).inspect_err(|_| {
+        replace(&tmp, &target).inspect_err(|_| {
             let _ = std::fs::remove_file(&tmp);
         })?;
         Ok(())
+    }
+
+    /// Waits between attempts to rename over a file that is briefly held.
+    const HELD_RETRIES_MS: [u64; 6] = [10, 20, 40, 80, 160, 320];
+
+    /// `tmp` renamed over `target`. On Windows a file another process has
+    /// open, as an antivirus scan holds one just written, can't be renamed
+    /// or replaced for a moment: "Access is denied" or a sharing violation.
+    /// Every start rewrites a bot's settings this way, and a start that
+    /// failed on it waited out a crash backoff (H-188); a short retry rides
+    /// the scan out.
+    fn replace(tmp: &Path, target: &Path) -> std::io::Result<()> {
+        let mut waits = HELD_RETRIES_MS.iter();
+        loop {
+            match std::fs::rename(tmp, target) {
+                Err(e) if held(&e) => match waits.next() {
+                    Some(ms) => std::thread::sleep(std::time::Duration::from_millis(*ms)),
+                    None => return Err(e),
+                },
+                result => return result,
+            }
+        }
+    }
+
+    /// ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION or ERROR_LOCK_VIOLATION.
+    fn held(e: &std::io::Error) -> bool {
+        cfg!(windows) && matches!(e.raw_os_error(), Some(5 | 32 | 33))
     }
 
     pub fn create_new(

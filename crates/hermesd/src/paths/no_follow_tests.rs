@@ -186,3 +186,30 @@ fn create_new_never_follows_a_dangling_link() {
     assert!(!create_new(&base, Path::new("CLAUDE.md"), b"y").unwrap());
     assert!(write(&base, Path::new("../escape"), b"x").is_err());
 }
+
+/// A file held open for a moment, as an antivirus scan holds one just
+/// written, doesn't fail the next write over it: it waits the hold out
+/// (H-188).
+#[cfg(windows)]
+#[test]
+fn a_write_waits_out_a_brief_hold_on_the_file() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("bot");
+    std::fs::create_dir_all(&base).unwrap();
+    let rel = Path::new("settings.json");
+    write(&base, rel, b"old").unwrap();
+    // FILE_SHARE_READ only: while it is open, nothing renames over it.
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(base.join(rel))
+        .unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        drop(held);
+    });
+    write(&base, rel, b"new").unwrap();
+    release.join().unwrap();
+    assert_eq!(std::fs::read(base.join(rel)).unwrap(), b"new");
+}
