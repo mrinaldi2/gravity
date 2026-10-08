@@ -126,11 +126,9 @@ fn roll(
     match action {
         DeployAction::Deploy => gate_open(app, &release)?,
         DeployAction::Rollback => {
-            if !release
-                .deployments
-                .iter()
-                .any(|d| d.machine == machine && d.action == DeployAction::Deploy)
-            {
+            if !release.deployments.iter().any(|d| {
+                machines::same_target(&d.machine, machine) && d.action == DeployAction::Deploy
+            }) {
                 return Err(conflict(format!(
                     "release {} was never deployed to {machine}",
                     release.name
@@ -244,7 +242,7 @@ pub fn confirm(
         let row = release
             .deployments
             .iter()
-            .find(|d| d.machine == machine && d.action == action);
+            .find(|d| machines::same_target(&d.machine, machine) && d.action == action);
         let Some(row) = row else {
             return Err(conflict(format!(
                 "release {} has no {} open on {machine}",
@@ -257,6 +255,7 @@ pub fn confirm(
                 "only the tester carrying it out or DevOps can confirm it",
             ));
         }
+        let machine = row.machine.clone();
         // Called off when a later package closed this one (H-191).
         if row.result == Some(DeployResult::Superseded) {
             return Err(conflict(format!(
@@ -265,7 +264,7 @@ pub fn confirm(
                 release.name
             )));
         }
-        t.finish_deployment(&release.id, machine, action, result, smoke, log_artifact)?;
+        t.finish_deployment(&release.id, &machine, action, result, smoke, log_artifact)?;
         let release = t.release(&release.id)?.expect("loaded");
         let (status, to, note) = match result {
             DeployResult::Failed => (
@@ -323,27 +322,21 @@ pub fn confirm(
 
 /// Every machine the items' platforms require (or, with none configured,
 /// every machine it went to) has reported a good deploy.
-fn all_done(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<bool> {
-    let ok = |m: &str| {
-        release.deployments.iter().any(|d| {
-            d.machine == m && d.action == DeployAction::Deploy && d.result == Some(DeployResult::Ok)
-        })
-    };
+pub(super) fn all_done(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<bool> {
     // Every tester's computer unless the owner narrowed it, as frozen at
-    // submit (ARCH-R55 M1).
+    // submit (ARCH-R55 M1). A rolled-back install doesn't count (H-191 S2).
     let required = machines::deploys_to(t, release)?;
     if required.is_empty() {
         // No machine is configured or has a tester: every machine it went to.
-        let deploys: Vec<_> = release
+        let mut deploys = release
             .deployments
             .iter()
             .filter(|d| d.action == DeployAction::Deploy)
-            .collect();
-        return Ok(
-            !deploys.is_empty() && deploys.iter().all(|d| d.result == Some(DeployResult::Ok))
-        );
+            .peekable();
+        return Ok(deploys.peek().is_some()
+            && deploys.all(|d| machines::installed_on(release, &d.machine)));
     }
-    Ok(required.iter().all(|m| ok(m)))
+    Ok(required.iter().all(|m| machines::installed_on(release, m)))
 }
 
 fn all_rolled_back(release: &Release) -> bool {
@@ -353,7 +346,7 @@ fn all_rolled_back(release: &Release) -> bool {
         .filter(|d| d.action == DeployAction::Deploy && d.result == Some(DeployResult::Ok))
         .all(|d| {
             release.deployments.iter().any(|r| {
-                r.machine == d.machine
+                machines::same_target(&r.machine, &d.machine)
                     && r.action == DeployAction::Rollback
                     && r.result == Some(DeployResult::RolledBack)
             })

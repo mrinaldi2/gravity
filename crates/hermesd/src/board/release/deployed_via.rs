@@ -266,10 +266,13 @@ fn covered(t: &BoardTx<'_>, old: &Release, via: &Release) -> anyhow::Result<Cove
     let via_targets = machines::deploys_to(t, via)?;
     let (installed, left): (Vec<String>, Vec<String>) = machines::deploys_to(t, old)?
         .into_iter()
-        .partition(|m| ok_on(old, m));
+        .partition(|m| machines::installed_on(old, m));
     let missing: Vec<&String> = left
         .iter()
-        .filter(|m| !via_targets.iter().any(|v| v.eq_ignore_ascii_case(m)) && !ok_on(via, m))
+        .filter(|m| {
+            !via_targets.iter().any(|v| v.eq_ignore_ascii_case(m))
+                && !machines::installed_on(via, m)
+        })
         .collect();
     if !missing.is_empty() {
         let names: Vec<&str> = missing.iter().map(|m| m.as_str()).collect();
@@ -285,19 +288,4 @@ fn covered(t: &BoardTx<'_>, old: &Release, via: &Release) -> anyhow::Result<Cove
         installed,
         by_via: left,
     })
-}
-
-/// Installed on `m` and not rolled back since.
-fn ok_on(r: &Release, m: &str) -> bool {
-    let row = |action| {
-        r.deployments
-            .iter()
-            .find(|d| d.machine.eq_ignore_ascii_case(m) && d.action == action)
-    };
-    let Some(deploy) = row(DeployAction::Deploy).filter(|d| d.result == Some(DeployResult::Ok))
-    else {
-        return false;
-    };
-    !row(DeployAction::Rollback)
-        .is_some_and(|b| b.result == Some(DeployResult::RolledBack) && b.at >= deploy.at)
 }

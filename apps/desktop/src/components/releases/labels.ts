@@ -69,6 +69,9 @@ const EVENT_LINES: Readonly<Record<string, EventText>> = {
   // H-176: an iOS package frozen with desktop deploy targets, moved to the iPhone at boot.
   targets_repaired: (event) =>
     `Hermes moved ${event.release_name}'s deploy to the iPhone: ${event.note ?? "it was frozen before per-platform targets"}.`,
+  // H-231: confirmed on `ios` while it waited for `iphone`, the same target.
+  targets_settled: (event) =>
+    `Hermes marked ${event.release_name} deployed: its install on iOS counts for the iPhone.`,
   lead_ticked: (event, who) => {
     const d = event.detail ?? {};
     const verb = d.passed === false ? "marked failed" : "ticked";

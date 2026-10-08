@@ -72,4 +72,22 @@ describe("eventLine", () => {
       ),
     ).toBe("0.17.0-r1 stayed open: 0.17.2 is deployed but didn't close this one: x.");
   });
+
+  it("says the daemon settled an iOS package installed on iOS", () => {
+    const line = eventLine(
+      {
+        release_id: "rel-6",
+        release_name: "iOS 0.6.1",
+        related_id: null,
+        kind: "targets_settled",
+        actor: "daemon",
+        note: "its deploy on ios counts for the iPhone (H-231)",
+        at: "2026-10-08T08:00:00Z",
+      },
+      () => undefined,
+    );
+    expect(line).toBe(
+      "Hermes marked iOS 0.6.1 deployed: its install on iOS counts for the iPhone.",
+    );
+  });
 });

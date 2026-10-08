@@ -24,7 +24,7 @@ use serde_json::{json, Value};
 use crate::db::BoardTx;
 use crate::decisions::{forbidden, invalid};
 
-use super::model::{Release, ReleaseTargets};
+use super::model::{DeployAction, DeployResult, Release, ReleaseTargets};
 
 /// The name when even the host has none.
 const FALLBACK_NAME: &str = "this computer";
@@ -36,6 +36,43 @@ pub const IOS_DEVICE: &str = "iphone";
 /// A target of iOS packages, never a desktop computer.
 pub fn is_ios_target(machine: &str) -> bool {
     machine.eq_ignore_ascii_case(IOS_TEST) || machine.eq_ignore_ascii_case(IOS_DEVICE)
+}
+
+/// A computer can't take the iOS target's name, or `same_target` would
+/// alias it with the iPhone (H-237 S1): for `machine_name` and peer names.
+pub fn refuse_ios_name(name: &str) -> anyhow::Result<()> {
+    if is_ios_target(name.trim()) {
+        return Err(invalid(format!(
+            "'{}' is the iOS target's name; a computer needs another",
+            name.trim()
+        )));
+    }
+    Ok(())
+}
+
+/// Whether two target names are the same target: the same computer, or both
+/// the iOS target. `ios` and `iphone` are one name (H-231): the lead sets
+/// tester@ios, and packages frozen by the H-176 repair deploy to `iphone`.
+pub fn same_target(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b) || (is_ios_target(a) && is_ios_target(b))
+}
+
+/// Installed on target `m` and not rolled back since (H-191 S2): a
+/// Deploy=Ok that a later Rollback undid doesn't count. `ios` and `iphone`
+/// are one target (H-231).
+pub fn installed_on(release: &Release, m: &str) -> bool {
+    let rows = |action| {
+        release
+            .deployments
+            .iter()
+            .filter(move |d| same_target(&d.machine, m) && d.action == action)
+    };
+    rows(DeployAction::Deploy)
+        .filter(|d| d.result == Some(DeployResult::Ok))
+        .any(|d| {
+            !rows(DeployAction::Rollback)
+                .any(|b| b.result == Some(DeployResult::RolledBack) && b.at >= d.at)
+        })
 }
 
 /// A package whose every build is for iOS.
@@ -241,6 +278,7 @@ pub fn set_name(t: &BoardTx<'_>, name: &str) -> anyhow::Result<()> {
             "'machine_name' is 1–{MAX_NAME} letters, digits, spaces, '-', '_' or '.'"
         )));
     }
+    refuse_ios_name(name)?;
     if t.peer_names()?.iter().any(|p| p.eq_ignore_ascii_case(name)) {
         return Err(invalid(format!(
             "{name} is a linked computer's name; this one needs its own"

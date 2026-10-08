@@ -159,6 +159,7 @@ async fn link(
 
 fn peer_name(app: &AppState, raw: &str) -> anyhow::Result<String> {
     let name = bus::names::validate_project(raw).map_err(anyhow::Error::msg)?;
+    crate::board::release::machines::refuse_ios_name(&name)?;
     anyhow::ensure!(
         app.db.get_peer_by_name(&name)?.is_none(),
         "a peer named '{name}' already exists"

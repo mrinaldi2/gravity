@@ -10,10 +10,12 @@ use super::board_tx::BoardTx;
 use super::ts;
 
 impl BoardTx<'_> {
-    /// Each tester of the project and the computer it tests on. A linked
-    /// bot tests on its peer, whatever its role says (S2). A bot here tests
-    /// on the machine its role names, unless that names a linked peer;
-    /// otherwise `None`: this computer.
+    /// Each tester of the project and the computer it tests on. A role on
+    /// the iOS target (`ios`, or `iphone`) tests iOS wherever the bot runs,
+    /// as `ios` (H-231): it is no computer, and its bot never takes a desktop
+    /// deploy. Otherwise a linked bot tests on its peer, whatever its role
+    /// says (S2), and a bot here on the machine its role names, unless that
+    /// names a linked peer; otherwise `None`: this computer.
     pub fn tester_machines(
         &self,
         project_id: &str,
@@ -21,6 +23,7 @@ impl BoardTx<'_> {
         let mut stmt = self.conn.prepare(
             "SELECT r.bot_id,
                     CASE
+                      WHEN LOWER(TRIM(r.machine)) IN ('ios', 'iphone') THEN 'ios'
                       WHEN b.peer_id IS NOT NULL THEN p.name
                       WHEN NULLIF(TRIM(r.machine), '') IS NOT NULL AND NOT EXISTS (
                         SELECT 1 FROM peer q
