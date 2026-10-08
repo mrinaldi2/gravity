@@ -128,33 +128,64 @@ fn executable_of(pid: u32) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
-    /// A copy of `sleep` stands in for a daemon launchd lost track of; it is
-    /// the only process this test stops.
+    /// Set in the stand-in's environment; only then does
+    /// [`stand_in_daemon`] wait instead of returning.
+    const STAND_IN: &str = "HERMESD_REAP_STAND_IN";
+
+    /// The body of the stand-in process: a copy of this test binary run with
+    /// a filter for this one test. Copying a signed system binary such as
+    /// `sleep` instead makes macOS kill it (Code Signature Invalid) and file
+    /// a crash report (H-213).
+    #[test]
+    #[ignore = "run only as the stand-in daemon of the reap test"]
+    fn stand_in_daemon() {
+        if std::env::var_os(STAND_IN).is_some() {
+            std::thread::sleep(Duration::from_secs(60));
+        }
+    }
+
+    /// Kills the stand-in if the test fails before reaping it.
+    struct Child(std::process::Child);
+
+    impl Drop for Child {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    /// A copy of this test binary stands in for a daemon launchd lost track
+    /// of; it is the only process this test stops.
     #[test]
     fn reaping_finds_a_daemon_by_its_executable() {
         let tmp = tempfile::tempdir().unwrap();
-        let daemon = tmp.path().join("hermesd");
-        std::fs::copy(Path::new("/bin/sleep"), &daemon).unwrap();
-        let mut child = std::process::Command::new(&daemon)
-            .arg("60")
-            .spawn()
-            .unwrap();
+        let daemon = tmp.path().join("stand-in-daemon");
+        std::fs::copy(std::env::current_exe().unwrap(), &daemon).unwrap();
+        let mut child = Child(
+            std::process::Command::new(&daemon)
+                .args(["--exact", "service::reap::tests::stand_in_daemon"])
+                .args(["--ignored", "--test-threads=1"])
+                .env(STAND_IN, "1")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap(),
+        );
         let deadline = Instant::now() + Duration::from_secs(5);
         while running(std::slice::from_ref(&daemon)).is_empty() && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(20));
         }
-        assert_eq!(running(std::slice::from_ref(&daemon)), [child.id()]);
-        let other = tmp.path().join("gravityd");
+        assert_eq!(running(std::slice::from_ref(&daemon)), [child.0.id()]);
+        let other = tmp.path().join("other-daemon");
         reap(std::slice::from_ref(&other)).unwrap();
         assert!(
-            child.try_wait().unwrap().is_none(),
+            child.0.try_wait().unwrap().is_none(),
             "an unrelated binary was stopped"
         );
 
         reap(&[other, daemon.clone()]).unwrap();
-        let _ = child.wait();
+        let _ = child.0.wait();
         assert!(running(&[daemon]).is_empty());
     }
 }
