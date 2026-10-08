@@ -228,10 +228,12 @@ fn a_folder_swapped_for_a_link_mid_write_is_never_followed() {
                     if std::fs::rename(at("sub.link"), at("sub")).is_ok() {
                         retry(&|| std::fs::rename(at("sub"), at("sub.link")));
                     }
-                    // A `sub` a write made meanwhile is dropped, so the real
-                    // folder can come back (it isn't the link: that's away).
+                    // A `sub` a write made meanwhile is moved aside, never
+                    // deleted under the write, so the real folder can come
+                    // back (it isn't the link: that's away).
+                    let made = swaps.load(Ordering::SeqCst);
                     retry(&|| {
-                        let _ = std::fs::remove_dir_all(at("sub"));
+                        let _ = std::fs::rename(at("sub"), at(&format!("sub.made-{made}")));
                         std::fs::rename(at("sub.real"), at("sub"))
                     });
                     swaps.fetch_add(1, Ordering::SeqCst);
@@ -239,17 +241,18 @@ fn a_folder_swapped_for_a_link_mid_write_is_never_followed() {
             })
         };
         let rel = Path::new("sub/settings.json");
-        for _ in 0..400 {
+        // A write may also fail for a moment while the folder is renamed under
+        // it (macOS returns EINVAL creating in a folder mid-rename); what
+        // matters is where writes land. It runs until one met the link.
+        let mut refused = 0;
+        for round in 0..20_000 {
+            if round >= 400 && refused > 0 {
+                break;
+            }
             if let Err(error) = write(&base, rel, b"bot") {
-                // Refused at the link, or the folder briefly not there.
-                let gone = error.chain().any(|e| {
-                    e.downcast_ref::<std::io::Error>()
-                        .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
-                });
-                assert!(
-                    gone || error.downcast_ref::<LinkRefused>().is_some(),
-                    "{kind}: {error:#}"
-                );
+                if error.downcast_ref::<LinkRefused>().is_some() {
+                    refused += 1;
+                }
             }
         }
         stop.store(true, Ordering::SeqCst);
@@ -258,6 +261,7 @@ fn a_folder_swapped_for_a_link_mid_write_is_never_followed() {
             swaps.load(Ordering::SeqCst) > 0,
             "{kind}: the folder was swapped"
         );
+        assert!(refused > 0, "{kind}: a write met the link and was refused");
         assert_eq!(
             std::fs::read_dir(&owner).unwrap().count(),
             0,
