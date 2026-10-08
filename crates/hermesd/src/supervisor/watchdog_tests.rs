@@ -97,11 +97,20 @@ impl Fixture {
         self.adapter.starts.load(Ordering::SeqCst)
     }
 
-    /// Supervision ticks until `done` holds, failing after a few seconds.
+    /// Supervision ticks until `done` holds. The cap only stops a hung test:
+    /// how long the ticks take is no part of what is tested (the watchdog's
+    /// clock is each session's own start), and three bots' nine session
+    /// starts outran a 5 s cap on a loaded Windows machine (H-183).
     async fn tick_until(&self, what: &str, done: impl Fn(&Self) -> bool) {
-        let deadline = Instant::now() + Duration::from_secs(5);
+        let started = Instant::now();
+        let mut ticks = 0;
         while !done(self) {
-            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            assert!(
+                started.elapsed() < Duration::from_secs(60),
+                "timed out waiting for {what} after {ticks} ticks, {} starts",
+                self.starts()
+            );
+            ticks += 1;
             self.sup.reconcile();
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
@@ -184,52 +193,6 @@ async fn a_turn_in_flight_is_not_cut_off() {
     }
     assert_eq!(f.starts(), 1);
     assert_eq!(f.sup.state(&bot_id).0, BotState::Working);
-}
-
-/// H-041 (ARCH-R20 F5): a mass restart where several bots never connect
-/// raises one toast that names them, not one each.
-#[tokio::test(flavor = "multi_thread")]
-async fn bots_that_dont_connect_together_are_told_in_one_toast() {
-    let f = Fixture::new(|_| {});
-    let mut pushes = f.sup.inner.events.subscribe_push();
-    let ids: Vec<String> = ["alice", "bob", "carol"]
-        .iter()
-        .map(|name| f.bot(name, bus::BotRuntime::ClaudeCode))
-        .collect();
-    f.tick_until("the watchdog to give up on all three", |f| {
-        ids.iter().all(|id| gave_up(&f.sup, id))
-    })
-    .await;
-    f.sup.reconcile();
-    let mut toasts = Vec::new();
-    while let Ok(push) = pushes.try_recv() {
-        if let Push::Notify { title, body, .. } = push {
-            toasts.push((title, body));
-        }
-    }
-    assert_eq!(toasts.len(), 1, "{toasts:?}");
-    assert_eq!(toasts[0].0, "3 bots didn't connect");
-    assert!(
-        toasts[0].1.starts_with("alice, bob and carol"),
-        "{toasts:?}"
-    );
-}
-
-#[test]
-fn the_toast_names_one_bot_or_counts_many() {
-    let bots = |names: &[&str]| -> Vec<(String, bool)> {
-        names.iter().map(|n| ((*n).to_string(), false)).collect()
-    };
-    assert_eq!(gave_up_toast(&bots(&["alice"])).0, "alice didn't connect");
-    assert_eq!(
-        gave_up_toast(&[("w-1".to_string(), true)]).1,
-        "Its task was cancelled and its worker slot freed."
-    );
-    let (title, body) = gave_up_toast(&bots(&["a", "b", "c", "d", "e", "f"]));
-    assert_eq!(title, "6 bots didn't connect");
-    assert!(body.starts_with("a, b, c and 3 more:"), "{body}");
-    let mixed = [("a".to_string(), false), ("w".to_string(), true)];
-    assert!(gave_up_toast(&mixed).1.contains("Workers among them"));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -394,3 +357,6 @@ async fn a_busy_config_lock_defers_the_start_and_retries() {
     let written = std::fs::read_to_string(&config).expect("config written");
     assert!(written.contains("hasTrustDialogAccepted"), "{written}");
 }
+
+#[path = "watchdog_toast_tests.rs"]
+mod toast;

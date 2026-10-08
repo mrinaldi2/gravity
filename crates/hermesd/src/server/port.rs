@@ -127,15 +127,7 @@ async fn bind_with_grace(
     // A daemon already answering here is the one case negotiation must not
     // paper over: it owns the same state directory this one is about to open,
     // and moving aside would leave two of them running.
-    let port = configured_port;
-    if let Ok(Some(version)) =
-        tokio::task::spawn_blocking(move || probe_health(port, OCCUPANT_PROBE_TIMEOUT)).await
-    {
-        anyhow::bail!(
-            "port {configured_port} is already served by a daemon (version {version}); \
-             stop it before starting this one"
-        );
-    }
+    refuse_a_live_daemon(configured_port).await?;
 
     // A restart usually collides with its own predecessor's listener, or with
     // whatever raced it to the port during an update; both clear in about a
@@ -149,7 +141,11 @@ async fn bind_with_grace(
                 tracing::info!(port = configured_port, "configured port cleared in time");
                 return Ok(bound);
             }
-            Err(error) if port_unavailable(&error) => {}
+            // Still taken: ask again, so a daemon too busy to answer the
+            // first probe in time is not moved aside for (H-183).
+            Err(error) if port_unavailable(&error) => {
+                refuse_a_live_daemon(configured_port).await?;
+            }
             Err(error) => return Err(error.into()),
         }
     }
@@ -167,6 +163,19 @@ async fn bind_with_grace(
         }
     }
     anyhow::bail!("could not reserve a fallback port after {PORT_NEGOTIATION_ATTEMPTS} attempts")
+}
+
+/// An error naming the daemon that answers `/health` on `port`, if one does.
+async fn refuse_a_live_daemon(port: u16) -> anyhow::Result<()> {
+    if let Ok(Some(version)) =
+        tokio::task::spawn_blocking(move || probe_health(port, OCCUPANT_PROBE_TIMEOUT)).await
+    {
+        anyhow::bail!(
+            "port {port} is already served by a daemon (version {version}); \
+             stop it before starting this one"
+        );
+    }
+    Ok(())
 }
 
 /// Asks whatever owns `port` on loopback whether it is one of our daemons,
