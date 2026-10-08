@@ -47,6 +47,7 @@ mod owner_card;
 mod panic_tests;
 mod peers;
 mod permissions;
+mod presence;
 #[cfg(test)]
 mod probe;
 mod profiles;
@@ -137,14 +138,14 @@ impl Drop for Conn {
 }
 
 /// Returns the authenticated connection's capability grants and issuing
-/// device, or None when the handshake fails (an error frame is sent first).
+/// device, or why the handshake failed (an error frame is sent first).
 fn handshake(
     app: &Arc<AppState>,
     out: &mpsc::UnboundedSender<Value>,
     text: &str,
-) -> Option<(Vec<Capability>, Option<String>, bool)> {
+) -> Result<(Vec<Capability>, Option<String>, bool), presence::Reason> {
     let Ok(req) = serde_json::from_str::<Value>(text) else {
-        return None;
+        return Err(presence::Reason::BadHello);
     };
     let req_id = req.get("req_id").cloned().unwrap_or(Value::Null);
     let fail = |code: &str, message: String| {
@@ -154,7 +155,7 @@ fn handshake(
     };
     if req.get("type").and_then(|t| t.as_str()) != Some("hello") {
         fail("invalid_request", "expected hello".to_string());
-        return None;
+        return Err(presence::Reason::BadHello);
     }
     let version = req
         .get("protocol_version")
@@ -165,7 +166,7 @@ fn handshake(
             "unsupported_version",
             format!("server speaks protocol {PROTOCOL_VERSION}"),
         );
-        return None;
+        return Err(presence::Reason::BadHello);
     }
     let token = req.get("token").and_then(|t| t.as_str()).unwrap_or("");
 
@@ -193,12 +194,12 @@ fn handshake(
             Ok(Some(d)) if d.revoked_at.is_none() => (d.capabilities, Some(device_id)),
             _ => {
                 fail("auth_failed", "device credential revoked".to_string());
-                return None;
+                return Err(presence::Reason::AuthRefused);
             }
         }
     } else {
         fail("auth_failed", "invalid client token".to_string());
-        return None;
+        return Err(presence::Reason::AuthRefused);
     };
     if let Some(id) = &device_id {
         let _ = app.db.touch_device(id);
@@ -229,5 +230,5 @@ fn handshake(
         // which peer row is which daemon.
         "daemon_id": app.db.daemon_id().ok()
     }));
-    Some((caps, device_id, via_ticket))
+    Ok((caps, device_id, via_ticket))
 }

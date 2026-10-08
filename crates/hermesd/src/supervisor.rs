@@ -39,8 +39,6 @@ mod session_events;
 mod session_hooks;
 mod start;
 mod termio;
-#[cfg(test)]
-mod test_logs;
 mod typing;
 mod typing_kinds;
 mod watchdog;
