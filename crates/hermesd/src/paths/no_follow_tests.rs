@@ -231,9 +231,14 @@ fn a_folder_swapped_for_a_link_mid_write_is_never_followed() {
                     // A `sub` a write made meanwhile is moved aside, never
                     // deleted under the write, so the real folder can come
                     // back (it isn't the link: that's away).
-                    let made = swaps.load(Ordering::SeqCst);
+                    // A fresh aside name each attempt: a write can make
+                    // another `sub` while the real one is still held.
+                    let made = std::cell::Cell::new(0);
+                    let round = swaps.load(Ordering::SeqCst);
                     retry(&|| {
-                        let _ = std::fs::rename(at("sub"), at(&format!("sub.made-{made}")));
+                        made.set(made.get() + 1);
+                        let aside = format!("sub.made-{round}-{}", made.get());
+                        let _ = std::fs::rename(at("sub"), at(&aside));
                         std::fs::rename(at("sub.real"), at("sub"))
                     });
                     swaps.fetch_add(1, Ordering::SeqCst);
@@ -316,10 +321,14 @@ fn a_write_waits_out_a_brief_hold_on_the_file() {
 
 /// A write that waits out a hold re-vets the path before each retry: a bot
 /// that forces the wait can't swap a folder for a junction meanwhile and
-/// have the retry rename through it (H-188, Architect M1).
+/// have the retry rename through it (H-188, Architect M1). On NTFS the swap
+/// itself fails: the write's open temp keeps every folder above it from
+/// being renamed. Where it succeeds, the re-check refuses the write.
 #[cfg(windows)]
 #[test]
 fn a_junction_swapped_in_during_the_wait_is_refused() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path().join("bot");
     let conf = base.join("conf");
@@ -328,17 +337,24 @@ fn a_junction_swapped_in_during_the_wait_is_refused() {
     // A folder at the name: renaming a file over it is "Access is denied",
     // so the first attempt fails as it does over a held file.
     std::fs::create_dir_all(conf.join("settings.json")).unwrap();
+    let swapped = Arc::new(AtomicBool::new(false));
     let swap = {
         let (base, conf, outside) = (base.clone(), conf.clone(), outside.clone());
-        move || {
-            std::fs::rename(&conf, base.join("conf-real")).unwrap();
-            junction(&outside, &conf);
+        let swapped = swapped.clone();
+        move || match std::fs::rename(&conf, base.join("conf-real")) {
+            Ok(()) => {
+                junction(&outside, &conf);
+                swapped.store(true, Ordering::SeqCst);
+            }
+            Err(e) => assert_eq!(e.raw_os_error(), Some(5), "the swap: {e}"),
         }
     };
     imp::BETWEEN_ATTEMPTS.with(|hook| hook.set(Some(Box::new(swap))));
     let error = write(&base, Path::new("conf/settings.json"), b"x").unwrap_err();
     let ran = imp::BETWEEN_ATTEMPTS.with(|hook| hook.take()).is_none();
     assert!(ran, "the write never retried");
-    assert!(error.downcast_ref::<LinkRefused>().is_some(), "{error:#}");
+    if swapped.load(Ordering::SeqCst) {
+        assert!(error.downcast_ref::<LinkRefused>().is_some(), "{error:#}");
+    }
     assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
 }

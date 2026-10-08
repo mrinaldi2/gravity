@@ -74,20 +74,34 @@ fn walk(base: &Path, dirs: &[&OsStr], make: bool, rel: &Path) -> anyhow::Result<
     Ok(dir)
 }
 
-
 /// A link the bot left at `name` in `dir`, deleted by handle so the rename
 /// replaces it as on Unix: the link itself, never its target.
+/// Looked at first without DELETE, so a plain file another process holds
+/// open (the hold `replace` waits out) is no error here.
 fn remove_link(dir: &OwnedHandle, name: &OsStr, rel: &Path) -> anyhow::Result<()> {
-    let opened = open_at(dir, name, DELETE | FILE_READ_ATTRIBUTES, FILE_OPEN, 0, rel)?;
-    let handle = match opened {
-        Ok(handle) => handle,
-        Err(e) if e.raw_os_error() == Some(ERROR_FILE_NOT_FOUND) => return Ok(()),
-        Err(e) => return Err(refused(e, rel)),
-    };
-    if info(&handle)?.attributes & FILE_ATTRIBUTE_REPARSE_POINT == 0 {
+    if is_link(dir, name, FILE_READ_ATTRIBUTES, rel)?.is_none() {
         return Ok(());
     }
-    delete(&handle).map_err(|_| link_refused(rel))
+    match is_link(dir, name, DELETE | FILE_READ_ATTRIBUTES, rel)? {
+        Some(handle) => delete(&handle).map_err(|_| link_refused(rel)),
+        None => Ok(()),
+    }
+}
+
+/// `name` in `dir` opened with `access` when it is a reparse point.
+fn is_link(
+    dir: &OwnedHandle,
+    name: &OsStr,
+    access: u32,
+    rel: &Path,
+) -> anyhow::Result<Option<OwnedHandle>> {
+    let handle = match open_at(dir, name, access, FILE_OPEN, 0, rel)? {
+        Ok(handle) => handle,
+        Err(e) if e.raw_os_error() == Some(ERROR_FILE_NOT_FOUND) => return Ok(None),
+        Err(e) => return Err(refused(e, rel)),
+    };
+    let link = info(&handle)?.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0;
+    Ok(link.then_some(handle))
 }
 
 /// A new file `name` in `dir`, open for writing and deleting; `None` when
@@ -99,8 +113,18 @@ fn create(dir: &OwnedHandle, name: &OsStr, rel: &Path) -> anyhow::Result<Option<
         Err(e) if e.raw_os_error() == Some(ERROR_FILE_EXISTS) => Ok(None),
         // STATUS_OBJECT_NAME_COLLISION maps to ERROR_ALREADY_EXISTS (183).
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(None),
+        // A junction at the name is a folder: STATUS_FILE_IS_A_DIRECTORY,
+        // "Access is denied", comes before the name collision.
+        Err(e) if e.raw_os_error() == Some(ERROR_ACCESS_DENIED) && exists(dir, name, rel)? => {
+            Ok(None)
+        }
         Err(e) => Err(refused(e, rel)),
     }
+}
+
+/// Something, a link included, has `name` in `dir`.
+fn exists(dir: &OwnedHandle, name: &OsStr, rel: &Path) -> anyhow::Result<bool> {
+    Ok(open_at(dir, name, FILE_READ_ATTRIBUTES, FILE_OPEN, 0, rel)?.is_ok())
 }
 
 pub fn write(
@@ -171,10 +195,18 @@ fn replace(
 /// `dir` is still the folder the path names, and no link sits at the name:
 /// walked again, a folder that became a link is refused, and so is one that
 /// is now another folder (the one held was moved away).
-fn vet(dir: &OwnedHandle, base: &Path, dirs: &[&OsStr], file: &OsStr, rel: &Path) -> anyhow::Result<()> {
+fn vet(
+    dir: &OwnedHandle,
+    base: &Path,
+    dirs: &[&OsStr],
+    file: &OsStr,
+    rel: &Path,
+) -> anyhow::Result<()> {
     let again = walk(base, dirs, false, rel)?;
     let (now, held) = (info(&again)?, info(dir)?);
-    if (now.volume_serial, now.index) != (held.volume_serial, held.index) {
+    if (now.volume_serial, now.index_high, now.index_low)
+        != (held.volume_serial, held.index_high, held.index_low)
+    {
         return Err(link_refused(rel));
     }
     remove_link(dir, file, rel)

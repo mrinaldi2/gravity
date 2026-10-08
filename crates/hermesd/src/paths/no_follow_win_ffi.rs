@@ -33,13 +33,19 @@ pub(super) struct IoStatusBlock {
 
 #[repr(C)]
 #[derive(Default)]
+/// Field for field as `confine_os` has it: two declarations of one
+/// kernel32 function must agree (`clashing_extern_declarations`).
 pub(super) struct ByHandleFileInformation {
     pub(super) attributes: u32,
-    times: [u32; 6],
+    creation: [u32; 2],
+    last_access: [u32; 2],
+    last_write: [u32; 2],
     pub(super) volume_serial: u32,
-    size: [u32; 2],
+    size_high: u32,
+    size_low: u32,
     pub(super) links: u32,
-    pub(super) index: [u32; 2],
+    pub(super) index_high: u32,
+    pub(super) index_low: u32,
 }
 
 #[link(name = "ntdll")]
@@ -58,6 +64,13 @@ extern "system" {
         ea: *const c_void,
         ea_length: u32,
     ) -> i32;
+    fn NtSetInformationFile(
+        handle: Handle,
+        status: *mut IoStatusBlock,
+        info: *const c_void,
+        length: u32,
+        class: i32,
+    ) -> i32;
     fn RtlNtStatusToDosError(status: i32) -> u32;
 }
 
@@ -75,7 +88,8 @@ pub(super) const FILE_TRAVERSE: u32 = 0x20;
 pub(super) const FILE_READ_ATTRIBUTES: u32 = 0x80;
 pub(super) const FILE_GENERIC_READ: u32 = 0x0012_0089;
 pub(super) const FILE_GENERIC_WRITE: u32 = 0x0012_0116;
-pub(super) const DIR_ACCESS: u32 = FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE;
+pub(super) const DIR_ACCESS: u32 =
+    FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE;
 pub(super) const SHARE_ALL: u32 = 0x7;
 pub(super) const FILE_OPEN: u32 = 1;
 pub(super) const FILE_CREATE: u32 = 2;
@@ -89,15 +103,17 @@ pub(super) const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 pub(super) const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
 pub(super) const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
 pub(super) const ERROR_FILE_NOT_FOUND: i32 = 2;
+pub(super) const ERROR_ACCESS_DENIED: i32 = 5;
 pub(super) const ERROR_FILE_EXISTS: i32 = 80;
 pub(super) const ERROR_INVALID_PARAMETER: i32 = 87;
 pub(super) const ERROR_DIRECTORY: i32 = 267;
 pub(super) const ERROR_NOT_SUPPORTED: i32 = 50;
 /// FILE_INFO_BY_HANDLE_CLASS values.
-pub(super) const FILE_RENAME_INFO: i32 = 3;
 pub(super) const FILE_DISPOSITION_INFO: i32 = 4;
 pub(super) const FILE_DISPOSITION_INFO_EX: i32 = 21;
-pub(super) const FILE_RENAME_INFO_EX: i32 = 22;
+/// FILE_INFORMATION_CLASS values for `NtSetInformationFile`.
+pub(super) const FILE_RENAME_INFORMATION: i32 = 10;
+pub(super) const FILE_RENAME_INFORMATION_EX: i32 = 65;
 pub(super) const RENAME_REPLACE_IF_EXISTS: u32 = 0x1;
 pub(super) const RENAME_POSIX_SEMANTICS: u32 = 0x2;
 pub(super) const DISPOSITION_DELETE: u32 = 0x1;
@@ -163,12 +179,17 @@ pub(super) fn open_at(
         )
     };
     if nt < 0 {
-        // SAFETY: a plain status-code translation.
-        let code = unsafe { RtlNtStatusToDosError(nt) };
-        return Ok(Err(std::io::Error::from_raw_os_error(code as i32)));
+        return Ok(Err(nt_error(nt)));
     }
     // SAFETY: NtCreateFile succeeded, so `handle` is open and ours alone.
     Ok(Ok(unsafe { OwnedHandle::from_raw_handle(handle) }))
+}
+
+/// The Win32 error an NTSTATUS failure stands for.
+fn nt_error(nt: i32) -> std::io::Error {
+    // SAFETY: a plain status-code translation.
+    let code = unsafe { RtlNtStatusToDosError(nt) };
+    std::io::Error::from_raw_os_error(code as i32)
 }
 
 pub(super) fn info(handle: &OwnedHandle) -> std::io::Result<ByHandleFileInformation> {
@@ -231,11 +252,43 @@ pub(super) fn rename_record(flags: u32, dir: &OwnedHandle, name: &[u16]) -> Vec<
     record
 }
 
+/// Sets one FILE_RENAME_INFORMATION(_EX) record on `handle` through ntdll.
+/// Not `SetFileInformationByHandle`: kernelbase turns the name into a full
+/// DOS path first, and a full path with a `RootDirectory` is
+/// STATUS_INVALID_PARAMETER (os 87) for every rename.
+fn set_rename(handle: &OwnedHandle, class: i32, record: &[u8]) -> std::io::Result<()> {
+    let mut status = IoStatusBlock {
+        status: 0,
+        information: 0,
+    };
+    // SAFETY: `record` is a whole, aligned rename record for the call.
+    let nt = unsafe {
+        NtSetInformationFile(
+            handle.as_raw_handle(),
+            &mut status,
+            record.as_ptr().cast(),
+            record.len() as u32,
+            class,
+        )
+    };
+    if nt < 0 {
+        return Err(nt_error(nt));
+    }
+    Ok(())
+}
+
 /// Renames the open `file` to `name` in `dir`, replacing what is there.
-pub(super) fn rename_into(file: &OwnedHandle, dir: &OwnedHandle, name: &[u16]) -> std::io::Result<()> {
+pub(super) fn rename_into(
+    file: &OwnedHandle,
+    dir: &OwnedHandle,
+    name: &[u16],
+) -> std::io::Result<()> {
     let ex = rename_record(RENAME_REPLACE_IF_EXISTS | RENAME_POSIX_SEMANTICS, dir, name);
-    match set_info(file, FILE_RENAME_INFO_EX, &ex) {
-        Err(e) if unsupported(&e) => set_info(file, FILE_RENAME_INFO, &rename_record(1, dir, name)),
+    match set_rename(file, FILE_RENAME_INFORMATION_EX, &ex) {
+        // STATUS_INVALID_INFO_CLASS (os 87) before Windows 10 1709.
+        Err(e) if unsupported(&e) => {
+            set_rename(file, FILE_RENAME_INFORMATION, &rename_record(1, dir, name))
+        }
         other => other,
     }
 }
