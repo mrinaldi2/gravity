@@ -90,6 +90,7 @@ function ReviewDrawer(props: {
         botName={botNamer(props.bots)}
         actions={actions}
         canControl={props.canControl}
+        client={props.client}
       />
     </aside>
   );

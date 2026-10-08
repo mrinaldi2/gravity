@@ -277,3 +277,82 @@ message OwnerThreadMarked {
   int64 last_read_num = 2;
   uint32 unread = 3;
 }
+
+// ---- installing an iOS release on an iPhone or iPad (additions, H-229, UX-043) ----
+// JSON WS only, `{type, req_id, ...}` with these field names; unset fields
+// are left out. The desktop reads `release_install` and sends the link to a
+// paired device; the device reads its offers and opens `install_url` (H-230).
+
+// [release_install] what an iOS package offers for install on a phone.
+message ReleaseInstallRequest {             // [release_install] read
+  string release_id = 1;
+  bool check_site = 2;                      // also ask the build site whether it answers
+}
+
+message ReleaseInstall {
+  string release_id = 1;
+  string project_id = 2;
+  string version = 3;                       // what the owner sees, e.g. "0.6.1"
+  string build = 4;                         // the iOS build's version, e.g. "12"; empty = no build
+  string state = 5;                         // ReleaseStatus name
+  bool installable = 6;                     // the state offers install actions (UX-043 §1)
+  bool for_testing = 7;                     // awaiting_owner: installed to test it
+  string page_url = 8;                      // HTTPS install page (…/index.html); empty = not published
+  string install_url = 9;                   // the itms-services link; empty = not published
+  SiteCheck site = 10;                      // unset = not checked
+  string computer = 11;                     // the computer whose build site serves it
+  bool can_start_site = 12;                 // this computer may start the build site itself
+  repeated InstallDevice devices = 13;      // paired and not revoked, last seen first
+  string app_title = 14;                    // "The Hermes"
+  google.protobuf.Timestamp approved_at = 15;   // the owner's ruling; unset = not approved
+}
+
+message SiteCheck {
+  bool serving = 1;                         // the install page answered 2xx over HTTPS
+  string problem = 2;                       // why not, for the log; the copy is the client's
+  google.protobuf.Timestamp checked_at = 3;
+}
+
+message InstallDevice {
+  string device_id = 1;
+  string name = 2;
+  google.protobuf.Timestamp last_seen_at = 3;
+  bool connected = 4;                       // holds a live connection to this computer now
+  string app_version = 5;                   // "0.6.1 (12)" as it last reported (H-230); empty = unknown
+  google.protobuf.Timestamp app_version_seen_at = 6;  // when it last reported it (H-241); unset = never
+}
+
+// [install_offer] answers `release_send_to_device`; also pushed, with no
+// `req_id`, to that device's connections only.
+message ReleaseSendToDeviceRequest {        // [release_send_to_device] control
+  string release_id = 1;
+  string device_id = 2;
+}
+
+message InstallOffer {
+  string release_id = 1;
+  string project_id = 2;
+  string device_id = 3;
+  string device_name = 4;
+  string version = 5;
+  string build = 6;
+  string install_url = 7;                   // what a tap opens (itms-services)
+  string page_url = 8;                      // the HTTPS page, for a device that can't open the link
+  string title = 9;                         // the notification's title
+  string body = 10;                         // the notification's body
+  bool for_testing = 11;
+  google.protobuf.Timestamp sent_at = 12;
+  bool delivered = 13;                      // the device was connected when it was sent
+}
+
+// [install_offers] this device's waiting offer, at most one: the latest
+// sent, until it is dismissed or another replaces it.
+message InstallOffersRequest {}             // [install_offers] read
+message InstallOffers {
+  repeated InstallOffer offers = 1;
+}
+
+// [install_offers] Not now: the banner stays hidden until the next package.
+message InstallOfferDismissRequest {        // [install_offer_dismiss] control
+  string release_id = 1;
+}

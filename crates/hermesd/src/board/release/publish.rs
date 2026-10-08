@@ -117,7 +117,15 @@ pub fn publish(
         Some(bundle) => {
             let title = cfg.releases.ios_title.as_deref().unwrap_or("The Hermes");
             let manifest = serve::write_manifest(&dirs, &staged, &bundle, &version, title)?;
-            format!("itms-services://?action=download-manifest&url={manifest}")
+            let link = format!("itms-services://?action=download-manifest&url={manifest}");
+            // The page Copy link and the QR code open (H-229). A page left
+            // from an earlier file is kept: published files never change.
+            let dir = staged.path.parent().expect("staged in a directory");
+            let page = super::phone::page_html(title, &version, &link);
+            if let Err(e) = serve::write_page(&dirs, dir, &page) {
+                tracing::warn!(release = %release.id, "the install page wasn't written: {e:#}");
+            }
+            link
         }
         None => staged.url.clone(),
     };

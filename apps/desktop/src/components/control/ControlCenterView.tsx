@@ -30,6 +30,7 @@ export default function ControlCenterView(props: ControlCenterOptions): ReactEle
         botName={botNamer(props.bots)}
         actions={linked.actions}
         canControl={canControl}
+        client={props.client}
       />
     );
 

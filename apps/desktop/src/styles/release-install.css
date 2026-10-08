@@ -1,0 +1,102 @@
+/* H-229: the Install box under a release's status pill (UX-043 §2). */
+.install-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.install-box h3 {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.install-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.install-box button:not([role="menuitem"]) {
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-strong);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.install-box button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.install-send {
+  position: relative;
+}
+
+.install-devices {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 220px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.install-devices button {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  text-align: left;
+  color: var(--text-strong);
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.install-devices button:hover,
+.install-devices button:focus-visible {
+  background: var(--bg);
+}
+
+.install-status {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-strong);
+}
+
+.install-qr {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.install-qr p {
+  max-width: 260px;
+  margin: 0;
+}
+
+/* The white tile scans on the dark theme too. */
+.install-qr-code {
+  flex: none;
+  padding: 6px;
+  background: #fff;
+  border-radius: 6px;
+}
+
+.install-qr.off .install-qr-code {
+  opacity: 0.25;
+}

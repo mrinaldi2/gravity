@@ -132,6 +132,14 @@ pub fn write_manifest(
     Ok(format!("{base}/manifest.plist"))
 }
 
+/// Write the install page (H-229) into a served build's folder.
+pub fn write_page(dirs: &ServedDirs, dir: &Path, html: &str) -> anyhow::Result<()> {
+    place(&dir.join(super::phone::PAGE), &dirs.staging, |out| {
+        out.write_all(html.as_bytes())
+    })?;
+    Ok(())
+}
+
 /// The `itms-services` manifest Safari reads to install an ad-hoc IPA.
 pub fn manifest(ipa_url: &str, bundle_id: &str, version: &str, title: &str) -> String {
     let [url, bundle, version, title] = [ipa_url, bundle_id, version, title].map(xml_escape);
@@ -285,14 +293,17 @@ impl Write for Hashing {
 }
 
 /// A path component that can't climb out, hide, or need URL encoding.
-fn safe_name(what: &str, name: &str) -> anyhow::Result<()> {
-    let ok = !name.is_empty()
+pub fn is_safe_name(name: &str) -> bool {
+    !name.is_empty()
         && name.len() <= 128
         && !name.starts_with('.')
         && name
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '+'));
-    if ok {
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '+'))
+}
+
+fn safe_name(what: &str, name: &str) -> anyhow::Result<()> {
+    if is_safe_name(name) {
         Ok(())
     } else {
         Err(invalid(format!(
@@ -302,7 +313,7 @@ fn safe_name(what: &str, name: &str) -> anyhow::Result<()> {
     }
 }
 
-fn xml_escape(text: &str) -> String {
+pub fn xml_escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")

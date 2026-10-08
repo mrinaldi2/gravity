@@ -25,6 +25,7 @@ pub mod ios_targets;
 pub mod peer_board;
 pub mod peers;
 pub mod proxy;
+pub mod release_phone;
 pub mod releases;
 pub mod repo;
 pub mod supersede;
@@ -143,6 +144,11 @@ impl WsClient {
 
     /// Connects on `token`, saying it supports these hello features only.
     pub async fn connect_with(d: &TestDaemon, token: &str, features: &[&str]) -> Self {
+        Self::connect_hello(d, token, json!({ "features": features })).await
+    }
+
+    /// Connects on `token` with these fields added to the hello.
+    pub async fn connect_hello(d: &TestDaemon, token: &str, extra: Value) -> Self {
         let url = format!("ws://{}/ws", d.addr);
         let (socket, _) = tokio_tungstenite::connect_async(&url)
             .await
@@ -155,18 +161,16 @@ impl WsClient {
         };
         // The hello is the first frame a fresh daemon answers: once it is
         // back, the daemon is serving.
-        let reply = c
-            .request_within(
-                setup_wait(),
-                json!({
-                    "type": "hello",
-                    "protocol_version": 2,
-                    "token": token,
-                    "client": "test/0",
-                    "features": features
-                }),
-            )
-            .await;
+        let mut hello = json!({
+            "type": "hello",
+            "protocol_version": 2,
+            "token": token,
+            "client": "test/0",
+        });
+        if let (Some(hello), Some(extra)) = (hello.as_object_mut(), extra.as_object()) {
+            hello.extend(extra.clone());
+        }
+        let reply = c.request_within(setup_wait(), hello).await;
         assert_eq!(reply["type"], "hello_ok", "handshake failed: {reply}");
         c
     }

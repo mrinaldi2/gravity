@@ -116,6 +116,12 @@ pub enum Push {
         #[serde(skip_serializing_if = "Option::is_none")]
         tool: Option<String>,
     },
+    /// The owner sent a paired device an iOS install link (H-229). Only
+    /// that device's connections get it.
+    InstallOffer {
+        device_id: String,
+        offer: Box<bus::contract::home::InstallOffer>,
+    },
     Notify {
         level: String,
         title: String,

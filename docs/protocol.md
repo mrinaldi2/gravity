@@ -105,6 +105,12 @@ the app" or "update Hermes"); the connection itself is not refused. Only
 or `{ "type": "error", "req_id": "1", "code": "auth_failed" | "unsupported_version", "message": "..." }`
 followed by close.
 
+A paired device's `hello` may carry `"app_version"` and `"app_build"` (the iOS app
+sends both from H-230). The daemon keeps the latest per device with when it saw them,
+each trimmed and kept only at 1–32 printable ASCII characters, and shows them as
+`InstallDevice.app_version` (H-241). They are display only: a reported version never
+creates or confirms a deploy record. Other connections' fields are ignored.
+
 A client may add `"features": ["permission_cards"]` to `hello`: it shows bots'
 permission prompts and can answer them (`answer_permission`). The daemon only holds
 a Claude Code prompt for the app while at least one such client with the `control`
@@ -830,8 +836,12 @@ runs through the tester the same way.
   - The file must be an `.ipa`, `.zip`, `.dmg`, `.exe` or `.msi`, and must resolve, symlinks and all, inside `[releases] source_roots` (default: the `<repo>-rel-*` release worktrees in the trusted paths) or the project's artifacts. It is opened once, without following a link at the end of its path (`O_NOFOLLOW`; on Windows the reparse point itself), and the handle must be a regular file with one name (no hard link). The handle's own real path (`F_GETPATH`, `/proc/self/fd`, `GetFinalPathNameByHandleW`) must still be the checked path, inside a source root, so a directory swapped for a link after the checks is refused (H-100). It is hashed and copied from that handle. Inside the served directory, symlinks are refused; copies are staged beside it, never in it.
   - The served directory must be a real folder of its own: a symlink, a folder that is or contains the daemon home, its secrets or `bus.sqlite`, or any folder inside a home other than the dedicated `<home>/releases` (e.g. `<home>/projects`), is refused at config load and at every publish. The owner sees it in Needs you (`serving_off`), and a refused publish also pushes them a notice (H-100). Only the daemon writes there: every bot's guard and settings deny writes to it (CE-010).
   - A published file is never replaced by a different one.
-  - It attaches the build with its sha256, its `url` under `[releases] base_url`, and its `install_url`. For an `.ipa`, that is the `itms-services://` link to a generated `manifest.plist`; for other builds, it is the `url`.
+  - It attaches the build with its sha256, its `url` under `[releases] base_url`, and its `install_url`. For an `.ipa`, that is the `itms-services://` link to a generated `manifest.plist`, and an `index.html` install page with one Install button is written beside it (H-229); for other builds, it is the `url`.
   - `install_release` re-hashes every served build against the frozen sha256 and returns `verified` per build. On a mismatch, it refuses the install, pauses a rollout in progress and tells DevOps.
+- **Installing on an iPhone or iPad (H-229, UX-043):** the messages are `hermes.home.v1` `ReleaseInstall*` and `InstallOffer*`, as proto3 JSON with the proto field names; a field at its default is left out. All four need the board's home.
+  - `release_install {release_id, check_site?}` (read) answers `{type: "release_install", install}`: the package's version, its iOS `build`, `state`, `installable` (awaiting_owner, approved, deploying or deployed), `for_testing`, the HTTPS `page_url` (the build's `index.html`, written on demand for builds published before it existed), the `install_url`. Both are derived by the daemon from `[releases] base_url` and the build's served folder, never taken from the build's `url` or `install_url`: the build's file must lie at `<served dir>/<release>/ios/<file>` beside its `manifest.plist` and still match its sha256, else both are empty and nothing is written, probed or sent (CE review of H-229, M1). It also answers `computer`, `approved_at` and the paired `devices` (not revoked, last seen first, `connected` when one holds a live connection, and `app_version` "0.6.1 (12)" with `app_version_seen_at` as the device last reported it). With `check_site`, the daemon first asks for the page over HTTPS (curl, 4 s) and sets `site {serving, problem, checked_at}`.
+  - `release_send_to_device {release_id, device_id}` (control, from the app's ticket or a paired device only, never the owner token; M2) answers `{type: "install_offer", offer}`: `title` ("The Hermes 0.6.1 (12) is ready to install"), `body` ("Approved on 8 Oct 2026. Tap to install." or "Ready to test. Tap to install."), `install_url`, `page_url` and `delivered` (the device was connected). It is kept as that device's one waiting offer and pushed as `{type: "install_offer", device_id, offer}` to that device's connections only. Refused (`conflict`) when the package isn't installable or has no published iOS build, and `not_found` for an unknown or revoked device.
+  - `install_offers {}` (read) answers `{type: "install_offers", offers}`: the asking device's waiting offer, at most one; none on a connection that isn't a device. `install_offer_dismiss {release_id}` (control, a device only) drops it (Not now) and answers the same.
 
 ## Pausing every project for an install (H-117)
 

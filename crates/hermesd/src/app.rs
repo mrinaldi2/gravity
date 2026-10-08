@@ -88,6 +88,8 @@ pub struct AppState {
     pub bearers: crate::bus_auth::BearerLog,
     /// The owner's one-time tickets and the app check behind them (H-044 T4).
     pub owner: crate::bus_auth::owner::Owner,
+    /// Paired devices connected now, for Send to phone (H-229).
+    pub live_devices: crate::board::release::phone::LiveDevices,
     pub started_at: Instant,
     /// Wall-clock start, kept alongside the monotonic `started_at` purely so
     /// [`AppState::stale_build`] can compare it against a file mtime.
@@ -146,6 +148,7 @@ impl AppState {
             overview: crate::overview::Overview::default(),
             bearers: crate::bus_auth::BearerLog::default(),
             owner: crate::bus_auth::owner::Owner::new(&cfg_home),
+            live_devices: Default::default(),
             started_at: Instant::now(),
             started_wall: SystemTime::now(),
         });
