@@ -27,6 +27,7 @@ pub mod peers;
 pub mod proxy;
 pub mod releases;
 pub mod repo;
+pub mod supersede;
 pub mod tasks;
 pub mod team;
 

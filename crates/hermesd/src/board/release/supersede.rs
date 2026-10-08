@@ -7,9 +7,13 @@
 //! When a deploy completes a package, every older open package of the same
 //! platform (iOS with iOS, desktop with desktop) is closed:
 //! - one the owner hasn't ruled on (awaiting, held, repackaging) is
-//!   superseded by it; its decision is withdrawn, so Needs you drops it, and
-//!   its items the deployed package doesn't hold go back to Verify, free to
-//!   join the next package;
+//!   superseded by it, when it contains that one and reaches every computer
+//!   that one was for (the checks `close_via` makes): its decision is
+//!   withdrawn, so Needs you drops it, and its items the deployed package
+//!   doesn't hold go back to Verify, free to join the next package. Created
+//!   later isn't enough: a hotfix cut from an older branch, or a Mac-only
+//!   package, would take a ruling from the owner that it doesn't answer.
+//!   One that fails a check keeps its ruling, with a `not_closed` event;
 //! - one ruled to ship whose install got under way (deploying, paused,
 //!   partly deployed) is closed as deployed through it
 //!   (`deployed_via::close_via`), with every check that tool makes. One it
@@ -28,7 +32,7 @@ use crate::actor::Actor;
 use crate::app::AppState;
 use crate::board::model::ColumnCategory;
 
-use super::deployed_via::{close_via, ruled_open};
+use super::deployed_via::{close_via, reaches, reaches_and_contains, ruled_open};
 use super::machines::is_ios_package;
 use super::model::{Release, ReleaseEvent, ReleaseStatus};
 use super::{daemon_move, load, publish_moves, publish_touched};
@@ -70,7 +74,8 @@ pub(super) fn after_deploy(
     };
     for old in older {
         let closed = if unruled_open(old.status) {
-            supersede(app, bot, actor, &old.id, deployed)
+            reaches_and_contains(app, project, &old, deployed)
+                .and_then(|()| supersede(app, bot, actor, &old.id, deployed))
         } else {
             close_via(app, bot, actor, &old.id, &deployed.id).map(drop)
         };
@@ -97,6 +102,8 @@ fn supersede(
         if !unruled_open(old.status) {
             return Ok((old, Vec::new(), Vec::new()));
         }
+        // Again, inside the write: its computers may have changed.
+        reaches(t, &old, deployed)?;
         let event = ReleaseEvent {
             release_id: old.id.clone(),
             release_name: old.name.clone(),
@@ -156,6 +163,11 @@ fn supersede(
 
 /// Says on the package why the later deploy didn't close it.
 fn not_closed(app: &Arc<AppState>, bot: &bus::Bot, old: &Release, deployed: &Release, why: &str) {
+    let then = if unruled_open(old.status) {
+        "It still waits for the owner's ruling."
+    } else {
+        "DevOps or the lead closes it with release_deployed_via once that's resolved."
+    };
     let event = ReleaseEvent {
         release_id: old.id.clone(),
         release_name: old.name.clone(),
@@ -163,8 +175,7 @@ fn not_closed(app: &Arc<AppState>, bot: &bus::Bot, old: &Release, deployed: &Rel
         kind: "not_closed".into(),
         actor: bot.id.clone(),
         note: Some(format!(
-            "{} is deployed but didn't close this one: {why}. DevOps or the lead closes it \
-             with release_deployed_via once that's resolved.",
+            "{} is deployed but didn't close this one: {why}. {then}",
             deployed.name
         )),
         detail: json!({ "by_release_id": deployed.id, "why": why }),

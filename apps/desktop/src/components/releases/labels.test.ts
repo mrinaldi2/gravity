@@ -1,5 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { eventLine } from "./labels";
+import { deployment, release } from "../../test/releaseFixtures";
+import { eventLine, rolloutLabel } from "./labels";
+
+describe("rolloutLabel", () => {
+  it("shows an install called off by a later package as replaced, not installing", () => {
+    const closed = release({
+      status: "deployed",
+      deployments: [
+        deployment({ machine: "mac", result: "ok" }),
+        deployment({ machine: "imac", result: "superseded" }),
+      ],
+    });
+    expect(rolloutLabel(closed, "imac")).toEqual({ glyph: "⊘", word: "Replaced", tone: "off" });
+    expect(rolloutLabel(closed, "mac").word).toBe("Live");
+  });
+});
 
 describe("eventLine", () => {
   it("says a package was closed through the later release that contains it", () => {

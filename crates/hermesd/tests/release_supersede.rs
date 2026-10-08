@@ -7,162 +7,16 @@
 
 mod common;
 
-use common::deployed_via::{git, history, via};
-use common::releases::{releases, rule, Releases};
+use common::deployed_via::{git, via};
+use common::releases::Releases;
+use common::supersede::{
+    approved, approved_by, deploy_on, deployment, event, status, still_awaiting, submitted,
+    two_computers, DESKTOP,
+};
 use common::tasks::error_text;
 use common::WsClient;
 use hermesd::board::model::{ProjectRole, Role};
-use serde_json::{json, Value};
-
-const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
-/// Two computers: the Tester on the Mac, DevOps also testing on the iMac;
-/// the project's repository holds `history`.
-async fn two_computers(items: usize) -> (Releases, [String; 4], tempfile::TempDir) {
-    let r = releases(items).await;
-    let db = &r.pair.d.app.db;
-    db.set_project_role(&ProjectRole {
-        project_id: r.project.clone(),
-        role: Role::Tester,
-        bot_id: r.pair.ids[1].clone(),
-        machine: Some("imac".into()),
-    })
-    .unwrap();
-    let repo = tempfile::tempdir().unwrap();
-    let commits = history(repo.path());
-    db.set_project_repo(
-        &r.project,
-        Some(&bus::ProjectRepo {
-            url: repo.path().display().to_string(),
-            branch: "main".into(),
-        }),
-    )
-    .unwrap();
-    (r, commits, repo)
-}
-
-/// Both desktop computers' testers: the Tester on the Mac, DevOps on the iMac.
-const DESKTOP: &[(usize, &str)] = &[(2, "mac"), (1, "imac")];
-
-/// A package of `item` built for `platform` from `commit`, passed by
-/// `testers` and submitted to the owner.
-async fn submitted(
-    r: &mut Releases,
-    name: &str,
-    item: &str,
-    (platform, testers): (&str, &[(usize, &str)]),
-    commit: &str,
-) -> Value {
-    let created = r.bots[1]
-        .call("release_create", json!({"name": name, "items": [item]}))
-        .await;
-    let id = created["release"]["id"].as_str().unwrap().to_string();
-    r.bots[1]
-        .call(
-            "release_attach_build",
-            json!({"release_id": id, "platform": platform, "version": name,
-                   "artifact": format!("/builds/{name}"), "sha256": SHA,
-                   "source_commit": commit}),
-        )
-        .await;
-    for &(bot, machine) in testers {
-        r.bots[bot]
-            .call(
-                "release_test",
-                json!({"release_id": id, "machine": machine, "build_sha256": SHA,
-                       "result": "pass"}),
-            )
-            .await;
-    }
-    r.bots[1]
-        .call("release_submit", json!({"release_id": id}))
-        .await["release"]
-        .clone()
-}
-
-async fn approved(
-    r: &mut Releases,
-    owner: &mut WsClient,
-    name: &str,
-    item: &str,
-    commit: &str,
-) -> Value {
-    approved_by(r, owner, name, item, commit, DESKTOP).await
-}
-
-async fn approved_by(
-    r: &mut Releases,
-    owner: &mut WsClient,
-    name: &str,
-    item: &str,
-    commit: &str,
-    testers: &[(usize, &str)],
-) -> Value {
-    let release = submitted(r, name, item, ("daemon", testers), commit).await;
-    let ruled = rule(
-        owner,
-        &release,
-        json!([{"item_id": item, "verdict": "ship"}]),
-    )
-    .await;
-    assert_eq!(ruled["release"]["status"], "approved", "{ruled}");
-    ruled["release"].clone()
-}
-
-/// Sends `release` to `machine` and, unless `confirm` is false, confirms it.
-async fn deploy_on(r: &mut Releases, release: &Value, machine: &str, confirm: bool) -> Value {
-    r.bots[1]
-        .call(
-            "release_deploy",
-            json!({"release_id": release["id"], "machine": machine}),
-        )
-        .await;
-    if !confirm {
-        return Value::Null;
-    }
-    let tester = if machine == "mac" { 2 } else { 1 };
-    r.bots[tester]
-        .call(
-            "deploy_confirm",
-            json!({"release_id": release["id"], "machine": machine, "result": "ok",
-                   "smoke": "pass"}),
-        )
-        .await["release"]
-        .clone()
-}
-
-fn status(r: &Releases, release: &Value) -> String {
-    let id = release["id"].as_str().unwrap();
-    r.pair
-        .d
-        .app
-        .db
-        .board_read(|t| t.release(id))
-        .unwrap()
-        .unwrap()
-        .status
-        .as_str()
-        .to_string()
-}
-
-fn event(r: &Releases, release: &Value, kind: &str) -> Value {
-    let id = release["id"].as_str().unwrap();
-    let got = r
-        .pair
-        .d
-        .app
-        .db
-        .board_read(|t| t.release(id))
-        .unwrap()
-        .unwrap();
-    got.to_json()["events"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|e| e["kind"] == kind)
-        .cloned()
-        .unwrap_or_else(|| panic!("no {kind} event on {}", got.name))
-}
+use serde_json::json;
 
 #[tokio::test]
 async fn a_deploy_supersedes_the_older_unruled_packages_of_its_platform() {
@@ -271,6 +125,28 @@ async fn a_package_stuck_part_way_closes_through_the_later_one() {
         "{:?}",
         told.iter().map(|m| &m.body).collect::<Vec<_>>()
     );
+    // Its iMac install is called off: the row closed, the task cancelled,
+    // and a late confirm refused (ARCH S1).
+    let row = deployment(&r, &stuck, "imac");
+    assert_eq!(row["result"], "superseded", "{row}");
+    let task = r
+        .pair
+        .d
+        .app
+        .db
+        .get_task(row["task_id"].as_str().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(task.state, bus::TaskState::Cancelled);
+    let late = r.bots[1]
+        .call_raw(
+            "deploy_confirm",
+            json!({"release_id": stuck["id"], "machine": "imac", "result": "ok",
+                   "smoke": "pass"}),
+        )
+        .await;
+    assert!(error_text(&late).contains("called off"), "{late}");
+    assert_eq!(status(&r, &stuck), "deployed");
 
     // Not contained: left, with the reason on it.
     assert_eq!(status(&r, &side), "deploying");
@@ -334,4 +210,44 @@ async fn a_later_package_that_missed_a_computer_doesnt_close_it() {
         why["note"].as_str().unwrap().contains("doesn't reach imac"),
         "{why}"
     );
+}
+
+/// A hotfix cut after a newer package, from an older branch, doesn't
+/// supersede it: deployed later, it doesn't hold the newer code (ARCH M1).
+#[tokio::test]
+async fn a_later_hotfix_from_an_older_branch_doesnt_supersede_a_newer_package() {
+    let (mut r, [_a, b, c, _d], _repo) = two_computers(2).await;
+    let mut owner = WsClient::connect(&r.pair.d).await;
+    let items = r.items.clone();
+    let newer = submitted(&mut r, "0.17.5", &items[0], ("daemon", DESKTOP), &c).await;
+    // 0.17.4-r1, from the 0.17.4 branch at B, created and deployed after.
+    let hotfix = approved(&mut r, &mut owner, "0.17.4-r1", &items[1], &b).await;
+    deploy_on(&mut r, &hotfix, "mac", true).await;
+    let done = deploy_on(&mut r, &hotfix, "imac", true).await;
+    assert_eq!(done["status"], "deployed", "{done}");
+
+    still_awaiting(&r, &newer, &items[0], "doesn't contain");
+}
+
+/// A Mac-only deploy doesn't supersede a package also meant for the iMac:
+/// the iMac would never get what the owner was asked to rule on (ARCH M1).
+#[tokio::test]
+async fn a_mac_only_deploy_doesnt_supersede_a_package_for_both_computers() {
+    let (mut r, [a, _b, c, _d], repo) = two_computers(2).await;
+    let mut owner = WsClient::connect(&r.pair.d).await;
+    let items = r.items.clone();
+    let both = submitted(&mut r, "0.17.0-r1", &items[0], ("daemon", DESKTOP), &a).await;
+    let set = owner
+        .request(
+            json!({"type": "release_machines_set", "project_id": r.project,
+                        "machines": ["mac"]}),
+        )
+        .await;
+    assert_eq!(set["type"], "release_machines", "{set}");
+    git(repo.path(), &["checkout", "-q", "main"]);
+    let mac_only = approved_by(&mut r, &mut owner, "0.17.2", &items[1], &c, &[(2, "mac")]).await;
+    let done = deploy_on(&mut r, &mac_only, "mac", true).await;
+    assert_eq!(done["status"], "deployed", "{done}");
+
+    still_awaiting(&r, &both, &items[0], "doesn't reach imac");
 }

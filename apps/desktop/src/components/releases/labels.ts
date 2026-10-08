@@ -129,6 +129,9 @@ export function rolloutLabel(release: Release, machine: string): StatusLabel {
   if (deploy?.result === "failed") {
     return { glyph: "✗", word: "Failed", tone: "bad" };
   }
+  if (deploy?.result === "superseded") {
+    return { glyph: "⊘", word: "Replaced", tone: "off" };
+  }
   if (deploy) {
     return { glyph: "◑", word: "Installing", tone: "wait" };
   }

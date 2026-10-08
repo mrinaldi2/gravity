@@ -88,7 +88,8 @@ export interface ReleaseDeployment {
   /** The bot carrying it out. */
   readonly executor: string;
   readonly task_id: string | null;
-  readonly result: "ok" | "failed" | "rolled_back" | null;
+  /** `superseded`: called off when a later package closed this one. */
+  readonly result: "ok" | "failed" | "rolled_back" | "superseded" | null;
   readonly smoke: "pass" | "fail" | null;
   readonly log_artifact: string | null;
   readonly started_at: string;

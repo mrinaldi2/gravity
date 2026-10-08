@@ -257,6 +257,14 @@ pub fn confirm(
                 "only the tester carrying it out or DevOps can confirm it",
             ));
         }
+        // Called off when a later package closed this one (H-191).
+        if row.result == Some(DeployResult::Superseded) {
+            return Err(conflict(format!(
+                "the {} on {machine} was called off: release {} was closed through a later one",
+                action.as_str(),
+                release.name
+            )));
+        }
         t.finish_deployment(&release.id, machine, action, result, smoke, log_artifact)?;
         let release = t.release(&release.id)?.expect("loaded");
         let (status, to, note) = match result {
