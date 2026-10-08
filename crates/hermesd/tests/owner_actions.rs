@@ -98,16 +98,11 @@ async fn the_owner_runs_a_proposal_once_exactly_as_shown() {
     assert_eq!(viewer.request(run.clone()).await["code"], "forbidden");
     // The owner token is refused from anywhere, even from a process that
     // isn't a bot's (here: this test's own), and can't reject either
-    // (ARCH-R51 M1); the app's credential runs it.
+    // (ARCH-R51 M1): it holds no approve at all (CE-030 N1). The app's
+    // credential runs it.
     let mut token = WsClient::connect_with(&s.d, s.d.app.secrets.client_token(), FEATURES).await;
     let reply = token.request(run.clone()).await;
-    assert!(
-        reply["message"]
-            .as_str()
-            .unwrap()
-            .contains("not with the owner token"),
-        "{reply}"
-    );
+    assert_eq!(reply["code"], "forbidden", "{reply}");
     let reject = token
         .request(json!({"type": "owner_action_reject", "id": id}))
         .await;
@@ -160,10 +155,11 @@ async fn the_owner_runs_a_proposal_once_exactly_as_shown() {
             .into_iter()
             .map(|(_, _, e)| e)
             .collect();
-    // No feature, unknown process, wrong hash: each refusal is on record.
+    // No feature, no approve, the owner token's run and reject, wrong hash:
+    // each refusal is on record, the ones at the gate too.
     assert_eq!(
         events,
-        ["proposed", "refused", "refused", "refused", "run", "finished"]
+        ["proposed", "refused", "refused", "refused", "refused", "refused", "run", "finished"]
     );
 }
 

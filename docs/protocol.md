@@ -57,6 +57,12 @@ project, bad arguments, an envelope a client may not send) is answered with an
 `Error` body: `forbidden`, `not_found`, `no_board`, `invalid_request` or
 `internal`.
 
+A request whose handler fails unexpectedly (a panic in the daemon) is answered
+`internal` under its own `req_id`, JSON or binary, whether its handler answers
+at once or later; the connection goes on serving. A connection the daemon can
+no longer serve is closed, never left open and silent, so a client reconnects
+(H-170). Requests from a linked computer get the same `internal` answer.
+
 The board (`proto/hermes/board/v1/requests.proto`, H-020 §1.5) is the first
 typed surface:
 
@@ -69,6 +75,15 @@ typed surface:
 | `item_query {project_id, text?, column_keys, assignee?, types, priorities, platforms, blocked?}` | read | `items`: matching cards |
 | `item_move_check {id}` | read | `move_check`: every other column with its unmet guards |
 | `item_move {id, to, expected_version, reason?, override_reason?}` | control | `moved`: `done` (the item), `refused` (unmet guards) or `conflict` (the current item) |
+| `item_comment {id, body, reply_to?}` | control | `edited`: `done` (the item) and `told`, the bots told. The owner's comment is delivered, once each, to every bot whose card question it answers (see owner threads), the card's assignee and the project's lead, as a **note** from the owner: `[card <id>] Owner replied to your question on the card: <body>` (it replies to the bot's question), `… Owner commented on the card you asked about: …`, or `… Owner commented on the card: …`, each followed by how to answer on the card (`item_comment` with `reply_to` the comment's id). A note, not a chat, so the bot answers on the card and its turn isn't posted to the owner's thread (H-201 S2, H-211). One recipient failing doesn't stop the others. A bot's comment (MCP) tells no one. |
+
+Cards carry `owner_commented_at`, the owner's latest comment on them (H-211):
+a computer mirroring the board closes its card questions asked before it.
+
+Bots read a card's comments in MCP `item_get`: `comments` lists the latest 50,
+oldest first, each `{id, author, author_name, body, reply_to, at}`. `author` is
+stored form (`user`, `device:<id>`, `bot:<id>`); `author_name` is `owner` for
+the owner on any client, else the bot's name (H-201).
 
 `board_watch` answers with the snapshot the pushes continue from, and no push
 for that project is sent before it. Each committed board change is then pushed
@@ -484,6 +499,7 @@ The owner is known by their app's code identity or by an OK from them in the app
   - The card's `origin` (also its `input`) carries separate fields (UX-014): `command` (no pid), `pid`, `process` (the pid's executable name), `launched_from` (the nearest ancestor that is an app or terminal: Terminal, iTerm2, Code, claude…), `cwd` (read from the OS; the client's `cwd` only where the OS can't tell, i.e. Windows) and `bot` (the name of the bot whose workspace holds `cwd`). A field that can't be read is left out. The client composes every line and never shows `summary`.
   - The app answers these cards with `allow_once` ("Allow this command") or `deny` (no reason); it offers no "Allow for session" and no single-key shortcuts for a terminal command.
 - **Tickets:** single use, valid for 60 s. A ticket is passed as the `token` in WS `hello` and grants the same capabilities as the client token.
+- **Observability (H-165):** the daemon logs `owner ticket granted` and `owner ticket redeemed` at info, with `via` (`app`, `cli`), the grantee's `pid` and `exe` path, and the compiled `team` on a grant; a hello on `client.token` logs `owner connected with client.token, not a ticket`. No line carries a ticket or a token. `/health` counts, since the daemon started, `owner_tickets_granted`, `owner_tickets_redeemed` and `client_token_fallbacks` (owner hellos on `client.token`).
 - **Refusals:** error `-32002`.
   - A caller inside a bot session is always refused: "a bot can't act as the owner" for `owner_ticket`, "Commands that act as the owner can't run from a bot's session." for `owner_request`.
   - Other refusals: "not the owner's app"; for `owner_request`, which the CLI prints as is, "You denied this command in The Hermes. It did not run.", "No answer in The Hermes, so the command did not run." and "Open The Hermes on this computer to allow this command, then run it again." (no app is connected to show the card).
@@ -741,6 +757,11 @@ runs through the tester the same way.
   - `release_machines` (every bot; WS read) returns `{project_id, machine_name, required, deploys_to, set, set_by, testers: [{bot_id, machine}]}`.
   - `release_machines_set {machines?, machine_name?}` sets the list: MCP for the lead (narrowing testing only), WS for the owner (approve, on the board's home; narrows deploys too). Each entry must be a computer some tester tests on, and an empty list goes back to every tester's computer.
   - Migration 033: `release_machine`, `release_machine_setter`, `release_target`, `daemon_name`.
+  - **iOS packages (H-176).** A package whose every build is `ios` freezes its own targets: it is tested on `ios` and deployed to `iphone`, the owner's phone.
+    - The tester whose role names `ios` (iOS QA) reports its `release_test`, and gets the `iphone` deploy task and confirms it.
+    - `ios` and `iphone` never count as desktop computers. The project's list, and `required` and `deploys_to` in `release_machines`, stay desktop-only, so desktop packages keep needing every desktop tester's computer.
+    - Besides the roles it already assigns, the lead may give, or take away, a `tester` role on `ios` with `role_set {bot, role: "tester", machine: "ios"}`. That's only on `ios` (not `iphone`), and only for a bot that isn't the lead, DevOps or a dev (separation of duties) and isn't already testing a desktop computer. Nor may the lead later make that iOS tester a dev (or DevOps or lead): taking the tester role back comes first. Every other tester, DevOps or lead role stays the owner's (ARCH-R30).
+    - A boot repair (`release::ios_repair`) re-freezes, to `iphone`, the deploy targets of iOS packages submitted before this change, and rehashes them so their deploy passes the frozen-hash check. That applies only to packages still as frozen, not over, whose deploy targets nobody set and that haven't started a deploy. Each repair is a `targets_repaired` release event on the package (actor `daemon`, `detail {from, to}`); a later boot finds none.
 - **Hold:** `release_hold` keeps the decision open and holds it (`remind_at` becomes its `held_until`). When the reminder comes due, the decision sweep resumes it and the package goes back to `awaiting_owner`. `release_unhold` does the same on request.
 - **Pause:** `release_pause` (owner, or DevOps over MCP) pauses a rollout in progress. Deploys and installs are refused with the reason, and every tester holding an open deploy task gets a note. `release_resume` returns it to `deploying`.
 - **Who may rule:** `can_rule` says whether this connection may rule (the approve grant, on the board's home). When it can't, `rule_on` names the home computer. `BoardSnapshot.can_rule` carries the same flag.
@@ -770,6 +791,12 @@ runs through the tester the same way.
 
     The job writes `<home>/logs/release-install-<release>.log` and its exit code to `<home>/run/release-install-<release>.status`, then removes the stage and itself. The command exits at once.
   - **After the restart.** From the next session, `--status` prints how it ended and the end of the log. The open deploy task in the session's resume note is the reminder. The tester smoke-tests and reports with `deploy_confirm`. `--dry-run` stops after the checksum and signature checks.
+  - **Who may replace a running service (H-193).** Opening the app never replaces a daemon that answers on its port:
+    - Its launch repair (`service install --no-migrate`) runs only when the files say the service is broken (binary missing, or an interrupted switch-over) and nothing answers `/health`.
+    - A newer bundled daemon is offered as the "Update Hermes service" toast, a click.
+    - Otherwise the service is replaced only by a release install, with its quiesce.
+
+    Runbook: to find out what restarted the service, read `<home>/logs/service-install.log`. Each `service install` appends a line with the time, version, arguments, the executable that ran it (with its pid), and what launched that executable.
   - **Deny rules, advisory only.** Every bot but the project's DevOps gets deny rules in its generated Claude Code settings for direct installer and service commands: `hermesd service install/uninstall`, `installer -pkg`, `msiexec`, `xcrun devicectl device install`, `ios-deploy`, and a silent `*-setup.exe /S`.
     - They are **advisory, not a boundary**. They match command text, so a script, an alias, a renamed binary or a Codex-runtime bot gets past them.
     - What enforces the gate is the daemon: `install_release`, the approval, the frozen hash and the signature check. Every deploy carries its task and decision ids for the audit trail.
@@ -939,7 +966,15 @@ A bot proposes an exact command for the owner to run; only the owner runs it.
   - `serving_off`: `{title, reason}`, listed first: the served folder is refused, so no build can be published until `[releases] dir` is fixed (H-100). It has no action in the app.
   - With `all_kinds: true` in the request, the kinds the projects home added are listed too (`owner_action`, `permission_prompt`, `bot_waiting`), each as its typed `AttentionRow` in proto3 JSON with `kind` its lowercase name. An older client leaves `all_kinds` out and sees only the kinds above.
 - **`wip_overrides`:** moves made over a WIP limit in the last seven days, with their notes. They're the lead's call, so they sit beside Needs you, not in it.
-- **Off the board's home:** this computer's own decisions are listed, and the daemon adds the home's rows (asked as peer request `dashboard_needs_you`), each with `elsewhere` naming the home, where they're acted on; `wip_overrides` are the home's too. When the home can't be reached, `needs_you_note` says so and names it.
+- **Other linked computers (H-178):** the rows are those `attention_rows` lists, so the dashboard and the projects home always agree.
+  - This computer's own rows come in the shapes above.
+  - Each linked computer's last good part, the board's home included, is added as `{kind: "elsewhere", row, elsewhere}` (only with `all_kinds`). `row` is the typed `AttentionRow` in proto3 JSON with `kind` its lowercase name, and `elsewhere` is the computer to act on it.
+  - `needs_you_count` is the projects home's count for the project: this computer's rows plus every linked computer's.
+  - When a linked computer isn't answering, its last good rows are still listed, and `needs_you_note` names it ("Can't reach … right now, so this may not be everything that needs you.").
+  - `wip_overrides` are this computer's only.
+  - **Deprecated** (ARCH-R70): the peer request `dashboard_needs_you {project_id, all_kinds}` (the caller's ids). A daemon no longer sends it.
+    - The board's home still answers it for one release, so a linked computer on 0.17.2 or earlier keeps the home's rows. The answer is `{rows, wip_overrides, count}` in the caller's ids.
+    - It is removed in 0.18.0 (H-185).
 - **`board`:** null without a board. Otherwise:
   - `columns`: each visible column with its `count`, `wip_limit` and `wip_scope`.
   - `blocked` and `stale`: counts of open items.
@@ -956,7 +991,8 @@ The typed surface `hermes.home.v1` (`proto/hermes/home/v1/home.proto`, contract 
 - **`projects_overview {project_ids?}`** (read) answers `{type: "projects_overview", overview}`: one `ProjectRow` per live project (all when `project_ids` is empty), ranked pinned first, then `attention.score` desc, `attention.oldest_at` asc, `last_activity_at` desc, name; `rank` numbers that order. It answers at once from local data and each linked peer's last good part: it never asks a peer. `sources` lists each linked computer with its `state` (`OK`, `OFFLINE`, `TIMEOUT`, `OLD_VERSION`; `STATE_UNSPECIFIED` until first asked) and the `as_of` of the data in use; a row whose peer isn't `OK` is `partial` and names it in `stale_sources`. A row is `pinned` when any member computer has pinned it.
   - **Card fields (H-144, additive):** `columns` lists every board column in board order as `{key, name, category, count}` (`category` the lowercase `ColumnCategory` name), and `doing_total` counts the cards in Doing columns while `doing` lists at most 3; both come from the board here, or its mirror off-home, as `doing` does, and are empty without a board. `bots_waiting` counts bots waiting for the owner, summed from each computer's part (`Part.bots_waiting`) like `bots_working`, last good for a peer that isn't `OK`. `current_release.items_ready` counts the release's items in Verify or later (H-137's `ready`), the progress of a planned release.
 - **`attention_rows {project_id}`** (read) answers `{type: "attention_rows", attention_rows}`: the rows the project's `attention` counts, this computer's and each linked peer's last good ones, weight desc then oldest first. Row ids are `<kind>:<daemon_id>:<target>` and stay the same across reads; `daemon_id` is the computer to act on it, `project_id` in its ids.
-- **`attention_dismiss {id}`** (approve) closes an `owner_question` row (D6); any other kind is refused with `invalid_request`.
+- **`attention_dismiss {id}`** (approve) closes an `owner_question` row (D6); any other kind is refused with `invalid_request`. The bot that asked is told, as a note from the service, that the owner dismissed it without answering (UX-042).
+- **`question_comment_id`** (H-211): on an `owner_question` row on a card, the comment that asked, so the owner's reply can name it in `reply_to`.
 - **Push `projects_overview_changed {project_ids}`**, debounced at 2 s: a bot's state, a task or message, a card, a decision, an owner action, a permission prompt or a meeting changed one of those rows, or a peer's part changed. Clients refetch.
 - **Weights:** release awaiting, owner action, permission prompt 3; P0 item, serving off 2; relayed rulings, bot waiting, off board, owner question 1; a decision 3 when urgent, else 1. Each computer counts only the rows it owns: its prompts, Run cards (`target_machine` here), waiting bots, decisions and serving state, plus releases awaiting the owner and P0 cards when it holds the board.
 - **Peers:** `project_attention {project_ids}` (peer request, the callee's ids) answers `ProjectAttention` in proto3 JSON: a `Part` per project linked with the caller, in the caller's ids, with its rows, summary, own working bots, and on the board's home the current release and latest meeting summary. A project not linked with the caller is left out. A peer sends `project_attention_changed {project_ids}` (the receiver's ids), debounced at 2 s, when its part may have changed; the receiver asks again. It also asks on link-up and every 60 s while a client fetched the overview in the last 5 min, at most one request per peer at a time, 3 s each. A peer without `project_attention` is `OLD_VERSION`.
@@ -964,13 +1000,18 @@ The typed surface `hermes.home.v1` (`proto/hermes/home/v1/home.proto`, contract 
 - **A card on the owner's message (D5):** `send_user_message` with `item_id` checks the card is on the bot's project's board and open (else `invalid_request`, or `not_found`), stores and delivers the body as `[card <id>] <body>`, and comments "Owner asked <bot>: …" on the card when its board lives here (`commented: false` on a board mirrored from its home).
 - **Owner threads (D6, capability `owner_threads`).** A bot's thread is its DM conversation's messages from the owner and its own `message_owner` notes; other bots' messages there aren't in it.
   - **MCP `message_owner {body, asks?, item?}`** (every bot): stores a note from the bot in its thread, nothing delivered. `body` at most 4096 bytes. With `item` the card is commented "To the owner: …" first (through the board's home when mirrored; a card the bot can't comment on refuses the call) and the stored body is `[card <id>] …`. With `asks: true` it opens an `owner_question` row (target `bot`) until the owner writes in that thread or dismisses it.
-  - **`item_comment {asks_owner?}`:** after the comment, an `owner_question` row (target `item_id`) until the owner comments on the card (a D5 card message counts), the card closes, or it is dismissed. On a mirrored board only the closing is seen here. `asks_owner` never reaches the board's home.
+  - **`item_comment {asks_owner?}`:** after the comment, an `owner_question` row (target `item_id`) until the owner comments on the card (a D5 card message counts), the card closes, or it is dismissed. On a mirrored board the card's `owner_commented_at` and column are seen here. The comment goes to the board's home with `asks_owner: true` (H-211), which keeps the question (`card_question`: the comment and the bot, a stand-in for a linked bot), so the owner's answer reaches the bot wherever it runs; a home from before refuses the argument and the comment goes plainly.
   - **`owner_threads {}`** (read) → `{type: "owner_threads", owner_threads: OwnerThreads}`: one entry per bot of this computer's projects, stand-ins included (asked of their computer, 3 s; one that doesn't answer is listed without `last`), open questions first, then newest message. `bot` is the `BotRef` of its own computer; `project_id` is this computer's.
   - **`owner_thread_get {bot_id, before_num?, limit?}`** (read) → `{type: "owner_thread", owner_thread: OwnerThreadPage}`: messages oldest first (`limit` default 50, max 200), `asks`/`open` on the messages that asked, `last_read_num`, `has_more`.
   - **`owner_thread_read {bot_id, up_to_num}`** (read) → `{type: "owner_thread_marked", owner_thread_marked}`; read state never goes back. `unread` counts the bot's messages after it.
   - `bot_id` may be this computer's id or, for a stand-in, its `BotRef.bot_id`. A stand-in's thread requests go to its computer as peer requests of the same name (in its ids); offline answers `unavailable`.
   - **Push `owner_thread_updated {bot: BotRef, project_id}`** on a bot's note, question, read or dismissal; the bot's computer sends peer notify `owner_thread_updated {bot_id}` to each peer the bot is linked to, which pushes it for its stand-in. Pushes carry no titles or text.
   - Binary arms: `HomeRequest` 5–7, `HomeResponse` 5–7.
+  - **Answers posted from the session (H-192, capability `owner_answers`).** When a turn the owner started from chat (`trigger {kind: "owner", via: "chat"}`) ends without a `message_owner` call, its final text item is posted to the bot's thread as the bot's note, once per turn. It is redacted like a prompt summary and cut to 4096 bytes with "… The rest is in Activity.".
+    - When: after the `Stop` hook, once the transcript holds the turn's end; a turn that ended more than 2 minutes before the hook is never posted.
+    - Not posted: turns started any other way (terminal, a task, a bus message, a routine); turns of a stand-in, which its own computer posts.
+    - Each posted turn is stored once (`owner_answer`, keyed by bot and turn). The chat turn then carries `answer_num`, the thread message it became, in `chat` replies and `chat_turns` pushes.
+    - A `message_owner` call shows in the transcript as `{type: "sent", to: "owner", msg_kind: "owner", body}`, which is also what tells the capture the turn answered already.
 - **Pins (D7, capability `project_pin`).** `project_pin {project_id, pinned}` (control) → `{type: "project_pinned", project_id, pinned}` (binary arm 4). Stored per computer (`project.pinned_at`) and forwarded best-effort as peer request `project_pin` (the callee's id) to each linked computer, which stores it without forwarding. `ProjectAttention.Part.pinned` carries it across. Push `project_pinned {project_id, pinned}`, and the row's `projects_overview_changed`.
 - **Redaction (CE-014 F1):** a permission prompt's `summary` and every attention row's `title` mask token-like values (`Bearer …`, `--password …`, `--token …`, `token=`, `password=`, `secret=`, `*_TOKEN=`, `*_KEY=`, `*_SECRET=`, `*_PASSWORD=`) as `***`. A prompt's full `input` is unchanged.
 

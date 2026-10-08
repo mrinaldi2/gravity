@@ -16,6 +16,7 @@ import RelayedDialog from "./RelayedDialog";
 import type { ConfirmOutcome } from "./useConfirmRelayed";
 import { attentionRow } from "./attentionRows";
 import type { AttentionActions } from "./attentionRows";
+import { elsewhereKind, elsewhereRow } from "./elsewhereRows";
 
 interface NeedsYouActions extends AttentionActions {
   readonly onReview: (release: Release) => void;
@@ -29,6 +30,8 @@ interface NeedsYouActions extends AttentionActions {
 interface NeedsYouProps extends NeedsYouActions {
   readonly projectName: string;
   readonly rows: readonly Row[];
+  /** The daemon's count, as the projects home counts (H-161); absent before 0.17. */
+  readonly count?: number;
   readonly overrides: readonly WipOverride[];
   /** Off-home, why the home's rows are missing. */
   readonly note?: string | null;
@@ -54,10 +57,23 @@ const ORDER: Readonly<Record<Shown["kind"], number>> = {
   permission_prompt: 1,
   p0: 3,
   owner_question: 4,
-  bot_waiting: 5,
+  // Weighed as an ordinary decision by the daemon, a bot stopped on its
+  // terminal's permission prompt included (H-172).
+  bot_waiting: 1,
   off_board: 6,
   routines_without_card: 7,
+  // Sorted by the kind it carries (`orderOf`); this is the fallback.
+  elsewhere: 5,
 };
+
+/** A row's place; another computer's row sorts as the kind it carries. */
+function orderOf(r: Shown): number {
+  if (r.kind !== "elsewhere") {
+    return ORDER[r.kind];
+  }
+  const inner = elsewhereKind(r.row);
+  return inner in ORDER ? ORDER[inner as Shown["kind"]] : ORDER.elsewhere;
+}
 
 /** "bot:<id>", "user", "device:…": who made a move, in words. */
 function actorName(actor: string, botName: (id: string) => string): string {
@@ -232,6 +248,8 @@ function rowProps(
       return p0Row(r, props);
     case "routines_without_card":
       return cardlessRow(r, props);
+    case "elsewhere":
+      return elsewhereRow(r.row, props);
     default:
       return attentionRow(r, props);
   }
@@ -247,6 +265,8 @@ function rowKey(r: Shown): string {
       return `serving-${r.elsewhere ?? "here"}`;
     case "routines_without_card":
       return `cardless-${r.elsewhere ?? "here"}`;
+    case "elsewhere":
+      return `elsewhere-${r.elsewhere}-${r.row.id}`;
     default:
       return `${r.kind}-${r.id}`;
   }
@@ -302,7 +322,7 @@ export default function NeedsYou(props: NeedsYouProps): ReactElement {
     (r): r is Shown => r.kind !== "wip_override" && r.kind !== "owner_action",
   );
   // oxlint-disable-next-line unicorn/no-array-sort
-  rows.sort((a, b) => ORDER[a.kind] - ORDER[b.kind]);
+  rows.sort((a, b) => orderOf(a) - orderOf(b));
   const relayed = localRelayed(rows);
   // Every ruling confirmed or answered meanwhile: nothing left to review,
   // and a later relay doesn't reopen the dialog by itself.
@@ -315,10 +335,14 @@ export default function NeedsYou(props: NeedsYouProps): ReactElement {
     const view = rowProps(r, props, openReview);
     return view === undefined ? [] : [{ key: rowKey(r), view, elsewhere: r.elsewhere }];
   });
+  // The number the projects home shows (H-161): an info row such as
+  // routines with no card is listed, not counted. An older daemon sends
+  // none, so its listed rows are counted as before.
+  const count = props.count ?? views.length;
   return (
     <section className="dash-widget dash-wide" aria-labelledby="dash-needs-you">
       {/* At zero the empty sentence says it; no "· 0" badge (UX-010). */}
-      <h2 id="dash-needs-you">Needs you{views.length > 0 ? ` · ${views.length}` : ""}</h2>
+      <h2 id="dash-needs-you">Needs you{count > 0 ? ` · ${count}` : ""}</h2>
       {props.note ? (
         <p className="dash-note">
           <strong>{props.note}</strong>

@@ -121,3 +121,41 @@ export const Working: Story = () => (
     ]}
   />
 );
+
+/**
+ * Activity (H-192): an answer printed in the session and posted to Chat,
+ * tagged "In Chat", and a note the bot sent the owner's Chat itself.
+ */
+export const InChat: Story = () => (
+  <Frame
+    turns={[
+      turn({
+        id: "t1",
+        started_at: AT,
+        trigger: { kind: "owner", text: "Is the build green?", via: "chat" },
+        items: [
+          text("Checking.", "x1"),
+          step({ id: "s1", title: "Ran a command", subtitle: "cargo test" }),
+          text("Green: 597 tests.", "x2"),
+        ],
+        stats: stats({ commands: 1 }),
+        answer_num: 13,
+      }),
+      turn({
+        id: "t2",
+        started_at: AT,
+        trigger: { kind: "owner", text: "Ship it?", via: "chat" },
+        items: [
+          {
+            type: "sent",
+            id: "m1",
+            to: "owner",
+            msg_kind: "owner",
+            body: "Shipped 0.17.4 to the iMac.",
+          },
+        ],
+        stats: stats({ sent: 1 }),
+      }),
+    ]}
+  />
+);

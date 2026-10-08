@@ -6,12 +6,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::ws::{Message as WsMessage, WebSocket, WebSocketUpgrade};
+use axum::extract::ws::WebSocketUpgrade;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
 use bus::Capability;
-use futures::StreamExt;
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -36,20 +35,27 @@ mod decisions_publish;
 mod dispatch;
 mod entities;
 mod home;
+mod later;
 mod links;
 mod meetings;
 mod messaging;
 mod origin;
 mod owner_actions;
+mod owner_auth;
 mod owner_card;
+#[cfg(test)]
+mod panic_tests;
 mod peers;
 mod permissions;
+#[cfg(test)]
+mod probe;
 mod profiles;
 mod project_repo;
 mod quiesce;
 mod releases;
 mod routines;
 mod runtime;
+mod session;
 mod tasks;
 mod terminal;
 mod views;
@@ -88,7 +94,7 @@ pub async fn ws_handler(
     }
     upgrade
         .max_frame_size(MAX_FRAME_BYTES)
-        .on_upgrade(move |socket| handle_socket(app, socket, peer.map(|c| c.0)))
+        .on_upgrade(move |socket| session::handle_socket(app, socket, peer.map(|c| c.0)))
         .into_response()
 }
 
@@ -113,195 +119,20 @@ struct Conn {
     terminal_cards: bool,
     /// How this client may see and run owner actions (H-117 R1).
     owner: owner_actions::Client,
+    /// The request being handled, named in the log if its handler panics.
+    kind: String,
 }
 
-async fn handle_socket(app: Arc<AppState>, socket: WebSocket, peer: Option<std::net::SocketAddr>) {
-    let (sink, mut stream) = socket.split();
-    let (out_tx, out_rx) = mpsc::unbounded_channel::<Value>();
-    let (viewer, frames) = Viewer::new(out_tx.clone());
-
-    // Writer task: everything outbound goes through one sink.
-    // Binary frames (protobuf envelopes) have their own queue to the writer.
-    let (bin_tx, bin_rx) = mpsc::unbounded_channel::<Vec<u8>>();
-    let writer = tokio::spawn(writer::write_out(
-        sink,
-        out_rx,
-        bin_rx,
-        frames,
-        PING_INTERVAL,
-    ));
-
-    // Handshake: first frame must be a valid hello.
-    let session = match tokio::time::timeout(IDLE_TIMEOUT, stream.next()).await {
-        Ok(Some(Ok(WsMessage::Text(text)))) => {
-            handshake(&app, &out_tx, &text).map(|session| (session, hello_features(&text)))
+/// Attachments die with the connection, however it ends: on a panic as
+/// much as on a close (H-170).
+impl Drop for Conn {
+    fn drop(&mut self) {
+        for (_, task) in self.attachments.drain() {
+            task.abort();
         }
-        _ => None,
-    };
-    let Some(((caps, device_id, via_ticket), features)) = session else {
-        drop((out_tx, viewer));
-        finish(writer).await;
-        return;
-    };
-
-    // A client that renders permission cards and may answer them is what lets
-    // the daemon hold a prompt for the app instead of the terminal.
-    let cards = features.iter().any(|f| f == "permission_cards");
-    // Terminal cards (an owner command waiting on the owner) go only to a
-    // client that says it renders them: an older one would show them as a
-    // bot's prompt and could grant owner power without saying so (H-044 T4).
-    let terminal_cards = cards && features.iter().any(|f| f == TERMINAL_CARD);
-    // Only a client that could allow a terminal card (it holds approve) makes
-    // a terminal command wait for the app; a control-only one would leave it
-    // waiting on a card nobody there may answer (ARCH-R36).
-    let terminal_answerer = terminal_cards && caps.contains(&Capability::Approve);
-    let _answerer = (cards && caps.contains(&Capability::Control))
-        .then(|| crate::approval::answerer(&app, terminal_answerer));
-
-    // Owner actions go only to a client that renders them (H-117 R1).
-    let owner = owner_actions::Client::new(&features, &caps, device_id.is_some(), via_ticket, peer);
-    // Forward server pushes to this client.
-    let push_tx = out_tx.clone();
-    let mut push_rx = app.events.subscribe_push();
-    let push_app = app.clone();
-    let push_task = tokio::spawn(async move {
-        loop {
-            let push = match push_rx.recv().await {
-                Ok(push) => push,
-                // Falling behind a burst must not end the feed for good: the
-                // client keeps the pushes that follow and resyncs the rest on
-                // its own. Ending the loop here left a connection silently
-                // stale until it reconnected.
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
-                    tracing::warn!(skipped, "client push feed lagged; some pushes were dropped");
-                    continue;
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-            };
-            if (!terminal_cards && is_terminal_card(&push)) || !owner.sees(&push) {
-                continue;
-            }
-            // `BotUpdated` carries a database row, whose `state` and
-            // `unread_count` are placeholders the supervisor normally overlays.
-            // Serialising it raw would tell clients every changed bot is
-            // stopped with nothing unread, so it is rendered the same way a
-            // `list_bots` reply is.
-            let value = match &push {
-                crate::events::Push::BotUpdated { bot } => {
-                    Ok(json!({ "type": "bot_updated", "bot": bot_view(&push_app, bot) }))
-                }
-                // Archiving tombstones the name so it can be reused; clients
-                // should see the name the project actually had.
-                crate::events::Push::ProjectUpdated { project } => Ok(
-                    json!({ "type": "project_updated", "project": project_view(&push_app, project) }),
-                ),
-                other => serde_json::to_value(other),
-            };
-            if let Ok(v) = value {
-                if push_tx.send(v).is_err() {
-                    break;
-                }
-            }
+        if let Some(task) = self.browser_watch.take() {
+            task.abort();
         }
-    });
-
-    let mut conn = Conn {
-        app: app.clone(),
-        out: out_tx.clone(),
-        attachments: HashMap::new(),
-        browser_watch: None,
-        viewer,
-        caps,
-        device_id,
-        bin: bin_tx,
-        watch: board::Watch::default(),
-        terminal_cards,
-        owner,
-    };
-
-    // Any frame counts as a sign of life, a ping or pong as much as a request.
-    // Pongs to the client's pings go out with the next read or write, both of
-    // which flush.
-    loop {
-        let frame = match tokio::time::timeout(IDLE_TIMEOUT, stream.next()).await {
-            Ok(Some(Ok(frame))) => frame,
-            Ok(_) => break,
-            Err(_) => {
-                tracing::info!(
-                    idle_secs = IDLE_TIMEOUT.as_secs(),
-                    "client went silent; closing its connection"
-                );
-                break;
-            }
-        };
-        match frame {
-            WsMessage::Text(text) => {
-                if text.len() > MAX_FRAME_BYTES {
-                    continue;
-                }
-                let Ok(req) = serde_json::from_str::<Value>(&text) else {
-                    continue;
-                };
-                conn.handle(&req);
-            }
-            WsMessage::Binary(bytes) => {
-                if bytes.len() <= MAX_FRAME_BYTES {
-                    conn.handle_binary(&bytes);
-                }
-            }
-            WsMessage::Close(_) => break,
-            _ => {}
-        }
-    }
-
-    // Cleanup: attachments die with the connection.
-    for (_, task) in conn.attachments.drain() {
-        task.abort();
-    }
-    if let Some(task) = conn.browser_watch.take() {
-        task.abort();
-    }
-    push_task.abort();
-    drop(out_tx);
-    drop(conn);
-    finish(writer).await;
-}
-
-/// Lets the writer send what is left, unless the link is too slow to.
-async fn finish(mut writer: JoinHandle<()>) {
-    if tokio::time::timeout(WRITER_GRACE, &mut writer)
-        .await
-        .is_err()
-    {
-        writer.abort();
-    }
-}
-
-/// The hello feature a client sends when it renders terminal cards.
-const TERMINAL_CARD: &str = "terminal_card";
-
-/// The optional behaviours the client's hello says it supports.
-fn hello_features(hello: &str) -> Vec<String> {
-    serde_json::from_str::<Value>(hello)
-        .ok()
-        .and_then(|hello| {
-            hello["features"].as_array().map(|features| {
-                features
-                    .iter()
-                    .filter_map(|f| f.as_str().map(str::to_string))
-                    .collect()
-            })
-        })
-        .unwrap_or_default()
-}
-
-/// Whether a push is about a terminal card.
-fn is_terminal_card(push: &crate::events::Push) -> bool {
-    use crate::events::Push;
-    match push {
-        Push::PermissionRequest { request } => request.bot_id == crate::approval::TERMINAL,
-        Push::PermissionResolved { bot_id, .. } => bot_id == crate::approval::TERMINAL,
-        _ => false,
     }
 }
 
@@ -344,11 +175,19 @@ fn handshake(
     // the desktop app by its signature, a CLI command by the owner's card.
     let owner_token = app.secrets.verify_client(token);
     let via_ticket = !owner_token && app.owner.redeem(token);
-    let (caps, device_id) = if owner_token || via_ticket {
+    if owner_token {
+        app.owner.note_client_token();
+    }
+    // The owner token is readable by every bot of the same user, so it
+    // reads and runs the fleet but never rules for the owner (CE-030 N1):
+    // `approve` comes only with the app's ticket or a device granted it.
+    let (caps, device_id) = if via_ticket {
         (
             vec![Capability::Read, Capability::Control, Capability::Approve],
             None,
         )
+    } else if owner_token {
+        (vec![Capability::Read, Capability::Control], None)
     } else if let Some(device_id) = app.secrets.device_for_token(token) {
         match app.db.get_device(&device_id) {
             Ok(Some(d)) if d.revoked_at.is_none() => (d.capabilities, Some(device_id)),

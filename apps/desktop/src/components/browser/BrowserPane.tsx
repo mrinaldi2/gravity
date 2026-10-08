@@ -114,7 +114,7 @@ export function BrowserScreen({
 }
 
 /** What the browser is, and the switch handing the owner its mouse and keyboard. */
-function ControlBar({
+export function ControlBar({
   bot,
   offered,
   controlling,

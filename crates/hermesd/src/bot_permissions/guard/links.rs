@@ -15,8 +15,8 @@ const WHY: &str = "a link at a .claude folder, or to the owner's Claude config, 
                    what you need instead";
 
 /// Why this link-making command is refused, if it is: `ln`, `mklink`,
-/// PowerShell's `New-Item -ItemType Junction|SymbolicLink|HardLink` (`ni`),
-/// and those run through `cmd /c` or `powershell -c`.
+/// PowerShell's `New-Item -ItemType Junction|SymbolicLink|HardLink` (`ni`).
+/// Run through `cmd /c` or `powershell -c`, they reach here from `powershell`.
 pub(super) fn check(
     name: &str,
     rest: &[String],
@@ -40,19 +40,6 @@ pub(super) fn check(
             _ => return None,
         },
         "new-item" | "ni" => super::powershell::new_link(rest)?,
-        // `cmd /c mklink …`: the command after `/c` (or `/k`).
-        "cmd" | "cmd.exe" => {
-            let at = rest
-                .iter()
-                .position(|w| w.eq_ignore_ascii_case("/c") || w.eq_ignore_ascii_case("/k"))?;
-            let inner = super::powershell::commands(&rest[at + 1..].join(" "));
-            let (program, rest) = inner.first()?.split_first()?;
-            return check(program, rest, scope, ctx);
-        }
-        "powershell" | "powershell.exe" | "pwsh" | "pwsh.exe" => {
-            let script = super::powershell::script(rest)?;
-            return super::powershell::line(&script, &mut scope.clone(), ctx);
-        }
         _ => return None,
     };
     let owner_config = [

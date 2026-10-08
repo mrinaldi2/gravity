@@ -17,4 +17,22 @@ describe("eventLine", () => {
     );
     expect(line).toBe("DevOps closed 0.16.2: deployed via 0.16.4.");
   });
+
+  it("says the daemon moved an iOS package's deploy to the iPhone", () => {
+    const line = eventLine(
+      {
+        release_id: "rel-5",
+        release_name: "iOS 0.5.0",
+        related_id: null,
+        kind: "targets_repaired",
+        actor: "daemon",
+        note: "frozen before per-platform targets",
+        at: "2026-10-07T08:00:00Z",
+      },
+      () => undefined,
+    );
+    expect(line).toBe(
+      "Hermes moved iOS 0.5.0's deploy to the iPhone: frozen before per-platform targets.",
+    );
+  });
 });

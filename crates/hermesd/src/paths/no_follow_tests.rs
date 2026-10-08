@@ -211,16 +211,29 @@ fn a_folder_swapped_for_a_link_mid_write_is_never_followed() {
             let (base, stop, swaps) = (base.clone(), stop.clone(), swaps.clone());
             std::thread::spawn(move || {
                 let at = |name: &str| base.join(name);
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+                // Each step may fail while the daemon has a part open; a stuck
+                // one ends the test rather than hanging it.
+                let retry = |step: &dyn Fn() -> std::io::Result<()>| {
+                    while step().is_err() {
+                        assert!(std::time::Instant::now() < deadline, "the swap is stuck");
+                        std::thread::yield_now();
+                    }
+                };
                 while !stop.load(Ordering::SeqCst) {
-                    // Each step may fail while the daemon has a part open.
                     if std::fs::rename(at("sub"), at("sub.real")).is_err() {
                         continue;
                     }
-                    let _ = std::fs::rename(at("sub.link"), at("sub"));
-                    let _ = std::fs::rename(at("sub"), at("sub.link"));
-                    while std::fs::rename(at("sub.real"), at("sub")).is_err() {
-                        std::thread::yield_now();
+                    // The link in, unless a write just made a fresh `sub`.
+                    if std::fs::rename(at("sub.link"), at("sub")).is_ok() {
+                        retry(&|| std::fs::rename(at("sub"), at("sub.link")));
                     }
+                    // A `sub` a write made meanwhile is dropped, so the real
+                    // folder can come back (it isn't the link: that's away).
+                    retry(&|| {
+                        let _ = std::fs::remove_dir_all(at("sub"));
+                        std::fs::rename(at("sub.real"), at("sub"))
+                    });
                     swaps.fetch_add(1, Ordering::SeqCst);
                 }
             })
@@ -268,4 +281,60 @@ fn a_hard_link_to_a_file_elsewhere_is_not_read() {
     write(&base, Path::new("mcp.json"), b"bot").unwrap();
     assert_eq!(read(&base, Path::new("mcp.json")).as_deref(), Some("bot"));
     assert_eq!(std::fs::read_to_string(&owner).unwrap(), "owner");
+}
+
+/// A file held open for a moment, as an antivirus scan holds one just
+/// written, doesn't fail the next write over it: it waits the hold out
+/// (H-188).
+#[cfg(windows)]
+#[test]
+fn a_write_waits_out_a_brief_hold_on_the_file() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("bot");
+    std::fs::create_dir_all(&base).unwrap();
+    let rel = Path::new("settings.json");
+    write(&base, rel, b"old").unwrap();
+    // FILE_SHARE_READ only: while it is open, nothing renames over it.
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(base.join(rel))
+        .unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        drop(held);
+    });
+    write(&base, rel, b"new").unwrap();
+    release.join().unwrap();
+    assert_eq!(std::fs::read(base.join(rel)).unwrap(), b"new");
+}
+
+/// A write that waits out a hold re-vets the path before each retry: a bot
+/// that forces the wait can't swap a folder for a junction meanwhile and
+/// have the retry rename through it (H-188, Architect M1).
+#[cfg(windows)]
+#[test]
+fn a_junction_swapped_in_during_the_wait_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("bot");
+    let conf = base.join("conf");
+    let outside = dir.path().join("owner");
+    std::fs::create_dir_all(&outside).unwrap();
+    // A folder at the name: renaming a file over it is "Access is denied",
+    // so the first attempt fails as it does over a held file.
+    std::fs::create_dir_all(conf.join("settings.json")).unwrap();
+    let swap = {
+        let (base, conf, outside) = (base.clone(), conf.clone(), outside.clone());
+        move || {
+            std::fs::rename(&conf, base.join("conf-real")).unwrap();
+            junction(&outside, &conf);
+        }
+    };
+    imp::BETWEEN_ATTEMPTS.with(|hook| hook.set(Some(Box::new(swap))));
+    let error = write(&base, Path::new("conf/settings.json"), b"x").unwrap_err();
+    let ran = imp::BETWEEN_ATTEMPTS.with(|hook| hook.take()).is_none();
+    assert!(ran, "the write never retried");
+    assert!(error.downcast_ref::<LinkRefused>().is_some(), "{error:#}");
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
 }

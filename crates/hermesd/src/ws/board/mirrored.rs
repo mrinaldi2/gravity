@@ -82,11 +82,11 @@ impl Conn {
         // owner (H-020 §2.2).
         let name = home_name(&self.app, &home);
         let refusal = match request {
-            Request::ItemMove(_) => {
-                Some(format!("The board lives on {name}. Move {id} from there."))
-            }
+            Request::ItemMove(_) => Some(format!(
+                "The board is kept on {name}. Move {id} from there."
+            )),
             Request::ItemComment(_) => Some(format!(
-                "The board for {id} lives on {name}. Comment on it from there."
+                "The board for {id} is kept on {name}. Comment on it from there."
             )),
             _ => None,
         };

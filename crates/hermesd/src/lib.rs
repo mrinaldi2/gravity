@@ -16,6 +16,7 @@ pub mod bus_auth;
 pub mod channel;
 pub mod chat;
 pub mod config;
+pub mod contain;
 pub mod db;
 pub mod decisions;
 pub mod delivery;
@@ -48,6 +49,7 @@ pub mod service;
 #[cfg(windows)]
 #[path = "service/windows/mod.rs"]
 pub mod service;
+pub mod service_audit;
 pub mod service_report;
 pub mod supervisor;
 pub mod terminal;

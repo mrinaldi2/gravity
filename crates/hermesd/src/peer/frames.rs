@@ -27,6 +27,11 @@ pub struct MessageFrame {
     pub closes_task: Option<ClosesFrame>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<ArtifactFrame>,
+    /// Set on the owner's chat when the sender recorded it as the owner's own
+    /// (H-195 D1): how the owner proved it there, `device` or `ticket`. A
+    /// peer older than that never sends it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_verified: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

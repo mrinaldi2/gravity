@@ -62,6 +62,11 @@ impl Client {
         }
     }
 
+    /// It holds the app's one-time ticket (H-044 T4).
+    pub(super) fn via_ticket(&self) -> bool {
+        self.via_ticket
+    }
+
     /// Whether this client gets `push`: owner action pushes only reach a
     /// client that renders them.
     pub(super) fn sees(&self, push: &Push) -> bool {
@@ -162,6 +167,16 @@ impl Conn {
         Ok(())
     }
 
+    /// A run or reject of an owner action refused at the gate is on its
+    /// record too: the owner token is a bot's way in (ARCH-R51 M1).
+    pub(super) fn audit_refused_action(&self, kind: &str, req: &Value, why: &str) {
+        let id = req.get("id").and_then(Value::as_str);
+        if let (Some(id), "owner_action_run" | "owner_action_reject") = (id, kind) {
+            let actor = self.actor().as_stored();
+            owner_action::audit(&self.app, id, &actor, "refused", json!({ "why": why }));
+        }
+    }
+
     /// `{id, sha256}`: the hash the client showed the owner.
     pub(super) fn owner_action_run(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let id = Self::str_field(req, "id")?;
@@ -200,9 +215,9 @@ impl Conn {
             + Send
             + 'static,
     ) {
-        let (app, out, req_id) = (self.app.clone(), self.out.clone(), req_id.clone());
-        tokio::spawn(async move {
-            let reply = match work.await {
+        let app = self.app.clone();
+        self.spawn_reply(req_id, move |req_id| async move {
+            match work.await {
                 Ok(a) => json!({ "type": "owner_action", "req_id": req_id,
                                  "action": owner_action::view(&app, &a) }),
                 Err(e) => {
@@ -211,8 +226,7 @@ impl Conn {
                     json!({ "type": "error", "req_id": req_id, "code": code,
                             "message": e.to_string() })
                 }
-            };
-            let _ = out.send(reply);
+            }
         });
     }
 

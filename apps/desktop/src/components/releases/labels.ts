@@ -60,6 +60,9 @@ const EVENT_LINES: Readonly<Record<string, EventText>> = {
   // H-121: closed because a later, deployed release contains it.
   deployed_via: (event, who) =>
     `${who} closed ${event.release_name}: ${event.note ?? "deployed through a later release"}.`,
+  // H-176: an iOS package frozen with desktop deploy targets, moved to the iPhone at boot.
+  targets_repaired: (event) =>
+    `Hermes moved ${event.release_name}'s deploy to the iPhone: ${event.note ?? "it was frozen before per-platform targets"}.`,
   lead_ticked: (event, who) => {
     const d = event.detail ?? {};
     const verb = d.passed === false ? "marked failed" : "ticked";

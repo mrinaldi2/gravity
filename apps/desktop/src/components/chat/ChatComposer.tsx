@@ -16,6 +16,8 @@ interface ChatComposerProps {
   readonly slashHint?: string | null;
   /** On-device dictation; the mic button shows only where it is available. */
   readonly dictation?: Dictation;
+  /** A faint line under the box, e.g. where else the message shows (H-192). */
+  readonly footnote?: string;
 }
 
 const LISTENING = "Listening… press the stop button when you are done.";
@@ -98,6 +100,11 @@ export default function ChatComposer(props: ChatComposerProps): ReactElement {
           Send
         </button>
       </div>
+      <Footnote text={props.footnote} />
     </div>
   );
+}
+
+function Footnote({ text }: { readonly text: string | undefined }): ReactElement | null {
+  return text === undefined ? null : <div className="chat-composer-foot">{text}</div>;
 }

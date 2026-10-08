@@ -36,6 +36,8 @@ export default function DecisionThread({
           <div key={comment.id} className="cc-thread-item">
             {comment.author_kind === "user" ? (
               <span className="cc-thread-owner">●</span>
+            ) : comment.author_kind === "system" ? (
+              <span className="cc-thread-owner cc-thread-system">H</span>
             ) : (
               <BotAvatar
                 size="md"

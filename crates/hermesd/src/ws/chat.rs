@@ -196,9 +196,9 @@ impl Conn {
         frame: Value,
         reply: impl FnOnce(Value) -> Value + Send + 'static,
     ) {
-        let (app, out, req_id) = (self.app.clone(), self.out.clone(), req_id.clone());
-        tokio::spawn(async move {
-            let response = match crate::peer::chat::ask(&app, &bot, frame).await {
+        let app = self.app.clone();
+        self.spawn_reply(req_id, move |req_id| async move {
+            match crate::peer::chat::ask(&app, &bot, frame).await {
                 Ok(result) => {
                     let mut response = reply(result);
                     response["req_id"] = req_id;
@@ -208,8 +208,7 @@ impl Conn {
                     "type": "error", "req_id": req_id, "code": "unavailable",
                     "message": format!("{e:#}")
                 }),
-            };
-            let _ = out.send(response);
+            }
         });
     }
 
@@ -220,19 +219,16 @@ impl Conn {
         req_id: &Value,
         work: impl FnOnce(&Arc<AppState>) -> anyhow::Result<Value> + Send + 'static,
     ) {
-        let (app, out, req_id) = (self.app.clone(), self.out.clone(), req_id.clone());
-        tokio::task::spawn_blocking(move || {
-            let reply = match work(&app) {
-                Ok(mut reply) => {
-                    reply["req_id"] = req_id;
-                    reply
-                }
-                Err(e) => json!({
-                    "type": "error", "req_id": req_id, "code": "not_found",
-                    "message": format!("{e:#}")
-                }),
-            };
-            let _ = out.send(reply);
+        let app = self.app.clone();
+        self.spawn_blocking_reply(req_id, move |req_id| match work(&app) {
+            Ok(mut reply) => {
+                reply["req_id"] = req_id;
+                reply
+            }
+            Err(e) => json!({
+                "type": "error", "req_id": req_id, "code": "not_found",
+                "message": format!("{e:#}")
+            }),
         });
     }
 }

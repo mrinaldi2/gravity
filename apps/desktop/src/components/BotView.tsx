@@ -23,6 +23,8 @@ interface BotViewProps {
   readonly client: DaemonApi;
   readonly bot: Bot;
   readonly bots: readonly Bot[];
+  /** The tab to open on, when the bot offers it (H-192: Chat from the main chat). */
+  readonly initialTab?: BotTab;
   readonly connected: boolean;
   readonly canControl: boolean;
   readonly onBotUpdated: (bot: Bot) => void;
@@ -47,6 +49,14 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
+/**
+ * The tab the page opens on: the one asked for when the bot offers it, else
+ * its first. The page is keyed on the bot and the ask, so a new ask opens it.
+ */
+function startTab(tabs: readonly BotTab[], asked: BotTab | undefined): BotTab {
+  return asked !== undefined && tabs.includes(asked) ? asked : (tabs[0] ?? "terminal");
+}
+
 export default function BotView(props: BotViewProps): ReactElement {
   const { client, bot, bots, connected, canControl, onToast } = props;
   const tabs = botTabs(
@@ -59,7 +69,7 @@ export default function BotView(props: BotViewProps): ReactElement {
     },
     bot.peer != null,
   );
-  const [tab, setTab] = useState<BotTab>(tabs[0] ?? "terminal");
+  const [tab, setTab] = useState<BotTab>(() => startTab(tabs, props.initialTab));
   const [side, setSide] = useState<SideTab>("info");
   const [openFile, setOpenFile] = useState<string | null>(null);
   const [infoPanel, setInfoPanel] = useState(loadBotInfoPanel);
@@ -203,6 +213,7 @@ export default function BotView(props: BotViewProps): ReactElement {
             onOpenDecision={props.onOpenDecision}
             onRoutinesChanged={props.onRoutinesChanged}
             onToast={onToast}
+            onSelectTab={setTab}
             onReply={(quote) => {
               if (props.onReply === undefined) {
                 setTab("chat");

@@ -3,8 +3,6 @@
 //! the transcript grows; a new transcript file (a fresh session) rebuilds it.
 
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -16,6 +14,7 @@ use crate::app::AppState;
 use super::builder::Builder;
 use super::model::{ChatTurn, StepDetail, Trigger};
 use super::steps::{self, result_text};
+use super::transcript_lines::{line_at, read_from};
 
 const MAX_INPUT_CHARS: usize = 4_000;
 const MAX_OUTPUT_CHARS: usize = 12_000;
@@ -54,6 +53,9 @@ impl ChatStore {
             };
         }
         if let Some(path) = &path {
+            if let Ok(typed) = app.db.typed_prompt_digests(&bot.id) {
+                chat.builder.typed = typed;
+            }
             let offset = chat.offset;
             let chat = &mut *chat;
             let (builder, commands, writes) =
@@ -67,7 +69,8 @@ impl ChatStore {
         let changed = chat.builder.take_changed();
         // The first read is a snapshot, not news.
         let changed = if fresh { Vec::new() } else { changed };
-        Ok(settle(changed, &chat.builder.turns, busy(app, bot)))
+        let changed = settle(changed, &chat.builder.turns, busy(app, bot));
+        Ok(super::answers::marked(app, &bot.id, changed))
     }
 
     /// Up to `limit` turns before `before` (or the newest), oldest first,
@@ -89,7 +92,21 @@ impl ChatStore {
         };
         let start = end.saturating_sub(limit);
         let page = settle(turns[start..end].to_vec(), turns, busy(app, bot));
-        Ok((page, start > 0))
+        Ok((super::answers::marked(app, &bot.id, page), start > 0))
+    }
+
+    /// The bot's turns its transcript has ended, newest last (H-192).
+    pub fn finished_turns(&self, app: &AppState, bot: &Bot) -> anyhow::Result<Vec<ChatTurn>> {
+        self.refresh(app, bot)?;
+        let (chat, _) = self.entry(app, bot)?;
+        let chat = lock(&chat);
+        Ok(chat
+            .builder
+            .turns
+            .iter()
+            .filter(|t| !t.open)
+            .cloned()
+            .collect())
     }
 
     /// What started the bot's last turn, when that turn never ended: the
@@ -326,35 +343,6 @@ fn settle(mut page: Vec<ChatTurn>, all: &[ChatTurn], busy: bool) -> Vec<ChatTurn
         }
     }
     page
-}
-
-/// Folds the complete lines after `offset` into the builder and returns the
-/// offset of the first line not yet complete.
-fn read_from(path: &Path, offset: u64, mut push: impl FnMut(u64, &str)) -> anyhow::Result<u64> {
-    let mut file = File::open(path)?;
-    let len = file.metadata()?.len();
-    // A shorter file than we have read is a rewritten one: start over.
-    let offset = if len < offset { 0 } else { offset };
-    file.seek(SeekFrom::Start(offset))?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    let mut start = 0usize;
-    while let Some(end) = bytes[start..].iter().position(|&b| b == b'\n') {
-        let line = &bytes[start..start + end];
-        if let Ok(text) = std::str::from_utf8(line) {
-            push(offset + start as u64, text);
-        }
-        start += end + 1;
-    }
-    Ok(offset + start as u64)
-}
-
-fn line_at(path: &Path, offset: u64) -> anyhow::Result<String> {
-    let mut file = File::open(path)?;
-    file.seek(SeekFrom::Start(offset))?;
-    let mut line = String::new();
-    BufReader::new(file).read_line(&mut line)?;
-    Ok(line)
 }
 
 /// A unified diff from Claude Code's structured patch, hunk headers included.

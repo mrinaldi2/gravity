@@ -51,8 +51,9 @@ impl Conn {
             Vec::new()
         };
         // What's kept here: the board's rows when it lives here, and this
-        // computer's own decisions either way (they don't sync, H-030).
-        // Off-home the home's rows are added once it answers.
+        // computer's own decisions either way (they don't sync, H-030). Every
+        // linked computer's rows, the board's home included, come from the
+        // part the projects home counts (H-178), not a request per read.
         let home_peer = (!local)
             .then(|| self.app.board_mirror.home_peer(project_id))
             .flatten();
@@ -68,6 +69,7 @@ impl Conn {
         needs.rows.extend(crate::attention::routines_without_card(
             &self.app, project_id,
         )?);
+        let (count, note) = linked_needs(&self.app, project_id, all_kinds, &mut needs)?;
 
         let strip: Vec<Value> = columns
             .iter()
@@ -138,67 +140,54 @@ impl Conn {
         let dashboard = json!({
             "project_id": project_id, "as_of": now, "since": since,
             "home": home, "needs_you": needs.rows, "wip_overrides": needs.wip_overrides,
-            "needs_you_note": Value::Null, "board": board,
+            "needs_you_count": count, "needs_you_note": note, "board": board,
             "releases": shown, "team": team,
             "meetings": meetings, "action_items": action_items,
         });
-        match home_peer {
-            Some(peer) => self.answer_later(
-                req_id,
-                from_home(
-                    self.app.clone(),
-                    project_id.to_string(),
-                    peer,
-                    all_kinds,
-                    dashboard,
-                ),
-            ),
-            None => {
-                self.send(json!({ "type": "dashboard", "req_id": req_id, "dashboard": dashboard }))
-            }
-        }
+        self.send(json!({ "type": "dashboard", "req_id": req_id, "dashboard": dashboard }));
         Ok(())
     }
 }
 
-/// Off-home, Needs you adds the board's home's rows (H-112): read-only here,
-/// each marked with where to act on it. When the home can't be reached the
-/// dashboard says so.
-async fn from_home(
-    app: std::sync::Arc<crate::app::AppState>,
-    project_id: String,
-    home: String,
+/// Every linked computer's rows, as the projects home counts them (H-178):
+/// each linked computer's last good part, the board's home included. Each
+/// row goes out as `{kind: "elsewhere", row, elsewhere}`: the typed row in
+/// proto3 JSON (a `decision` there is not the dashboard's own `decision`
+/// shape) and the computer to act on it. An older client asks without
+/// `all_kinds` and gets only this computer's rows, as before. Returns the
+/// count the projects home shows, and a note naming any computer not
+/// answering, whose last good rows are listed but may be out of date.
+fn linked_needs(
+    app: &crate::app::AppState,
+    project_id: &str,
     all_kinds: bool,
-    mut dashboard: Value,
-) -> anyhow::Result<Value> {
-    let name = crate::peer::board::home_name(&app, &home);
-    let frame = json!({
-        "type": "dashboard_needs_you", "project_id": project_id, "all_kinds": all_kinds,
-    });
-    let link = app.db.project_link(&project_id, &home)?;
-    match (app.peers.request(&home, frame).await, link) {
-        (Ok(mut answer), Some(link)) => {
-            crate::peer::board::ids_from_home(&app, &link, &mut answer);
-            let mut rows = match answer["rows"].take() {
-                Value::Array(rows) => rows,
-                _ => Vec::new(),
-            };
-            for row in &mut rows {
-                row["elsewhere"] = json!(name);
-            }
-            if let Some(here) = dashboard["needs_you"].as_array_mut() {
-                here.extend(rows);
-            }
-            dashboard["wip_overrides"] = answer["wip_overrides"].take();
-        }
-        _ => {
-            // What's here may not be all; "nothing" can't be known (UX-016 §3).
-            dashboard["needs_you_note"] = json!(format!(
-                "Can't reach {name} right now, so this may not be everything that needs you."
-            ));
+    needs: &mut crate::attention::NeedsYou,
+) -> anyhow::Result<(u32, Option<String>)> {
+    let linked = crate::overview::linked_rows(app, project_id)?;
+    let count = needs.count + crate::attention::summary(linked.rows.iter().map(|(_, r)| r)).count;
+    if all_kinds {
+        for (computer, row) in &linked.rows {
+            let mut typed = serde_json::to_value(row)?;
+            typed["kind"] = json!(crate::attention::kind_key(row.kind()));
+            needs
+                .rows
+                .push(json!({"kind": "elsewhere", "row": typed, "elsewhere": computer}));
         }
     }
-    Ok(json!({ "type": "dashboard", "dashboard": dashboard }))
+    let away: Vec<&str> = linked
+        .sources
+        .iter()
+        .filter(|s| s.state() != bus::contract::home::source::State::Ok)
+        .map(|s| s.name.as_str())
+        .collect();
+    // What's here may not be all; "nothing" can't be known (UX-016 §3).
+    let note = (!away.is_empty()).then(|| {
+        format!(
+            "Can't reach {} right now, so this may not be everything that needs you.",
+            away.join(" or ")
+        )
+    });
+    Ok((count, note))
 }
 
 /// The columns and cards of a board mirrored from its home, in model types.

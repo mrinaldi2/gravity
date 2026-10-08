@@ -82,8 +82,8 @@ type Reply = Result<Option<Response>, Refusal>;
 
 impl Conn {
     /// Answer one binary frame.
-    pub(super) fn binary_frame(&mut self, bytes: &[u8]) {
-        let reply = match binary::decode(bytes) {
+    pub(super) fn binary_frame(&mut self, frame: Frame) {
+        let reply = match frame {
             Frame::Refused(error) => error,
             Frame::Board(req_id, request) => match self.board(req_id, request) {
                 Ok(Some(response)) => binary::response(

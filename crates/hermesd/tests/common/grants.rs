@@ -3,14 +3,14 @@
 
 #![allow(dead_code)]
 
-use bus::PermissionExtra;
+use bus::{CommentAuthorKind, PermissionExtra};
 use serde_json::{json, Value};
 
 use super::peers::{wait_until, Team};
 use super::{TestDaemon, WsClient};
 
 pub async fn desktop(d: &TestDaemon) -> WsClient {
-    WsClient::connect_with(d, d.app.secrets.client_token(), &["decision_grants"]).await
+    WsClient::connect_with(d, &d.app.owner.mint(), &["decision_grants"]).await
 }
 
 /// The lead asks for `extras` for the linked Windev; the owner grants them,
@@ -62,11 +62,18 @@ pub fn comments(d: &TestDaemon, id: &str) -> Vec<String> {
         .collect()
 }
 
+/// Waits until the decision's thread carries `needle`, written by Hermes
+/// rather than by the owner (H-173).
 pub async fn said(d: &TestDaemon, id: &str, needle: &str) {
     wait_until(&format!("the decision says '{needle}'"), || {
         comments(d, id).iter().any(|c| c.contains(needle))
     })
     .await;
+    for c in d.app.db.list_decision_comments(id).unwrap() {
+        if c.body.contains(needle) {
+            assert_eq!(c.author_kind, CommentAuthorKind::System, "{}", c.body);
+        }
+    }
 }
 
 /// What the PC holds for Windev.

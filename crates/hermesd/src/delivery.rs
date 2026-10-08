@@ -13,12 +13,44 @@ use crate::app::AppState;
 use crate::config::DeliveryConfig;
 use crate::db::Db;
 use crate::events::{Events, Push};
-use crate::supervisor::Supervisor;
+use crate::supervisor::{Outcome, Supervisor, TypeError};
 
 /// Ceiling on the wait between attempts at a bot that is not ready. Deliveries
 /// are durable, so one that never becomes ready waits at this interval rather
 /// than being dropped.
 const MAX_NOT_READY_BACKOFF_SECONDS: i64 = 60;
+
+/// What became of an owner's chat offered to the composer.
+enum Typed {
+    /// Typed or deferred: record `outcome` as any delivery's.
+    Handled(Result<(), crate::supervisor::DeliverError>),
+    /// Failed and recorded; nothing more to do.
+    Done,
+    /// Not typed: deliver it through the inbox.
+    NotOwners,
+}
+
+/// The owner's message #`num` couldn't be typed into the bot: the delivery
+/// fails, with no retry, and the owner is told.
+fn couldnt_type(db: &Db, events: &Events, delivery_id: &str, bot_id: &str, num: i64, reason: &str) {
+    if let Err(e) = db.mark_delivery_retry(delivery_id, reason, chrono::Utc::now(), 0) {
+        tracing::warn!(delivery_id, error = %e, "typed delivery failure not recorded");
+    }
+    let name = db
+        .get_bot(bot_id)
+        .ok()
+        .flatten()
+        .map_or_else(|| "the bot".to_string(), |b| b.name);
+    events.push(Push::notice(
+        "error",
+        "Couldn't type it",
+        format!("Couldn't type message #{num} into {name}: {reason}. Send again?"),
+    ));
+    if let Ok(Some(updated)) = db.get_delivery(delivery_id) {
+        events.push(Push::DeliveryUpdate { delivery: updated });
+    }
+    tracing::warn!(delivery_id, bot_id, reason, "owner chat not typed");
+}
 
 pub struct DeliveryWorker {
     /// For forwarding to linked bots, which runs through the peer link.
@@ -77,10 +109,17 @@ impl DeliveryWorker {
                     }
                 }
             }
-            _ => {
-                let text = self.render(delivery_id, &delivery.bot_id, &msg)?;
-                self.supervisor.deliver(&delivery.bot_id, &text)
-            }
+            _ => match self
+                .type_owner_chat(delivery_id, &delivery.bot_id, &msg)
+                .await?
+            {
+                Typed::Handled(outcome) => outcome,
+                Typed::Done => return Ok(()),
+                Typed::NotOwners => {
+                    let text = self.render(delivery_id, &delivery.bot_id, &msg)?;
+                    self.supervisor.deliver(&delivery.bot_id, &text)
+                }
+            },
         };
 
         match outcome {
@@ -127,6 +166,84 @@ impl DeliveryWorker {
             self.events.push(Push::DeliveryUpdate { delivery: updated });
         }
         Ok(())
+    }
+
+    /// The owner's own chat (H-195 D1) typed into the bot's composer as their
+    /// turn (D2), when this daemon vouches for composers. Anything else, and
+    /// a session that can't take it, goes through the inbox as before.
+    async fn type_owner_chat(
+        &self,
+        delivery_id: &str,
+        bot_id: &str,
+        msg: &Message,
+    ) -> anyhow::Result<Typed> {
+        let owners = msg.kind == bus::MessageKind::Chat
+            && msg.sender.kind == bus::SenderKind::User
+            && self.db.owner_message_via(&msg.id)?.is_some();
+        if !owners || !self.supervisor.typed_delivery(bot_id) {
+            return Ok(Typed::NotOwners);
+        }
+        let typed = self
+            .supervisor
+            .type_into(bot_id, &msg.id, msg.num, &msg.body)
+            .await;
+        let log = |outcome, reason: &str| {
+            self.supervisor
+                .log_delivery(bot_id, &msg.id, outcome, None, reason);
+        };
+        match typed {
+            Ok(confirmed) => {
+                let (db, events) = (self.db.clone(), self.events.clone());
+                let supervisor = self.supervisor.clone();
+                let (delivery_id, bot_id, num, message_id) = (
+                    delivery_id.to_string(),
+                    bot_id.to_string(),
+                    msg.num,
+                    msg.id.clone(),
+                );
+                tokio::spawn(async move {
+                    // `typed` is logged by the prompt that spends the token.
+                    if let Ok(Err(reason)) = confirmed.await {
+                        supervisor.log_delivery(
+                            &bot_id,
+                            &message_id,
+                            Outcome::Refused,
+                            None,
+                            &reason,
+                        );
+                        couldnt_type(&db, &events, &delivery_id, &bot_id, num, &reason);
+                    }
+                });
+                Ok(Typed::Handled(Ok(())))
+            }
+            Err(TypeError::NotReady(reason)) => {
+                log(Outcome::Deferred, &reason);
+                Ok(Typed::Handled(Err(
+                    crate::supervisor::DeliverError::NotReady(reason),
+                )))
+            }
+            // Never retried: a second paste could make a second turn.
+            Err(TypeError::Failed(reason)) => {
+                log(Outcome::Refused, &reason);
+                couldnt_type(
+                    &self.db,
+                    &self.events,
+                    delivery_id,
+                    bot_id,
+                    msg.num,
+                    &reason,
+                );
+                Ok(Typed::Done)
+            }
+            // PENDING U1: shown to the owner as "Delivered as a message".
+            Err(TypeError::Unsupported(reason)) => {
+                log(
+                    Outcome::Refused,
+                    &format!("{reason}; delivered as a message (wrapped)"),
+                );
+                Ok(Typed::NotOwners)
+            }
+        }
     }
 
     /// The envelope a local session reads for `msg`.

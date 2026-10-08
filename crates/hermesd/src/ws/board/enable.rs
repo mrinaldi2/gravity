@@ -24,9 +24,9 @@ impl Conn {
             self.enable_board(&project_id, Enable::Owner)?;
             return Ok(Some(Response::Board(self.snapshot(&project_id)?)));
         }
-        let (app, out) = (self.app.clone(), self.bin.clone());
-        tokio::spawn(async move {
-            let frame = match enable_linked(&app, &project_id, &links).await {
+        let app = self.app.clone();
+        self.spawn_frame(req_id, "board:BoardEnable", async move {
+            match enable_linked(&app, &project_id, &links).await {
                 Ok(board) => binary::response(
                     req_id,
                     c::BoardResponse {
@@ -34,8 +34,7 @@ impl Conn {
                     },
                 ),
                 Err(r) => binary::error(req_id, r.code, r.message),
-            };
-            let _ = out.send(frame);
+            }
         });
         Ok(None)
     }

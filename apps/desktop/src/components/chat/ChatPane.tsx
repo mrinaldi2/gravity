@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { DaemonApi } from "../../protocol/api";
 import type { Bot } from "../../protocol/entities";
 import ChatComposer from "./ChatComposer";
@@ -23,6 +23,12 @@ interface ChatPaneProps {
   readonly onOpenDecision?: (decisionId: string) => void;
   /** A line above the conversation, e.g. which machine a linked bot runs on. */
   readonly note?: string;
+  /** The Activity tab's caption, above everything (H-192). */
+  readonly caption?: ReactNode;
+  /** A faint line under the composer. */
+  readonly composerNote?: string;
+  /** Opens the bot's Chat from an answer tagged "In Chat". */
+  readonly onOpenChat?: () => void;
 }
 
 /** A bot's conversation read from its transcript, with a composer. */
@@ -51,6 +57,7 @@ export default function ChatPane(props: ChatPaneProps): ReactElement {
     <div className="chat-pane">
       {search.open ? <ChatSearchBar search={search} hasMore={chat.hasMore} /> : null}
       <div className="chat-scroll" ref={scroller} onScroll={onScroll}>
+        {props.caption === undefined ? null : <div className="chat-caption">{props.caption}</div>}
         {props.note === undefined ? null : <div className="chat-note">{props.note}</div>}
         {chat.hasMore ? (
           <button
@@ -79,6 +86,7 @@ export default function ChatPane(props: ChatPaneProps): ReactElement {
             onOpenFile={props.onOpenFile}
             onOpenDecision={props.onOpenDecision}
             expandAll={searching}
+            onOpenChat={props.onOpenChat}
           />
         ))}
         <PendingMessages pending={pending} />
@@ -90,6 +98,7 @@ export default function ChatPane(props: ChatPaneProps): ReactElement {
         onAttach={linked ? undefined : (file) => uploadAttachment(client, bot.project_id, file)}
         onSend={onSend}
         dictation={nativeDictation}
+        footnote={props.composerNote}
       />
     </div>
   );

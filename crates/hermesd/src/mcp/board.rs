@@ -328,7 +328,11 @@ fn item_get(app: &Arc<AppState>, me: &Me, req: c::ItemGet) -> anyhow::Result<Val
     // The latest few; the drawer pages the rest.
     let skip = history.len().saturating_sub(20);
     let history: Vec<c::ItemEvent> = history.drain(skip..).map(Into::into).collect();
-    Ok(json!({ "item": item_out(item)?, "links": out(links)?, "history": out(history)? }))
+    let comments = super::board_comments::comments(app, &req.id)?;
+    Ok(
+        json!({ "item": item_out(item)?, "links": out(links)?, "history": out(history)?,
+               "comments": comments }),
+    )
 }
 
 fn item_query(app: &Arc<AppState>, me: &Me, req: c::ItemQuery) -> anyhow::Result<Value> {

@@ -295,3 +295,50 @@ fn open_uses_counts_what_the_tag_still_owes_the_owner() {
     // Parked still counts: the owner chose later, not never.
     assert_eq!(usage(&db, "spend").open_uses, 2);
 }
+
+/// Grant notes Hermes wrote before H-173 were stored as the owner's; the
+/// migration moves them to Hermes and leaves the owner's own words alone.
+#[test]
+fn the_grant_notes_hermes_already_wrote_become_its_own() {
+    let (db, bot) = setup();
+    let d = raise(&db, &bot, "one");
+    for body in [
+        "Applied this ruling's grants. alice: install.",
+        "Not granted on win: windev's publish (the bot is gone); set it on win.",
+        "Granted on win: windev now has install.",
+        "tell me more",
+    ] {
+        db.insert_decision_comment(&d.id, CommentAuthorKind::User, None, body)
+            .unwrap();
+    }
+    db.insert_decision_comment(
+        &d.id,
+        CommentAuthorKind::Bot,
+        Some(&bot.id),
+        "Granted on it",
+    )
+    .unwrap();
+    // Rewind to just before the migration and run it, and any after it, again.
+    let before = MIGRATIONS
+        .iter()
+        .position(|sql| sql.contains("decision_comment_new"))
+        .expect("the comment author migration");
+    db.lock()
+        .execute(
+            "UPDATE meta SET value = ?1 WHERE key = 'schema_version'",
+            [before.to_string()],
+        )
+        .unwrap();
+    db.migrate().unwrap();
+    let mut kinds: Vec<(String, CommentAuthorKind)> = db
+        .list_decision_comments(&d.id)
+        .unwrap()
+        .into_iter()
+        .map(|c| (c.body, c.author_kind))
+        .collect();
+    kinds.sort_by(|a, b| a.0.cmp(&b.0));
+    let kinds: Vec<CommentAuthorKind> = kinds.into_iter().map(|(_, k)| k).collect();
+    use CommentAuthorKind::{Bot, System, User};
+    // Sorted by body: Applied…, Granted on it, Granted on win…, Not granted…, tell me more.
+    assert_eq!(kinds, vec![System, Bot, System, System, User]);
+}

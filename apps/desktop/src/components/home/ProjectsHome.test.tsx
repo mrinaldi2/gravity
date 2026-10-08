@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { JsonValue } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import * as fx from "../../test/fixtures";
@@ -88,6 +89,25 @@ describe("ProjectsHome", () => {
     expect(last.getByText("Last activity 3 days ago")).toBeInTheDocument();
     expect(last.getByText("○ No release yet")).toBeInTheDocument();
     expect(screen.getByText("3 projects · 2 computers")).toBeInTheDocument();
+  });
+
+  it("counts a bot waiting on an approval as needing you (H-172)", async () => {
+    const overview = overviewJson() as { rows: { attention?: JsonValue }[] };
+    const last = overview.rows[2];
+    if (last === undefined) {
+      throw new Error("no third row");
+    }
+    last.attention = { count: 1, score: 1, by_kind: { bot_waiting: 1 } };
+    const daemon = new FakeDaemon().onRequest("projects_overview", () => ({
+      type: "projects_overview",
+      req_id: "1",
+      overview,
+    }));
+    daemon.capabilities = [...daemon.capabilities, "projects_overview"];
+    renderHome(daemon);
+    const card = await screen.findByRole("article", { name: "Aurora Notes" });
+    expect(within(card).getByText("1 bot waiting for you")).toBeInTheDocument();
+    expect(within(card).queryByLabelText("Nothing needs you")).toBeNull();
   });
 
   it("says when a computer is away, with when it was last seen", async () => {

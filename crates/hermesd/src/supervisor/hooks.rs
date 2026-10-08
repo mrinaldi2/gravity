@@ -17,6 +17,7 @@ impl Supervisor {
         message: Option<&str>,
         transcript_path: Option<&str>,
     ) {
+        self.composer_event(bot_id, event);
         match event {
             "SessionStart" => {
                 // Socket registration happens in the HTTP handler. A session
@@ -72,7 +73,11 @@ impl Supervisor {
             tracing::debug!(bot_id, message = text, "idle notification, state unchanged");
             return;
         }
-        self.set_state(bot_id, BotState::WaitingForApproval, "notification");
+        self.set_state(
+            bot_id,
+            BotState::WaitingForApproval,
+            super::APPROVAL_NOTIFICATION,
+        );
         // Claude Code's own wording never reaches the owner (ux-glossary
         // rule 9): the client names the bot and, when known, the tool.
         let tool = requested_tool(text);
@@ -99,7 +104,7 @@ fn requested_tool(message: &str) -> Option<String> {
 /// The "waiting for your input" notification means nobody is typing, not that
 /// something needs approving. Everything else (permission prompts above all)
 /// is treated as an approval stop.
-fn is_idle_notification(message: &str) -> bool {
+pub(super) fn is_idle_notification(message: &str) -> bool {
     let m = message.to_ascii_lowercase();
     m.contains("waiting for your input") || m.contains("waiting for user input")
 }

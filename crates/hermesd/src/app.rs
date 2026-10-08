@@ -48,6 +48,9 @@ pub const CAPABILITIES: &[&str] = &[
     // Owner threads and pins (H-128 D6, D7): `owner_threads`,
     // `owner_thread_get`, `owner_thread_read`, `project_pin`.
     "owner_threads",
+    // A bot's answer to a chat message, posted to its owner thread when
+    // the turn didn't `message_owner` (H-192).
+    "owner_answers",
     "project_pin",
 ];
 

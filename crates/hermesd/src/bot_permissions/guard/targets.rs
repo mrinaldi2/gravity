@@ -8,6 +8,7 @@ pub(super) fn of(name: &str, rest: &[String], args: &[String]) -> Vec<String> {
     match name {
         "rm" | "rmdir" | "unlink" | "shred" | "srm" | "trash" | "mv" | "tee" => args.to_vec(),
         "cp" | "install" | "ditto" | "ln" | "rsync" => destination(rest),
+        "robocopy" | "xcopy" => windows_copy(args),
         "truncate" => without_values(rest, &["-s", "-r", "--size", "--reference"]),
         "dd" => rest
             .iter()
@@ -79,6 +80,32 @@ fn destination(rest: &[String]) -> Vec<String> {
     let args = without_values(rest, &values);
     match args.last() {
         Some(last) if args.len() >= 2 && !is_remote(last) => vec![last.clone()],
+        _ => Vec::new(),
+    }
+}
+
+/// `robocopy SRC DST [FILES] [/MIR]`, `xcopy SRC DST`: the destination, and
+/// the source too when `/MOV`, `/MOVE`, `/MIR` or `/PURGE` deletes from it.
+fn windows_copy(args: &[String]) -> Vec<String> {
+    // `/MIR`, `/R:3`: a switch has no `/` after its first.
+    let switch = |w: &String| w.starts_with('/') && !w[1..].contains('/');
+    let paths: Vec<String> = args
+        .iter()
+        .filter(|w| !switch(w))
+        .take(2)
+        .cloned()
+        .collect();
+    let moves = args.iter().filter(|w| switch(w)).any(|w| {
+        let name = w[1..]
+            .split(':')
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        matches!(name.as_str(), "mov" | "move" | "mir" | "purge")
+    });
+    match &paths[..] {
+        [src, dst] if moves => vec![src.clone(), dst.clone()],
+        [_, dst] => vec![dst.clone()],
         _ => Vec::new(),
     }
 }

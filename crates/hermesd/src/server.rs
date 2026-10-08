@@ -45,6 +45,7 @@ pub fn router(app: Arc<AppState>) -> Router {
 
 async fn health(State(app): State<Arc<AppState>>) -> impl IntoResponse {
     let db_healthy = app.db.delivery_backlog().is_ok();
+    let owner = app.owner.counts();
     Json(json!({
         "status": if db_healthy { "ok" } else { "degraded" },
         "version": crate::app::DAEMON_VERSION,
@@ -54,7 +55,11 @@ async fn health(State(app): State<Arc<AppState>>) -> impl IntoResponse {
         "db_healthy": db_healthy,
         "delivery_backlog": app.db.delivery_backlog().unwrap_or(-1),
         "active_bots": app.supervisor.active_total(),
-        "uptime_seconds": app.started_at.elapsed().as_secs()
+        "uptime_seconds": app.started_at.elapsed().as_secs(),
+        // How the owner connected since start (H-165); counts, no secrets.
+        "owner_tickets_granted": owner.owner_tickets_granted,
+        "owner_tickets_redeemed": owner.owner_tickets_redeemed,
+        "client_token_fallbacks": owner.client_token_fallbacks
     }))
 }
 
@@ -78,6 +83,12 @@ pub fn spawn_workers(app: &Arc<AppState>) {
     // one now; bots pick up the matching permissions on their next start.
     if let Err(e) = crate::projectmgmt::ensure_artifacts_dirs(app) {
         tracing::warn!(error = %e, "artifacts dir backfill failed");
+    }
+
+    // iOS packages frozen with desktop deploy targets before H-176 deploy
+    // to the iPhone; a no-op once none is left.
+    if let Err(e) = crate::board::release::ios_repair::repair_ios_deploy_targets(&app.db) {
+        tracing::warn!(error = %e, "iOS deploy target repair failed");
     }
 
     // Bots are always-on: the first tick fires at once and brings every live
@@ -140,6 +151,7 @@ pub fn spawn_workers(app: &Arc<AppState>) {
     tokio::spawn(crate::activity::watch(app.clone()));
     tokio::spawn(crate::chat::watch(app.clone()));
     tokio::spawn(crate::offboard::watch(app.clone()));
+    tokio::spawn(crate::chat::watch_answers(app.clone()));
     tokio::spawn(crate::quiesce::pending::watch(app.clone()));
     tokio::spawn(crate::approval::watch(app.clone()));
     tokio::spawn(crate::peer::chat::forward(app.clone()));

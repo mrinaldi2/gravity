@@ -74,7 +74,27 @@ type Row =
     }
   /** In Needs you on daemons before 0.16.2; shown beside it here. */
   | ({ readonly kind: "wip_override" } & WipOverride)
-  | AttentionRowJson;
+  | AttentionRowJson
+  | {
+      /**
+       * Another linked computer's row, as the projects home counts it
+       * (H-178): its typed row, acted on there.
+       */
+      readonly kind: "elsewhere";
+      readonly row: TypedRowJson;
+      readonly elsewhere: string;
+    };
+
+/** A linked computer's typed `AttentionRow`, any kind, as proto3 JSON. */
+export interface TypedRowJson extends Omit<AttentionRowJson, "kind"> {
+  readonly kind:
+    | AttentionRowJson["kind"]
+    | "release_awaiting"
+    | "decision"
+    | "relayed_rulings"
+    | "p0_item"
+    | "serving_off";
+}
 
 /**
  * The kinds added with the projects home (H-128), sent to a client that asks
@@ -136,6 +156,11 @@ export interface Dashboard {
   /** The computer holding the board, when it is mirrored here. */
   readonly home: string | null;
   readonly needs_you: readonly NeedsYou[];
+  /**
+   * How many of those the projects home counts (H-161), for the header:
+   * info rows such as routines with no card are not. Absent before 0.17.
+   */
+  readonly needs_you_count?: number;
   /** Moves over a WIP limit this week; absent before 0.16.2. */
   readonly wip_overrides?: readonly WipOverride[];
   /** Off-home, why the home's rows are missing (it can't be reached). */

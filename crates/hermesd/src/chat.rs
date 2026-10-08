@@ -7,6 +7,7 @@ use std::time::Duration;
 use crate::app::AppState;
 use crate::events::Push;
 
+mod answers;
 pub mod authors;
 mod browser_steps;
 mod builder;
@@ -18,9 +19,11 @@ pub mod files;
 pub mod model;
 mod steps;
 mod store;
+mod transcript_lines;
 mod triggers;
 pub mod writes;
 
+pub use answers::watch as watch_answers;
 pub(crate) use envelope::unwrap_peer;
 pub(crate) use steps::truncate;
 pub use store::ChatStore;

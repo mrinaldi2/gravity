@@ -8,6 +8,7 @@
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 
+use super::glob::Glob;
 use super::path_key::{git_bash_drive, is_null_device, last_separator};
 pub use super::path_key::{key, within};
 use super::words::pieces;
@@ -30,14 +31,17 @@ pub(super) struct Scope {
     pub named: Vec<String>,
     /// `for name in a b c`: each value the loop variable takes.
     pub lists: HashMap<String, Vec<String>>,
+    /// What the line changes in the shell the guard models (CE-032).
+    pub changes: super::changes::Changes,
 }
 
 /// More directories than this means the line is playing games.
 const MAX_DIRS: usize = 16;
 
 /// Characters that make a word match more than its own spelling. `$` is a
-/// variable the guard could not expand.
-const WILD: &[char] = &['*', '?', '[', '{', '$'];
+/// variable the guard could not expand; `(` a zsh or extglob pattern group
+/// (`*(D)`, `.ss(h|x)`).
+pub(super) const WILD: &[char] = &['*', '?', '[', '{', '$', '('];
 
 impl Scope {
     pub fn new(cwd: &Path) -> Self {
@@ -48,6 +52,7 @@ impl Scope {
             substitutes: false,
             named: Vec::new(),
             lists: HashMap::new(),
+            changes: Default::default(),
         }
     }
 
@@ -147,7 +152,7 @@ impl GuardContext {
         "settings.gen.json",
     ];
 
-    fn is_protected(&self, path: &Path) -> Option<String> {
+    pub(super) fn is_protected(&self, path: &Path) -> Option<String> {
         let text = path.display().to_string().replace('\\', "/");
         self.protected()
             .into_iter()
@@ -201,12 +206,21 @@ impl GuardContext {
         if let Some(device) = words.iter().find(|w| super::words::is_device_path(w)) {
             return Some(device.clone());
         }
+        // A zsh or extglob group (`*(D)`, `.ss(h|x)`) is one pattern, which
+        // `pieces` would cut apart at its brackets (CE-032 M3).
+        if let Some(path) = words
+            .iter()
+            .filter(|w| w.contains('('))
+            .find_map(|w| self.glob_reaches(w, scope, Glob::Shell))
+        {
+            return Some(path);
+        }
         let found = words.iter().flat_map(|w| pieces(w)).find_map(|piece| {
             let expanded = self.expand(piece, scope);
             self.candidates(&expanded, scope)
                 .iter()
                 .find_map(|p| self.is_protected(p))
-                .or_else(|| self.glob_reaches_protected(&expanded, scope))
+                .or_else(|| self.glob_reaches(&expanded, scope, Glob::Shell))
         });
         found
     }
@@ -223,39 +237,6 @@ impl GuardContext {
         })
     }
 
-    /// `~/.gravity/sec*/x` reaches the secrets: the literal part before the
-    /// first wildcard is a prefix of a protected path. The folder part of
-    /// that prefix is read both as spelled and resolved like a plain path,
-    /// so a glob through a symlink (`~/.gravity` → `~/.thehermes`) is judged
-    /// by where it lands (CE-006 G1). A wildcard at the start of a name never
-    /// matches a dot file.
-    fn glob_reaches_protected(&self, expanded: &str, scope: &Scope) -> Option<String> {
-        let at = expanded.find(WILD)?;
-        let (prefix, wild) = expanded.split_at(at);
-        let (folder, partial) = match last_separator(prefix) {
-            Some(i) => (&prefix[..=i], &prefix[i + 1..]),
-            None => ("", prefix),
-        };
-        let protected = self.protected();
-        let rooted = Path::new(prefix).has_root() || Path::new(prefix).is_absolute();
-        let dirs: Vec<PathBuf> = if rooted {
-            vec![PathBuf::from("/")]
-        } else {
-            scope.dirs.clone()
-        };
-        let mut folders: Vec<PathBuf> = dirs.iter().map(|d| normalize(&d.join(folder))).collect();
-        folders.extend(self.candidates(if folder.is_empty() { "." } else { folder }, scope));
-        folders.iter().find_map(|dir| {
-            let base = format!("{}/{partial}", key(dir)).replace("//", "/");
-            let base = key(Path::new(&base));
-            protected.iter().find_map(|p| {
-                let rest = key(p).strip_prefix(&base)?.to_string();
-                let hidden = base.ends_with('/') && rest.starts_with('.') && !wild.starts_with('.');
-                (!hidden).then(|| p.display().to_string())
-            })
-        })
-    }
-
     /// Whether a destructive command may act on `path` (already real).
     pub(super) fn may_change(&self, path: &Path) -> bool {
         if path == Path::new("/dev/null")
@@ -264,7 +245,7 @@ impl GuardContext {
         {
             return true;
         }
-        if self.in_served(path) {
+        if self.in_served(path) || self.in_run(path) {
             return false;
         }
         let inside = |root: &PathBuf| path.starts_with(real(root));
@@ -324,6 +305,7 @@ impl GuardContext {
             if Path::new(wild)
                 .components()
                 .any(|c| c == Component::ParentDir)
+                || (wild.contains('(') && wild.contains(".."))
             {
                 return Err(PathBuf::from(&expanded));
             }

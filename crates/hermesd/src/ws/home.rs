@@ -107,16 +107,14 @@ impl Conn {
         kind: &'static str,
         work: impl Future<Output = anyhow::Result<T>> + Send + 'static,
     ) {
-        let (out, req_id) = (self.out.clone(), req_id.clone());
-        tokio::spawn(async move {
-            let reply = match work.await {
+        self.spawn_reply(req_id, move |req_id| async move {
+            match work.await {
                 Ok(answer) => json!({ "type": kind, "req_id": req_id, kind: answer }),
                 Err(e) => {
                     let r = unavailable(&e);
                     json!({ "type": "error", "req_id": req_id, "code": r.code, "message": r.message })
                 }
-            };
-            let _ = out.send(reply);
+            }
         });
     }
 
@@ -160,7 +158,7 @@ impl Conn {
                 crate::overview::pin(&app, &r.project_id, r.pinned).map(Response::ProjectPinned)
             }
             Request::OwnerThreads(_) => {
-                self.home_later(req_id, async move {
+                self.home_later(req_id, "home:OwnerThreads", async move {
                     owner_threads::threads(app)
                         .await
                         .map(Response::OwnerThreads)
@@ -168,7 +166,7 @@ impl Conn {
                 return Ok(None);
             }
             Request::OwnerThreadGet(r) => {
-                self.home_later(req_id, async move {
+                self.home_later(req_id, "home:OwnerThreadGet", async move {
                     owner_threads::get(app, &r.bot_id, r.before_num, r.limit)
                         .await
                         .map(Response::OwnerThread)
@@ -176,7 +174,7 @@ impl Conn {
                 return Ok(None);
             }
             Request::OwnerThreadRead(r) => {
-                self.home_later(req_id, async move {
+                self.home_later(req_id, "home:OwnerThreadRead", async move {
                     owner_threads::read(app, &r.bot_id, r.up_to_num)
                         .await
                         .map(Response::OwnerThreadMarked)
@@ -199,11 +197,11 @@ impl Conn {
     fn home_later(
         &self,
         req_id: u64,
+        kind: &'static str,
         work: impl Future<Output = anyhow::Result<Response>> + Send + 'static,
     ) {
-        let bin = self.bin.clone();
-        tokio::spawn(async move {
-            let frame = match work.await {
+        self.spawn_frame(req_id, kind, async move {
+            match work.await {
                 Ok(response) => binary::home_response(
                     req_id,
                     HomeResponse {
@@ -214,8 +212,7 @@ impl Conn {
                     let r = unavailable(&e);
                     binary::error(req_id, r.code, r.message)
                 }
-            };
-            let _ = bin.send(frame);
+            }
         });
     }
 }

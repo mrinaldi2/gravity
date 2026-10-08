@@ -127,3 +127,25 @@ fn a_pin_is_stored_once() {
     assert!(db.set_project_pinned(&bot.project_id, false).unwrap());
     assert!(!db.project_pinned(&bot.project_id).unwrap());
 }
+
+/// H-192: a turn's answer is claimed once; a claim whose post failed is
+/// given back so a later pass retries (ARCH S1), and a posted one stays.
+#[test]
+fn an_answer_claim_is_given_back_only_when_nothing_was_posted() {
+    let (db, bot) = setup();
+    assert!(db.claim_owner_answer(&bot.id, "t1").unwrap());
+    assert!(
+        !db.claim_owner_answer(&bot.id, "t1").unwrap(),
+        "claimed once"
+    );
+    db.release_owner_answer(&bot.id, "t1").unwrap();
+    assert!(db.claim_owner_answer(&bot.id, "t1").unwrap(), "free again");
+
+    db.set_owner_answer_num(&bot.id, "t1", 7).unwrap();
+    db.release_owner_answer(&bot.id, "t1").unwrap();
+    assert!(
+        !db.claim_owner_answer(&bot.id, "t1").unwrap(),
+        "posted stays"
+    );
+    assert_eq!(db.owner_answers(&bot.id).unwrap().get("t1"), Some(&7));
+}

@@ -114,7 +114,15 @@ async fn restarting_a_bot_tells_it_to_pick_its_work_back_up_once() {
     let mut inbox = read_until(&mut t.dev_mcp, "Your session restarted", 100).await;
     inbox.extend(read_until(&mut t.dev_mcp, "never sent", 20).await);
     let notes = notes(&inbox);
-    assert_eq!(notes.len(), 1, "{inbox:?}");
+    // The note reaches the inbox once the new session takes it: none means
+    // the session didn't come back, and the terminal says why (H-188).
+    let deliveries = t.d.app.db.list_deliveries(Some(&t.dev), None);
+    assert_eq!(
+        notes.len(),
+        1,
+        "{inbox:?}\n{}\n{deliveries:?}",
+        terminal(&t.d, &t.dev)
+    );
     let note = notes[0];
     assert!(note.contains("picked your conversation back up"), "{note}");
     assert!(note.contains("middle of a turn, started by lead's task: port the updater"));

@@ -1,23 +1,17 @@
-// The item drawer's three tabs (H-018 §3.6): Overview (description,
-// acceptance criteria, verification, people, parent), Links grouped by kind,
-// and Activity, comments and history as one timeline with the composer.
+// The item drawer's Overview (description, acceptance criteria,
+// verification, people, parent) and Links grouped by kind (H-018 §3.6).
+// Activity lives in DrawerActivity.
 
-import { useState } from "react";
-import type { KeyboardEvent, ReactElement } from "react";
-import type {
-  ItemComment,
-  ItemEvent,
-  ItemLink,
-} from "../../../protocol/gen/hermes/board/v1/board_pb";
+import type { ReactElement } from "react";
+import type { ItemLink } from "../../../protocol/gen/hermes/board/v1/board_pb";
 import {
-  ItemEventKind,
   LinkKind,
   PersonRole,
   VerificationResult,
 } from "../../../protocol/gen/hermes/board/v1/board_pb";
 import type { ItemDetail } from "../../../protocol/gen/hermes/board/v1/requests_pb";
 import Markdown from "../../control/Markdown";
-import { eventLine, when } from "./drawerText";
+import { when } from "./drawerText";
 
 const VERIFIED: Readonly<Record<VerificationResult, string>> = {
   [VerificationResult.UNSPECIFIED]: "◌",
@@ -146,132 +140,5 @@ export function Links(props: { readonly links: readonly ItemLink[] }): ReactElem
         );
       })}
     </dl>
-  );
-}
-
-type Filter = "all" | "comments" | "moves";
-
-type Entry =
-  | { readonly kind: "comment"; readonly at: number; readonly comment: ItemComment }
-  | { readonly kind: "event"; readonly at: number; readonly event: ItemEvent };
-
-function stamp(at: { readonly seconds: bigint } | undefined): number {
-  return at === undefined ? 0 : Number(at.seconds);
-}
-
-export function Activity(props: {
-  readonly detail: ItemDetail;
-  readonly who: (actor: string) => string;
-  readonly columnName: (key: string) => string;
-  /** Absent where this connection can't comment. */
-  readonly onComment?: (body: string) => Promise<void>;
-}): ReactElement {
-  const [filter, setFilter] = useState<Filter>("all");
-  const [draft, setDraft] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const entries: Entry[] = [
-    ...props.detail.comments.map((c) => ({
-      kind: "comment" as const,
-      at: stamp(c.at),
-      comment: c,
-    })),
-    ...props.detail.history
-      .filter((e) => e.kind !== ItemEventKind.COMMENTED)
-      .map((e) => ({ kind: "event" as const, at: stamp(e.at), event: e })),
-  ];
-  // Newest last, as a conversation reads.
-  // oxlint-disable-next-line unicorn/no-array-sort
-  entries.sort((a, b) => a.at - b.at);
-  const shown = entries.filter(
-    (e) =>
-      filter === "all" ||
-      (filter === "comments" && e.kind === "comment") ||
-      (filter === "moves" && e.kind === "event" && e.event.kind === ItemEventKind.MOVED),
-  );
-  const send = async (): Promise<void> => {
-    const body = draft.trim();
-    if (!body || props.onComment === undefined) {
-      return;
-    }
-    setSending(true);
-    try {
-      await props.onComment(body);
-      setDraft("");
-      setError(null);
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : String(failure));
-    } finally {
-      setSending(false);
-    }
-  };
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault();
-      void send();
-    }
-  };
-  return (
-    <div className="drawer-activity">
-      <div className="drawer-filter" role="group" aria-label="Show">
-        {(["all", "comments", "moves"] as const).map((f) => (
-          <button
-            key={f}
-            type="button"
-            className={filter === f ? "on" : ""}
-            aria-pressed={filter === f}
-            onClick={() => setFilter(f)}
-          >
-            {f === "all" ? "All" : f === "comments" ? "Comments" : "Moves"}
-          </button>
-        ))}
-      </div>
-      {shown.length === 0 ? (
-        <p className="drawer-empty">Nothing here yet.</p>
-      ) : (
-        <ol className="drawer-timeline" aria-label="Timeline">
-          {shown.map((e) =>
-            e.kind === "comment" ? (
-              <li
-                key={`c-${e.comment.id}`}
-                className={e.comment.author === "user" ? "drawer-owner" : ""}
-              >
-                <span className="drawer-dim">{when(e.comment.at)}</span>{" "}
-                <b>{props.who(e.comment.author)}</b>: {e.comment.body}
-              </li>
-            ) : (
-              <li key={`e-${e.event.id}`} className="drawer-dim">
-                {when(e.event.at)} {eventLine(e.event, props.who, props.columnName)}
-              </li>
-            ),
-          )}
-        </ol>
-      )}
-      {props.onComment === undefined ? null : (
-        <div className="drawer-composer">
-          <textarea
-            rows={2}
-            aria-label={`Comment on ${props.detail.item?.id ?? ""}`}
-            placeholder="Write a comment…"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={onKeyDown}
-          />
-          <button
-            type="button"
-            className="btn btn-small btn-primary"
-            disabled={sending || draft.trim() === ""}
-            onClick={() => void send()}
-          >
-            Send <span className="drawer-dim">⌘↩</span>
-          </button>
-          {error === null ? null : (
-            <p className="drawer-error" role="alert">
-              {error}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
   );
 }

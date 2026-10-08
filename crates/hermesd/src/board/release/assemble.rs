@@ -193,7 +193,8 @@ pub fn submit(app: &Arc<AppState>, me: &Caller<'_>, release_id: &str) -> anyhow:
         }
         // The computers it is tested on and deployed to, as of now, frozen
         // into the package (ARCH-R55 M1): later edits are for the next one.
-        t.set_release_targets(&release.id, &machines::targets_now(t, project)?)?;
+        // An iOS package freezes its own (H-176).
+        t.set_release_targets(&release.id, &machines::targets_for(t, &release)?)?;
         let release = t.release(&release.id)?.expect("loaded");
         check_tested(t, &release)?;
         let before = predecessor(t, &release)?;

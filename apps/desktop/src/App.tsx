@@ -7,6 +7,7 @@ import { useDaemonState } from "./app/useDaemonState";
 import type { DaemonState } from "./app/useDaemonState";
 import { useDesktopShell } from "./app/useDesktopShell";
 import { usePermissionInbox } from "./app/usePermissionInbox";
+import { useOpenBot } from "./app/useOpenBot";
 import { useOverlays } from "./app/useOverlays";
 import type { OverlaysApi } from "./app/useOverlays";
 import { usePaletteActions } from "./app/usePaletteActions";
@@ -136,12 +137,7 @@ export default function App(): ReactElement {
     [addToast, daemon, select],
   );
 
-  const openBot = useCallback(
-    (botId: string): void => {
-      select({ kind: "bot", botId });
-    },
-    [select],
-  );
+  const { openBot, openBotChat } = useOpenBot(select);
 
   const inbox = usePermissionInbox({
     client,
@@ -219,7 +215,7 @@ export default function App(): ReactElement {
           threads={threads}
           chat={chat}
           addToast={addToast}
-          onOpenBot={openBot}
+          onOpenBot={openBotChat}
         />
         {overlays.paletteOpen ? (
           <CommandPalette

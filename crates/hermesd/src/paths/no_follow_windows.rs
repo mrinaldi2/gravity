@@ -5,115 +5,24 @@
 //! is opened as itself and refused, never followed. The file is created as a
 //! fresh temp relative to the last folder's handle and renamed by its own
 //! handle into that folder (`SetFileInformationByHandle`, `RootDirectory`).
-//! No path is resolved again after a check: a bot swapping a folder for a
-//! junction mid-write changes nothing the daemon already holds open.
+//! No write goes by path after a check: a bot swapping a folder for a
+//! junction mid-write changes nothing the daemon already holds open. A
+//! rename over a briefly held file is retried (H-188), and before each retry
+//! the path is walked again: a folder that became a link, or another folder,
+//! is refused rather than written behind.
 
-use std::ffi::{c_void, OsStr};
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::OpenOptionsExt;
-use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+use std::os::windows::io::OwnedHandle;
 use std::path::Path;
 
 use super::LinkRefused;
 
-type Handle = *mut c_void;
-
-#[repr(C)]
-struct UnicodeString {
-    length: u16,
-    maximum_length: u16,
-    buffer: *const u16,
-}
-
-#[repr(C)]
-struct ObjectAttributes {
-    length: u32,
-    root_directory: Handle,
-    object_name: *const UnicodeString,
-    attributes: u32,
-    security_descriptor: *const c_void,
-    security_quality_of_service: *const c_void,
-}
-
-#[repr(C)]
-struct IoStatusBlock {
-    status: usize,
-    information: usize,
-}
-
-#[repr(C)]
-#[derive(Default)]
-struct ByHandleFileInformation {
-    attributes: u32,
-    times: [u32; 6],
-    volume_serial: u32,
-    size: [u32; 2],
-    links: u32,
-    index: [u32; 2],
-}
-
-#[link(name = "ntdll")]
-extern "system" {
-    #[allow(clippy::too_many_arguments)]
-    fn NtCreateFile(
-        handle: *mut Handle,
-        access: u32,
-        attributes: *const ObjectAttributes,
-        status: *mut IoStatusBlock,
-        allocation: *const i64,
-        file_attributes: u32,
-        share: u32,
-        disposition: u32,
-        options: u32,
-        ea: *const c_void,
-        ea_length: u32,
-    ) -> i32;
-    fn RtlNtStatusToDosError(status: i32) -> u32;
-}
-
-#[link(name = "kernel32")]
-extern "system" {
-    fn GetFileInformationByHandle(file: Handle, info: *mut ByHandleFileInformation) -> i32;
-    fn SetFileInformationByHandle(file: Handle, class: i32, info: *const c_void, size: u32) -> i32;
-}
-
-const OBJ_CASE_INSENSITIVE: u32 = 0x40;
-const SYNCHRONIZE: u32 = 0x0010_0000;
-const DELETE: u32 = 0x0001_0000;
-const FILE_LIST_DIRECTORY: u32 = 0x1;
-const FILE_TRAVERSE: u32 = 0x20;
-const FILE_READ_ATTRIBUTES: u32 = 0x80;
-const FILE_GENERIC_READ: u32 = 0x0012_0089;
-const FILE_GENERIC_WRITE: u32 = 0x0012_0116;
-const DIR_ACCESS: u32 = FILE_LIST_DIRECTORY | FILE_TRAVERSE | FILE_READ_ATTRIBUTES | SYNCHRONIZE;
-const SHARE_ALL: u32 = 0x7;
-const FILE_OPEN: u32 = 1;
-const FILE_CREATE: u32 = 2;
-const FILE_OPEN_IF: u32 = 3;
-const FILE_DIRECTORY_FILE: u32 = 0x1;
-const FILE_SYNCHRONOUS_IO_NONALERT: u32 = 0x20;
-const FILE_NON_DIRECTORY_FILE: u32 = 0x40;
-const FILE_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
-const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-const ERROR_FILE_NOT_FOUND: i32 = 2;
-const ERROR_FILE_EXISTS: i32 = 80;
-const ERROR_INVALID_PARAMETER: i32 = 87;
-const ERROR_DIRECTORY: i32 = 267;
-const ERROR_NOT_SUPPORTED: i32 = 50;
-/// FILE_INFO_BY_HANDLE_CLASS values.
-const FILE_RENAME_INFO: i32 = 3;
-const FILE_DISPOSITION_INFO: i32 = 4;
-const FILE_DISPOSITION_INFO_EX: i32 = 21;
-const FILE_RENAME_INFO_EX: i32 = 22;
-const RENAME_REPLACE_IF_EXISTS: u32 = 0x1;
-const RENAME_POSIX_SEMANTICS: u32 = 0x2;
-const DISPOSITION_DELETE: u32 = 0x1;
-const DISPOSITION_POSIX_SEMANTICS: u32 = 0x2;
+#[path = "no_follow_win_ffi.rs"]
+mod ffi;
+use ffi::*;
 
 /// A link (or something that isn't a plain folder or file) where one should be.
 fn refused(error: std::io::Error, rel: &Path) -> anyhow::Error {
@@ -125,83 +34,6 @@ fn refused(error: std::io::Error, rel: &Path) -> anyhow::Error {
 
 fn link_refused(rel: &Path) -> anyhow::Error {
     LinkRefused(rel.display().to_string()).into()
-}
-
-/// `name` in UTF-16; a stream name (`a:b`) or a separator is never a plain name.
-fn wide(name: &OsStr, rel: &Path) -> anyhow::Result<Vec<u16>> {
-    let wide: Vec<u16> = name.encode_wide().collect();
-    if wide.is_empty()
-        || wide
-            .iter()
-            .any(|&c| c == u16::from(b':') || c == u16::from(b'\\'))
-    {
-        anyhow::bail!("not a plain name in {}", rel.display());
-    }
-    Ok(wide)
-}
-
-/// `name` opened relative to `dir`, the reparse point itself if it is one.
-fn open_at(
-    dir: &OwnedHandle,
-    name: &OsStr,
-    access: u32,
-    disposition: u32,
-    options: u32,
-    rel: &Path,
-) -> anyhow::Result<std::io::Result<OwnedHandle>> {
-    let wide = wide(name, rel)?;
-    let bytes = u16::try_from(wide.len() * 2)?;
-    let object_name = UnicodeString {
-        length: bytes,
-        maximum_length: bytes,
-        buffer: wide.as_ptr(),
-    };
-    let attributes = ObjectAttributes {
-        length: std::mem::size_of::<ObjectAttributes>() as u32,
-        root_directory: dir.as_raw_handle(),
-        object_name: &object_name,
-        attributes: OBJ_CASE_INSENSITIVE,
-        security_descriptor: std::ptr::null(),
-        security_quality_of_service: std::ptr::null(),
-    };
-    let mut status = IoStatusBlock {
-        status: 0,
-        information: 0,
-    };
-    let mut handle: Handle = std::ptr::null_mut();
-    // SAFETY: every pointer is to a live local for the call; on success the
-    // handle is fresh and owned below.
-    let nt = unsafe {
-        NtCreateFile(
-            &mut handle,
-            access | SYNCHRONIZE,
-            &attributes,
-            &mut status,
-            std::ptr::null(),
-            0,
-            SHARE_ALL,
-            disposition,
-            options | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT,
-            std::ptr::null(),
-            0,
-        )
-    };
-    if nt < 0 {
-        // SAFETY: a plain status-code translation.
-        let code = unsafe { RtlNtStatusToDosError(nt) };
-        return Ok(Err(std::io::Error::from_raw_os_error(code as i32)));
-    }
-    // SAFETY: NtCreateFile succeeded, so `handle` is open and ours alone.
-    Ok(Ok(unsafe { OwnedHandle::from_raw_handle(handle) }))
-}
-
-fn info(handle: &OwnedHandle) -> std::io::Result<ByHandleFileInformation> {
-    let mut info = ByHandleFileInformation::default();
-    // SAFETY: the handle is open for the call; info is a valid out-pointer.
-    if unsafe { GetFileInformationByHandle(handle.as_raw_handle(), &mut info) } == 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    Ok(info)
 }
 
 /// A plain folder: a directory that is no reparse point.
@@ -242,65 +74,6 @@ fn walk(base: &Path, dirs: &[&OsStr], make: bool, rel: &Path) -> anyhow::Result<
     Ok(dir)
 }
 
-/// Sets one FILE_INFO_BY_HANDLE_CLASS record on `handle`.
-fn set_info(handle: &OwnedHandle, class: i32, record: &[u8]) -> std::io::Result<()> {
-    // SAFETY: `record` is a whole, aligned record of `class` for the call.
-    let ok = unsafe {
-        SetFileInformationByHandle(
-            handle.as_raw_handle(),
-            class,
-            record.as_ptr().cast(),
-            record.len() as u32,
-        )
-    };
-    if ok == 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    Ok(())
-}
-
-/// The class unsupported here (an older Windows or another file system).
-fn unsupported(error: &std::io::Error) -> bool {
-    matches!(
-        error.raw_os_error(),
-        Some(ERROR_INVALID_PARAMETER | ERROR_NOT_SUPPORTED)
-    )
-}
-
-/// Deletes what `handle` is open on: the link itself for a reparse point.
-fn delete(handle: &OwnedHandle) -> std::io::Result<()> {
-    let flags = (DISPOSITION_DELETE | DISPOSITION_POSIX_SEMANTICS).to_ne_bytes();
-    match set_info(handle, FILE_DISPOSITION_INFO_EX, &flags) {
-        Err(e) if unsupported(&e) => set_info(handle, FILE_DISPOSITION_INFO, &[1]),
-        other => other,
-    }
-}
-
-/// A FILE_RENAME_INFO record: flags, the folder handle, then the name.
-fn rename_record(flags: u32, dir: &OwnedHandle, name: &[u16]) -> Vec<u8> {
-    // Offsets of FILE_RENAME_INFO: the handle is pointer-aligned after the
-    // 4-byte flags; the name follows its 4-byte length.
-    let handle_at = std::mem::size_of::<usize>();
-    let name_at = handle_at + std::mem::size_of::<usize>() + 4;
-    let mut record = vec![0u8; name_at + (name.len() + 1) * 2];
-    record[..4].copy_from_slice(&flags.to_ne_bytes());
-    record[handle_at..handle_at + std::mem::size_of::<usize>()]
-        .copy_from_slice(&(dir.as_raw_handle() as usize).to_ne_bytes());
-    record[name_at - 4..name_at].copy_from_slice(&((name.len() * 2) as u32).to_ne_bytes());
-    for (i, unit) in name.iter().enumerate() {
-        record[name_at + i * 2..name_at + i * 2 + 2].copy_from_slice(&unit.to_ne_bytes());
-    }
-    record
-}
-
-/// Renames the open `file` to `name` in `dir`, replacing what is there.
-fn rename_into(file: &OwnedHandle, dir: &OwnedHandle, name: &[u16]) -> std::io::Result<()> {
-    let ex = rename_record(RENAME_REPLACE_IF_EXISTS | RENAME_POSIX_SEMANTICS, dir, name);
-    match set_info(file, FILE_RENAME_INFO_EX, &ex) {
-        Err(e) if unsupported(&e) => set_info(file, FILE_RENAME_INFO, &rename_record(1, dir, name)),
-        other => other,
-    }
-}
 
 /// A link the bot left at `name` in `dir`, deleted by handle so the rename
 /// replaces it as on Unix: the link itself, never its target.
@@ -343,17 +116,87 @@ pub fn write(
     let mut out = create(&dir, OsStr::new(&tmp_name), rel)?
         .ok_or_else(|| anyhow::anyhow!("a fresh temp name was taken: {}", rel.display()))?;
     let handle = OwnedHandle::from(out.try_clone()?);
+    let vet = || vet(&dir, base, dirs, file, rel);
     let done = out
         .write_all(bytes)
         .and_then(|()| out.sync_all())
         .map_err(anyhow::Error::from)
         .and_then(|()| remove_link(&dir, file, rel))
-        .and_then(|()| rename_into(&handle, &dir, &target).map_err(anyhow::Error::from));
+        .and_then(|()| replace(&handle, &dir, &target, vet));
     if let Err(error) = done {
+        // By handle, so the temp goes even when its folder became a link.
         let _ = delete(&handle);
         return Err(error.context(format!("writing {}", rel.display())));
     }
     Ok(())
+}
+
+/// Waits between attempts to rename over a file that is briefly held.
+const HELD_RETRIES_MS: [u64; 6] = [10, 20, 40, 80, 160, 320];
+
+/// ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION or ERROR_LOCK_VIOLATION.
+fn held(e: &std::io::Error) -> bool {
+    matches!(e.raw_os_error(), Some(5 | 32 | 33))
+}
+
+/// The open `file` renamed over `target` in `dir`. A file another process
+/// has open, as an antivirus scan holds one just written, can't be replaced
+/// for a moment; every start rewrites a bot's settings this way, so a short
+/// retry rides the scan out (H-188). `vet` re-runs the link checks before
+/// each retry: a bot holding the file open to force a wait can't swap a
+/// link in meanwhile (Architect M1).
+fn replace(
+    file: &OwnedHandle,
+    dir: &OwnedHandle,
+    target: &[u16],
+    vet: impl Fn() -> anyhow::Result<()>,
+) -> anyhow::Result<()> {
+    let mut waits = HELD_RETRIES_MS.iter();
+    loop {
+        match rename_into(file, dir, target) {
+            Err(e) if held(&e) => match waits.next() {
+                Some(ms) => {
+                    pause(std::time::Duration::from_millis(*ms));
+                    #[cfg(test)]
+                    BETWEEN_ATTEMPTS.with(|hook| hook.take().map(|f| f()));
+                    vet()?;
+                }
+                None => return Err(e.into()),
+            },
+            result => return Ok(result?),
+        }
+    }
+}
+
+/// `dir` is still the folder the path names, and no link sits at the name:
+/// walked again, a folder that became a link is refused, and so is one that
+/// is now another folder (the one held was moved away).
+fn vet(dir: &OwnedHandle, base: &Path, dirs: &[&OsStr], file: &OsStr, rel: &Path) -> anyhow::Result<()> {
+    let again = walk(base, dirs, false, rel)?;
+    let (now, held) = (info(&again)?, info(dir)?);
+    if (now.volume_serial, now.index) != (held.volume_serial, held.index) {
+        return Err(link_refused(rel));
+    }
+    remove_link(dir, file, rel)
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Run once after the next wait, before the checks: a test's swap.
+    pub(super) static BETWEEN_ATTEMPTS: std::cell::Cell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// A wait that doesn't stall a tokio worker: on the multi-threaded runtime
+/// the worker hands its tasks off while this thread sleeps.
+fn pause(wait: std::time::Duration) {
+    use tokio::runtime::{Handle, RuntimeFlavor};
+    match Handle::try_current() {
+        Ok(rt) if rt.runtime_flavor() == RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(|| std::thread::sleep(wait))
+        }
+        _ => std::thread::sleep(wait),
+    }
 }
 
 pub fn create_new(

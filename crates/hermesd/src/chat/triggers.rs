@@ -1,7 +1,7 @@
 //! What woke a bot: the trigger a user record in the transcript opens a turn
 //! with, read from Claude Code's record markers and the bus's envelopes.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde_json::Value;
 
@@ -22,6 +22,7 @@ pub(super) fn of_prompt(
     record: &Value,
     text: &str,
     names: &HashMap<String, String>,
+    typed: &HashSet<String>,
 ) -> Option<Trigger> {
     let flag = |key: &str| record.get(key).and_then(Value::as_bool) == Some(true);
     if flag("isCompactSummary") || flag("isVisibleInTranscriptOnly") {
@@ -38,6 +39,13 @@ pub(super) fn of_prompt(
     } else if record.get("scheduledTaskId").is_some() {
         Trigger::Background {
             text: format!("Scheduled wake-up: {}", first_line(text)),
+        }
+    } else if typed.contains(&crate::supervisor::prompt_digest(text)) {
+        // Typed into the composer for an owner message: the daemon's record
+        // of the token it spent says so, never the text (H-195, S2).
+        Trigger::Owner {
+            text: steps::truncate(crate::supervisor::typed_body(text), MAX_TRIGGER_CHARS),
+            via: OwnerVia::Chat,
         }
     } else if let Some(delivered) = envelope::parse(text) {
         delivered_trigger(names, delivered)

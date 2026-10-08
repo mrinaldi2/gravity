@@ -13,10 +13,12 @@ pub use board_import::{Created, ImportReport, Warned};
 pub use board_items::{NewItem, Write};
 pub use board_reads::BoardSnapshot;
 pub use board_tx::BoardTx;
+pub use card_questions::Asker;
 pub use decisions::NewDecision;
 pub use decisions_edit::DecisionEdit;
 pub use decisions_list::DecisionFilter;
 pub use overview::LatestSummary;
+pub use owner_messages::{OwnerProof, OwnerVia};
 pub use owner_threads::{Asked, OwnerQuestion};
 pub use peer_grants::{GrantEnd, GrantRuling, PeerGrant};
 pub use quiesce::{NewQuiesce, Quiesce};
@@ -45,6 +47,7 @@ mod board_tests;
 mod board_tx;
 mod bot_runtime;
 mod bots;
+mod card_questions;
 mod conversations;
 pub mod dashboard;
 mod decision_threads;
@@ -60,6 +63,8 @@ mod meetings;
 pub mod metrics;
 mod overview;
 mod owner_actions;
+mod owner_answers;
+mod owner_messages;
 mod owner_threads;
 #[cfg(test)]
 mod owner_threads_tests;
@@ -91,6 +96,7 @@ mod task_views;
 mod tasks;
 #[cfg(test)]
 mod tests;
+mod typed_prompts;
 mod workers;
 #[cfg(test)]
 mod workers_tests;
@@ -274,6 +280,10 @@ impl Db {
             )?;
             tx.execute(
                 "DELETE FROM task_card WHERE task_id NOT IN (SELECT id FROM task)",
+                [],
+            )?;
+            tx.execute(
+                "DELETE FROM task_release WHERE task_id NOT IN (SELECT id FROM task)",
                 [],
             )?;
             tx.execute(

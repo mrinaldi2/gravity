@@ -146,7 +146,7 @@ fn the_session_start_hook_retries_a_daemon_that_is_still_booting() {
 fn hooks_go_over_the_local_endpoint_without_a_token() {
     let dir = tempfile::tempdir().expect("tmp");
     let cfg = cfg_in(dir.path());
-    let transport = crate::bus_auth::hook_transport(&cfg);
+    let transport = crate::bus_auth::hook_transport(&cfg, false);
     super::write_hook_settings(dir.path(), &transport).expect("write");
     let raw = std::fs::read_to_string(dir.path().join(".claude/settings.json")).expect("read");
     let settings: serde_json::Value = serde_json::from_str(&raw).expect("json");
@@ -191,4 +191,68 @@ fn system_md_states_this_machines_task_limits_and_the_note_cap() {
     assert!(md.contains("4 across the project (20 for the lead)"));
     assert!(md.contains(&format!("over {} bytes is refused", bus::MAX_NOTE_BYTES)));
     assert!(md.contains("A note never\nauthorises work"));
+}
+
+#[cfg(unix)]
+#[test]
+fn the_composer_switch_adds_the_provenance_hooks_and_nothing_else_does() {
+    let settings = |provenance| {
+        super::unix_hooks::settings(&crate::bus_auth::HookTransport::Ipc {
+            command: "/bin/hermesd".to_string(),
+            endpoint: "/run/bus.sock".to_string(),
+            provenance,
+        })
+    };
+    let off = settings(false);
+    let submit = off["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+        .as_str()
+        .unwrap();
+    assert!(!submit.contains("--provenance"), "{submit}");
+    assert!(off["hooks"].get("PreToolUse").is_none());
+    assert!(off.get("editorMode").is_none());
+
+    let on = settings(true);
+    let submit = on["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+        .as_str()
+        .unwrap();
+    assert!(submit.ends_with(" --provenance"), "{submit}");
+    assert_eq!(
+        on["hooks"]["PreToolUse"][0]["matcher"],
+        "AskUserQuestion|ExitPlanMode"
+    );
+    for event in ["Elicitation", "PostToolUseFailure", "PermissionDenied"] {
+        assert!(on["hooks"].get(event).is_some(), "{event}");
+    }
+    assert_eq!(on["editorMode"], "normal");
+}
+
+/// H-209: a bot `composer_bots` names gets its MCP servers detached from its
+/// terminal; its neighbour keeps the plain entry.
+#[test]
+fn only_composer_bots_get_detached_mcp_servers() {
+    let tmp = tempfile::tempdir().expect("tmp");
+    let mut cfg = cfg_in(tmp.path());
+    cfg.delivery.composer_bots = vec!["Composer Test".to_string()];
+    let listed = provision_bot(&cfg, &spec("Composer Test", "")).expect("provision");
+    let other = provision_bot(
+        &cfg,
+        &BotProvision {
+            bot_id: "bot-2",
+            dir_name: "other",
+            ..spec("Other", "")
+        },
+    )
+    .expect("provision");
+    let bus = |dirs: &BotDirs| {
+        let raw = fs::read_to_string(dirs.root.join("mcp.json")).expect("read");
+        let mcp: serde_json::Value = serde_json::from_str(&raw).expect("json");
+        mcp["mcpServers"][crate::brand::ACTIVE_MCP_SERVER]["args"].to_string()
+    };
+    assert!(!bus(&other).contains("mcp-exec"), "{}", bus(&other));
+    assert_eq!(
+        bus(&listed).contains("mcp-exec"),
+        cfg!(unix),
+        "{}",
+        bus(&listed)
+    );
 }

@@ -24,7 +24,10 @@
 //!   bot's own folders;
 //! - a Write, Edit or destructive command into the served release builds,
 //!   for every bot, DevOps included: only the daemon writes there (CE-010
-//!   M3). Reading them stays allowed.
+//!   M3). Reading them stays allowed. The same holds for the daemon's own
+//!   state in `<home>/run` (CE-023 M1);
+//! - `hermesd release install|quiesce` pointed at another config or home
+//!   (CE-023 F1).
 //!
 //! Hooks run in every permission mode, so this is the boundary that still
 //! holds in Full. It is a parser, not a sandbox: a script file can still
@@ -43,13 +46,24 @@ use serde_json::{json, Value};
 
 mod cargo;
 mod cargo_alias;
+mod cd;
+mod changes;
+mod cmdlets;
 mod commands;
+mod daemon_cli;
+mod dotnet;
 mod full;
 mod git;
+mod glob;
+mod heredoc;
 mod links;
+mod mentions;
 mod path_key;
 pub(super) mod paths;
 mod powershell;
+mod ps_fold;
+mod ps_launch;
+mod ps_words;
 mod served;
 mod targets;
 mod words;
@@ -96,12 +110,13 @@ pub fn decide(input: &Value, ctx: &GuardContext) -> Option<String> {
             &mut scope.clone(),
             ctx,
         ),
-        // Only the links it makes (H-182); the Bash rules read POSIX words.
-        "PowerShell" => powershell::line(
-            args["command"].as_str().unwrap_or_default(),
-            &mut scope.clone(),
-            ctx,
-        ),
+        // Every Bash rule, read the PowerShell way (H-187).
+        "PowerShell" => match args["command"].as_str().unwrap_or_default() {
+            command if command.trim().is_empty() => {
+                Some("this PowerShell call has no command to judge, so it is refused".to_string())
+            }
+            command => powershell::line(command, &mut scope.clone(), ctx),
+        },
         "Read" | "Grep" | "Glob" => {
             // `path` is where Grep/Glob search; a Glob pattern can name a path too.
             ["file_path", "path", "pattern"]
@@ -123,6 +138,12 @@ pub fn decide(input: &Value, ctx: &GuardContext) -> Option<String> {
                 return Some(format!(
                     "{path} is in the served release builds, which only the daemon writes; \
                      publish with `hermesd release publish`"
+                ));
+            }
+            if let Some(path) = ctx.run_word(file, &scope) {
+                return Some(format!(
+                    "{path} is the daemon's own state, which only the daemon writes; \
+                     leave it alone"
                 ));
             }
             // In Full nothing reviews a write to a shell rc or a launch agent.
@@ -159,8 +180,12 @@ pub fn verdict(reason: Option<String>) -> Option<Value> {
 pub fn answer(payload: &str, ctx: &GuardContext) -> Option<Value> {
     let reason = match serde_json::from_str::<Value>(payload) {
         Ok(call) if call["tool_name"].as_str().is_some_and(|t| !t.is_empty()) => {
-            if call["tool_name"] == "Bash" && !call["tool_input"]["command"].is_string() {
-                Some("it couldn't read this Bash call's command, so it is refused".to_string())
+            let shell = call["tool_name"] == "Bash" || call["tool_name"] == "PowerShell";
+            if shell && !call["tool_input"]["command"].is_string() {
+                Some(format!(
+                    "it couldn't read this {} call's command, so it is refused",
+                    call["tool_name"].as_str().unwrap_or_default()
+                ))
             } else {
                 decide(&call, ctx)
             }

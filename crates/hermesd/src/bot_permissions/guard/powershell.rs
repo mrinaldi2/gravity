@@ -1,45 +1,178 @@
-//! The links a PowerShell line makes (H-182): `New-Item -ItemType
-//! Junction|SymbolicLink|HardLink`, its `ni` alias, and `cmd /c mklink`.
-//! Windows bots run PowerShell as a tool of its own and through
-//! `powershell -c`; a junction needs no privilege, so it is the easy way to
-//! link a `.claude` to the owner's. Only links are judged here: the Bash
-//! rules read POSIX words, which PowerShell's quoting and `\` paths aren't.
+//! The PowerShell tool, and `powershell`/`pwsh` or `cmd` run from either
+//! tool (H-182, H-187). Every rule the Bash guard applies applies here too:
+//! each simple command's words are read the PowerShell way (`$env:`,
+//! `%VAR%`, `$HOME`, `~`, `\` paths, the line's own variables), then judged
+//! by the Bash rules as they are (protected paths, redirects, git, gh,
+//! cargo, links, Full) and once more as the POSIX command a cmdlet amounts
+//! to (`Remove-Item` is an `rm`, `Set-Content` a `tee`; see `cmdlets`).
+//! `-EncodedCommand` is decoded and judged; one that can't be is refused.
 
 use super::paths::Scope;
-use super::GuardContext;
+use super::ps_fold::fold;
+use super::ps_launch::{is_cmd_switch, launch, start_process};
+use super::ps_words::{assignment, pipeline_variables, split};
+use super::{cmdlets, commands, dotnet, GuardContext};
+use crate::bot_permissions::shell;
 
 /// Why the PowerShell line must not run, or `None`.
 pub(super) fn line(line: &str, scope: &mut Scope, ctx: &GuardContext) -> Option<String> {
-    for words in commands(line) {
-        // `& cmd /c …` and `. script` call what follows.
-        let words: Vec<String> = words.into_iter().skip_while(|w| w == ".").collect();
-        let Some((program, rest)) = words.split_first() else {
-            continue;
-        };
-        let program = crate::bot_permissions::shell::program(program);
-        match program.to_ascii_lowercase().as_str() {
-            "cd" | "chdir" | "sl" | "set-location" | "pushd" | "push-location" => {
-                let dir = rest.iter().find(|w| !w.starts_with('-'));
-                let dirs = ctx.resolve(scope, dir.map_or("", String::as_str));
-                scope.enter(dirs);
-            }
-            _ => {
-                if let Some(reason) = super::links::check(program, rest, scope, ctx) {
-                    return Some(reason);
-                }
+    let line = &fold(line);
+    pipeline_variables(line, scope);
+    let commands = split(line, true);
+    // What a cmdlet fed by the pipeline may act on: every path the line names.
+    for words in &commands {
+        for word in words.iter().skip(1) {
+            let word = ctx.ps_word(word, scope);
+            scope.named.extend(
+                word.split([',', '='])
+                    .filter(|p| {
+                        !p.starts_with('-') && (p.contains('/') || p.starts_with(['~', '.']))
+                    })
+                    .map(str::to_string),
+            );
+        }
+    }
+    for words in commands {
+        if let Some(reason) = command(&words, scope, ctx) {
+            return Some(reason);
+        }
+    }
+    // `Remove-Item (Join-Path …)`, `Remove-Item @('a','b')`: the cmdlet with
+    // what its brackets hold as its arguments; so are a .NET call's.
+    for words in split(line, false) {
+        let words: Vec<String> = words.iter().map(|w| ctx.ps_word(w, scope)).collect();
+        if let Some(reason) = as_posix(&words, scope, ctx) {
+            return Some(reason);
+        }
+        for (display, posix) in dotnet::calls(&words) {
+            if let Some(reason) = judged(&display, &posix, scope, ctx) {
+                return Some(reason);
             }
         }
     }
     None
 }
 
-/// The script `powershell`/`pwsh` runs: the words after `-c`/`-Command`.
-pub(super) fn script(rest: &[String]) -> Option<String> {
-    let at = rest.iter().position(|w| {
-        let w = w.to_ascii_lowercase();
-        w.len() >= 2 && "-command".starts_with(&w)
-    })?;
-    Some(rest[at + 1..].join(" "))
+/// One simple command, its words as the tokenizer left them.
+pub(super) fn command(raw: &[String], scope: &mut Scope, ctx: &GuardContext) -> Option<String> {
+    // `. script` and `& cmd` call what follows; `&` already split the line.
+    let raw: Vec<String> = raw.iter().skip_while(|w| *w == ".").cloned().collect();
+    if let Some((name, plain, value)) = assignment(&raw) {
+        let key = format!("ps:{name}");
+        match (plain, &value[..]) {
+            (true, [one]) => {
+                let one = ctx.ps_word(one, scope);
+                scope.vars.insert(key, one);
+            }
+            _ => {
+                scope.vars.remove(&key);
+            }
+        }
+        // The value may itself be a command: `$x = Remove-Item …`.
+        return command(&value, scope, ctx);
+    }
+    let words: Vec<String> = raw.iter().map(|w| ctx.ps_word(w, scope)).collect();
+    let (first, rest) = words.split_first()?;
+    let program = program(first);
+    let raw_rest = &raw[1..];
+    if let Some(reason) = super::links::check(&program, rest, scope, ctx) {
+        return Some(reason);
+    }
+    // The arms below return before the Bash rules read every word; a
+    // launcher's script is judged first, so a link in it gets its own reason.
+    let touches = || {
+        let path = words.iter().find_map(|w| ctx.protected_word(w, scope))?;
+        Some(format!(
+            "this command touches {path}, which is protected; don't reword it, ask the owner"
+        ))
+    };
+    if !is_launcher(&program) {
+        if let Some(reason) = touches() {
+            return Some(reason);
+        }
+    }
+    match program.as_str() {
+        "cd" | "chdir" | "sl" | "set-location" | "pushd" | "push-location" => {
+            let dir = rest
+                .iter()
+                .find(|w| !w.starts_with('-') && !is_cmd_switch(w));
+            let dirs = ctx.resolve(scope, dir.map_or("", String::as_str));
+            scope.enter(dirs);
+            return None;
+        }
+        "set-alias" | "sal" | "new-alias" | "nal" => {
+            return Some(
+                "aliases defined on the command line can hide what runs; spell the command out"
+                    .to_string(),
+            )
+        }
+        "invoke-expression" | "iex" => {
+            if ctx.full {
+                return commands::command(&vec!["eval".to_string()], scope, ctx);
+            }
+            let script: Vec<String> = raw_rest
+                .iter()
+                .filter(|w| !w.starts_with('-'))
+                .cloned()
+                .collect();
+            return line(&script.join(" "), &mut scope.clone(), ctx);
+        }
+        "start-process" | "saps" | "start" => return start_process(raw_rest, scope, ctx),
+        "taskkill" if rest.iter().any(|w| is_cmd_flag(w, &["im", "fi"])) => {
+            return commands::command(&vec!["pkill".to_string()], scope, ctx)
+        }
+        // `pwsh -File ~\.ssh\x.ps1`: the script runs unread, its path doesn't.
+        name if is_launcher(name) => return launch(name, raw_rest, scope, ctx).or_else(touches),
+        _ => {}
+    }
+    // The Bash rules on the words as they are: protected paths, redirects,
+    // git, gh, cargo, a nested shell, and what only Full refuses.
+    // The program keeps its folder, which the protected-path rule reads.
+    let folder = first.rfind('/').map_or("", |at| &first[..=at]);
+    let mut native = vec![format!("{folder}{program}")];
+    native.extend(rest.iter().cloned());
+    if let Some(reason) = commands::command(&native, scope, ctx) {
+        return Some(reason);
+    }
+    as_posix(&words, scope, ctx)
+}
+
+/// A cmdlet judged as the POSIX command it amounts to.
+fn as_posix(words: &[String], scope: &Scope, ctx: &GuardContext) -> Option<String> {
+    let (first, rest) = words.split_first()?;
+    let (display, posix) = cmdlets::translate(&program(first), rest)?;
+    judged(display, &posix, scope, ctx)
+}
+
+/// The POSIX words judged, the refusal naming `display` as the command.
+fn judged(display: &str, posix: &[String], scope: &Scope, ctx: &GuardContext) -> Option<String> {
+    let reason = commands::command(&posix.to_vec(), scope, ctx)?;
+    let spelled = match posix {
+        [xargs, inner, ..] if xargs == "xargs" => format!("`xargs {inner}`"),
+        [name, ..] => format!("`{name}`"),
+        [] => return Some(reason),
+    };
+    Some(reason.replacen(&spelled, &format!("`{display}`"), 1))
+}
+
+/// A program word as the guard names it: its file name, lower case, no `.exe`.
+pub(super) fn program(word: &str) -> String {
+    let name = shell::program(word).to_ascii_lowercase();
+    match name.strip_suffix(".exe") {
+        Some(stem) if !stem.is_empty() => stem.to_string(),
+        _ => name,
+    }
+}
+
+/// `powershell`, `pwsh` and `cmd`, as [`program`] spells them.
+pub(super) fn is_launcher(program: &str) -> bool {
+    matches!(program, "powershell" | "pwsh" | "cmd" | "powershell_ise")
+}
+
+/// `/IM`-style flags of a Windows program, in any case.
+pub(super) fn is_cmd_flag(word: &str, names: &[&str]) -> bool {
+    word.strip_prefix('/')
+        .is_some_and(|w| names.iter().any(|n| w.eq_ignore_ascii_case(n)))
 }
 
 /// `-Path`, `-Name`, `-ItemType`, `-Value`, or a parameter that takes a
@@ -109,78 +242,4 @@ pub(super) fn new_link(rest: &[String]) -> Option<(Vec<String>, Vec<String>)> {
         (_, None) => paths.iter().map(|p| (*p).to_string()).collect(),
     };
     Some((values, links))
-}
-
-/// A PowerShell line as simple commands of words, quotes removed. `;`,
-/// `|`, `&`, newlines and brackets separate; `\` is a plain character,
-/// a backtick escapes, `''` is a quote inside single quotes, and `${…}`
-/// stays one word.
-pub(super) fn commands(line: &str) -> Vec<Vec<String>> {
-    let mut out = Vec::new();
-    let mut words = Vec::new();
-    let mut word = String::new();
-    let mut in_word = false;
-    let mut chars = line.chars().peekable();
-    let end_word = |word: &mut String, in_word: &mut bool, words: &mut Vec<String>| {
-        if std::mem::take(in_word) {
-            words.push(std::mem::take(word));
-        }
-    };
-    while let Some(c) = chars.next() {
-        match c {
-            '\'' => {
-                in_word = true;
-                while let Some(q) = chars.next() {
-                    match q {
-                        '\'' if chars.peek() == Some(&'\'') => {
-                            chars.next();
-                            word.push('\'');
-                        }
-                        '\'' => break,
-                        _ => word.push(q),
-                    }
-                }
-            }
-            '"' => {
-                in_word = true;
-                while let Some(q) = chars.next() {
-                    match q {
-                        '"' => break,
-                        '`' => word.extend(chars.next()),
-                        _ => word.push(q),
-                    }
-                }
-            }
-            '`' => {
-                in_word = true;
-                word.extend(chars.next().filter(|n| *n != '\n'));
-            }
-            '$' if chars.peek() == Some(&'{') => {
-                in_word = true;
-                word.push('$');
-                for b in chars.by_ref() {
-                    word.push(b);
-                    if b == '}' {
-                        break;
-                    }
-                }
-            }
-            ' ' | '\t' | '\r' => end_word(&mut word, &mut in_word, &mut words),
-            ';' | '|' | '&' | '\n' | '{' | '}' | '(' | ')' => {
-                end_word(&mut word, &mut in_word, &mut words);
-                if !words.is_empty() {
-                    out.push(std::mem::take(&mut words));
-                }
-            }
-            _ => {
-                in_word = true;
-                word.push(c);
-            }
-        }
-    }
-    end_word(&mut word, &mut in_word, &mut words);
-    if !words.is_empty() {
-        out.push(words);
-    }
-    out
 }

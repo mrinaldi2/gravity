@@ -7,6 +7,7 @@ use bus::{Bot, Message, MessageKind, Peer, SenderKind, TaskState};
 use serde_json::json;
 
 use crate::app::AppState;
+use crate::db::OwnerVia;
 
 use super::frames::{ClosesFrame, FromFrame, MessageFrame, Received, TaskFrame};
 use super::hub::PeerError;
@@ -133,6 +134,7 @@ fn build(
     };
 
     let closes_task = closes(app, peer, target, msg)?;
+    let owner_verified = owner_verified(app, msg)?;
     let artifacts = match (&sender_bot, msg.kind) {
         (Some(bot), MessageKind::Done) => super::artifacts::collect(app, bot, &msg.body),
         _ => Vec::new(),
@@ -148,7 +150,22 @@ fn build(
         task,
         closes_task,
         artifacts,
+        owner_verified,
     }))
+}
+
+/// How the owner proved they sent `msg` here, for the peer to record it as
+/// the owner's own (H-195 D1). Only the owner's chat recorded from a device
+/// or the app's ticket: one a peer forwarded here is never passed on as
+/// verified (CE-029 V2).
+fn owner_verified(app: &Arc<AppState>, msg: &Message) -> anyhow::Result<Option<String>> {
+    if msg.sender.kind != SenderKind::User || msg.kind != MessageKind::Chat {
+        return Ok(None);
+    }
+    Ok(match app.db.owner_message_via(&msg.id)? {
+        Some(via @ (OwnerVia::Device | OwnerVia::Ticket)) => Some(via.as_str().to_string()),
+        Some(OwnerVia::Peer) | None => None,
+    })
 }
 
 /// The peer's half of the task this message closes: a result for a task the

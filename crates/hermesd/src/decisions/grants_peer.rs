@@ -118,9 +118,9 @@ fn computer(app: &AppState, peer_id: &str) -> String {
 }
 
 fn say(app: &AppState, decision_id: &str, body: &str) {
-    if let Err(e) = app
-        .db
-        .insert_decision_comment(decision_id, CommentAuthorKind::User, None, body)
+    if let Err(e) =
+        app.db
+            .insert_decision_comment(decision_id, CommentAuthorKind::System, None, body)
     {
         tracing::warn!(error = %e, "could not note a linked grant's outcome");
     }

@@ -27,7 +27,9 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
+use ipc_hooks::ipc_hooks;
 
+mod ipc_hooks;
 pub mod no_follow;
 mod own;
 mod prompt;
@@ -193,12 +195,13 @@ pub fn provision_bot(cfg: &Config, spec: &BotProvision<'_>) -> anyhow::Result<Bo
 
     // The browser entry is added at spawn, when the session's config is
     // refreshed with whatever Node and Chrome the machine has then.
-    let bus = crate::bus_auth::server_entry(cfg);
+    let composer = crate::bus_auth::composer_delivery(cfg, spec.bot_id, spec.name);
+    let bus = crate::bus_auth::server_entry(cfg, composer);
     write_mcp_config(&root, &bus, None)?;
 
     seed_memory_files(&workspace, spec.name)?;
 
-    write_hook_settings(&workspace, &crate::bus_auth::hook_transport(cfg))?;
+    write_hook_settings(&workspace, &crate::bus_auth::hook_transport(cfg, composer))?;
 
     Ok(BotDirs { root, workspace })
 }
@@ -280,40 +283,6 @@ pub fn write_hook_settings(
     #[cfg(windows)]
     let settings = windows_hooks::settings(workspace, transport)?;
     no_follow::write_json(workspace, Path::new(".claude/settings.json"), &settings)
-}
-
-/// The hooks as `hermesd hook <event>` over the local endpoint (H-044): the
-/// hook process is a child of the session, so the daemon knows whose it is
-/// without a token. Claude Code's stdin payload goes through untouched, so
-/// the daemon reads Notification's `message` and Stop's `transcript_path`;
-/// SessionStart adds the session's inbox socket and retries a daemon still
-/// booting for ~20s (H-038). PermissionRequest waits for the owner and
-/// prints the decision; on any failure it prints nothing, which leaves
-/// Claude Code's own prompt in the terminal.
-fn ipc_hooks(command: &str, endpoint: &str) -> serde_json::Value {
-    use crate::bot_permissions::quote;
-    let mut hooks = serde_json::Map::new();
-    // PostToolUse: a finished tool is proof the session runs again, the only
-    // report that a pending permission prompt was answered.
-    for event in [
-        "SessionStart",
-        "UserPromptSubmit",
-        "PostToolUse",
-        "Stop",
-        "Notification",
-        "PermissionRequest",
-        "SessionEnd",
-    ] {
-        let mut hook = serde_json::json!({
-            "type": "command",
-            "command": format!("{} hook {event} --endpoint {}", quote(command), quote(endpoint)),
-        });
-        if event == "PermissionRequest" {
-            hook["timeout"] = serde_json::json!(crate::approval::HOOK_TIMEOUT_SECS);
-        }
-        hooks.insert(event.to_string(), serde_json::json!([{ "hooks": [hook] }]));
-    }
-    serde_json::Value::Object(hooks)
 }
 
 /// Permission rules granting access to the project's shared artifacts

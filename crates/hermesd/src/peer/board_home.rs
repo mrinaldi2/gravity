@@ -126,6 +126,11 @@ pub(super) fn serve_metrics(
 /// has it, in the peer's ids (H-112). Rulings stay here, so no package can
 /// be ruled from there. With `all_kinds`, the kinds the projects home added
 /// too (H-128).
+///
+/// Deprecated (H-178, ARCH-R70): this daemon no longer asks it; its own
+/// dashboard reads every linked computer's part as the projects home does.
+/// Still served for one release so a linked computer on 0.17.2 or earlier
+/// keeps the home's rows. Removed by H-185 (0.18.0).
 pub(super) fn serve_needs_you(
     app: &Arc<AppState>,
     peer: &Peer,
@@ -139,7 +144,9 @@ pub(super) fn serve_needs_you(
         v["can_rule"] = json!(false);
         Ok(v)
     })?;
-    let mut answer = json!({ "rows": needs.rows, "wip_overrides": needs.wip_overrides });
+    let mut answer = json!({
+        "rows": needs.rows, "wip_overrides": needs.wip_overrides, "count": needs.count,
+    });
     board_ids::json(&mut answer, &|id| board_ids::to_peer(&app.db, &peer.id, id));
     Ok(answer)
 }

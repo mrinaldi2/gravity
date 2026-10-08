@@ -8,6 +8,7 @@ use std::sync::Arc;
 use bus::{MessageKind, Peer, RemoteBot, Sender, SenderKind, TaskState};
 
 use crate::app::AppState;
+use crate::db::{OwnerProof, OwnerVia};
 use crate::events::Push;
 use crate::messaging::{self, Dm};
 
@@ -137,8 +138,10 @@ pub(super) fn receive(
                 frame.kind != MessageKind::Done,
                 "a result must name the task it closes"
             );
+            let proof = owner_proof(peer, &frame);
             let mut dm = Dm::new(&to.id, &sender, frame.kind, &body);
             dm.ref_message_id = ref_id.as_deref();
+            dm.owner = proof.as_ref();
             messaging::send_dm(&app.db, &app.events, dm)?
         }
     };
@@ -151,25 +154,44 @@ pub(super) fn receive(
         let (Some(spec), Some(linked)) = (&frame.task, &linked) else {
             anyhow::bail!("a task needs a task frame and a bot sender");
         };
-        let task = app.db.create_task(
+        let release =
+            super::task_card::accepted_release(app, peer, &to, spec.release_id.as_deref())?;
+        let task = app.db.create_task_with_release(
             &msg.id,
             Some(&linked.id),
             &to.id,
             spec.deadline_at,
             spec.hop_count,
             &linked.id,
+            release,
         )?;
         app.db.map_peer_task(&peer.id, &spec.id, &task.id)?;
         super::task_card::received(app, &to, linked, &task.id, spec.item_id.as_deref())?;
-        if let Some(release_id) = &spec.release_id {
-            app.db.set_task_release(&task.id, release_id)?;
-        }
         task_id = Some(task.id);
     }
     app.db.map_peer_message(&peer.id, &frame.id, &msg.id)?;
     Ok(Received {
         message_id: msg.id,
         task_id,
+    })
+}
+
+/// The owner's proof for a chat the peer says its owner sent from a device or
+/// the app's ticket there (H-195 D1, CE-029 V1). Only the owner's chat
+/// counts, only from this linked peer (revoked ones never get here), for a
+/// bot exposed to it (checked above); anything else stays a plain message.
+fn owner_proof(peer: &Peer, frame: &MessageFrame) -> Option<OwnerProof> {
+    if !matches!(frame.from, FromFrame::User) || frame.kind != MessageKind::Chat {
+        return None;
+    }
+    let origin_via = match frame.owner_verified.as_deref().and_then(OwnerVia::parse) {
+        Some(via @ (OwnerVia::Device | OwnerVia::Ticket)) => via,
+        _ => return None,
+    };
+    Some(OwnerProof::Peer {
+        peer_id: peer.id.clone(),
+        origin_message_id: frame.id.clone(),
+        origin_via,
     })
 }
 

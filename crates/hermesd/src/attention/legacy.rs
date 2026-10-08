@@ -13,10 +13,13 @@ use super::{rows, Built, Scope};
 use crate::app::AppState;
 use crate::board::release::model::Release;
 
-/// The rows, and the WIP overrides shown beside them.
+/// The rows, the WIP overrides shown beside them, and how many rows the
+/// projects home counts for them (H-161): the dashboard's header shows
+/// that number, so both say the same.
 pub(crate) struct NeedsYou {
     pub rows: Vec<Value>,
     pub wip_overrides: Vec<Value>,
+    pub count: u32,
 }
 
 /// Needs you as this computer has it for the project: its own rows, and the
@@ -44,6 +47,7 @@ pub(crate) fn needs_you(
     Ok(NeedsYou {
         rows: dashboard_rows(&built, all_kinds),
         wip_overrides,
+        count: super::summary(built.iter().map(|b| &b.row)).count,
     })
 }
 
@@ -67,8 +71,8 @@ pub(crate) fn dashboard_rows(built: &[Built], all_kinds: bool) -> Vec<Value> {
 
 /// One row listing this computer's routines that name no card (H-135 G5),
 /// while the project has a board. Shown on this computer's dashboard only,
-/// for information: it is not an attention row, so it isn't counted, and a
-/// linked computer lists its own.
+/// for information: it is not an attention row, so it isn't in `count` nor
+/// the projects home's, and a linked computer lists its own.
 pub(crate) fn routines_without_card(
     app: &AppState,
     project_id: &str,

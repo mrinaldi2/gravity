@@ -30,16 +30,29 @@ use crate::secrets::Secrets;
 use crate::terminal::TermBuffer;
 
 mod claim;
+mod composer;
+mod deliver;
 mod hooks;
 mod lifecycle;
 mod quiesce;
 mod restart;
 mod session_events;
+mod session_hooks;
 mod start;
 mod termio;
+#[cfg(test)]
+mod test_logs;
+mod typing;
+mod typing_kinds;
 mod watchdog;
 
+pub use composer::{digest as prompt_digest, typed_body};
+pub use typing_kinds::{opens_modal, Outcome, TypeError};
 pub use watchdog::{StartupConfig, DIDNT_CONNECT};
+
+/// The state reason of a bot stopped on a permission prompt in its own
+/// terminal: Claude Code's notification names no command.
+pub(crate) const APPROVAL_NOTIFICATION: &str = "notification";
 
 pub use crate::brand::BOT_TOKEN_ENV;
 /// Caps how large a bot's conversation grows before Claude Code compacts it.
@@ -206,6 +219,8 @@ struct SupervisorInner {
     roots: crate::bus_auth::session::SessionRoots,
     /// Bots the watchdog gave up on, told to the owner in one toast (H-041).
     gave_up: Mutex<watchdog::GaveUp>,
+    /// Each bot's composer, for the owner's typed chat (H-195 D2).
+    composers: Mutex<HashMap<String, Arc<typing::BotComposer>>>,
 }
 
 /// What runs before a bot's session starts: the bot id, and whether the
@@ -233,6 +248,7 @@ impl Supervisor {
                 before_start: std::sync::OnceLock::new(),
                 roots: crate::bus_auth::session::SessionRoots::default(),
                 gave_up: Mutex::new(watchdog::GaveUp::default()),
+                composers: Mutex::new(HashMap::new()),
             }),
         }
     }
@@ -340,36 +356,5 @@ impl Supervisor {
         }
         tracing::info!(bot_id, socket = path, "inbox socket registered");
         self.on_connected(bot_id);
-    }
-
-    /// Deliver a rendered envelope through the session's inbox socket. The
-    /// message is read between tool calls or starts a new turn when the
-    /// session is idle; it never touches the terminal.
-    pub fn deliver(&self, bot_id: &str, text: &str) -> Result<(), DeliverError> {
-        let (session, socket) = {
-            let bots = self.lock_bots();
-            let Some(h) = bots.get(bot_id) else {
-                return Err(DeliverError::NotReady("bot has no runtime".to_string()));
-            };
-            if h.session.is_none() || !h.state.is_running() {
-                return Err(DeliverError::NotReady(format!(
-                    "bot is {}",
-                    h.state.as_str()
-                )));
-            }
-            (h.session.clone(), h.msg_socket.clone())
-        };
-        if let Some(session) = session {
-            if let Some(result) = session
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .deliver(text)
-            {
-                return result.map_err(DeliverError::Failed);
-            }
-        }
-        let socket = socket
-            .ok_or_else(|| DeliverError::NotReady("inbox socket not reported yet".to_string()))?;
-        crate::channel::send(&socket, text).map_err(DeliverError::Failed)
     }
 }

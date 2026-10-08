@@ -23,6 +23,7 @@ pub(super) async fn consume(
     while let Some(event) = rx.recv().await {
         match event {
             SessionEvent::Output(data) => {
+                sup.composer_output(&bot_id, &data);
                 term.push(data);
                 if !saw_output {
                     saw_output = true;

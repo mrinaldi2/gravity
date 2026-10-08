@@ -74,7 +74,7 @@ impl BotBrowser {
 /// The MCP server entry for a bot's browser, as `{command, args, env}`, after
 /// writing its Playwright config. `None` when browsers are off or Node is not
 /// installed, so the session simply starts without one.
-pub fn server(cfg: &Config, bot_root: &Path) -> Option<Value> {
+pub fn server(cfg: &Config, bot_root: &Path, composer: bool) -> Option<Value> {
     if !cfg.browser.enabled {
         return None;
     }
@@ -121,11 +121,12 @@ pub fn server(cfg: &Config, bot_root: &Path) -> Option<Value> {
         browser.config().display().to_string(),
     ];
     let (command, args) = launch(&npx.display().to_string(), args, cfg!(windows));
-    Some(json!({
+    let entry = json!({
         "command": command,
         "args": args,
         "env": { "PATH": path.to_string_lossy() }
-    }))
+    });
+    Some(crate::bus_auth::detached(composer, entry))
 }
 
 /// How a session runs `npx`. On Windows it is a batch script, which neither
@@ -258,7 +259,7 @@ mod tests {
         cfg.browser.node_dir = Some(node.clone());
         cfg.browser.channel = Some("msedge".to_string());
         let root = tmp.path().join("bot");
-        let entry = server(&cfg, &root).expect("server");
+        let entry = server(&cfg, &root, false).expect("server");
         // On Windows `npx.cmd` runs through `cmd /c`, which shifts the args.
         let (npx, package) = if cfg!(windows) {
             assert_eq!(entry["command"], "cmd");
@@ -304,6 +305,6 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tmp");
         let mut cfg = Config::default();
         cfg.browser.enabled = false;
-        assert!(server(&cfg, tmp.path()).is_none());
+        assert!(server(&cfg, tmp.path(), false).is_none());
     }
 }

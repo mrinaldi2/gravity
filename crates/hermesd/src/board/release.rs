@@ -31,6 +31,7 @@ pub mod gates;
 pub mod git;
 pub mod git_cache;
 pub mod install;
+pub mod ios_repair;
 pub mod land;
 pub mod lifecycle;
 pub mod machines;
@@ -247,17 +248,19 @@ pub fn publish_touched(
 }
 
 /// The bot ids of a project's testers on `machine`, a computer as
-/// [`machines::testers`] names it (H-115).
+/// [`machines::testers`] names it (H-115). The owner's iPhone has no tester
+/// of its own: iOS QA, the tester on `ios`, carries its deploys (H-176).
 pub fn testers_on(
     app: &Arc<AppState>,
     project_id: &str,
     machine: &str,
 ) -> anyhow::Result<Vec<String>> {
+    let ios = machines::is_ios_target(machine);
     Ok(app
         .db
         .board_read(|t| machines::testers(t, project_id))?
         .into_iter()
-        .filter(|(_, m)| m.eq_ignore_ascii_case(machine))
+        .filter(|(_, m)| m.eq_ignore_ascii_case(machine) || (ios && machines::is_ios_target(m)))
         .map(|(bot, _)| bot)
         .collect())
 }

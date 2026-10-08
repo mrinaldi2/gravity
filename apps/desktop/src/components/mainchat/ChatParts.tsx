@@ -3,9 +3,10 @@
 // answers, quoted.
 
 import { useEffect, useRef, useState } from "react";
-import type { KeyboardEvent, ReactElement } from "react";
+import type { ReactElement } from "react";
 import type { Bot, Project } from "../../protocol/entities";
 import type { OwnerThread, ThreadMessage } from "../../protocol/gen/hermes/home/v1/home_pb";
+import { sendOnCmdEnter } from "../../util";
 import BotAvatar from "../BotAvatar";
 import { clock } from "../home/homeText";
 
@@ -151,12 +152,7 @@ export function Composer(props: ComposerProps): ReactElement {
     }
     setSending(false);
   };
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault();
-      void send();
-    }
-  };
+  const onKeyDown = sendOnCmdEnter(send);
   return (
     <div className="mc-composer">
       <ToPicker
@@ -220,14 +216,16 @@ export function BotHeading(props: {
         {props.projectName}
         {props.lead ? " · lead" : ""}
       </span>
+      {/* The intended way to the bot's page, which opens on its Chat (H-192). */}
       <button
         type="button"
         className="btn btn-small mc-open-bot"
+        aria-label={`Open ${bot.name}'s page`}
         onClick={() => {
           props.onOpenBot(bot.id);
         }}
       >
-        Open bot
+        Open {bot.name}
       </button>
     </div>
   );

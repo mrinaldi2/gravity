@@ -16,6 +16,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub mod app_identity;
+pub mod detach;
 pub mod hook;
 pub mod inbox;
 pub mod ipc;
@@ -145,14 +146,22 @@ impl BearerLog {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HookTransport {
     /// `<command> hook <event> --endpoint <endpoint>`, identified by process.
-    Ipc { command: String, endpoint: String },
+    /// With `provenance`, a `user` prompt the daemon didn't vouch for is
+    /// blocked, and the hooks that precede a dialog wait for the composer
+    /// (H-195 D2b).
+    Ipc {
+        command: String,
+        endpoint: String,
+        provenance: bool,
+    },
     /// curl / PowerShell with the bearer token in `token_env`: the rollback.
     Http { port: u16, token_env: String },
 }
 
 /// The hooks a bot's settings get, following `[auth] bot_transport` as its
 /// `mcp.json` does.
-pub fn hook_transport(cfg: &crate::config::Config) -> HookTransport {
+/// `composer` is [`composer_delivery`] for the bot whose settings these are.
+pub fn hook_transport(cfg: &crate::config::Config, composer: bool) -> HookTransport {
     match cfg.auth.bot_transport {
         BotTransport::Http => HookTransport::Http {
             port: cfg.port,
@@ -161,8 +170,55 @@ pub fn hook_transport(cfg: &crate::config::Config) -> HookTransport {
         BotTransport::Stdio => HookTransport::Ipc {
             command: proxy_command(),
             endpoint: ipc::hook_endpoint(cfg),
+            provenance: composer,
         },
     }
+}
+
+/// Whether the owner's chat is typed into the composer of the bot `id`
+/// named `name` (H-195): every bot under `[delivery] composer`, or only
+/// those `composer_bots` names (H-209). One switch for D2 and D2b together,
+/// so typing never ships without the provenance check: it needs the hooks
+/// over the local endpoint, which carry that check, and a terminal CLI in a
+/// PTY. Windows waits for S0 on ConPTY.
+///
+/// Read once per session start, for the settings and the supervisor alike,
+/// so a rename never splits typing from the check that guards it.
+pub fn composer_delivery(cfg: &crate::config::Config, id: &str, name: &str) -> bool {
+    let named = cfg
+        .delivery
+        .composer_bots
+        .iter()
+        .map(|b| b.trim())
+        .any(|b| b == id || b.eq_ignore_ascii_case(name.trim()));
+    (cfg.delivery.composer || named)
+        && cfg!(unix)
+        && cfg.auth.bot_transport == BotTransport::Stdio
+        && cfg.runtime == crate::config::RuntimeKind::Pty
+}
+
+/// A stdio MCP server's entry, started through `hermesd mcp-exec` when the
+/// composer is vouched for: detached from the bot's terminal, it can't push
+/// keystrokes into the composer (TIOCSTI, CE-029 M1). The provenance check
+/// still covers a server a bot adds itself.
+pub fn detached(composer: bool, mut entry: serde_json::Value) -> serde_json::Value {
+    let Some(command) = entry.get("command").and_then(|c| c.as_str()) else {
+        return entry;
+    };
+    if !composer {
+        return entry;
+    }
+    let mut args = vec![
+        serde_json::json!("mcp-exec"),
+        serde_json::json!("--"),
+        serde_json::json!(command),
+    ];
+    if let Some(rest) = entry.get("args").and_then(|a| a.as_array()) {
+        args.extend(rest.iter().cloned());
+    }
+    entry["command"] = serde_json::json!(proxy_command());
+    entry["args"] = serde_json::Value::Array(args);
+    entry
 }
 
 /// Whether bot sessions still get their bearer token in the environment:
@@ -191,14 +247,17 @@ pub fn http_entry(port: u16, token_env: &str) -> serde_json::Value {
 }
 
 /// The bus server a Claude Code session's `mcp.json` declares.
-pub fn server_entry(cfg: &crate::config::Config) -> serde_json::Value {
+pub fn server_entry(cfg: &crate::config::Config, composer: bool) -> serde_json::Value {
     match cfg.auth.bot_transport {
         BotTransport::Http => http_entry(cfg.port, crate::brand::BOT_TOKEN_ENV),
-        BotTransport::Stdio => serde_json::json!({
-            "type": "stdio",
-            "command": proxy_command(),
-            "args": ipc::proxy_args(cfg),
-        }),
+        BotTransport::Stdio => detached(
+            composer,
+            serde_json::json!({
+                "type": "stdio",
+                "command": proxy_command(),
+                "args": ipc::proxy_args(cfg),
+            }),
+        ),
     }
 }
 
@@ -228,6 +287,38 @@ pub fn bearer_bot(app: &crate::app::AppState, token: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// H-209: `composer_bots` turns the composer on for the bots it names,
+    /// by name (any case) or id, while the global switch stays off.
+    #[test]
+    fn composer_bots_names_the_only_bots_typed_into() {
+        let mut cfg = crate::config::Config::default();
+        assert!(!composer_delivery(&cfg, "id-1", "Composer Test"));
+        cfg.delivery.composer_bots = vec![" composer test ".to_string(), "id-9".to_string()];
+        let on = |id: &str, name: &str| composer_delivery(&cfg, id, name);
+        assert_eq!(on("id-1", "Composer Test"), cfg!(unix));
+        assert_eq!(on("id-9", "Renamed"), cfg!(unix));
+        assert!(!on("id-2", "Other Bot"));
+        assert!(!on("id-2", "Composer Testing"));
+        // Its hooks carry the provenance check; another bot's don't.
+        let provenance = |id: &str, name: &str| match hook_transport(&cfg, on(id, name)) {
+            HookTransport::Ipc { provenance, .. } => provenance,
+            HookTransport::Http { .. } => unreachable!("stdio is the default"),
+        };
+        assert_eq!(provenance("id-1", "Composer Test"), cfg!(unix));
+        assert!(!provenance("id-2", "Other Bot"));
+        // The same platform gates as the global switch.
+        let mut http = cfg.clone();
+        http.auth.bot_transport = BotTransport::Http;
+        assert!(!composer_delivery(&http, "id-1", "Composer Test"));
+        let mut double = cfg.clone();
+        double.runtime = crate::config::RuntimeKind::Double;
+        assert!(!composer_delivery(&double, "id-1", "Composer Test"));
+        // The global switch still covers every bot.
+        cfg.delivery.composer_bots.clear();
+        cfg.delivery.composer = true;
+        assert_eq!(composer_delivery(&cfg, "id-2", "Other Bot"), cfg!(unix));
+    }
 
     fn refusing() -> AuthConfig {
         AuthConfig {

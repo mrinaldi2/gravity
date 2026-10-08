@@ -41,6 +41,7 @@ function Harness(props: {
   readonly client: FakeDaemon;
   readonly start?: string;
   readonly quote?: string;
+  readonly onOpenBot?: (botId: string) => void;
 }): ReactElement {
   const chat = useMainChat(leadFallback);
   const { openOn } = chat;
@@ -59,13 +60,22 @@ function Harness(props: {
       threads={decodeOwnerThreads(ownerThreadsJson()).threads}
       chat={chat}
       addToast={vi.fn<AddToast>()}
-      onOpenBot={vi.fn<(botId: string) => void>()}
+      onOpenBot={props.onOpenBot ?? vi.fn<(botId: string) => void>()}
       now={HOME_NOW}
     />
   );
 }
 
 describe("MainChat", () => {
+  it("opens the bot's page from a visible button in the thread's header (H-192)", async () => {
+    const onOpenBot = vi.fn<(botId: string) => void>();
+    render(<Harness client={daemon()} start="b2" onOpenBot={onOpenBot} />);
+    const open = screen.getByRole("button", { name: "Open Desktop Dev's page" });
+    expect(open).toHaveTextContent("Open Desktop Dev");
+    await userEvent.click(open);
+    expect(onOpenBot).toHaveBeenCalledWith("b2");
+  });
+
   it("opens with ⌘J on the bot in context and closes again", () => {
     render(<Harness client={daemon()} />);
     expect(screen.queryByRole("complementary", { name: "Chat" })).not.toBeInTheDocument();

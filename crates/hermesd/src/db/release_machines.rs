@@ -7,6 +7,7 @@ use rusqlite::{params, OptionalExtension};
 use crate::board::release::model::ReleaseTargets;
 
 use super::board_tx::BoardTx;
+use super::ts;
 
 impl BoardTx<'_> {
     /// Each tester of the project and the computer it tests on. A linked
@@ -107,6 +108,17 @@ impl BoardTx<'_> {
                 )?;
             }
         }
+        Ok(())
+    }
+
+    /// Records a repaired package's new frozen hash, keeping when it was
+    /// frozen and its decision, and takes its next version.
+    pub fn refreeze_release(&self, release_id: &str, hash: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "UPDATE release SET frozen_hash = ?2, version = version + 1, updated_at = ?3
+             WHERE id = ?1",
+            params![release_id, hash, ts(bus::now())],
+        )?;
         Ok(())
     }
 

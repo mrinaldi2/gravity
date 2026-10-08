@@ -13,7 +13,7 @@ use serde_json::{json, Value};
 
 /// The owner's desktop: it says it shows what an option grants.
 async fn desktop(d: &TestDaemon) -> WsClient {
-    WsClient::connect_with(d, d.app.secrets.client_token(), &["decision_grants"]).await
+    WsClient::connect_with(d, &d.app.owner.mint(), &["decision_grants"]).await
 }
 
 /// The `grants_sha` of option `key` as the client was shown it.
@@ -131,10 +131,19 @@ async fn the_owners_ruling_applies_the_extras_its_option_grants() {
     let got = owner
         .request(json!({"type": "get_decision", "decision_id": id}))
         .await;
-    assert!(
-        got.to_string().contains("Applied this ruling's grants"),
-        "{got}"
-    );
+    // Hermes applied them, not the owner (H-173).
+    let applied = got["decision"]["comments"]
+        .as_array()
+        .and_then(|cs| {
+            cs.iter().find(|c| {
+                c["body"]
+                    .as_str()
+                    .is_some_and(|b| b.starts_with("Applied this ruling's grants"))
+            })
+        })
+        .unwrap_or_else(|| panic!("no applied-grants comment: {got}"));
+    assert_eq!(applied["author_kind"], "system", "{applied}");
+    assert_eq!(applied["author_name"], "Hermes", "{applied}");
 }
 
 #[tokio::test]
