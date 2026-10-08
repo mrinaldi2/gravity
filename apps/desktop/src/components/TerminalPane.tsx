@@ -212,8 +212,13 @@ export default function TerminalPane({
       term.focus();
     }
 
+    // Each pty size change makes the runtime re-render, and a full replay
+    // forces one more round (see the attach below). A size sent before the
+    // attach answers would cost a re-render of its own for nothing, since
+    // the attach syncs the size anyway, so the pane stays quiet until then.
+    let attached = false;
     const sendResize = (force: boolean): void => {
-      if (canWriteRef.current) {
+      if (attached && canWriteRef.current) {
         client.fire({ type: "resize", bot_id: botId, cols: term.cols, rows: term.rows, force });
       }
     };
@@ -292,7 +297,11 @@ export default function TerminalPane({
           return;
         }
         resumable = true;
-        if (!resumed) {
+        attached = true;
+        if (resumed) {
+          // The container may have changed size while the pane was parked.
+          sendResize(false);
+        } else {
           // Replaying from the top of the buffer paints over whatever is here.
           term.reset();
           // Everything up to the attach-time sequence number is replay; the
@@ -300,9 +309,10 @@ export default function TerminalPane({
           replayThrough = seq;
           // Force a repaint: the replay rebuilds the screen out of what the
           // ring still holds, and an unchanged size would otherwise leave the
-          // runtime silent about the live region it owns. A resumed replay is
-          // contiguous with the screen this terminal kept, so it needs none of
-          // this.
+          // runtime silent about the live region it owns. The server turns a
+          // changed size into one plain resize and nudges only an unchanged
+          // one. A resumed replay is contiguous with the screen this terminal
+          // kept, so it needs none of this.
           sendResize(true);
         }
       } catch {
