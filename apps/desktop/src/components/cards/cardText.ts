@@ -65,15 +65,19 @@ export function preview(
   if (entry === undefined) {
     return { kind: "loading", text: `Loading ${id}…` };
   }
-  const project = entry.project_name ?? "its project";
+  return cantShow(id, entry, ctx) ?? cardPreview(id, entry, ctx);
+}
+
+/** Why `id` can't be shown from here, or `null` when it can. */
+function cantShow(id: string, entry: ItemCardEntry, ctx: PreviewContext): Preview | null {
   if (entry.unreachable) {
+    const project = entry.project_name ?? "its project";
     const seen = clock(entry.unreachable.last_seen);
     const computer = entry.unreachable.computer;
+    const when = seen ? ` · last seen ${seen}` : "";
     return {
       kind: "note",
-      text: `${id} is on ${project}'s board, kept on ${computer}. ${computer} is offline${
-        seen ? ` · last seen ${seen}` : ""
-      }.`,
+      text: `${id} is on ${project}'s board, kept on ${computer}. ${computer} is offline${when}.`,
       lastSeen: entry.card?.title ?? ctx.lastTitle ?? null,
     };
   }
@@ -85,6 +89,10 @@ export function preview(
       lastSeen: null,
     };
   }
+  return null;
+}
+
+function cardPreview(id: string, entry: ItemCardEntry, ctx: PreviewContext): Preview {
   const card = fromJson(ItemCardSchema, entry.card as unknown as JsonValue, {
     ignoreUnknownFields: true,
   });

@@ -34,13 +34,11 @@ export class CardCache {
     return this.api.capabilities.includes("item_cards");
   }
 
-  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
   get(id: string): Cached | undefined {
     return this.entries.get(id);
   }
 
   /** The last title seen for `id`, from any earlier answer. */
-  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
   lastTitle(id: string): string | undefined {
     return this.titles.get(id);
   }

@@ -15,10 +15,7 @@ import { useToasts } from "./app/useToasts";
 import type { AddToast } from "./app/useToasts";
 import { useServiceRecovery } from "./app/useServiceRecovery";
 import { useUpdates } from "./app/useUpdates";
-import { useHistoryKeys } from "./app/useHistoryKeys";
-import type { Selection } from "./app/selection";
-import CardDrawer, { useCardDrawer } from "./components/cards/CardDrawer";
-import { CardLinksProvider } from "./components/cards/CardLinks";
+import CardsLayer from "./components/cards/CardsLayer";
 import CommandPalette from "./components/CommandPalette";
 import Rail from "./components/home/Rail";
 import MainChat from "./components/mainchat/MainChat";
@@ -33,22 +30,10 @@ import SetupScreen from "./components/setup/SetupScreen";
 import Toasts from "./components/Toasts";
 import type { Toast } from "./components/Toasts";
 import type { DaemonApi } from "./protocol/api";
-import type { Bot } from "./protocol/entities";
 import type { Endpoint } from "./protocol/connection";
 import { DaemonClient } from "./protocol/client";
 import { loadEndpoint } from "./settings";
 import { readClientToken } from "./token";
-
-/** The project on screen, whose cards' previews don't name it. */
-function currentProjectId(selection: Selection, bots: readonly Bot[]): string | null {
-  if (selection.kind === "project") {
-    return selection.projectId;
-  }
-  if (selection.kind === "bot") {
-    return bots.find((b) => b.id === selection.botId)?.project_id ?? null;
-  }
-  return null;
-}
 
 interface SettingsLayerProps {
   readonly client: DaemonApi;
@@ -182,18 +167,9 @@ export default function App(): ReactElement {
 
   const setup = useFirstRunSetup(client, daemon.changeEndpoint);
 
-  useHistoryKeys(daemon.go);
-  const cards = useCardDrawer();
-
   return (
     <SetupGate setup={setup} toasts={toasts} onDismissToast={dismissToast}>
-      <CardLinksProvider
-        client={client}
-        projects={daemon.projects}
-        bots={bots}
-        currentProjectId={currentProjectId(daemon.selection, bots)}
-        onOpen={cards.open}
-      >
+      <CardsLayer client={client} daemon={daemon}>
         <div className="app">
           <Rail
             selection={daemon.selection}
@@ -263,20 +239,11 @@ export default function App(): ReactElement {
               onClose={overlays.closeSearch}
             />
           ) : null}
-          <CardDrawer
-            drawer={cards}
-            client={client}
-            bots={bots}
-            canComment={canControl}
-            onOpenBoard={(card) =>
-              select({ kind: "project", projectId: card.projectId, tab: "board", item: card.id })
-            }
-          />
           <SettingsLayer client={client} daemon={daemon} overlays={overlays} addToast={addToast} />
           <Toasts toasts={toasts} onDismiss={dismissToast} />
           <HomeMigrationConfirm />
         </div>
-      </CardLinksProvider>
+      </CardsLayer>
     </SetupGate>
   );
 }

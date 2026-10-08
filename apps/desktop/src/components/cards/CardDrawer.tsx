@@ -122,16 +122,18 @@ export default function CardDrawer(props: CardDrawerProps): ReactElement | null 
         onClose={() => drawer.close()}
         back={before ? { id: before.id, onBack: drawer.back } : undefined}
         footer={
-          <button
-            type="button"
-            className="btn btn-small"
-            onClick={() => {
-              drawer.close(false);
-              props.onOpenBoard(top);
-            }}
-          >
-            Open on the board
-          </button>
+          <footer className="drawer-foot">
+            <button
+              type="button"
+              className="btn btn-small"
+              onClick={() => {
+                drawer.close(false);
+                props.onOpenBoard(top);
+              }}
+            >
+              Open on the board
+            </button>
+          </footer>
         }
       />
     </div>

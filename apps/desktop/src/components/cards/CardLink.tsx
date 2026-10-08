@@ -7,6 +7,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react"
 import type { MouseEvent, ReactElement } from "react";
 import type { Preview } from "./cardText";
 import { linkName, noAnswerNote, oldServiceNote, preview } from "./cardText";
+import type { CardLinksValue } from "./CardLinks";
 import { useCardLinks } from "./CardLinks";
 
 /** How long a hover waits before the preview, and the pointer may leave. */
@@ -38,25 +39,23 @@ function PreviewBody({ p }: { readonly p: Preview }): ReactElement {
   );
 }
 
-export default function CardLink({ id }: { readonly id: string }): ReactElement {
-  const links = useCardLinks();
-  const tipId = useId();
+type Timer = { current: ReturnType<typeof setTimeout> | null };
+
+/** Whether the preview shows, and the timers that open and close it. */
+function usePreviewState(loaded: boolean) {
   const [shown, setShown] = useState(false);
   const [slow, setSlow] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cache = links?.cache;
-  useSyncExternalStore(cache?.subscribe ?? noSubscribe, cache?.snapshot ?? zero);
-  const cached = cache?.get(id);
 
   useEffect(() => () => clear(timer), []);
   // "Loading…" only for so long.
   useEffect(() => {
-    if (!shown || cached !== undefined) {
+    if (!shown || loaded) {
       return undefined;
     }
     const wait = setTimeout(() => setSlow(true), SLOW_MS);
     return () => clearTimeout(wait);
-  }, [shown, cached]);
+  }, [shown, loaded]);
   // Esc closes the preview before anything else (the drawer, a dialog).
   useEffect(() => {
     if (!shown) {
@@ -73,35 +72,63 @@ export default function CardLink({ id }: { readonly id: string }): ReactElement 
     return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [shown]);
 
-  if (links === null || cache === undefined) {
-    return <>{id}</>;
-  }
-  const p: Preview = !cache.supported
-    ? oldServiceNote("this computer")
-    : cached === undefined && slow
-      ? noAnswerNote(id)
-      : preview(id, cached?.entry, {
-          botName: links.botName,
-          currentProjectId: links.currentProjectId,
-          lastTitle: cache.lastTitle(id),
-        });
-  const dim = p.kind === "note";
-  const show = (): void => {
-    clear(timer);
-    cache.want(id);
-    setSlow(false);
-    setShown(true);
-  };
   const later = (ms: number, then: () => void): void => {
     clear(timer);
     timer.current = setTimeout(then, ms);
   };
+  const open = (): void => {
+    clear(timer);
+    setSlow(false);
+    setShown(true);
+  };
+  return {
+    shown,
+    slow,
+    open,
+    openLater: () => later(HOVER_MS, open),
+    closeLater: () => later(LEAVE_MS, () => setShown(false)),
+    keep: () => clear(timer),
+    hide: () => setShown(false),
+  };
+}
+
+/** What the preview says, from the service's answer so far. */
+function previewOf(id: string, links: CardLinksValue, slow: boolean): Preview {
+  const { cache } = links;
+  const cached = cache.get(id);
+  if (!cache.supported) {
+    return oldServiceNote("this computer");
+  }
+  if (cached === undefined && slow) {
+    return noAnswerNote(id);
+  }
+  return preview(id, cached?.entry, {
+    botName: links.botName,
+    currentProjectId: links.currentProjectId,
+    lastTitle: cache.lastTitle(id),
+  });
+}
+
+export default function CardLink({ id }: { readonly id: string }): ReactElement {
+  const links = useCardLinks();
+  const cache = links?.cache;
+  useSyncExternalStore(cache?.subscribe ?? noSubscribe, cache?.snapshot ?? zero);
+  const tip = usePreviewState(cache?.get(id) !== undefined);
+  const tipId = useId();
+  if (links === null) {
+    return <>{id}</>;
+  }
+  const p = previewOf(id, links, tip.slow);
+  const show = (): void => {
+    links.cache.want(id);
+    tip.open();
+  };
   const onClick = (event: MouseEvent): void => {
     event.preventDefault();
-    cache.want(id);
-    const projectId = cached?.entry.project_id;
+    links.cache.want(id);
+    const projectId = links.cache.get(id)?.entry.project_id;
     if (p.kind === "card" && projectId) {
-      setShown(false);
+      tip.hide();
       links.open(id, projectId);
     } else {
       show();
@@ -111,29 +138,29 @@ export default function CardLink({ id }: { readonly id: string }): ReactElement 
     <span className="card-link-wrap">
       <a
         href={`hermes://item/${id}`}
-        className={dim ? "card-link card-link--dim" : "card-link"}
+        className={p.kind === "note" ? "card-link card-link--dim" : "card-link"}
         aria-label={linkName(id, p)}
-        aria-describedby={shown ? tipId : undefined}
+        aria-describedby={tip.shown ? tipId : undefined}
         onMouseEnter={() => {
-          cache.want(id);
-          later(HOVER_MS, show);
+          links.cache.want(id);
+          tip.openLater();
         }}
-        onMouseLeave={() => later(LEAVE_MS, () => setShown(false))}
+        onMouseLeave={tip.closeLater}
         onFocus={show}
-        onBlur={() => later(LEAVE_MS, () => setShown(false))}
+        onBlur={tip.closeLater}
         onClick={onClick}
       >
         {id}
       </a>
-      {shown ? (
+      {tip.shown ? (
         // The pointer may cross onto the preview without closing it (UX-035 §3).
         // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
         <span
           id={tipId}
           role="tooltip"
           className="card-preview"
-          onMouseEnter={() => clear(timer)}
-          onMouseLeave={() => later(LEAVE_MS, () => setShown(false))}
+          onMouseEnter={tip.keep}
+          onMouseLeave={tip.closeLater}
         >
           <PreviewBody p={p} />
         </span>
@@ -142,7 +169,7 @@ export default function CardLink({ id }: { readonly id: string }): ReactElement 
   );
 }
 
-function clear(timer: { current: ReturnType<typeof setTimeout> | null }): void {
+function clear(timer: Timer): void {
   if (timer.current !== null) {
     clearTimeout(timer.current);
     timer.current = null;

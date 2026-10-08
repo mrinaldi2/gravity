@@ -43,7 +43,7 @@ export interface ItemDrawerProps {
   readonly children?: ReactNode;
   /** The card shown before, for `‹ Back` (UX-035 §4). */
   readonly back?: { readonly id: string; readonly onBack: () => void };
-  /** Below everything: "Open on the board" where the drawer isn't on it. */
+  /** Below everything (a `drawer-foot`): "Open on the board" off the board. */
   readonly footer?: ReactNode;
 }
 
@@ -135,7 +135,7 @@ export default function ItemDrawer(props: ItemDrawerProps): ReactElement {
           ) : null}
         </div>
       )}
-      {props.footer ? <footer className="drawer-foot">{props.footer}</footer> : null}
+      {props.footer}
     </aside>
   );
 }
