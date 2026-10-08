@@ -1,81 +1,18 @@
-import { toJson } from "@bufbuild/protobuf";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { card } from "../../test/boardFixtures";
-import { itemDetail } from "../../test/drawerFixtures";
-import { FakeDaemon } from "../../test/fakeDaemon";
-import { bot, project } from "../../test/fixtures";
-import { ItemCardSchema, ItemType, Priority } from "../../protocol/gen/hermes/board/v1/board_pb";
-import type { ItemCardEntry } from "../../protocol/itemCards";
+import { boardEvent } from "../../test/boardFixtures";
+import {
+  CARD_BOTS as BOTS,
+  CARD_PROJECT,
+  cardsDaemon as fakeDaemon,
+} from "../../test/cardFixtures";
+import type { FakeDaemon } from "../../test/fakeDaemon";
 import ChatMarkdown from "../chat/ChatMarkdown";
 import CardDrawer, { useCardDrawer } from "./CardDrawer";
 import { HOVER_MS, LEAVE_MS, SLOW_MS } from "./CardLink";
 import { CardLinksProvider } from "./CardLinks";
 import LinkedText from "./LinkedText";
-
-const BOTS = [bot({ id: "dd", name: "Desktop Dev" })];
-
-function entry(id: string, title: string): ItemCardEntry {
-  const json = toJson(
-    ItemCardSchema,
-    card({
-      id,
-      title,
-      type: ItemType.BUG,
-      priority: Priority.P0,
-      assignee: "dd",
-      columnKey: "doing",
-    }),
-  );
-  return {
-    id,
-    project_id: "p1",
-    project_name: "The Hermes",
-    computer: "mac",
-    card: json as ItemCardEntry["card"],
-    column_name: "Doing",
-  };
-}
-
-const ENTRIES: Record<string, ItemCardEntry> = {
-  "H-293": entry("H-293", "Clicks open the wrong bot"),
-  "H-292": entry("H-292", "Card ids as links"),
-  "H-999": { id: "H-999", project_id: "p1", project_name: "The Hermes", missing: true },
-  "H-500": {
-    ...entry("H-500", "Kept elsewhere"),
-    unreachable: { computer: "win-pc", last_seen: "2026-10-08T13:30:00Z" },
-  },
-};
-
-function fakeDaemon(): FakeDaemon {
-  const fake = new FakeDaemon();
-  fake.capabilities = [...fake.capabilities, "item_cards"];
-  fake.onRequest("item_cards_get", (body) => ({
-    type: "item_cards",
-    req_id: "1",
-    cards: (body.type === "item_cards_get" ? body.ids : []).map(
-      (id) => ENTRIES[id] ?? { id, missing: true },
-    ),
-  }));
-  fake.onBoard("boardGet", () => {
-    throw new Error("no board here");
-  });
-  fake.onBoard("itemMoveCheck", () => {
-    throw new Error("no check here");
-  });
-  fake.onBoard("itemGet", (call) => {
-    const id: string = (call.case === "itemGet" ? call.value.id : undefined) ?? "";
-    const detail = itemDetail();
-    if (detail.item) {
-      detail.item.id = id;
-      detail.item.title = ENTRIES[id]?.card?.title ?? id;
-      detail.item.description = id === "H-293" ? "Same as H-292." : "";
-    }
-    return { case: "item", value: detail };
-  });
-  return fake;
-}
 
 function Harness(props: {
   readonly fake: FakeDaemon;
@@ -87,7 +24,7 @@ function Harness(props: {
   return (
     <CardLinksProvider
       client={props.fake}
-      projects={[project({ id: "p1", name: "The Hermes", item_prefix: "H" })]}
+      projects={[CARD_PROJECT]}
       bots={BOTS}
       currentProjectId="p1"
       onOpen={cards.open}
@@ -234,6 +171,21 @@ describe("card links", () => {
     await settle();
     const asks = fake.requests.filter((r) => r.body.type === "item_cards_get");
     expect(asks).toHaveLength(1);
+  });
+
+  it("asks again after the card changes, keeping the old copy meanwhile", async () => {
+    const fake = fakeDaemon();
+    render(<Harness fake={fake} text="H-293" />);
+    const link = await hover(/^H-293/);
+    fireEvent.mouseLeave(link);
+    await settle(LEAVE_MS);
+    act(() => {
+      fake.emitBoardEvent(boardEvent({ itemId: "H-293" }));
+    });
+    await hover(/^H-293/);
+    expect(screen.getByRole("tooltip").textContent).toContain("Clicks open the wrong bot");
+    const asks = fake.requests.filter((r) => r.body.type === "item_cards_get");
+    expect(asks).toHaveLength(2);
   });
 });
 

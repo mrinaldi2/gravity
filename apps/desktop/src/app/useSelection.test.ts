@@ -80,3 +80,39 @@ describe("useSelection project windows", () => {
     });
   });
 });
+
+describe("useSelection history (UX-035 §5)", () => {
+  it("returns to the bot page on the tab it was left on, and forward again", () => {
+    stubLocalStorage();
+    const result = render();
+    openProject(result, { kind: "bot", botId: "b1" });
+    act(() => {
+      result.current.note({ kind: "bot", botId: "b1", tab: "activity" });
+    });
+    openProject(result, { kind: "project", projectId: "p1", tab: "board", item: "H-293" });
+
+    act(() => {
+      result.current.go(-1);
+    });
+    expect(result.current.selection).toEqual({ kind: "bot", botId: "b1", tab: "activity" });
+    act(() => {
+      result.current.go(1);
+    });
+    expect(result.current.selection).toEqual({
+      kind: "project",
+      projectId: "p1",
+      tab: "board",
+      item: "H-293",
+    });
+  });
+
+  it("stays put at either end", () => {
+    stubLocalStorage();
+    const result = render();
+    act(() => {
+      result.current.go(-1);
+      result.current.go(1);
+    });
+    expect(result.current.selection).toEqual({ kind: "home" });
+  });
+});

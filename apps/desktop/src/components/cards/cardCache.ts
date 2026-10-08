@@ -6,7 +6,7 @@ import type { DaemonApi } from "../../protocol/api";
 import type { ItemCardEntry } from "../../protocol/itemCards";
 
 /** How long an answer is shown without asking again. */
-export const FRESH_MS = 60_000;
+const FRESH_MS = 60_000;
 
 export interface Cached {
   readonly entry: ItemCardEntry;
@@ -34,16 +34,19 @@ export class CardCache {
     return this.api.capabilities.includes("item_cards");
   }
 
+  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
   get(id: string): Cached | undefined {
     return this.entries.get(id);
   }
 
   /** The last title seen for `id`, from any earlier answer. */
+  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
   lastTitle(id: string): string | undefined {
     return this.titles.get(id);
   }
 
   /** Asks for `id` unless a fresh answer or a request is already there. */
+  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
   want(id: string): void {
     const cached = this.entries.get(id);
     const fresh = cached !== undefined && this.now() - cached.at < FRESH_MS;
@@ -57,13 +60,15 @@ export class CardCache {
     }
   }
 
-  /** Drops `id`'s copy: the card changed. */
+  /** Marks `id`'s copy stale: the card changed, so the next hover asks again. */
   invalidate(id: string): void {
-    if (this.entries.delete(id)) {
-      this.emit();
+    const cached = this.entries.get(id);
+    if (cached !== undefined) {
+      this.entries.set(id, { ...cached, at: Number.NEGATIVE_INFINITY });
     }
   }
 
+  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
     return () => {
@@ -72,6 +77,7 @@ export class CardCache {
   };
 
   /** Changes on every answer, for `useSyncExternalStore`. */
+  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
   snapshot = (): number => this.version;
 
   private async flush(): Promise<void> {

@@ -149,7 +149,6 @@ export class FakeDaemon implements DaemonApi {
     return responder(call);
   }
 
-  // fallow-ignore-next-line unused-class-member -- reached through BoardApi and the board tests
   onBoardEvent(handler: (event: BoardEvent) => void): () => void {
     this.boardHandlers.add(handler);
     return () => {
