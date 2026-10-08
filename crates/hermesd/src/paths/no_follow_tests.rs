@@ -213,3 +213,32 @@ fn a_write_waits_out_a_brief_hold_on_the_file() {
     release.join().unwrap();
     assert_eq!(std::fs::read(base.join(rel)).unwrap(), b"new");
 }
+
+/// A write that waits out a hold re-vets the path before each retry: a bot
+/// that forces the wait can't swap a folder for a junction meanwhile and
+/// have the retry rename through it (H-188, Architect M1).
+#[cfg(windows)]
+#[test]
+fn a_junction_swapped_in_during_the_wait_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("bot");
+    let conf = base.join("conf");
+    let outside = dir.path().join("owner");
+    std::fs::create_dir_all(&outside).unwrap();
+    // A folder at the name: renaming a file over it is "Access is denied",
+    // so the first attempt fails as it does over a held file.
+    std::fs::create_dir_all(conf.join("settings.json")).unwrap();
+    let swap = {
+        let (base, conf, outside) = (base.clone(), conf.clone(), outside.clone());
+        move || {
+            std::fs::rename(&conf, base.join("conf-real")).unwrap();
+            junction(&outside, &conf);
+        }
+    };
+    imp::BETWEEN_ATTEMPTS.with(|hook| hook.set(Some(Box::new(swap))));
+    let error = write(&base, Path::new("conf/settings.json"), b"x").unwrap_err();
+    let ran = imp::BETWEEN_ATTEMPTS.with(|hook| hook.take()).is_none();
+    assert!(ran, "the write never retried");
+    assert!(error.downcast_ref::<LinkRefused>().is_some(), "{error:#}");
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+}

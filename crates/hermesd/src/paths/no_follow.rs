@@ -340,10 +340,14 @@ mod imp {
         out.write_all(bytes)?;
         out.sync_all()?;
         drop(out);
-        replace(&tmp, &target).inspect_err(|_| {
-            let _ = std::fs::remove_file(&tmp);
-        })?;
-        Ok(())
+        let vet = || walk(base, dirs, rel).and_then(|_| remove_link(&target, rel));
+        replace(&tmp, &target, vet).inspect_err(|e| {
+            // Refused: a folder became a link, so `tmp` by path now goes
+            // through it. The temp is left behind rather than removed there.
+            if e.downcast_ref::<LinkRefused>().is_none() {
+                let _ = std::fs::remove_file(&tmp);
+            }
+        })
     }
 
     /// Waits between attempts to rename over a file that is briefly held.
@@ -354,17 +358,47 @@ mod imp {
     /// or replaced for a moment: "Access is denied" or a sharing violation.
     /// Every start rewrites a bot's settings this way, and a start that
     /// failed on it waited out a crash backoff (H-188); a short retry rides
-    /// the scan out.
-    fn replace(tmp: &Path, target: &Path) -> std::io::Result<()> {
+    /// the scan out. The rename resolves both paths again, so `vet` re-runs
+    /// the link checks before each retry: a bot holding the file open to
+    /// force a retry can't swap a link in during the wait.
+    fn replace(
+        tmp: &Path,
+        target: &Path,
+        vet: impl Fn() -> anyhow::Result<()>,
+    ) -> anyhow::Result<()> {
         let mut waits = HELD_RETRIES_MS.iter();
         loop {
             match std::fs::rename(tmp, target) {
                 Err(e) if held(&e) => match waits.next() {
-                    Some(ms) => std::thread::sleep(std::time::Duration::from_millis(*ms)),
-                    None => return Err(e),
+                    Some(ms) => {
+                        pause(std::time::Duration::from_millis(*ms));
+                        #[cfg(test)]
+                        BETWEEN_ATTEMPTS.with(|hook| hook.take().map(|f| f()));
+                        vet()?;
+                    }
+                    None => return Err(e.into()),
                 },
-                result => return result,
+                result => return Ok(result?),
             }
+        }
+    }
+
+    #[cfg(test)]
+    thread_local! {
+        /// Run once after the next wait, before the checks: a test's swap.
+        pub(super) static BETWEEN_ATTEMPTS: std::cell::Cell<Option<Box<dyn FnOnce()>>> =
+            const { std::cell::Cell::new(None) };
+    }
+
+    /// A wait that doesn't stall a tokio worker: on the multi-threaded
+    /// runtime the worker hands its tasks off while this thread sleeps.
+    fn pause(wait: std::time::Duration) {
+        use tokio::runtime::{Handle, RuntimeFlavor};
+        match Handle::try_current() {
+            Ok(rt) if rt.runtime_flavor() == RuntimeFlavor::MultiThread => {
+                tokio::task::block_in_place(|| std::thread::sleep(wait))
+            }
+            _ => std::thread::sleep(wait),
         }
     }
 
