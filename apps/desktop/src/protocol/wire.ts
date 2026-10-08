@@ -23,6 +23,7 @@ const PUSH_TYPES: Readonly<Record<ServerPushType, true>> = {
   project_updated: true,
   workers_updated: true,
   meeting_event: true,
+  release_updated: true,
   quiesce_update: true,
   owner_action_update: true,
   owner_action_output: true,

@@ -152,6 +152,7 @@ message ReleaseBrief {                      // iOS M4
   uint32 items_done = 6;
   google.protobuf.Timestamp deployed_at = 7;
   uint32 items_ready = 8;                   // addition (H-144): items in Verify or later (H-137)
+  uint32 owner_blocker_count = 9;           // addition (H-247): what it waits on from the owner
 }
 
 message DoingBrief {

@@ -174,6 +174,18 @@ async fn the_ruling_comes_first() {
     assert_eq!(first["id"], submitted["decision_id"]);
     assert_eq!(first["title"], "0.18.0");
     assert_eq!(release["owner_blockers"][1]["kind"], "run");
+
+    // The projects home card counts them for its "waits for you" pill.
+    let mut owner = common::WsClient::connect(&r.pair.d).await;
+    let reply = owner.request(json!({"type": "projects_overview"})).await;
+    let brief = reply["overview"]["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["project_id"] == r.project.as_str())
+        .map(|row| row["current_release"].clone())
+        .unwrap_or_default();
+    assert_eq!(brief["owner_blocker_count"], 2, "{brief}");
 }
 
 /// A release with no work card gets the card named for it, and a change to

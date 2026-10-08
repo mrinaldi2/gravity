@@ -92,10 +92,14 @@ fn current_release(app: &AppState, project_id: &str) -> anyhow::Result<Option<Re
                 .any(|c| c.id == item.item_id && done_columns.contains(&c.column_key))
         })
         .count();
-    Ok(Some(brief(release, done)))
+    // Shown, never a gate: a failure reads as nothing waiting.
+    let waiting = crate::board::release::blockers::owner_blockers(app, release)
+        .map(|b| b.len())
+        .unwrap_or_default();
+    Ok(Some(brief(release, done, waiting)))
 }
 
-fn brief(release: &Release, items_done: usize) -> ReleaseBrief {
+fn brief(release: &Release, items_done: usize, waiting: usize) -> ReleaseBrief {
     let deployed_at = release
         .deployments
         .iter()
@@ -115,5 +119,6 @@ fn brief(release: &Release, items_done: usize) -> ReleaseBrief {
         items_ready: u32::try_from(release.plan.iter().filter(|p| p.ready).count())
             .unwrap_or(u32::MAX),
         deployed_at: deployed_at.map(timestamp),
+        owner_blocker_count: u32::try_from(waiting).unwrap_or(u32::MAX),
     }
 }

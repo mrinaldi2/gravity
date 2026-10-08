@@ -175,6 +175,26 @@ export interface Release {
   readonly can_rule?: boolean;
   /** When it can't: the computer where the owner can. */
   readonly rule_on?: string | null;
+  /** Its REL work card (H-247), e.g. "H-244". */
+  readonly work_item_id?: string | null;
+  /** What it waits on from the owner (H-247); absent from older services. */
+  readonly owner_blockers?: readonly OwnerBlocker[];
+}
+
+/**
+ * One thing only the owner can clear that holds a release up (H-247; shape
+ * in artifacts/06d0acd4-H-247-owner-blockers-shape.md). `title` is raw
+ * text; the row words it (UX-048 §2).
+ */
+export interface OwnerBlocker {
+  readonly kind: "ruling" | "run" | "decision" | "question" | "permission";
+  /** The decision, owner action, comment or permission request. */
+  readonly id: string;
+  readonly title: string;
+  readonly item_id: string | null;
+  readonly bot: string | null;
+  readonly computer: string | null;
+  readonly created_at: string;
 }
 
 export interface ItemVerdict {

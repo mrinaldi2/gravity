@@ -283,6 +283,8 @@ export type ServerPush =
   | { readonly type: "owner_action_output"; readonly id: string; readonly chunk: string }
   /** A project's meetings or action items changed (H-102). */
   | { readonly type: "meeting_event"; readonly project_id: string; readonly meeting_id?: string }
+  /** What a release waits on from the owner, or its work card, changed (H-247). */
+  | { readonly type: "release_updated"; readonly project_id: string; readonly release_id: string }
   | { readonly type: "activity_update"; readonly activity: BotActivity }
   | { readonly type: "delivery_update"; readonly delivery: Delivery }
   | { readonly type: "routine_run_update"; readonly routine_run: RoutineRun }
