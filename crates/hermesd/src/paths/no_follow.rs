@@ -11,9 +11,12 @@
 //! `O_NOFOLLOW`, and the file is written as a fresh temp (`O_CREAT|O_EXCL|
 //! O_NOFOLLOW`) in that directory, then renamed over the name; a rename
 //! replaces a link at the name instead of writing through it. Nothing is
-//! resolved by path between the checks and the write. Elsewhere each
-//! component is checked with `symlink_metadata` first. Either way a link
-//! anywhere is refused with [`LinkRefused`], which callers log and skip.
+//! resolved by path between the checks and the write. On Windows the same
+//! walk goes by handle: each folder opened relative to its parent with
+//! `FILE_OPEN_REPARSE_POINT`, the temp renamed by handle (H-184,
+//! `no_follow_windows.rs`). Either way a link anywhere is refused with
+//! [`LinkRefused`], which callers log and skip. A file read back is also
+//! refused when it has another name (a hard link to a file elsewhere).
 
 use std::path::{Component, Path};
 
@@ -255,124 +258,20 @@ mod imp {
         }
         // SAFETY: as in `open_base`.
         let mut file = unsafe { std::fs::File::from_raw_fd(fd) };
+        // A hard link to a file elsewhere (the owner's config) has another
+        // name: reading it back would copy that file into the bot's folder.
+        if std::os::unix::fs::MetadataExt::nlink(&file.metadata()?) > 1 {
+            return Err(LinkRefused(rel.display().to_string()).into());
+        }
         let mut text = String::new();
         std::io::Read::read_to_string(&mut file, &mut text)?;
         Ok(text)
     }
 }
 
-#[cfg(not(unix))]
-mod imp {
-    use std::ffi::OsStr;
-    use std::io::Write;
-    use std::path::{Path, PathBuf};
-
-    use super::LinkRefused;
-
-    /// Each folder from `base` down: made if missing, refused when a link
-    /// (a junction or symlink is a reparse point `symlink_metadata` reports).
-    fn walk(base: &Path, dirs: &[&OsStr], rel: &Path) -> anyhow::Result<PathBuf> {
-        let mut at = base.to_path_buf();
-        for (i, name) in std::iter::once(OsStr::new(""))
-            .chain(dirs.iter().copied())
-            .enumerate()
-        {
-            if i > 0 {
-                at.push(name);
-                if !at.exists() && std::fs::symlink_metadata(&at).is_err() {
-                    std::fs::create_dir(&at)?;
-                }
-            }
-            let meta = std::fs::symlink_metadata(&at)?;
-            if meta.file_type().is_symlink() || !meta.is_dir() {
-                return Err(LinkRefused(rel.display().to_string()).into());
-            }
-        }
-        Ok(at)
-    }
-
-    /// A link the bot left at the file name, removed so the rename replaces
-    /// it as on Unix: the link itself, never its target. A folder link (a
-    /// junction or directory symlink) needs `remove_dir`; `remove_file` on
-    /// it fails with "Access is denied". Refused when it can't be removed.
-    fn remove_link(target: &Path, rel: &Path) -> anyhow::Result<()> {
-        let Ok(meta) = std::fs::symlink_metadata(target) else {
-            return Ok(());
-        };
-        if !meta.file_type().is_symlink() {
-            return Ok(());
-        }
-        #[cfg(windows)]
-        let folder = std::os::windows::fs::FileTypeExt::is_symlink_dir(&meta.file_type());
-        #[cfg(not(windows))]
-        let folder = false;
-        let removed = if folder {
-            std::fs::remove_dir(target)
-        } else {
-            std::fs::remove_file(target)
-        };
-        removed.map_err(|_| LinkRefused(rel.display().to_string()).into())
-    }
-
-    fn create(path: &Path) -> std::io::Result<std::fs::File> {
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-    }
-
-    pub fn write(
-        base: &Path,
-        dirs: &[&OsStr],
-        file: &OsStr,
-        bytes: &[u8],
-        rel: &Path,
-    ) -> anyhow::Result<()> {
-        let dir = walk(base, dirs, rel)?;
-        let target = dir.join(file);
-        remove_link(&target, rel)?;
-        let tmp = dir.join(format!(
-            ".{}.tmp-{}",
-            file.to_string_lossy(),
-            uuid::Uuid::new_v4()
-        ));
-        let mut out = create(&tmp)?;
-        out.write_all(bytes)?;
-        out.sync_all()?;
-        drop(out);
-        std::fs::rename(&tmp, &target).inspect_err(|_| {
-            let _ = std::fs::remove_file(&tmp);
-        })?;
-        Ok(())
-    }
-
-    pub fn create_new(
-        base: &Path,
-        dirs: &[&OsStr],
-        file: &OsStr,
-        bytes: &[u8],
-        rel: &Path,
-    ) -> anyhow::Result<bool> {
-        let target = walk(base, dirs, rel)?.join(file);
-        if std::fs::symlink_metadata(&target).is_ok() {
-            return Ok(false);
-        }
-        create(&target)?.write_all(bytes)?;
-        Ok(true)
-    }
-
-    pub fn create_dirs(base: &Path, dirs: &[&OsStr], rel: &Path) -> anyhow::Result<()> {
-        walk(base, dirs, rel).map(drop)
-    }
-
-    pub fn read(base: &Path, dirs: &[&OsStr], file: &OsStr, rel: &Path) -> anyhow::Result<String> {
-        let path = walk(base, dirs, rel)?.join(file);
-        if std::fs::symlink_metadata(&path)?.file_type().is_symlink() {
-            return Err(LinkRefused(rel.display().to_string()).into());
-        }
-        Ok(std::fs::read_to_string(path)?)
-    }
-}
+#[cfg(windows)]
+#[path = "no_follow_windows.rs"]
+mod imp;
 
 #[cfg(test)]
 #[path = "no_follow_tests.rs"]

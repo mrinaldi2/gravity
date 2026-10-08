@@ -31,6 +31,7 @@ use crate::terminal::TermBuffer;
 
 mod claim;
 mod composer;
+mod deliver;
 mod hooks;
 mod lifecycle;
 mod quiesce;
@@ -353,36 +354,5 @@ impl Supervisor {
         }
         tracing::info!(bot_id, socket = path, "inbox socket registered");
         self.on_connected(bot_id);
-    }
-
-    /// Deliver a rendered envelope through the session's inbox socket. The
-    /// message is read between tool calls or starts a new turn when the
-    /// session is idle; it never touches the terminal.
-    pub fn deliver(&self, bot_id: &str, text: &str) -> Result<(), DeliverError> {
-        let (session, socket) = {
-            let bots = self.lock_bots();
-            let Some(h) = bots.get(bot_id) else {
-                return Err(DeliverError::NotReady("bot has no runtime".to_string()));
-            };
-            if h.session.is_none() || !h.state.is_running() {
-                return Err(DeliverError::NotReady(format!(
-                    "bot is {}",
-                    h.state.as_str()
-                )));
-            }
-            (h.session.clone(), h.msg_socket.clone())
-        };
-        if let Some(session) = session {
-            if let Some(result) = session
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .deliver(text)
-            {
-                return result.map_err(DeliverError::Failed);
-            }
-        }
-        let socket = socket
-            .ok_or_else(|| DeliverError::NotReady("inbox socket not reported yet".to_string()))?;
-        crate::channel::send(&socket, text).map_err(DeliverError::Failed)
     }
 }

@@ -186,3 +186,175 @@ fn create_new_never_follows_a_dangling_link() {
     assert!(!create_new(&base, Path::new("CLAUDE.md"), b"y").unwrap());
     assert!(write(&base, Path::new("../escape"), b"x").is_err());
 }
+
+/// H-184 (CE-026 F1): a bot flipping a folder between a plain one and a link
+/// to the owner's folder while the daemon writes below it. Every write lands
+/// in the plain folder or is refused; none ever reaches the link's target.
+/// On Windows the old walk checked by path and then renamed by path, so a
+/// junction swapped in between was followed.
+#[test]
+fn a_folder_swapped_for_a_link_mid_write_is_never_followed() {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Arc;
+    for (kind, link) in folder_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("bot");
+        let owner = dir.path().join("owner");
+        std::fs::create_dir_all(base.join("sub")).unwrap();
+        std::fs::create_dir_all(&owner).unwrap();
+        if !link(&owner, &base.join("sub.link")) {
+            continue;
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        let swaps = Arc::new(AtomicUsize::new(0));
+        let swapper = {
+            let (base, stop, swaps) = (base.clone(), stop.clone(), swaps.clone());
+            std::thread::spawn(move || {
+                let at = |name: &str| base.join(name);
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+                // Each step may fail while the daemon has a part open; a stuck
+                // one ends the test rather than hanging it.
+                let retry = |step: &dyn Fn() -> std::io::Result<()>| {
+                    while step().is_err() {
+                        assert!(std::time::Instant::now() < deadline, "the swap is stuck");
+                        std::thread::yield_now();
+                    }
+                };
+                while !stop.load(Ordering::SeqCst) {
+                    if std::fs::rename(at("sub"), at("sub.real")).is_err() {
+                        continue;
+                    }
+                    // The link in, unless a write just made a fresh `sub`.
+                    if std::fs::rename(at("sub.link"), at("sub")).is_ok() {
+                        retry(&|| std::fs::rename(at("sub"), at("sub.link")));
+                    }
+                    // A `sub` a write made meanwhile is moved aside, never
+                    // deleted under the write, so the real folder can come
+                    // back (it isn't the link: that's away).
+                    // A fresh aside name each attempt: a write can make
+                    // another `sub` while the real one is still held.
+                    let made = std::cell::Cell::new(0);
+                    let round = swaps.load(Ordering::SeqCst);
+                    retry(&|| {
+                        made.set(made.get() + 1);
+                        let aside = format!("sub.made-{round}-{}", made.get());
+                        let _ = std::fs::rename(at("sub"), at(&aside));
+                        std::fs::rename(at("sub.real"), at("sub"))
+                    });
+                    swaps.fetch_add(1, Ordering::SeqCst);
+                }
+            })
+        };
+        let rel = Path::new("sub/settings.json");
+        // A write may also fail for a moment while the folder is renamed under
+        // it (macOS returns EINVAL creating in a folder mid-rename); what
+        // matters is where writes land. It runs until one met the link.
+        let mut refused = 0;
+        for round in 0..20_000 {
+            if round >= 400 && refused > 0 {
+                break;
+            }
+            if let Err(error) = write(&base, rel, b"bot") {
+                if error.downcast_ref::<LinkRefused>().is_some() {
+                    refused += 1;
+                }
+            }
+        }
+        stop.store(true, Ordering::SeqCst);
+        swapper.join().unwrap();
+        assert!(
+            swaps.load(Ordering::SeqCst) > 0,
+            "{kind}: the folder was swapped"
+        );
+        assert!(refused > 0, "{kind}: a write met the link and was refused");
+        assert_eq!(
+            std::fs::read_dir(&owner).unwrap().count(),
+            0,
+            "{kind}: nothing written through the link"
+        );
+    }
+}
+
+/// H-184 (CE-026 F2): a file in the bot's folder that is a hard link to a
+/// file elsewhere is not read back, so its content isn't copied around.
+#[test]
+fn a_hard_link_to_a_file_elsewhere_is_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("bot");
+    std::fs::create_dir_all(&base).unwrap();
+    let owner = dir.path().join("owner.json");
+    std::fs::write(&owner, "owner").unwrap();
+    std::fs::hard_link(&owner, base.join("mcp.json")).unwrap();
+    assert_eq!(read(&base, Path::new("mcp.json")), None);
+    // Written by the daemon, the name gets a file of its own again.
+    write(&base, Path::new("mcp.json"), b"bot").unwrap();
+    assert_eq!(read(&base, Path::new("mcp.json")).as_deref(), Some("bot"));
+    assert_eq!(std::fs::read_to_string(&owner).unwrap(), "owner");
+}
+
+/// A file held open for a moment, as an antivirus scan holds one just
+/// written, doesn't fail the next write over it: it waits the hold out
+/// (H-188).
+#[cfg(windows)]
+#[test]
+fn a_write_waits_out_a_brief_hold_on_the_file() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("bot");
+    std::fs::create_dir_all(&base).unwrap();
+    let rel = Path::new("settings.json");
+    write(&base, rel, b"old").unwrap();
+    // FILE_SHARE_READ only: while it is open, nothing renames over it.
+    let held = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(base.join(rel))
+        .unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        drop(held);
+    });
+    write(&base, rel, b"new").unwrap();
+    release.join().unwrap();
+    assert_eq!(std::fs::read(base.join(rel)).unwrap(), b"new");
+}
+
+/// A write that waits out a hold re-vets the path before each retry: a bot
+/// that forces the wait can't swap a folder for a junction meanwhile and
+/// have the retry rename through it (H-188, Architect M1). On NTFS the swap
+/// itself fails: the write's open temp keeps every folder above it from
+/// being renamed. Where it succeeds, the re-check refuses the write.
+#[cfg(windows)]
+#[test]
+fn a_junction_swapped_in_during_the_wait_is_refused() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    let dir = tempfile::tempdir().unwrap();
+    let base = dir.path().join("bot");
+    let conf = base.join("conf");
+    let outside = dir.path().join("owner");
+    std::fs::create_dir_all(&outside).unwrap();
+    // A folder at the name: renaming a file over it is "Access is denied",
+    // so the first attempt fails as it does over a held file.
+    std::fs::create_dir_all(conf.join("settings.json")).unwrap();
+    let swapped = Arc::new(AtomicBool::new(false));
+    let swap = {
+        let (base, conf, outside) = (base.clone(), conf.clone(), outside.clone());
+        let swapped = swapped.clone();
+        move || match std::fs::rename(&conf, base.join("conf-real")) {
+            Ok(()) => {
+                junction(&outside, &conf);
+                swapped.store(true, Ordering::SeqCst);
+            }
+            Err(e) => assert_eq!(e.raw_os_error(), Some(5), "the swap: {e}"),
+        }
+    };
+    imp::BETWEEN_ATTEMPTS.with(|hook| hook.set(Some(Box::new(swap))));
+    let error = write(&base, Path::new("conf/settings.json"), b"x").unwrap_err();
+    let ran = imp::BETWEEN_ATTEMPTS.with(|hook| hook.take()).is_none();
+    assert!(ran, "the write never retried");
+    if swapped.load(Ordering::SeqCst) {
+        assert!(error.downcast_ref::<LinkRefused>().is_some(), "{error:#}");
+    }
+    assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+}
