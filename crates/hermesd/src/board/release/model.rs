@@ -18,8 +18,20 @@ text_enum!(
 );
 text_enum!(Verdict { Pending => "pending", Ship => "ship", Hold => "hold", Rework => "rework" });
 text_enum!(DeployAction { Deploy => "deploy", Rollback => "rollback" });
-text_enum!(DeployResult { Ok => "ok", Failed => "failed", RolledBack => "rolled_back" });
+// `superseded`: an install called off because a later package closed its
+// package (H-191); never reported by a tester.
+text_enum!(DeployResult { Ok => "ok", Failed => "failed", RolledBack => "rolled_back",
+    Superseded => "superseded" });
 text_enum!(Smoke { Pass => "pass", Fail => "fail" });
+
+impl DeployResult {
+    /// What a tester or DevOps reports with `deploy_confirm`.
+    pub const CONFIRMABLE: &'static [DeployResult] = &[
+        DeployResult::Ok,
+        DeployResult::Failed,
+        DeployResult::RolledBack,
+    ];
+}
 
 impl ReleaseStatus {
     /// Still being put together by DevOps: items and builds may change.

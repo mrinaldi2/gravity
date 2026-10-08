@@ -43,7 +43,7 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
     tool(
         "release_deployed_via",
         "ReleaseDeployedVia",
-        Audience::Devops,
+        Audience::LeadOrDevops,
     ),
     tool("release_test", "ReleaseTest", Audience::Tester),
     tool("release_machines", "ReleaseMachines", Audience::Everyone),
@@ -287,7 +287,7 @@ pub(super) fn call(
         }
         "deploy_confirm" => {
             let req: c::DeployConfirm = decode("DeployConfirm", args, project)?;
-            let result = parse_arg("result", &req.result, DeployResult::ALL)?;
+            let result = parse_arg("result", &req.result, DeployResult::CONFIRMABLE)?;
             let smoke = req
                 .smoke
                 .as_deref()

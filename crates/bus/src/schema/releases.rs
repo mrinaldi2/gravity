@@ -170,3 +170,30 @@ CREATE TABLE IF NOT EXISTS release_plan (
     planned_at TEXT NOT NULL
 );
 "#;
+
+/// An install called off when a later package closed its package (H-191,
+/// ARCH S1): its row gets result `superseded`, so it no longer reads as
+/// under way and no late confirm lands on it. SQLite cannot alter a CHECK,
+/// so the table is rebuilt keeping every row. Safe to run again.
+pub(super) const MIGRATION_DEPLOY_SUPERSEDED: &str = r#"
+DROP TABLE IF EXISTS release_deployment_new;
+CREATE TABLE release_deployment_new (
+    release_id   TEXT NOT NULL REFERENCES release(id),
+    machine      TEXT NOT NULL,
+    action       TEXT NOT NULL DEFAULT 'deploy' CHECK(action IN ('deploy', 'rollback')),
+    executor     TEXT NOT NULL,
+    task_id      TEXT,
+    result       TEXT CHECK(result IN ('ok', 'failed', 'rolled_back', 'superseded')),
+    smoke        TEXT CHECK(smoke IN ('pass', 'fail')),
+    log_artifact TEXT,
+    started_at   TEXT NOT NULL,
+    at           TEXT,
+    PRIMARY KEY (release_id, machine, action)
+);
+INSERT OR IGNORE INTO release_deployment_new(release_id, machine, action, executor, task_id,
+                                             result, smoke, log_artifact, started_at, at)
+    SELECT release_id, machine, action, executor, task_id, result, smoke, log_artifact,
+           started_at, at FROM release_deployment;
+DROP TABLE release_deployment;
+ALTER TABLE release_deployment_new RENAME TO release_deployment;
+"#;

@@ -60,6 +60,12 @@ const EVENT_LINES: Readonly<Record<string, EventText>> = {
   // H-121: closed because a later, deployed release contains it.
   deployed_via: (event, who) =>
     `${who} closed ${event.release_name}: ${event.note ?? "deployed through a later release"}.`,
+  // H-191: a later release was deployed before anyone ruled on this one.
+  superseded: (event) =>
+    `${event.release_name} was ${event.note ?? "superseded by a later release"}, so it no longer needs your ruling.`,
+  // H-191: a later deploy couldn't close it; the note says why.
+  not_closed: (event) =>
+    `${event.release_name} stayed open: ${event.note ?? "a later release didn't close it"}`,
   // H-176: an iOS package frozen with desktop deploy targets, moved to the iPhone at boot.
   targets_repaired: (event) =>
     `Hermes moved ${event.release_name}'s deploy to the iPhone: ${event.note ?? "it was frozen before per-platform targets"}.`,
@@ -122,6 +128,9 @@ export function rolloutLabel(release: Release, machine: string): StatusLabel {
   }
   if (deploy?.result === "failed") {
     return { glyph: "✗", word: "Failed", tone: "bad" };
+  }
+  if (deploy?.result === "superseded") {
+    return { glyph: "⊘", word: "Replaced", tone: "off" };
   }
   if (deploy) {
     return { glyph: "◑", word: "Installing", tone: "wait" };

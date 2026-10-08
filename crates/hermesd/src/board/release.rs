@@ -25,6 +25,7 @@ pub mod build_installer;
 pub mod cancel;
 pub mod cli;
 pub mod confine;
+mod contains;
 pub mod deploy;
 pub mod deployed_via;
 pub mod gates;
@@ -43,6 +44,7 @@ pub mod publish;
 pub mod quiesce_gate;
 pub mod rule;
 pub mod serve;
+mod supersede;
 #[cfg(test)]
 mod tests;
 
