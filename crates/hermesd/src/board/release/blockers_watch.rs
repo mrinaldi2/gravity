@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use super::blockers::owner_blockers;
+use super::model::Release;
 use crate::app::AppState;
 use crate::events::Push;
 
@@ -37,10 +38,12 @@ pub fn step(app: &AppState, seen: &mut HashMap<String, Seen>) -> anyhow::Result<
     let open = app.db.board_read(|t| t.open_release_ids())?;
     let mut now = HashMap::with_capacity(open.len());
     for (id, project_id) in open {
-        backfill(app, &id)?;
-        let Some(release) = app.db.board_read(|t| t.release(&id))? else {
+        let Some(mut release) = app.db.board_read(|t| t.release(&id))? else {
             continue;
         };
+        if release.work_item_id.is_none() {
+            release.work_item_id = backfill(app, &release)?;
+        }
         let blockers = owner_blockers(app, &release)?
             .into_iter()
             .map(|b| (b.kind, b.id))
@@ -58,25 +61,22 @@ pub fn step(app: &AppState, seen: &mut HashMap<String, Seen>) -> anyhow::Result<
     Ok(())
 }
 
-/// A release without a work card gets the card named for its version.
-fn backfill(app: &AppState, release_id: &str) -> anyhow::Result<()> {
-    app.db.board_tx(|t| {
-        let Some(release) = t.release(release_id)? else {
-            return Ok(());
-        };
-        if release.work_item_id.is_some() {
-            return Ok(());
-        }
-        let version = release.display_version.as_deref().unwrap_or(&release.name);
-        if let Some(card) = t.rel_card_named(&release.project_id, version)? {
-            t.set_release_work_item(release_id, &card, "daemon:backfill")?;
-            tracing::info!(
-                release_id,
-                card,
-                version,
-                "release work card found by its REL title"
-            );
-        }
-        Ok(())
-    })
+/// A release without a work card gets the card named for its version. The
+/// search is a read; a write happens only when a card is found (ARCH S2).
+fn backfill(app: &AppState, release: &Release) -> anyhow::Result<Option<String>> {
+    let version = release.display_version.as_deref().unwrap_or(&release.name);
+    let found = app
+        .db
+        .board_read(|t| t.rel_card_named(&release.project_id, version))?;
+    if let Some(card) = &found {
+        app.db
+            .board_tx(|t| t.set_release_work_item(&release.id, card, "daemon:backfill"))?;
+        tracing::info!(
+            release_id = %release.id,
+            card,
+            version,
+            "release work card found by its REL title"
+        );
+    }
+    Ok(found)
 }

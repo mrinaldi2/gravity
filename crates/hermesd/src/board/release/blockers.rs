@@ -3,13 +3,14 @@
 //! its work card or its items. Computed when a release is shown; the shape
 //! is frozen in artifacts/06d0acd4-H-247-owner-blockers-shape.md.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use serde_json::{json, Value};
 
 use super::machines;
 use super::model::{Release, ReleaseStatus};
 use crate::app::AppState;
+use crate::board::model::ItemComment;
 use crate::db::OnCard;
 use crate::decisions::invalid;
 
@@ -112,10 +113,12 @@ pub fn owner_blockers(app: &AppState, release: &Release) -> anyhow::Result<Vec<B
     let cards_json = serde_json::to_string(&cards)?;
     let project = release.project_id.as_str();
     let me = app.db.daemon_id()?;
-    let (runs, decisions, here) = app.db.board_read(|t| {
+    // One read for everything stored (ARCH S1).
+    let (runs, decisions, tasks, here) = app.db.board_read(|t| {
         Ok((
             t.proposed_actions_on(project, &cards_json)?,
             t.open_decisions_on(project, &cards_json)?,
+            t.open_tasks_on(&cards_json)?,
             machines::this_computer(t)?,
         ))
     })?;
@@ -160,22 +163,20 @@ pub fn owner_blockers(app: &AppState, release: &Release) -> anyhow::Result<Vec<B
     for decision in decisions {
         out.push(card("decision", decision, None));
     }
-    out.extend(permissions(app, &cards, &here)?);
+    out.extend(permissions(app, &tasks, &here));
     out.extend(questions(app, project, &cards)?);
     out.sort_by(|a, b| (a.rank(), &a.created_at).cmp(&(b.rank(), &b.created_at)));
     Ok(out)
 }
 
-/// Permission prompts from bots whose open task is on one of `cards`.
-fn permissions(
-    app: &AppState,
-    cards: &BTreeSet<String>,
-    here: &str,
-) -> anyhow::Result<Vec<Blocker>> {
+/// Permission prompts from bots with an open task on one of the cards:
+/// `tasks` is every (bot, card) pair, read once.
+fn permissions(app: &AppState, tasks: &[(String, String)], here: &str) -> Vec<Blocker> {
     let mut out = Vec::new();
     for request in app.approvals.list(None) {
-        let on = app.db.board_read(|t| t.open_task_cards(&request.bot_id))?;
-        if let Some(item) = on.into_iter().find(|c| cards.contains(c)) {
+        let on = tasks.iter().find(|(bot, _)| bot == &request.bot_id);
+        if let Some((_, item)) = on {
+            let item = item.clone();
             out.push(Blocker {
                 kind: "permission",
                 id: request.id.clone(),
@@ -187,7 +188,7 @@ fn permissions(
             });
         }
     }
-    Ok(out)
+    out
 }
 
 /// Open `asks_owner` questions on one of `cards`, by the comment that asks.
@@ -197,6 +198,8 @@ fn questions(
     cards: &BTreeSet<String>,
 ) -> anyhow::Result<Vec<Blocker>> {
     let mut out = Vec::new();
+    // Each card's comments are read once, however many questions it has.
+    let mut comments: HashMap<String, Vec<ItemComment>> = HashMap::new();
     for q in crate::owner_threads::open_questions(app, Some(project), None)? {
         let Some(item) = q.item_id.clone().filter(|i| cards.contains(i)) else {
             continue;
@@ -205,12 +208,16 @@ fn questions(
         // thread's "<bot> asks on <card>: …" title.
         let comment = app.db.question_comment(&q.id)?;
         let asked = match &comment {
-            Some(id) => app
-                .db
-                .board_read(|t| t.item_comments(&item))?
-                .into_iter()
-                .find(|c| &c.id == id)
-                .map(|c| first_line(&c.body)),
+            Some(id) => {
+                if !comments.contains_key(&item) {
+                    let read = app.db.board_read(|t| t.item_comments(&item))?;
+                    comments.insert(item.clone(), read);
+                }
+                comments[&item]
+                    .iter()
+                    .find(|c| &c.id == id)
+                    .map(|c| first_line(&c.body))
+            }
             None => None,
         };
         out.push(Blocker {

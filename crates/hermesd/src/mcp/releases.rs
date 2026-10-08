@@ -82,7 +82,9 @@ pub(super) fn call(
 ) -> anyhow::Result<Value> {
     let me = Caller { bot, roles };
     let project = bot.project_id.as_str();
-    let payload = |r: &crate::board::release::model::Release| blockers::payload(app, r);
+    // Never `owner_blockers` to a bot: they name other bots' permission
+    // prompts and the owner's questions (ARCH M1). Owner clients only.
+    let payload = |r: &crate::board::release::model::Release| r.to_json();
     let released = |r: crate::board::release::model::Release| Ok(json!({ "release": payload(&r) }));
     match name {
         "release_list" => {

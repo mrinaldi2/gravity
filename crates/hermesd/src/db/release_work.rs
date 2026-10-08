@@ -20,14 +20,25 @@ pub(super) fn work_item_in(
     .optional()
 }
 
-/// `title` names release `version`: `REL-0.17.5: …` or `REL 0.17.5 …`, not
-/// `REL-0.17.50`.
-fn names_version(title: &str, version: &str) -> bool {
-    ["REL-", "REL "].iter().any(|prefix| {
-        title
-            .strip_prefix(prefix)
-            .and_then(|rest| rest.strip_prefix(version))
-            .is_some_and(|rest| !rest.starts_with(|c: char| c.is_ascii_digit() || c == '.'))
+/// How a title names release `version`, if it does (ARCH M2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Names {
+    /// `REL-0.17.5` or `REL 0.17.5` and nothing else.
+    Exactly,
+    /// Followed by whitespace or `:`: `REL-0.17.5: assemble…`.
+    Then,
+}
+
+/// Whether `title` names release `version`: never `REL-0.17.50`,
+/// `REL-0.17.5.1` or `REL-0.17.5-r1`, another release's card.
+fn names_version(title: &str, version: &str) -> Option<Names> {
+    ["REL-", "REL "].iter().find_map(|prefix| {
+        let rest = title.strip_prefix(prefix)?.strip_prefix(version)?;
+        match rest.chars().next() {
+            None => Some(Names::Exactly),
+            Some(c) if c == ':' || c.is_whitespace() => Some(Names::Then),
+            Some(_) => None,
+        }
     })
 }
 
@@ -50,7 +61,8 @@ impl BoardTx<'_> {
     }
 
     /// The project's card named for release `version` (UX-048 §6d): a title
-    /// starting `REL-<version>` or `REL <version>`; the newest when several.
+    /// `REL-<version>` or `REL <version>`, alone or followed by whitespace or
+    /// `:`. An exact title wins, then the newest; a cancelled card never.
     pub fn rel_card_named(
         &self,
         project_id: &str,
@@ -60,15 +72,19 @@ impl BoardTx<'_> {
             .conn
             .prepare(
                 "SELECT id, title FROM item
-                 WHERE project_id = ?1 AND (title LIKE 'REL-%' OR title LIKE 'REL %')
+                 WHERE project_id = ?1 AND category <> 'cancelled'
+                   AND (title LIKE 'REL-%' OR title LIKE 'REL %')
                  ORDER BY created_at DESC",
             )?
             .query_map(params![project_id], |r| Ok((r.get(0)?, r.get(1)?)))?
             .collect::<Result<_, _>>()?;
-        Ok(rows
+        // Stable: newest first within each kind of match.
+        let mut named: Vec<(Names, String)> = rows
             .into_iter()
-            .find(|(_, title)| names_version(title, version))
-            .map(|(id, _)| id))
+            .filter_map(|(id, title)| names_version(&title, version).map(|n| (n, id)))
+            .collect();
+        named.sort_by_key(|(n, _)| *n);
+        Ok(named.into_iter().next().map(|(_, id)| id))
     }
 }
 
@@ -152,33 +168,37 @@ impl BoardTx<'_> {
             .collect::<Result<_, _>>()?)
     }
 
-    /// The cards of a bot's open tasks.
-    pub fn open_task_cards(&self, bot_id: &str) -> anyhow::Result<Vec<String>> {
+    /// Which bot holds an open task on which of `cards` (JSON array of ids),
+    /// in one read for every permission prompt (ARCH S1).
+    pub fn open_tasks_on(&self, cards: &str) -> anyhow::Result<Vec<(String, String)>> {
         Ok(self
             .conn
             .prepare(
-                "SELECT DISTINCT item_id FROM task
-                 WHERE to_bot_id = ?1 AND state = 'open' AND item_id IS NOT NULL",
+                "SELECT DISTINCT to_bot_id, item_id FROM task
+                 WHERE state = 'open' AND item_id IN (SELECT value FROM json_each(?1))",
             )?
-            .query_map(params![bot_id], |r| r.get(0))?
+            .query_map(params![cards], |r| Ok((r.get(0)?, r.get(1)?)))?
             .collect::<Result<_, _>>()?)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::names_version;
+    use super::{names_version, Names};
 
     #[test]
     fn a_rel_title_names_its_version_only() {
-        assert!(names_version(
-            "REL-0.17.5: assemble, verify, sign",
-            "0.17.5"
-        ));
-        assert!(names_version("REL 0.17.5 desktop", "0.17.5"));
-        assert!(names_version("REL-0.17.5", "0.17.5"));
-        assert!(!names_version("REL-0.17.50: later", "0.17.5"));
-        assert!(!names_version("REL-0.17.5.1", "0.17.5"));
-        assert!(!names_version("Fix REL-0.17.5", "0.17.5"));
+        let names = |title| names_version(title, "0.17.5");
+        assert_eq!(names("REL-0.17.5"), Some(Names::Exactly));
+        assert_eq!(names("REL 0.17.5"), Some(Names::Exactly));
+        assert_eq!(
+            names("REL-0.17.5: assemble, verify, sign"),
+            Some(Names::Then)
+        );
+        assert_eq!(names("REL 0.17.5 desktop"), Some(Names::Then));
+        assert_eq!(names("REL-0.17.50: later"), None);
+        assert_eq!(names("REL-0.17.5.1"), None);
+        assert_eq!(names("REL-0.17.5-r1: the respin"), None);
+        assert_eq!(names("Fix REL-0.17.5"), None);
     }
 }

@@ -39,9 +39,12 @@ fn card(r: &Releases, title: &str) -> String {
         .id
 }
 
+/// The release as the owner's app reads it: the only place with
+/// `owner_blockers` (ARCH M1).
 async fn get(r: &mut Releases, id: &Value) -> Value {
-    r.bots[0]
-        .call("release_get", json!({"release_id": id}))
+    let mut owner = common::WsClient::connect(&r.pair.d).await;
+    owner
+        .request(json!({"type": "get_release", "release_id": id}))
         .await["release"]
         .clone()
 }
@@ -75,7 +78,7 @@ async fn a_release_lists_what_waits_for_the_owner_on_its_work_card_and_items() {
         .await["release"]
         .clone();
     assert_eq!(planned["work_item_id"], work, "{planned}");
-    assert_eq!(planned["owner_blockers"], json!([]), "{planned}");
+    assert!(planned.get("owner_blockers").is_none(), "{planned}");
     let id = planned["id"].clone();
 
     let cwd = tempfile::tempdir().unwrap();
@@ -144,6 +147,19 @@ async fn a_release_lists_what_waits_for_the_owner_on_its_work_card_and_items() {
         .unwrap();
     assert_eq!(shown["owner_blockers"], release["owner_blockers"]);
     assert_eq!(shown["work_item_id"], work);
+
+    // A bot never reads them: they name other bots' prompts and the owner's
+    // questions (ARCH M1).
+    for bot in 0..3 {
+        let got = r.bots[bot]
+            .call("release_get", json!({"release_id": id}))
+            .await;
+        assert!(got["release"].get("owner_blockers").is_none(), "{got}");
+        let listed = r.bots[bot].call("release_list", json!({})).await;
+        for x in listed["releases"].as_array().unwrap() {
+            assert!(x.get("owner_blockers").is_none(), "{x}");
+        }
+    }
 }
 
 /// The package's own ruling comes first, and a closed one waits on nothing
@@ -199,8 +215,25 @@ async fn a_rel_card_is_found_and_changes_are_pushed() {
         .await["release"]
         .clone();
     assert!(planned["work_item_id"].is_null(), "{planned}");
+    // ARCH M2: the exact title wins over a newer "REL-0.19.0: …"; another
+    // release's card (0.19.01, the -r1 respin) never matches; a cancelled
+    // card is skipped even when its title is exact.
+    let work = card(&r, "REL-0.19.0");
+    let _ = card(&r, "REL-0.19.0: assemble");
     let _ = card(&r, "REL-0.19.01: not this one");
-    let work = card(&r, "REL-0.19.0: assemble");
+    let _ = card(&r, "REL-0.19.0-r1: the respin");
+    let cancelled = card(&r, "REL-0.19.0");
+    {
+        let db = &r.pair.d.app.db;
+        let version = db.get_item(&cancelled).unwrap().unwrap().version;
+        let to = hermesd::db::MoveTo {
+            column: "cancelled",
+            note: Some("duplicate"),
+            ..hermesd::db::MoveTo::default()
+        };
+        db.move_item(&cancelled, version, &to, &Actor::User)
+            .unwrap();
+    }
     let app = r.pair.d.app.clone();
     let mut pushes = app.events.subscribe_push();
     let mut seen = HashMap::new();
