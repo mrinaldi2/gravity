@@ -113,9 +113,17 @@ export function nowLine(release: Release, botName: BotName): string | null {
     inProgress(release) ??
     building(release) ??
     testing(release) ??
+    assembling(release) ??
     rollingOut(release) ??
     "Now: nothing is blocking it."
   );
+}
+
+/** Being put together, with nothing more particular to name (UX-050 §2). */
+function assembling(release: Release): string | null {
+  return ["assembling", "built"].includes(release.status)
+    ? "Now: DevOps is assembling the package."
+    : null;
 }
 
 /** Cards still being worked on, while the release is planned or assembling. */
@@ -148,7 +156,13 @@ function rollingOut(release: Release): string | null {
   if (!["approved", "deploying", "partially_deployed", "paused"].includes(release.status)) {
     return null;
   }
+  // Never "0 of 0" (UX-050 §2).
+  if (release.status === "approved" && release.deployments.length === 0) {
+    return "Now: approved, the rollout starts soon.";
+  }
   const done = release.deployments.filter((d) => d.action === "deploy" && d.result === "ok");
   const of = (release.deploys_to ?? []).length || release.deployments.length;
-  return `Now: rolling out, ${done.length} of ${of} computers updated.`;
+  return of === 0
+    ? "Now: rolling out."
+    : `Now: rolling out, ${done.length} of ${of} computers updated.`;
 }

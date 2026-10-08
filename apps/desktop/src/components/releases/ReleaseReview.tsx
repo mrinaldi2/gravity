@@ -44,11 +44,15 @@ export interface ReleaseReviewProps {
   readonly waiting?: WaitingActions;
 }
 
-/** The release's own Approve / Hold / Reject, scrolled to and focused. */
-function focusReview(root: HTMLElement | null): void {
-  const target = root?.querySelector<HTMLElement>(".release-bar button:not([disabled])");
-  target?.scrollIntoView({ block: "nearest" });
-  target?.focus();
+/**
+ * Takes the owner to the release's own Approve / Hold / Reject: Approve when
+ * it can be pressed, else the release's heading, never Reject (UX-050 §1).
+ */
+export function focusReview(root: HTMLElement | null): void {
+  root?.querySelector(".release-bar")?.scrollIntoView({ block: "nearest" });
+  const approve = root?.querySelector<HTMLElement>(".release-bar .btn-primary:not([disabled])");
+  const target = approve ?? root?.querySelector<HTMLElement>(".release-head h2");
+  target?.focus({ preventScroll: true });
 }
 
 /** The verdicts for an approval: every item ships unless left out. */
@@ -191,7 +195,7 @@ export default function ReleaseReview({
   return (
     <div className="release-review" role="region" aria-label={`Release ${version}`} ref={root}>
       <header className="release-head">
-        <h2>{version}</h2>
+        <h2 tabIndex={-1}>{version}</h2>
         <span className={`release-pill release-tone-${status.tone}`}>
           <span aria-hidden="true">{status.glyph}</span> {status.word}
         </span>

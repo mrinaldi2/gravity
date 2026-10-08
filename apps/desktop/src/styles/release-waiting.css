@@ -83,3 +83,8 @@
   color: var(--amber);
   font-size: 12px;
 }
+
+/* Focused by "Review…" when Approve can't be pressed: no ring (UX-013). */
+.release-head h2:focus {
+  outline: none;
+}

@@ -9,6 +9,7 @@ import * as fx from "../../test/fixtures";
 import { deployment, release } from "../../test/releaseFixtures";
 import { actionToastSpy } from "../../test/spies";
 import { releasePill } from "../home/homeText";
+import { focusReview } from "./ReleaseReview";
 import ReleasesView from "./ReleasesView";
 import WaitingForYou, { NowLine } from "./WaitingForYou";
 import type { WaitingActions } from "./WaitingForYou";
@@ -200,12 +201,34 @@ describe("the Now: line (UX-048 §3)", () => {
       ],
     });
     expect(nowLine(rolling, name)).toBe("Now: rolling out, 2 of 3 computers updated.");
-    expect(
-      nowLine(
-        release({ status: "approved", owner_blockers: [], deploys_to: [], deployments: [] }),
-        name,
-      ),
-    ).toBe("Now: rolling out, 0 of 0 computers updated.");
+    // UX-050 §2: never "0 of 0", and never "nothing is blocking" mid-way.
+    const plain = (over: Partial<Release>): string | null =>
+      nowLine(release({ owner_blockers: [], deploys_to: [], deployments: [], ...over }), name);
+    expect(plain({ status: "approved" })).toBe("Now: approved, the rollout starts soon.");
+    expect(plain({ status: "deploying" })).toBe("Now: rolling out.");
+    const builtUp = { plan: [], builds: release().builds, readiness: undefined };
+    expect(plain({ status: "assembling", ...builtUp })).toBe(
+      "Now: DevOps is assembling the package.",
+    );
+    expect(plain({ status: "built", ...builtUp })).toBe("Now: DevOps is assembling the package.");
+  });
+
+  it("Review… takes the owner to Approve, or the heading when Approve can't be pressed (UX-050 §1)", () => {
+    document.body.innerHTML = `
+      <div id="r">
+        <header class="release-head"><h2 tabindex="-1">0.17.5</h2></header>
+        <footer class="release-bar">
+          <button class="btn btn-danger">Reject…</button>
+          <button class="btn btn-primary" disabled>Approve 0.17.5</button>
+        </footer>
+      </div>`;
+    const root = document.getElementById("r");
+    Element.prototype.scrollIntoView = vi.fn<() => void>();
+    focusReview(root);
+    expect(document.activeElement?.textContent).toBe("0.17.5");
+    root?.querySelector(".btn-primary")?.removeAttribute("disabled");
+    focusReview(root);
+    expect(document.activeElement?.textContent).toBe("Approve 0.17.5");
   });
 
   it("points an older service's owner to Needs you", async () => {
