@@ -34,6 +34,9 @@ pub(crate) fn project_view(app: &AppState, project: &bus::Project) -> Value {
         "name": crate::db::Db::display_project_name(project),
         "dir_name": project.dir_name,
         "lead_bot_id": project.lead_bot_id,
+        // Its cards' id prefix, so a client links `H-017` and not `UTF-8`
+        // (H-203); none while it has no board.
+        "item_prefix": super::item_cards::item_prefix(app, &project.id),
         "links": links,
         "repo": app.db.project_repo(&project.id).ok().flatten(),
         "permission_profile": app.db.project_permission_profile(&project.id).unwrap_or_default(),
