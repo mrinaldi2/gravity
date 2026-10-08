@@ -116,7 +116,13 @@ async fn restarting_a_bot_tells_it_to_pick_its_work_back_up_once() {
     let notes = notes(&inbox);
     // The note reaches the inbox once the new session takes it: none means
     // the session didn't come back, and the terminal says why (H-188).
-    assert_eq!(notes.len(), 1, "{inbox:?}\n{}", terminal(&t.d, &t.dev));
+    let deliveries = t.d.app.db.list_deliveries(Some(&t.dev), None);
+    assert_eq!(
+        notes.len(),
+        1,
+        "{inbox:?}\n{}\n{deliveries:?}",
+        terminal(&t.d, &t.dev)
+    );
     let note = notes[0];
     assert!(note.contains("picked your conversation back up"), "{note}");
     assert!(note.contains("middle of a turn, started by lead's task: port the updater"));
