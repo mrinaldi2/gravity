@@ -11,7 +11,7 @@ use serde_json::json;
 use crate::app::AppState;
 use crate::board::guards;
 use crate::db::BoardTx;
-use crate::decisions::not_found;
+use crate::decisions::{conflict, not_found};
 
 use super::lifecycle::tell_installers;
 use super::model::{DeployAction, Release, ReleaseEvent};
@@ -100,4 +100,29 @@ fn all_proven(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<bool> {
         }
     }
     Ok(true)
+}
+
+/// Nothing reaches Done with a post-install criterion unticked (H-116): the
+/// last good deploy is refused, and kept for later, until they are ticked.
+pub(super) fn post_install_checked(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<()> {
+    let mut open = Vec::new();
+    for ri in &release.items {
+        let Some(item) = t.item(&ri.item_id)? else {
+            continue;
+        };
+        open.extend(
+            guards::open_post_install(&item)
+                .into_iter()
+                .map(|ac| format!("{} #{} \"{}\"", item.id, ac.idx + 1, ac.text)),
+        );
+    }
+    if open.is_empty() {
+        return Ok(());
+    }
+    Err(conflict(format!(
+        "release {} is installed everywhere, but these post-install acceptance criteria \
+         aren't ticked: {}. Tick each with item_check_ac, then confirm again.",
+        release.name,
+        open.join("; ")
+    )))
 }

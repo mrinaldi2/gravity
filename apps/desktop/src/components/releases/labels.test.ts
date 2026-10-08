@@ -35,4 +35,26 @@ describe("eventLine", () => {
       "Hermes moved iOS 0.5.0's deploy to the iPhone: frozen before per-platform targets.",
     );
   });
+
+  it("says a later deploy superseded a package nobody ruled on, or why it stayed open", () => {
+    const base = {
+      release_id: "rel-1",
+      release_name: "0.17.0-r1",
+      related_id: "rel-3",
+      actor: "tester",
+      at: "2026-10-08T08:00:00Z",
+    };
+    expect(
+      eventLine(
+        { ...base, kind: "superseded", note: "superseded by 0.17.2, deployed" },
+        () => "Tester",
+      ),
+    ).toBe("0.17.0-r1 was superseded by 0.17.2, deployed, so it no longer needs your ruling.");
+    expect(
+      eventLine(
+        { ...base, kind: "not_closed", note: "0.17.2 is deployed but didn't close this one: x." },
+        () => "Tester",
+      ),
+    ).toBe("0.17.0-r1 stayed open: 0.17.2 is deployed but didn't close this one: x.");
+  });
 });

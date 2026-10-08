@@ -43,6 +43,7 @@ pub mod publish;
 pub mod quiesce_gate;
 pub mod rule;
 pub mod serve;
+mod supersede;
 #[cfg(test)]
 mod tests;
 

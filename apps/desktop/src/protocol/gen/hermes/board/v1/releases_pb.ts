@@ -810,10 +810,12 @@ export const MachineNameSetSchema: GenMessage<MachineNameSet> = /*@__PURE__*/
   messageDesc(file_hermes_board_v1_releases, 23);
 
 /**
- * DevOps: close an approved package that a later, deployed release contains
- * (H-121): its commit is in the later one's history (or, recorded before
- * commits were, the later one builds every platform it built). No
- * deployment is invented; its items go to Done.
+ * DevOps or the lead: close a package the owner ruled to ship (approved, or
+ * stuck deploying or partly deployed) that a later, deployed release
+ * contains (H-121, H-191): its commit is in the later one's history (or,
+ * recorded before commits were, its release branch or tag), and the later
+ * one reached every computer it didn't. No deployment is invented; its items
+ * go to Done. A deploy that completes a package does this for older ones.
  *
  * @generated from message hermes.board.v1.ReleaseDeployedVia
  */

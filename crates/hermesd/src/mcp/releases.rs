@@ -43,7 +43,7 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
     tool(
         "release_deployed_via",
         "ReleaseDeployedVia",
-        Audience::Devops,
+        Audience::LeadOrDevops,
     ),
     tool("release_test", "ReleaseTest", Audience::Tester),
     tool("release_machines", "ReleaseMachines", Audience::Everyone),

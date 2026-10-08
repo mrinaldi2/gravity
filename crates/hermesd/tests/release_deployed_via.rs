@@ -79,7 +79,7 @@ async fn a_chain_of_approved_packages_closes_through_the_deployed_one() {
         .call_raw("release_deployed_via", via(&p2, &p4))
         .await;
     assert!(
-        error_text(&raw).contains("only an approved package"),
+        error_text(&raw).contains("only a package the owner approved"),
         "{raw}"
     );
 }
@@ -131,7 +131,8 @@ async fn a_package_without_a_commit_closes_only_through_its_release_branch() {
         error_text(&raw).contains("no release branch or tag"),
         "{raw}"
     );
-    // A deployment still open on it: refused.
+    // A deployment still open on it no longer stops the close (H-191): it
+    // is weighed like any other, and refused here only for lacking a branch.
     r.bots[1]
         .call(
             "release_deploy",
@@ -141,7 +142,10 @@ async fn a_package_without_a_commit_closes_only_through_its_release_branch() {
     let raw = r.bots[1]
         .call_raw("release_deployed_via", via(&open, &newer))
         .await;
-    assert!(error_text(&raw).contains("is deploying"), "{raw}");
+    assert!(
+        error_text(&raw).contains("no release branch or tag"),
+        "{raw}"
+    );
 
     // Its post-install criteria first (H-116).
     let db = &r.pair.d.app.db;

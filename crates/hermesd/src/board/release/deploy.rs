@@ -9,7 +9,6 @@ use bus::{DecisionState, MessageKind, Sender, SenderKind, TaskState, DEFAULT_TAS
 use serde_json::{json, Value};
 
 use crate::app::AppState;
-use crate::board::guards;
 use crate::board::model::{ColumnCategory, Role};
 use crate::db::BoardTx;
 use crate::decisions::authority::is_relayed;
@@ -18,6 +17,7 @@ use crate::messaging::{self, Dm};
 
 use super::machines;
 use super::model::{DeployAction, DeployResult, Release, ReleaseStatus, Smoke, Verdict};
+use super::post_install::post_install_checked;
 use super::{check_frozen, daemon_move, load, publish_moves, publish_touched, testers_on, Caller};
 
 /// The gate, checked at call time (H-020 §2.4): a settled, unrelayed owner
@@ -306,32 +306,11 @@ pub fn confirm(
     if failed && !me.has(Role::Devops) {
         ask_rollback(app, me, &release, machine)?;
     }
+    // Deployed everywhere: older packages it replaces close (H-191).
+    if release.status == ReleaseStatus::Deployed {
+        super::supersede::after_deploy(app, me.bot, &actor, &release);
+    }
     Ok(release)
-}
-
-/// Nothing reaches Done with a post-install criterion unticked (H-116): the
-/// last good deploy is refused, and kept for later, until they are ticked.
-pub(super) fn post_install_checked(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<()> {
-    let mut open = Vec::new();
-    for ri in &release.items {
-        let Some(item) = t.item(&ri.item_id)? else {
-            continue;
-        };
-        open.extend(
-            guards::open_post_install(&item)
-                .into_iter()
-                .map(|ac| format!("{} #{} \"{}\"", item.id, ac.idx + 1, ac.text)),
-        );
-    }
-    if open.is_empty() {
-        return Ok(());
-    }
-    Err(conflict(format!(
-        "release {} is installed everywhere, but these post-install acceptance criteria \
-         aren't ticked: {}. Tick each with item_check_ac, then confirm again.",
-        release.name,
-        open.join("; ")
-    )))
 }
 
 /// Every machine the items' platforms require (or, with none configured,

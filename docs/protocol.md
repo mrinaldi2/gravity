@@ -736,14 +736,19 @@ runs through the tester the same way.
   - `readiness` is `{items_total, items_ready, builds: [platform], tests_required, tests_passed}`.
 - **Successor:** after a mixed ruling (`repackaging`) or a failed deploy (`partially_deployed`), DevOps calls `release_create` with `from`. The predecessor's shipped items join straight from Owner testing, and the predecessor becomes `superseded` when the successor is **submitted**. The successor is a new build, so it gets a new ruling. A failed deploy clears its items' `release_id`.
 - **Cancel:** `release_cancel {release_id, reason?}` (DevOps; the lead for a planned one) removes a package that is still `planned`, `assembling` or `built`; anything submitted or later is refused. Its items were never moved: a predecessor's shipped items stay in Owner testing for the predecessor, which can take a new successor, and items from Verify are free again. A `cancelled` event keeps who, why and what it held, and shows in the predecessor's `events`.
-- **Deployed via (H-121):** `release_deployed_via {release_id, via_release_id}` (DevOps) closes an approved package that a later, deployed release contains, for when the owner skips installing it.
-  - The old package must be `approved` with no deployment open.
+- **Deployed via (H-121, H-191):** `release_deployed_via {release_id, via_release_id}` (DevOps or the lead) closes a package the owner ruled to ship that a later, deployed release contains, for when the owner skips installing it or a later release replaced it part way through its install.
+  - The old package must be `approved`, `deploying`, `paused` or `partially_deployed`. A deployment still open on it doesn't stop it.
+  - Every computer it was to reach (`deploys_to`) and wasn't confirmed on must be one the via package reaches (its own `deploys_to`, or a computer it was confirmed on).
   - The via package must be `deployed`; it may itself have been closed this way, so a chain works.
   - The via package must contain the old one:
     - the old package's recorded source commit is the via's, or in its history. The daemon checks this with `git merge-base --is-ancestor` in its own copy of the project's repository: a bare, blob-less clone under `<home>/cache/repos/<project>.git`, cloned and fetched with no hooks and no user git config.
     - A package from before commits were recorded is contained when the via package is newer and has a build for every platform it built.
   - Its post-install acceptance criteria must be ticked (H-116).
-  - It records a `deployed_via` event (note `deployed via <name>`; detail `{via_release_id, basis: "ancestry" | "platforms", commit?, via_commit?}`), creates no deployment rows, sets the status to `deployed` and moves its items to Done.
+  - It records a `deployed_via` event (note `deployed via <name>`, or `deployed via <name> on <computers>` when it was installed on some itself; detail `{via_release_id, basis: "ancestry" | "release_branch", commit?, via_commit?, installed, covered}`), creates no deployment rows, sets the status to `deployed` and moves its items to Done. A tester still holding an install of it gets a note that it's closed.
+- **Replaced by a deploy (H-191):** when a deploy confirm completes a package (`deployed`), every older open package of the same platform family (iOS packages with iOS, the rest together) is closed:
+  - one nobody ruled on (`awaiting_owner`, `held`, `repackaging`) becomes `superseded`, with a `superseded` event; its decision is withdrawn, so Needs you drops it; its items the deployed package doesn't hold go back to Verify with no `release_id`.
+  - one ruled to ship whose install got under way (`deploying`, `paused`, `partially_deployed`) is closed through the deployed one as `release_deployed_via` would. If any check fails it stays open, with a `not_closed` event saying why.
+  - An `approved` package never installed is left for DevOps or the lead to close with the tool.
 - **Testing:**
   - DevOps fills `changelog` and `how_to_test` (`[{item_id?, platform, steps}]`) with `release_update` while the package is assembling.
   - Required machines are per computer, not per platform (H-115). Where a tester tests:

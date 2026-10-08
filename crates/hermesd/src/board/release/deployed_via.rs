@@ -1,10 +1,16 @@
-//! Closing an approved package that a later deployed release contains
-//! (H-121): the owner approved 0.16.2, then chose to install 0.16.3, which
-//! holds 0.16.2's commit. Installing 0.16.2 would install what the owner
-//! ruled out, and confirming it without installing would be a false record.
+//! Closing a package that a later deployed release contains (H-121, H-191):
+//! the owner approved 0.16.2, then chose to install 0.16.3, which holds
+//! 0.16.2's commit. Installing 0.16.2 would install what the owner ruled
+//! out, and confirming it without installing would be a false record.
 //!
-//! `release_deployed_via {release_id, via_release_id}` (DevOps) closes it:
-//! - the old package is approved and has no deployment open;
+//! `release_deployed_via {release_id, via_release_id}` (DevOps or the lead)
+//! closes it:
+//! - the old package is one the owner ruled to ship and isn't on every
+//!   computer: approved, or deploying, paused or partly deployed and stuck
+//!   there (H-191: 0.17.0 had the Mac done and the iMac's install never run
+//!   when 0.17.2 replaced it);
+//! - every computer it was to reach and didn't is one the via package
+//!   reaches, so the record stays true per computer;
 //! - the via package is deployed (or itself closed this way, for a chain),
 //!   and was created after the old one: a respin is never closed through
 //!   the package it respins (CE-018 M1);
@@ -20,8 +26,11 @@
 //!   than the via package's submit, or it is refused (CE-018 M2);
 //! - its post-install acceptance criteria are ticked (H-116).
 //!
-//! Then it records a `deployed_via` event, invents no deployment, marks the
-//! package deployed and moves its items to Done.
+//! Then it records a `deployed_via` event with the computers it reached
+//! itself and those the via package covered, invents no deployment, marks
+//! the package deployed, moves its items to Done, and tells a tester still
+//! holding an install of it that it's no longer needed. A deploy that
+//! completes a package runs the same close on older ones (`supersede`).
 
 use std::sync::Arc;
 
@@ -29,14 +38,19 @@ use bus::now;
 use chrono::{DateTime, Utc};
 use serde_json::json;
 
+use crate::actor::Actor;
 use crate::app::AppState;
 use crate::board::model::{ColumnCategory, Role};
+use crate::db::BoardTx;
 use crate::decisions::{conflict, forbidden, invalid};
+use crate::messaging;
 
-use super::deploy::post_install_checked;
 use super::gates::recorded_commit;
 use super::git_cache;
-use super::model::{Release, ReleaseEvent, ReleaseStatus};
+use super::lifecycle::tell_installers;
+use super::machines;
+use super::model::{DeployAction, DeployResult, Release, ReleaseEvent, ReleaseStatus};
+use super::post_install::post_install_checked;
 use super::{daemon_move, load, publish_moves, Caller};
 
 /// How the via package was shown to contain the old one: the old commit is
@@ -57,40 +71,69 @@ struct Basis {
     via: String,
 }
 
+/// The computers the old package reached itself, and those left that the
+/// via package covers.
+struct Cover {
+    installed: Vec<String>,
+    by_via: Vec<String>,
+}
+
 pub fn deployed_via(
     app: &Arc<AppState>,
     me: &Caller<'_>,
     release_id: &str,
     via_id: &str,
 ) -> anyhow::Result<Release> {
-    me.require(Role::Devops, "close a release deployed through a later one")?;
-    let project = me.bot.project_id.as_str();
-    let (old, via) = app
-        .db
-        .board_read(|t| Ok((load(t, project, release_id)?, load(t, project, via_id)?)))?;
-    check_states(&old, &via)?;
+    if !me.has(Role::Lead) {
+        me.require(Role::Devops, "close a release deployed through a later one")?;
+    }
+    close_via(app, me.bot, &me.actor(), release_id, via_id)
+}
+
+/// Closes `release_id` as deployed through `via_id`, for `bot`: the tool's
+/// caller, or the bot whose confirm completed the via package (`supersede`).
+pub(super) fn close_via(
+    app: &Arc<AppState>,
+    bot: &bus::Bot,
+    actor: &Actor<'_>,
+    release_id: &str,
+    via_id: &str,
+) -> anyhow::Result<Release> {
+    let project = bot.project_id.as_str();
+    let (old, via) = app.db.board_read(|t| {
+        let (old, via) = (load(t, project, release_id)?, load(t, project, via_id)?);
+        check_states(&old, &via)?;
+        covered(t, &old, &via)?;
+        Ok((old, via))
+    })?;
     let basis = contained(app, project, &old, &via)?;
 
-    let actor = me.actor();
     let mut feed = app.board.writer();
     let (release, moved) = app.db.board_tx(|t| {
         // Again, inside the write: nothing may have moved since.
         let old = load(t, project, release_id)?;
         let via = load(t, project, via_id)?;
         check_states(&old, &via)?;
+        let cover = covered(t, &old, &via)?;
         post_install_checked(t, &old)?;
         let detail = json!({
             "via_release_id": via.id, "basis": basis.rule, "reference": basis.reference,
             "commit": basis.old, "via_commit": basis.via, "via_reference": basis.via_reference,
             "via_commit_at": basis.via_commit_at, "via_submitted_at": basis.via_submitted_at,
+            "installed": cover.installed, "covered": cover.by_via,
         });
+        let note = if cover.installed.is_empty() {
+            format!("deployed via {}", via.name)
+        } else {
+            format!("deployed via {} on {}", via.name, cover.by_via.join(", "))
+        };
         let event = ReleaseEvent {
             release_id: old.id.clone(),
             release_name: old.name.clone(),
             related_id: Some(via.id.clone()),
             kind: "deployed_via".into(),
-            actor: me.bot.id.clone(),
-            note: Some(format!("deployed via {}", via.name)),
+            actor: bot.id.clone(),
+            note: Some(note),
             detail,
             at: now(),
         };
@@ -106,32 +149,49 @@ pub fn deployed_via(
                 ColumnCategory::Done,
                 &note,
                 false,
-                &actor,
+                actor,
             )?;
             moved.extend(from.map(|f| (ri.item_id.clone(), f)));
         }
         Ok((t.release(&old.id)?.expect("loaded"), moved))
     })?;
     publish_moves(app, &mut feed, project, &moved);
+    drop(feed);
+    // A tester still holding its install has nothing left to do.
+    let note = format!(
+        "Release {} is closed: {} replaced it and is installed, so don't install {}. \
+         Confirm nothing for it.",
+        release.name, via.name, release.name
+    );
+    if let Err(e) = tell_installers(app, &release, &messaging::daemon_sender(), &note) {
+        tracing::warn!(release = %release.id, error = %e, "couldn't tell its installers");
+    }
     Ok(release)
 }
 
-/// The old package approved and idle; the via package deployed.
+/// Owner-ruled to ship, not yet on every computer: what closes through a
+/// later package.
+pub(super) fn ruled_open(status: ReleaseStatus) -> bool {
+    matches!(
+        status,
+        ReleaseStatus::Approved
+            | ReleaseStatus::Deploying
+            | ReleaseStatus::Paused
+            | ReleaseStatus::PartiallyDeployed
+    )
+}
+
+/// The old package ruled to ship and not done; the via package deployed.
 fn check_states(old: &Release, via: &Release) -> anyhow::Result<()> {
     if old.id == via.id {
         return Err(invalid("a release can't be deployed via itself"));
     }
-    if old.status != ReleaseStatus::Approved {
+    if !ruled_open(old.status) {
         return Err(conflict(format!(
-            "release {} is {}; only an approved package is closed through a later one",
+            "release {} is {}; only a package the owner approved and that isn't on every \
+             computer is closed through a later one",
             old.name,
             old.status.as_str()
-        )));
-    }
-    if old.deployments.iter().any(|d| d.result.is_none()) {
-        return Err(conflict(format!(
-            "release {} has a deployment open; confirm or roll it back first",
-            old.name
         )));
     }
     if via.status != ReleaseStatus::Deployed {
@@ -150,6 +210,40 @@ fn check_states(old: &Release, via: &Release) -> anyhow::Result<()> {
         )));
     }
     Ok(())
+}
+
+/// Every computer `old` was to reach and didn't is one `via` reaches: its
+/// own deploy targets, or the computers it was installed on.
+fn covered(t: &BoardTx<'_>, old: &Release, via: &Release) -> anyhow::Result<Cover> {
+    let ok_on = |r: &Release, m: &str| {
+        r.deployments.iter().any(|d| {
+            d.machine.eq_ignore_ascii_case(m)
+                && d.action == DeployAction::Deploy
+                && d.result == Some(DeployResult::Ok)
+        })
+    };
+    let via_targets = machines::deploys_to(t, via)?;
+    let (installed, left): (Vec<String>, Vec<String>) = machines::deploys_to(t, old)?
+        .into_iter()
+        .partition(|m| ok_on(old, m));
+    let missing: Vec<&String> = left
+        .iter()
+        .filter(|m| !via_targets.iter().any(|v| v.eq_ignore_ascii_case(m)) && !ok_on(via, m))
+        .collect();
+    if !missing.is_empty() {
+        let names: Vec<&str> = missing.iter().map(|m| m.as_str()).collect();
+        return Err(conflict(format!(
+            "release {} doesn't reach {}, where {} isn't installed either; deploy one of \
+             them there first",
+            via.name,
+            names.join(", "),
+            old.name
+        )));
+    }
+    Ok(Cover {
+        installed,
+        by_via: left,
+    })
 }
 
 /// When the via package was submitted: its freeze, else its last build.
