@@ -23,6 +23,7 @@ pub use owner_threads::{Asked, OwnerQuestion};
 pub use peer_grants::{GrantEnd, GrantRuling, PeerGrant};
 pub use quiesce::{NewQuiesce, Quiesce};
 pub use release_life::NewReleaseTest;
+pub use release_work::OnCard;
 pub use releases::NewRelease;
 pub use routines::RoutineLimits;
 pub use runs::NewRun;
@@ -78,6 +79,7 @@ mod quiesce;
 mod release_life;
 mod release_machines;
 mod release_plans;
+mod release_work;
 mod releases;
 #[cfg(test)]
 mod releases_tests;

@@ -13,8 +13,8 @@ use crate::board::release::assemble::{self, NewPackage};
 use crate::board::release::model::{DeployResult, ReleaseBuild, Smoke};
 use crate::board::release::publish::{self, Publish};
 use crate::board::release::{
-    cancel, deploy, deployed_via, lifecycle, load, machines, model::parse_arg, package, plan,
-    Caller,
+    blockers, cancel, deploy, deployed_via, lifecycle, load, machines, model::parse_arg, package,
+    plan, Caller,
 };
 use crate::db::NewReleaseTest;
 
@@ -82,12 +82,13 @@ pub(super) fn call(
 ) -> anyhow::Result<Value> {
     let me = Caller { bot, roles };
     let project = bot.project_id.as_str();
-    let released = |r: crate::board::release::model::Release| Ok(json!({ "release": r.to_json() }));
+    let payload = |r: &crate::board::release::model::Release| blockers::payload(app, r);
+    let released = |r: crate::board::release::model::Release| Ok(json!({ "release": payload(&r) }));
     match name {
         "release_list" => {
             let _: c::ReleaseList = decode("ReleaseList", args, project)?;
             let all = app.db.board_read(|t| t.releases(project))?;
-            Ok(json!({ "releases": all.iter().map(|r| r.to_json()).collect::<Vec<_>>() }))
+            Ok(json!({ "releases": all.iter().map(payload).collect::<Vec<_>>() }))
         }
         "release_get" => {
             let req: c::ReleaseGet = decode("ReleaseGet", args, project)?;
@@ -110,7 +111,10 @@ pub(super) fn call(
         }
         "release_plan" => {
             let req: c::ReleasePlan = decode("ReleasePlan", args, project)?;
-            released(plan::plan(
+            if let Some(card) = &req.work_item {
+                blockers::own_card(app, project, card)?;
+            }
+            let release = plan::plan(
                 app,
                 &me,
                 &plan::NewPlan {
@@ -119,7 +123,14 @@ pub(super) fn call(
                     items: &req.items,
                     changelog: req.changelog.as_deref().unwrap_or_default(),
                 },
-            )?)
+            )?;
+            match &req.work_item {
+                Some(card) => {
+                    blockers::set_work_item(app, &me, &release.id, card)?;
+                    released(app.db.board_read(|t| load(t, project, &release.id))?)
+                }
+                None => released(release),
+            }
         }
         "release_items" => {
             let req: c::ReleaseItems = decode("ReleaseItems", args, project)?;
@@ -167,10 +178,21 @@ pub(super) fn call(
                     source_commit: req.source_commit.as_deref(),
                 },
             )?;
-            Ok(json!({ "release": release.to_json(), "published": published }))
+            Ok(json!({ "release": payload(&release), "published": published }))
         }
         "release_update" => {
             let req: c::ReleaseUpdate = decode("ReleaseUpdate", args, project)?;
+            // The work card may be set at any open stage; the text only
+            // while the package is assembling.
+            if let Some(card) = &req.work_item {
+                blockers::set_work_item(app, &me, &req.release_id, card)?;
+            }
+            let text = req.display_version.is_some()
+                || req.changelog.is_some()
+                || req.how_to_test.is_some();
+            if req.work_item.is_some() && !text {
+                return released(app.db.board_read(|t| load(t, project, &req.release_id))?);
+            }
             let steps = req.how_to_test.map(|l| how_to_test(&l.values));
             released(package::update(
                 app,

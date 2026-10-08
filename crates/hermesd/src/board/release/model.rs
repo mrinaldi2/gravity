@@ -185,6 +185,8 @@ pub struct Release {
     pub plan: Vec<PlanItem>,
     /// The computers it must pass on: frozen at submit, else as now.
     pub tests_required: Vec<String>,
+    /// Its REL work card (H-247), where its owner Run cards hang.
+    pub work_item_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -280,6 +282,7 @@ impl Release {
                 "ac_checked": p.ac_checked, "ac_total": p.ac_total, "ready": p.ready,
             })).collect::<Vec<_>>(),
             "readiness": self.readiness(),
+            "work_item_id": self.work_item_id,
         })
     }
 

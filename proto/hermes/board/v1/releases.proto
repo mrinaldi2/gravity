@@ -49,6 +49,9 @@ message ReleasePlan {
   // Item ids, e.g. "H-137"; each open and in no other open package.
   repeated string items = 4;
   optional string changelog = 5;
+  // The release's REL work card, e.g. "H-244": the owner Run cards,
+  // decisions and questions on it show on the release (H-247).
+  optional string work_item = 6;
 }
 
 // Lead or DevOps: add items to a release or take them out before it is
@@ -91,6 +94,8 @@ message ReleaseUpdate {
   optional string changelog = 3;
   // Replaces the list.
   HowToTestList how_to_test = 4;
+  // The release's REL work card (H-247), at any stage before it closes.
+  optional string work_item = 5;
 }
 
 // Tester: your computer's result for a package, against one of its builds for

@@ -61,6 +61,7 @@ fn release_row(r: &Row<'_>) -> rusqlite::Result<Release> {
         targets: Default::default(),
         plan: Vec::new(),
         tests_required: Vec::new(),
+        work_item_id: None,
     })
 }
 

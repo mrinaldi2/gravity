@@ -66,6 +66,12 @@ pub enum Push {
         bot: bus::contract::home::BotRef,
         project_id: String,
     },
+    /// What a release waits on from the owner, or its work card, changed
+    /// (H-247): clients refetch that release.
+    ReleaseUpdated {
+        project_id: String,
+        release_id: String,
+    },
     /// A project was pinned or unpinned on this computer (H-128 D7).
     ProjectPinned {
         project_id: String,

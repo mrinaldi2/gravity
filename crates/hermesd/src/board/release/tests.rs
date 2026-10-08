@@ -70,6 +70,7 @@ fn release() -> Release {
         targets: Default::default(),
         plan: Vec::new(),
         tests_required: Vec::new(),
+        work_item_id: None,
     }
 }
 

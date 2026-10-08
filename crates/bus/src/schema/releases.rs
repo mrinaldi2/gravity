@@ -197,3 +197,17 @@ INSERT OR IGNORE INTO release_deployment_new(release_id, machine, action, execut
 DROP TABLE release_deployment;
 ALTER TABLE release_deployment_new RENAME TO release_deployment;
 "#;
+
+/// A release's work card (H-247, UX-048 §6): the REL card its owner Run
+/// cards, decisions and questions hang on, so the release can say what it
+/// waits on from the owner. Set by `release_plan`/`release_update`
+/// `work_item`, or `item_link kind=release`; backfilled from a `REL-<version>`
+/// title. Safe to run again.
+pub(super) const MIGRATION_RELEASE_WORK_ITEM: &str = r#"
+CREATE TABLE IF NOT EXISTS release_work_item (
+    release_id TEXT PRIMARY KEY,
+    item_id    TEXT NOT NULL,
+    set_by     TEXT NOT NULL,
+    at         TEXT NOT NULL
+);
+"#;
