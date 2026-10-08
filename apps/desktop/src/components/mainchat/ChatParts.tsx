@@ -8,6 +8,7 @@ import type { Bot, Project } from "../../protocol/entities";
 import type { OwnerThread, ThreadMessage } from "../../protocol/gen/hermes/home/v1/home_pb";
 import { sendOnCmdEnter } from "../../util";
 import BotAvatar from "../BotAvatar";
+import LinkedText from "../cards/LinkedText";
 import { clock } from "../home/homeText";
 
 /** A thread's row: who, which project, when, and whether it waits on you. */
@@ -64,7 +65,9 @@ export function Bubble(props: {
         {label}
         {message.at === undefined ? "" : `${label ? " · " : ""}${clock(message.at, now)}`}
       </span>
-      <span className="mc-bubble-text">{message.text}</span>
+      <span className="mc-bubble-text">
+        <LinkedText text={message.text} />
+      </span>
     </div>
   );
 }

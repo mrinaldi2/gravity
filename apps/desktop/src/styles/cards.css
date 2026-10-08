@@ -1,0 +1,89 @@
+/* Card ids as links (UX-035 §2–§4): the link, its preview, and the card
+   drawer over any view. */
+
+.card-link-wrap {
+  position: relative;
+  display: inline;
+}
+
+.card-link {
+  color: var(--accent);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.card-link:hover,
+.card-link:focus-visible {
+  text-decoration-style: solid;
+}
+
+.card-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+/* A card that can't be opened from here: deleted, or kept offline. */
+.card-link--dim {
+  color: var(--text-dim);
+}
+
+.card-preview {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: 320px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 35%);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  text-align: left;
+}
+
+.card-preview-head {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.card-preview-title {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.card-preview-dim {
+  color: var(--text-dim);
+}
+
+/* The drawer over the whole window, above every view and the main chat. */
+.card-drawer {
+  position: fixed;
+  inset: var(--titlebar-h) 0 0 auto;
+  z-index: 50;
+  width: min(440px, 100%);
+}
+
+.drawer-back {
+  margin-right: 4px;
+}
+
+.drawer-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}

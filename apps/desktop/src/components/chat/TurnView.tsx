@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import type { DaemonApi } from "../../protocol/api";
 import type { ChatTurn } from "../../protocol/chat";
 import { fmtTimestamp } from "../../util";
+import LinkedText from "../cards/LinkedText";
 import ChatMarkdown from "./ChatMarkdown";
 import DecisionCard from "./DecisionCard";
 import { durationLabel, groupItems, statsLine, triggerView } from "./chatModel";
@@ -55,7 +56,11 @@ export default function TurnView(props: TurnViewProps): ReactElement {
       </header>
       {trigger.text === "" ? null : (
         <div className={trigger.own ? "chat-bubble chat-bubble-own" : "chat-bubble chat-bubble-in"}>
-          {trigger.own ? trigger.text : <ChatMarkdown>{trigger.text}</ChatMarkdown>}
+          {trigger.own ? (
+            <LinkedText text={trigger.text} />
+          ) : (
+            <ChatMarkdown>{trigger.text}</ChatMarkdown>
+          )}
         </div>
       )}
       {groupItems(turn.items).map((block) => (

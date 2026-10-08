@@ -112,6 +112,7 @@ const REPLY_TYPES: ReadonlySet<string> = new Set(
     owner_threads: true,
     owner_thread: true,
     owner_thread_marked: true,
+    item_cards: true,
   } satisfies Record<ServerReplyType, true>),
 );
 

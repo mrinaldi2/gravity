@@ -14,6 +14,7 @@ import type {
 import type { MeetingSummary } from "../../protocol/meetings";
 import { OWNER } from "../../protocol/meetings";
 import BotAvatar from "../BotAvatar";
+import LinkedText from "../cards/LinkedText";
 import { clock } from "../home/homeText";
 import { minutesTitle } from "../meetings/useMeetings";
 import { Widget } from "./Widgets";
@@ -151,7 +152,9 @@ function ReportRow(props: {
           {report.title}
           {report.at === undefined ? "" : ` · ${clock(report.at, now)}`}
         </span>
-        <span className="team-report-text">{report.text}</span>
+        <span className="team-report-text">
+          <LinkedText text={report.text} />
+        </span>
       </div>
       <div className="team-report-actions">
         {report.meeting ? (

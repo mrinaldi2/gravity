@@ -34,6 +34,8 @@ interface BoardViewProps {
   readonly connected: boolean;
   readonly canControl: boolean;
   readonly addToast: AddToast;
+  /** The card whose drawer opens with the board ("Open on the board", UX-035 §4). */
+  readonly openItem?: string;
 }
 
 function Notice({
@@ -231,7 +233,15 @@ function Board(props: BoardProps): ReactElement {
   };
 
   const canMove = canControl ? moves.openMenu : null;
-  const [opened, setOpened] = useState<string | null>(null);
+  const [opened, setOpened] = useState<string | null>(props.openItem ?? null);
+  // A new "Open on the board" opens its card even when the board is showing.
+  const [asked, setAsked] = useState(props.openItem);
+  if (props.openItem !== asked) {
+    setAsked(props.openItem);
+    if (props.openItem !== undefined) {
+      setOpened(props.openItem);
+    }
+  }
   // The owner's call, on the board's home (H-099).
   const setLimit =
     (column: BoardColumn) =>

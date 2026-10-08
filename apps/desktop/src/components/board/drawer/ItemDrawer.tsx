@@ -41,6 +41,10 @@ export interface ItemDrawerProps {
   readonly initialTab?: Tab;
   /** Shown above the tabs: the item's commands for the owner (H-117). */
   readonly children?: ReactNode;
+  /** The card shown before, for `‹ Back` (UX-035 §4). */
+  readonly back?: { readonly id: string; readonly onBack: () => void };
+  /** Below everything: "Open on the board" where the drawer isn't on it. */
+  readonly footer?: ReactNode;
 }
 
 type Tab = "overview" | "links" | "activity";
@@ -97,7 +101,13 @@ export default function ItemDrawer(props: ItemDrawerProps): ReactElement {
 
   return (
     <aside className="item-drawer" aria-label={`Item ${itemId}`}>
-      <DrawerHeader itemId={itemId} item={item} onMove={props.onMove} onClose={props.onClose} />
+      <DrawerHeader
+        itemId={itemId}
+        item={item}
+        onMove={props.onMove}
+        onClose={props.onClose}
+        back={props.back}
+      />
       {item === undefined ? (
         <p className="drawer-empty" role="status">
           {error === null ? "Loading…" : `Couldn't load ${itemId}: ${error}`}
@@ -125,6 +135,7 @@ export default function ItemDrawer(props: ItemDrawerProps): ReactElement {
           ) : null}
         </div>
       )}
+      {props.footer ? <footer className="drawer-foot">{props.footer}</footer> : null}
     </aside>
   );
 }

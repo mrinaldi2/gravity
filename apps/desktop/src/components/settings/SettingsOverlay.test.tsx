@@ -24,6 +24,8 @@ function daemonState(client: FakeDaemon): DaemonState {
     activityByBot: {},
     selection: { kind: "home" },
     select: voidSpy(),
+    go: vi.fn<DaemonState["go"]>(),
+    note: vi.fn<DaemonState["note"]>(),
     changeEndpoint: vi.fn<(endpoint: { host: string; port: number }) => void>(),
     refreshAll: vi.fn<() => Promise<void>>(() => Promise.resolve()),
     updateBotRoutines: vi.fn<DaemonState["updateBotRoutines"]>(),

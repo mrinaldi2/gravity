@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
+import { useCardMarkdown } from "../cards/cardMarkdown";
 
 interface MarkdownProps {
   readonly children: string;
@@ -39,9 +40,16 @@ export const SAFE_LINKS = {
  *
  */
 export default function Markdown({ children }: MarkdownProps): ReactElement {
+  const cards = useCardMarkdown(SAFE_LINKS.a);
   return (
     <div className="markdown">
-      <ReactMarkdown components={SAFE_LINKS}>{children}</ReactMarkdown>
+      <ReactMarkdown
+        components={{ ...SAFE_LINKS, a: cards.a }}
+        remarkPlugins={cards.remarkPlugins}
+        urlTransform={cards.urlTransform}
+      >
+        {children}
+      </ReactMarkdown>
     </div>
   );
 }

@@ -15,6 +15,10 @@ import { useToasts } from "./app/useToasts";
 import type { AddToast } from "./app/useToasts";
 import { useServiceRecovery } from "./app/useServiceRecovery";
 import { useUpdates } from "./app/useUpdates";
+import { useHistoryKeys } from "./app/useHistoryKeys";
+import type { Selection } from "./app/selection";
+import CardDrawer, { useCardDrawer } from "./components/cards/CardDrawer";
+import { CardLinksProvider } from "./components/cards/CardLinks";
 import CommandPalette from "./components/CommandPalette";
 import Rail from "./components/home/Rail";
 import MainChat from "./components/mainchat/MainChat";
@@ -29,10 +33,22 @@ import SetupScreen from "./components/setup/SetupScreen";
 import Toasts from "./components/Toasts";
 import type { Toast } from "./components/Toasts";
 import type { DaemonApi } from "./protocol/api";
+import type { Bot } from "./protocol/entities";
 import type { Endpoint } from "./protocol/connection";
 import { DaemonClient } from "./protocol/client";
 import { loadEndpoint } from "./settings";
 import { readClientToken } from "./token";
+
+/** The project on screen, whose cards' previews don't name it. */
+function currentProjectId(selection: Selection, bots: readonly Bot[]): string | null {
+  if (selection.kind === "project") {
+    return selection.projectId;
+  }
+  if (selection.kind === "bot") {
+    return bots.find((b) => b.id === selection.botId)?.project_id ?? null;
+  }
+  return null;
+}
 
 interface SettingsLayerProps {
   readonly client: DaemonApi;
@@ -166,81 +182,101 @@ export default function App(): ReactElement {
 
   const setup = useFirstRunSetup(client, daemon.changeEndpoint);
 
+  useHistoryKeys(daemon.go);
+  const cards = useCardDrawer();
+
   return (
     <SetupGate setup={setup} toasts={toasts} onDismissToast={dismissToast}>
-      <div className="app">
-        <Rail
-          selection={daemon.selection}
-          needsYou={pending.total}
-          status={daemon.status}
-          endpoint={daemon.endpoint}
-          canControl={canControl}
-          chatOpen={chat.open}
-          chatAsking={asking}
-          onSelect={select}
-          onToggleChat={() => {
-            if (chat.open) {
-              chat.close();
-            } else {
-              chat.openOn();
-            }
-          }}
-          onOpenSettings={overlays.openSettings}
-        />
-        <main className="main">
-          <ServiceRecoveryLayer endpoint={daemon.endpoint} addToast={addToast} />
-          <QuiesceLayer client={client} connected={connected} addToast={addToast} />
-          <MainPane
-            client={client}
-            daemon={daemon}
-            addToast={addToast}
-            onCreateProject={actions.createProjectWithBot}
-            onRenameProject={actions.renameProject}
-            onSetProjectLead={actions.setProjectLead}
-            onSetProjectRepo={actions.setProjectRepo}
-            onDeleteProject={actions.deleteProject}
-            onCreateBot={actions.createBot}
-            onDeleteBot={actions.deleteBot}
-            permissions={inbox.permissions}
-            onOpenBot={openBot}
-            onReply={chat.openOn}
+      <CardLinksProvider
+        client={client}
+        projects={daemon.projects}
+        bots={bots}
+        currentProjectId={currentProjectId(daemon.selection, bots)}
+        onOpen={cards.open}
+      >
+        <div className="app">
+          <Rail
+            selection={daemon.selection}
+            needsYou={pending.total}
+            status={daemon.status}
+            endpoint={daemon.endpoint}
+            canControl={canControl}
+            chatOpen={chat.open}
+            chatAsking={asking}
+            onSelect={select}
+            onToggleChat={() => {
+              if (chat.open) {
+                chat.close();
+              } else {
+                chat.openOn();
+              }
+            }}
+            onOpenSettings={overlays.openSettings}
           />
-        </main>
-        <MainChat
-          client={client}
-          connected={connected}
-          canControl={canControl}
-          bots={bots}
-          projects={daemon.projects}
-          threads={threads}
-          chat={chat}
-          addToast={addToast}
-          onOpenBot={openBotChat}
-        />
-        {overlays.paletteOpen ? (
-          <CommandPalette
-            actions={paletteActions}
-            onSearch={overlays.openSearch}
-            onClose={overlays.closePalette}
-          />
-        ) : null}
-        {overlays.searchOpen ? (
-          <SearchOverlay
+          <main className="main">
+            <ServiceRecoveryLayer endpoint={daemon.endpoint} addToast={addToast} />
+            <QuiesceLayer client={client} connected={connected} addToast={addToast} />
+            <MainPane
+              client={client}
+              daemon={daemon}
+              addToast={addToast}
+              onCreateProject={actions.createProjectWithBot}
+              onRenameProject={actions.renameProject}
+              onSetProjectLead={actions.setProjectLead}
+              onSetProjectRepo={actions.setProjectRepo}
+              onDeleteProject={actions.deleteProject}
+              onCreateBot={actions.createBot}
+              onDeleteBot={actions.deleteBot}
+              permissions={inbox.permissions}
+              onOpenBot={openBot}
+              onReply={chat.openOn}
+            />
+          </main>
+          <MainChat
             client={client}
-            conversations={daemon.conversations}
+            connected={connected}
+            canControl={canControl}
             bots={bots}
             projects={daemon.projects}
-            connected={connected}
-            initialQuery={overlays.searchQuery}
-            onOpenBot={openBot}
-            onOpenConversation={openConversation}
-            onClose={overlays.closeSearch}
+            threads={threads}
+            chat={chat}
+            addToast={addToast}
+            onOpenBot={openBotChat}
           />
-        ) : null}
-        <SettingsLayer client={client} daemon={daemon} overlays={overlays} addToast={addToast} />
-        <Toasts toasts={toasts} onDismiss={dismissToast} />
-        <HomeMigrationConfirm />
-      </div>
+          {overlays.paletteOpen ? (
+            <CommandPalette
+              actions={paletteActions}
+              onSearch={overlays.openSearch}
+              onClose={overlays.closePalette}
+            />
+          ) : null}
+          {overlays.searchOpen ? (
+            <SearchOverlay
+              client={client}
+              conversations={daemon.conversations}
+              bots={bots}
+              projects={daemon.projects}
+              connected={connected}
+              initialQuery={overlays.searchQuery}
+              onOpenBot={openBot}
+              onOpenConversation={openConversation}
+              onClose={overlays.closeSearch}
+            />
+          ) : null}
+          <CardDrawer
+            drawer={cards}
+            client={client}
+            bots={bots}
+            canComment={canControl}
+            onOpenBoard={(card) =>
+              select({ kind: "project", projectId: card.projectId, tab: "board", item: card.id })
+            }
+          />
+          <SettingsLayer client={client} daemon={daemon} overlays={overlays} addToast={addToast} />
+          <Toasts toasts={toasts} onDismiss={dismissToast} />
+          <HomeMigrationConfirm />
+        </div>
+      </CardLinksProvider>
     </SetupGate>
   );
 }

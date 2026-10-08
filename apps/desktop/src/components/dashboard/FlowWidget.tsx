@@ -9,6 +9,7 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
 import type { ColumnTime, FlowDay, FlowMetrics, MetricsRange } from "../../protocol/metrics";
+import CardLink from "../cards/CardLink";
 import type { MetricsState } from "./useMetrics";
 
 const DAY = 86_400;
@@ -242,8 +243,11 @@ function Charts(props: {
           <ul className="flow-aging">
             {m.aging.map((a) => (
               <li key={a.id}>
+                <span className="mono">
+                  <CardLink id={a.id} />
+                </span>{" "}
                 <button type="button" className="flow-link" onClick={props.onBoard}>
-                  <span className="mono">{a.id}</span> {a.title}
+                  {a.title}
                 </button>
                 <span className="flow-stat-note">
                   {props.columnName(a.column_key)} {duration(a.age)}

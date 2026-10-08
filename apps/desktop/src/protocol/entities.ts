@@ -39,6 +39,8 @@ export interface Project {
   readonly lead_bot_id?: string | null;
   /** The shared git repository workers check out and push to; absent on older daemons. */
   readonly repo?: ProjectRepo | null;
+  /** Its cards' id prefix (`H` for `H-017`); absent without a board, or on an older service (H-203). */
+  readonly item_prefix?: string | null;
   /** What its bots may do without asking (H-031); absent on older daemons. */
   readonly permission_profile?: PermissionProfile;
   readonly created_at: string;

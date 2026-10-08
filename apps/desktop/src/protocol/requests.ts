@@ -8,6 +8,7 @@ import type { OwnerActionRequestBody } from "./ownerActions";
 import type { QuiesceRequestBody } from "./quiesce";
 import type { DecisionRequestBody } from "./decisionRequests";
 import type { HomeRequestBody } from "./home";
+import type { ItemCardsRequestBody } from "./itemCards";
 import type { MetricsRequestBody } from "./metrics";
 import type { ReleaseRequestBody } from "./releases";
 import type {
@@ -24,6 +25,7 @@ export type ClientRequestBody =
   | DecisionRequestBody
   | ReleaseRequestBody
   | DashboardRequestBody
+  | ItemCardsRequestBody
   | MeetingRequestBody
   | QuiesceRequestBody
   | OwnerActionRequestBody

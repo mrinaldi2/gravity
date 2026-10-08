@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import type { NotifyLevel } from "../protocol/entities";
+import LinkedText from "./cards/LinkedText";
 
 export interface ToastAction {
   readonly label: string;
@@ -31,7 +32,11 @@ export default function Toasts({ toasts, onDismiss }: ToastsProps): ReactElement
         <div key={toast.id} className={`toast toast-${toast.level}`}>
           <div className="toast-text">
             <div className="toast-title">{toast.title}</div>
-            {toast.body.length > 0 ? <div className="toast-body">{toast.body}</div> : null}
+            {toast.body.length > 0 ? (
+              <div className="toast-body">
+                <LinkedText text={toast.body} />
+              </div>
+            ) : null}
           </div>
           <div className="toast-actions">
             {toast.action !== undefined ? (

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactElement } from "react";
+import { useLatestRef } from "../app/useLatestRef";
 import type { AddToast } from "../app/useToasts";
 import type { DaemonApi } from "../protocol/api";
 import type { Bot, Routine } from "../protocol/entities";
@@ -35,6 +36,8 @@ interface BotViewProps {
   readonly onReply?: (botId: string, quote: string) => void;
   /** Back to the bot's project (its Team tab); the crumb is hidden without it. */
   readonly onBack?: () => void;
+  /** Told the tab shown, so going back through history reopens it (UX-035 §5). */
+  readonly onTabShown?: (tab: BotTab) => void;
 }
 
 interface DragState {
@@ -77,6 +80,8 @@ export default function BotView(props: BotViewProps): ReactElement {
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
   useBotKeys(tabs, setTab);
+  const onTabShown = useLatestRef(props.onTabShown);
+  useEffect(() => onTabShown.current?.(tab), [tab, onTabShown]);
   // The bot's browser streams from the moment the bot is selected, whatever
   // tab is open, so it is live when the Browser tab is.
   const browser = useBrowserWatch(client, bot.id, tabs.includes("browser"), connected);

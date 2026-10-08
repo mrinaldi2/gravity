@@ -37,6 +37,10 @@ export interface DaemonState {
   readonly activityByBot: Readonly<Record<string, BotActivity>>;
   readonly selection: Selection;
   readonly select: (next: Selection) => void;
+  /** Back (-1) or forward (1) through the views opened (UX-035 §5). */
+  readonly go: (direction: -1 | 1) => void;
+  /** Records a move inside the current view, for going back to it. */
+  readonly note: (next: Selection) => void;
   readonly changeEndpoint: (next: Endpoint) => void;
   readonly refreshAll: () => Promise<void>;
   readonly updateBotRoutines: (botId: string, routines: readonly Routine[]) => void;
@@ -53,7 +57,7 @@ export interface DaemonState {
 export function useDaemonState(client: DaemonApi, addToast: AddToast): DaemonState {
   const entities = useEntities();
   const unread = useUnread();
-  const { selection, selectionRef, select, selectBot } = useSelection(unread);
+  const { selection, selectionRef, select, selectBot, go, note } = useSelection(unread);
 
   const conversationsRef = useLatestRef(entities.conversations);
   const botsRef = useLatestRef(entities.bots);
@@ -136,6 +140,8 @@ export function useDaemonState(client: DaemonApi, addToast: AddToast): DaemonSta
     unreadBots: unread.bots,
     selection,
     select,
+    go,
+    note,
     refreshAll,
     findConversation,
   };

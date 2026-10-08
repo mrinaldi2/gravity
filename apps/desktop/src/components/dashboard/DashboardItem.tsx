@@ -9,6 +9,7 @@ import { boardCall } from "../../protocol/board";
 import type { Bot } from "../../protocol/entities";
 import type { BoardColumn } from "../../protocol/gen/hermes/board/v1/board_pb";
 import ItemDrawer from "../board/drawer/ItemDrawer";
+import type { ItemDrawerProps } from "../board/drawer/ItemDrawer";
 
 export default function DashboardItem(props: {
   readonly api: BoardApi;
@@ -19,6 +20,9 @@ export default function DashboardItem(props: {
   readonly onClose: () => void;
   /** The item's commands for the owner (H-117), above its tabs. */
   readonly children?: ReactNode;
+  /** Where the app-level card drawer (UX-035 §4) adds `‹ Back` and its footer. */
+  readonly back?: ItemDrawerProps["back"];
+  readonly footer?: ReactNode;
 }): ReactElement {
   const { api, projectId } = props;
   const [columns, setColumns] = useState<readonly BoardColumn[]>([]);
@@ -47,6 +51,8 @@ export default function DashboardItem(props: {
       bots={props.bots}
       canComment={props.canComment}
       onClose={props.onClose}
+      back={props.back}
+      footer={props.footer}
     >
       {props.children}
     </ItemDrawer>

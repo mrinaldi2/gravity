@@ -1,3 +1,5 @@
+import type { BotTab } from "../components/bot/BotTabs";
+
 /**
  * The tabs of a project window (UX-024 §2): the first five are in the tab bar
  * on ⌘1…⌘5; the rest sit under More.
@@ -26,21 +28,28 @@ export type Selection =
   | { readonly kind: "home" }
   /**
    * A bot's page. `tab: "chat"` opens it on its Chat, the way back from the
-   * main chat (H-192); without it, the page opens on its first tab. `press`
+   * main chat (H-192); without it, the page opens on its first tab. History
+   * records the tab the owner moved to, so going back reopens it. `press`
    * counts those asks, so a second one lands on Chat even when the page is
    * already open and the owner moved to another tab (UX-034).
    */
   | {
       readonly kind: "bot";
       readonly botId: string;
-      readonly tab?: "chat";
+      readonly tab?: BotTab;
       readonly press?: number;
     }
   /**
    * A project window. Without `tab` it reopens on the tab last used there,
-   * which is the Dashboard the first time.
+   * which is the Dashboard the first time. `item` opens that card's drawer
+   * on the Board ("Open on the board", UX-035 §4).
    */
-  | { readonly kind: "project"; readonly projectId: string; readonly tab?: ProjectTab }
+  | {
+      readonly kind: "project";
+      readonly projectId: string;
+      readonly tab?: ProjectTab;
+      readonly item?: string;
+    }
   /**
    * The Control center. `decisionId` opens straight onto one record, which is
    * what a notification or a palette entry hands over.
