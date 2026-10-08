@@ -31,17 +31,18 @@ pub(crate) fn item_prefix(app: &AppState, project_id: &str) -> Option<String> {
 
 impl Conn {
     pub(super) fn item_cards_get(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
-        let mut ids: Vec<String> = req["ids"]
+        // Each id once, in the order asked (S1: repeats needn't be adjacent).
+        let mut seen = std::collections::HashSet::new();
+        let ids: Vec<String> = req["ids"]
             .as_array()
             .map(|ids| {
                 ids.iter()
                     .filter_map(|v| v.as_str())
                     .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
+                    .filter(|s| !s.is_empty() && seen.insert(s.clone()))
                     .collect()
             })
             .unwrap_or_default();
-        ids.dedup();
         if ids.len() > MAX_IDS {
             self.reply_err(
                 req_id,

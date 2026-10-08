@@ -23,6 +23,8 @@ export default function DashboardItem(props: {
   /** Where the app-level card drawer (UX-035 §4) adds `‹ Back` and its footer. */
   readonly back?: ItemDrawerProps["back"];
   readonly footer?: ReactNode;
+  /** The item's column as known elsewhere, named while the board's can't be read (UX-045). */
+  readonly column?: BoardColumn;
 }): ReactElement {
   const { api, projectId } = props;
   const [columns, setColumns] = useState<readonly BoardColumn[]>([]);
@@ -47,7 +49,7 @@ export default function DashboardItem(props: {
     <ItemDrawer
       api={api}
       itemId={props.itemId}
-      columns={columns}
+      columns={columns.length === 0 && props.column ? [props.column] : columns}
       bots={props.bots}
       canComment={props.canComment}
       onClose={props.onClose}

@@ -1,12 +1,15 @@
-// The card lookups behind the links (UX-035 §3): every id asked for in one
-// tick goes in one `item_cards_get`, an answer is kept for 60 s, and a board
-// push for a card drops its copy so the next hover reads it again.
+// The card lookups behind the links (UX-035 §3): the ids asked for in one
+// tick go in `item_cards_get` requests of up to 200 each, an answer is kept
+// for 60 s, and a board push for a card marks its copy stale so the next
+// hover reads it again.
 
 import type { DaemonApi } from "../../protocol/api";
 import type { ItemCardEntry } from "../../protocol/itemCards";
 
 /** How long an answer is shown without asking again. */
 const FRESH_MS = 60_000;
+/** The most ids one `item_cards_get` takes (the service's MAX_IDS). */
+export const BATCH = 200;
 
 export interface Cached {
   readonly entry: ItemCardEntry;
@@ -54,7 +57,7 @@ export class CardCache {
     this.pending.add(id);
     if (!this.scheduled) {
       this.scheduled = true;
-      queueMicrotask(() => void this.flush());
+      queueMicrotask(() => this.flush());
     }
   }
 
@@ -78,13 +81,17 @@ export class CardCache {
   // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
   snapshot = (): number => this.version;
 
-  private async flush(): Promise<void> {
+  private flush(): void {
     this.scheduled = false;
     const ids = [...this.pending];
     this.pending.clear();
-    if (ids.length === 0) {
-      return;
+    // The service answers at most BATCH ids a request (S2).
+    for (let at = 0; at < ids.length; at += BATCH) {
+      void this.ask(ids.slice(at, at + BATCH));
     }
+  }
+
+  private async ask(ids: string[]): Promise<void> {
     for (const id of ids) {
       this.inflight.add(id);
     }

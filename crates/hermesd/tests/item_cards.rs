@@ -42,9 +42,11 @@ async fn cards_on_this_computer_come_back_with_where_they_are_kept() {
     assert_eq!(mine["item_prefix"], "H", "{mine}");
 
     let reply = owner
-        .request(json!({"type": "item_cards_get", "ids": [card, "H-999", "UTF-8"]}))
+        .request(json!({"type": "item_cards_get", "ids": [card, "H-999", card, "UTF-8"]}))
         .await;
     assert_eq!(reply["type"], "item_cards", "{reply}");
+    // Each id answered once, even when asked twice apart (S1).
+    assert_eq!(reply["cards"].as_array().map(Vec::len), Some(3), "{reply}");
     let found = entry(&reply, &card);
     assert_eq!(found["project_id"], project_id.as_str());
     assert_eq!(found["project_name"], "The Hermes");

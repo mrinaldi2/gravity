@@ -10,7 +10,21 @@ import type { ReactElement } from "react";
 import { useLatestRef } from "../../app/useLatestRef";
 import type { DaemonApi } from "../../protocol/api";
 import type { Bot } from "../../protocol/entities";
+import { create } from "@bufbuild/protobuf";
+import { BoardColumnSchema } from "../../protocol/gen/hermes/board/v1/board_pb";
+import type { BoardColumn } from "../../protocol/gen/hermes/board/v1/board_pb";
 import DashboardItem from "../dashboard/DashboardItem";
+import type { CardLinksValue } from "./CardLinks";
+import { useCardLinks } from "./CardLinks";
+
+/** The card's column, named as its `item_cards` answer names it (UX-045). */
+function knownColumn(links: CardLinksValue | null, id: string): BoardColumn | undefined {
+  const entry = links?.cache.get(id)?.entry;
+  const key = entry?.card?.columnKey;
+  return key && entry.column_name
+    ? create(BoardColumnSchema, { key, name: entry.column_name })
+    : undefined;
+}
 
 /** A card in the drawer, with the project whose board keeps it. */
 interface OpenCard {
@@ -106,6 +120,7 @@ export default function CardDrawer(props: CardDrawerProps): ReactElement | null 
   const { drawer } = props;
   const top = drawer.stack.at(-1);
   const before = drawer.stack.at(-2);
+  const links = useCardLinks();
   useDrawerBack(top !== undefined, drawer.back);
   if (top === undefined) {
     return null;
@@ -121,6 +136,7 @@ export default function CardDrawer(props: CardDrawerProps): ReactElement | null 
         canComment={props.canComment}
         onClose={() => drawer.close()}
         back={before ? { id: before.id, onBack: drawer.back } : undefined}
+        column={knownColumn(links, top.id)}
         footer={
           <footer className="drawer-foot">
             <button

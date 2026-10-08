@@ -205,6 +205,8 @@ describe("the card drawer", () => {
     const link = await openFirst(fakeDaemon());
     expect(screen.getByRole("complementary", { name: "Item H-293" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Back to/ })).toBeNull();
+    // The board's columns can't be read here: its column still has a name (UX-045).
+    expect(screen.getByText(/^Doing for /)).toBeTruthy();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("complementary")).toBeNull();
     expect(document.activeElement).toBe(link);
