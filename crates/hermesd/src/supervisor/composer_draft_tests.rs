@@ -31,9 +31,9 @@ const REPORTS: &[&[u8]] = &[
     b"\x1bP>|xterm.js(5.5.0)\x1b\\",
     b"\x1b[<0;10;5M",
     b"\x1b[<0;10;5m",
-    // Keys that only move the cursor or browse.
-    b"\x1b[A",
-    b"\x1bOB",
+    // Keys that only move the cursor or scroll.
+    b"\x1b[C",
+    b"\x1bOD",
     b"\x1b[H",
     b"\x1b[1;5D",
     b"\x1b[5~",
@@ -120,4 +120,60 @@ fn alt_bracket_then_typing_is_a_draft() {
         c.unsafe_to_type_at(false, now + IDLE * 5),
         Some(Unsafe::OwnerTyping)
     );
+}
+
+/// CE M1 (a): a history key may fill the line, so it blocks; but the owner
+/// typed nothing, so Enter after it mints no keyed token.
+#[test]
+fn history_recall_blocks_but_mints_no_keyed_token() {
+    for key in [&b"\x1b[A"[..], b"\x1bOB", &[0x10], &[0x0e], &[0x12]] {
+        let mut c = ready();
+        let now = Instant::now();
+        c.on_owner_input(key, false, now);
+        assert_eq!(
+            c.unsafe_to_type_at(false, now),
+            Some(Unsafe::OwnerTyping),
+            "{key:?}"
+        );
+        c.on_owner_input(b"\r", false, now);
+        assert_eq!(
+            c.check_prompt(Some("user"), "recalled", now),
+            Verdict::Blocked,
+            "{key:?}"
+        );
+    }
+}
+
+/// CE M1 (b): the CR follows only when the paste starts the input line.
+#[test]
+fn the_paste_must_be_the_first_text_on_its_line() {
+    let text = typed_text("deploy the fix", "N0nce123", 1);
+    let needle = echo_needle(&text, "N0nce123");
+    let alone = "\x1b[2K\x1b[1G│ > Owner (Hermes app) ·N0nce123: de\r\n│   ploy the fix";
+    assert!(first_on_line(alone.as_bytes(), &needle));
+    let bare = "\x1b[3;1HOwner (Hermes app) ·N0nce123: deploy the fix";
+    assert!(first_on_line(bare.as_bytes(), &needle));
+    // A recalled or half-typed line in front of it: no CR.
+    let after_text = "\x1b[2K\x1b[1G│ > old prompt Owner (Hermes app) ·N0nce123: deploy";
+    assert!(echoed(after_text.as_bytes(), &needle));
+    assert!(!first_on_line(after_text.as_bytes(), &needle));
+    // Continued from a line above it, the line isn't its own either.
+    let wrapped = "\x1b[2K\x1b[1G│ > a long draft that wraps\r\n│ onward Owner (Hermes app) ·N0nce123: deploy";
+    assert!(!first_on_line(wrapped.as_bytes(), &needle));
+    // An earlier delivery's echo on screen doesn't count for this one.
+    let other = "\x1b[1G│ > Owner (Hermes app) ·0ther999: deploy\r\n│ > x Owner (Hermes app) ·N0nce123: deploy";
+    assert!(!first_on_line(other.as_bytes(), &needle));
+}
+
+#[test]
+fn a_paste_left_after_text_blocks_until_the_owner_clears_it() {
+    let mut c = ready();
+    let now = Instant::now();
+    c.draft.holds(40, now);
+    assert_eq!(
+        c.unsafe_to_type_at(false, now + IDLE * 10),
+        Some(Unsafe::OwnerTyping)
+    );
+    c.on_owner_input(&[0x15], false, now);
+    assert_eq!(c.unsafe_to_type_at(false, now), None);
 }

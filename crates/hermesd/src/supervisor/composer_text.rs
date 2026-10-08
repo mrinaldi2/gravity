@@ -42,7 +42,7 @@ pub(super) enum Unit<'a> {
     /// A CSI sequence: its parameter bytes and final byte.
     Csi(&'a [u8], u8),
     /// An arrow or other SS3 key (`ESC O x`).
-    Ss3,
+    Ss3(u8),
     /// Any other escape (`ESC x`).
     Esc(u8),
     /// A whole OSC, DCS, APC, PM or SOS string: a terminal's reply to a
@@ -100,7 +100,7 @@ impl Scan {
             }
             ScanState::Ss3 => {
                 self.state = ScanState::Ground;
-                out(Unit::Ss3);
+                out(Unit::Ss3(byte));
             }
         }
     }
@@ -198,18 +198,71 @@ fn squash(text: &str) -> String {
 pub fn strip_ansi(data: &[u8]) -> String {
     let mut scan = Scan::default();
     let mut bytes = Vec::with_capacity(data.len());
-    let mut osc = false;
+    // OSC strings (titles, links) are never shown; the scanner drops them.
     for &byte in data {
-        // OSC (`ESC ]` … BEL): titles and links, never shown.
-        if osc {
-            osc = byte != 0x07;
-            continue;
-        }
         scan.feed(byte, |unit| match unit {
             Unit::Byte(b) if b >= 0x20 || b == b'\n' => bytes.push(b),
-            Unit::Esc(b']') => osc = true,
             _ => {}
         });
     }
     String::from_utf8_lossy(&bytes).into_owned()
+}
+
+/// What may stand before the prefix on the composer's line: its prompt.
+const PROMPT_MARKERS: &[&str] = &[">", "❯", "›"];
+
+/// Whether the echo shows this delivery's prefix and `needle` (its nonce)
+/// as the first text on its line, after nothing but the prompt (CE M1 on
+/// H-236). Text the owner left there, or a history line, would be sent
+/// with it, so then no CR goes out.
+pub fn first_on_line(output: &[u8], needle: &str) -> bool {
+    let mut joined = String::new();
+    let mut starts = Vec::new();
+    for line in screen_lines(output) {
+        starts.push(joined.len());
+        joined.push_str(&squash(&line));
+    }
+    let Some(at) = joined.find(&format!("{}{needle}", squash(PREFIX))) else {
+        return false;
+    };
+    let start = starts
+        .iter()
+        .rev()
+        .find(|&&s| s <= at)
+        .copied()
+        .unwrap_or(0);
+    let before = &joined[start..at];
+    before.is_empty() || PROMPT_MARKERS.contains(&before)
+}
+
+/// `data` as the lines it draws: a newline, a carriage return or a move to
+/// the first column (`CSI G`, `CSI H`, `CSI E`/`F`) starts a new one.
+fn screen_lines(data: &[u8]) -> Vec<String> {
+    let mut scan = Scan::default();
+    let mut lines = vec![Vec::new()];
+    for &byte in data {
+        scan.feed(byte, |unit| match unit {
+            Unit::Byte(b'\n' | b'\r') => lines.push(Vec::new()),
+            Unit::Byte(b) if b >= 0x20 => lines.last_mut().expect("one line").push(b),
+            Unit::Csi(params, fin) if to_first_column(params, fin) => lines.push(Vec::new()),
+            _ => {}
+        });
+    }
+    lines
+        .into_iter()
+        .map(|l| String::from_utf8_lossy(&l).into_owned())
+        .collect()
+}
+
+/// A cursor move that lands in the first column.
+fn to_first_column(params: &[u8], fin: u8) -> bool {
+    match fin {
+        b'E' | b'F' => true,
+        b'G' => params.is_empty() || params == b"1",
+        b'H' | b'f' => params
+            .split(|&b| b == b';')
+            .nth(1)
+            .is_none_or(|col| col.is_empty() || col == b"1"),
+        _ => false,
+    }
 }

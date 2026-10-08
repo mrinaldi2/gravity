@@ -24,7 +24,9 @@ mod draft;
 mod text;
 
 pub use draft::Draft;
-pub use text::{digest, echo_needle, echoed, nonce, sanitize, typed_body, typed_text};
+pub use text::{
+    digest, echo_needle, echoed, first_on_line, nonce, sanitize, typed_body, typed_text,
+};
 use text::{Scan, Unit};
 
 /// At most this many unspent tokens per bot; a newer one drops the oldest.
@@ -154,14 +156,17 @@ impl Composer {
                 Owned::PasteEnd => self.in_paste = false,
                 Owned::Report => {}
                 Owned::Unsized => draft.unsure(now),
+                Owned::Recall => draft.recalled(now),
                 // Pasted text is the line's: every byte of it counts.
                 Owned::Byte(b) if self.in_paste => {
                     if !is_continuation(b) {
                         draft.typed(now);
                     }
                 }
+                // Only the owner's own edits back a keyed token: a recalled
+                // history line isn't one (K1, CE M1).
                 Owned::Byte(b'\r') => {
-                    if draft.dirty() && !self.modal_open && !modal_pending {
+                    if draft.edited() && !self.modal_open && !modal_pending {
                         let expires = (!self.working).then(|| now + KEYED_TTL);
                         self.push(TokenKind::Keyed, expires);
                     }
@@ -172,6 +177,8 @@ impl Composer {
                 Owned::Byte(0x7f | 0x08) => draft.erased(now),
                 // Tab completes, Ctrl-W and Ctrl-Y cut and paste words.
                 Owned::Byte(0x09 | 0x17 | 0x19) => draft.unsure(now),
+                // Ctrl-P, Ctrl-N and Ctrl-R recall history.
+                Owned::Byte(0x10 | 0x0e | 0x12) => draft.recalled(now),
                 Owned::Byte(b) if b >= 0x20 && !is_continuation(b) => draft.typed(now),
                 Owned::Byte(_) => {}
             }
@@ -306,6 +313,8 @@ enum Owned {
     /// Edits the line by an amount the daemon can't count: an Alt-key, a
     /// key in the kitty protocol (`CSI … u`).
     Unsized,
+    /// Up or Down: may put a history line on it, which the owner didn't type.
+    Recall,
 }
 
 fn owned(unit: Unit<'_>) -> Owned {
@@ -316,7 +325,8 @@ fn owned(unit: Unit<'_>) -> Owned {
         Unit::Csi(params, b'u') if !params.is_empty() && params[0].is_ascii_digit() => {
             Owned::Unsized
         }
-        Unit::Csi(..) | Unit::Ss3 | Unit::Str => Owned::Report,
+        Unit::Csi(_, b'A' | b'B') | Unit::Ss3(b'A' | b'B') => Owned::Recall,
+        Unit::Csi(..) | Unit::Ss3(_) | Unit::Str => Owned::Report,
         // Alt with a printable key: a word move or edit, or a character.
         Unit::Esc(b) if (0x20..0x7f).contains(&b) => Owned::Unsized,
         Unit::Esc(_) => Owned::Report,

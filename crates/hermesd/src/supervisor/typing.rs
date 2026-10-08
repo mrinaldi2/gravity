@@ -268,17 +268,25 @@ impl Supervisor {
 
         // The CR follows only a real composer echo of this nonce (K3).
         let deadline = Instant::now() + ECHO_WAIT;
-        let shown = loop {
+        let (shown, output) = loop {
             let newer = term.newer_than(since);
             let output: Vec<u8> = newer.frames.iter().flat_map(|f| f.data.clone()).collect();
             if composer::echoed(&output, &needle) {
-                break true;
+                break (true, output);
             }
             if Instant::now() >= deadline {
-                break false;
+                break (false, output);
             }
             tokio::time::sleep(ECHO_POLL).await;
         };
+        // And the paste must start the line: text before it would go too,
+        // so the CR waits for the owner, who sees both (CE M1).
+        if shown && !composer::first_on_line(&output, &needle) {
+            c.state().draft.holds(text.chars().count(), Instant::now());
+            return Err(TypeError::Failed(
+                "couldn't type it: there was text on its input line".to_string(),
+            ));
+        }
         // A dialog on its way, or open: no CR may answer it (K4 a).
         let modal = c.pending() || c.state().modal_open;
         if !shown || modal {
