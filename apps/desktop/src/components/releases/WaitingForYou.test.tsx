@@ -77,8 +77,10 @@ describe("Waiting for you (UX-048)", () => {
     expect(within(section).getByRole("heading").textContent).toBe("▲ Waiting for you · 3");
     const rows = within(section).getAllByRole("listitem");
     expect(rows[0]?.textContent).toContain("Test 0.17.5 and rule on it");
-    expect(rows[1]?.textContent).toContain("Run a command on mac");
-    expect(rows[1]?.textContent).toContain("DevOps · on H-244 · 25m");
+    // UX-049 §1: the Run card's title, then where and how long; no reason.
+    expect(rows[1]?.textContent).toContain("DevOps asks you to run a command on mac");
+    expect(rows[1]?.textContent).toContain("on H-244 · 25m");
+    expect(rows[1]?.textContent).not.toContain("Run the full test");
     expect(rows[2]?.textContent).toContain("Decide: Ship the banner?");
     expect(rows[2]?.textContent).toContain("Desktop Dev · on H-241 · 2h");
   });
@@ -115,9 +117,22 @@ describe("Waiting for you (UX-048)", () => {
 
 describe("the Now: line (UX-048 §3)", () => {
   const name = botName;
-  it("names the owner's part first", () => {
-    const r = release({ status: "assembling", owner_blockers: [blocker({})] });
-    expect(nowLine(r, name)).toBe("Now: waiting for you, run a command on mac (H-244).");
+  it("names the owner's part first, in UX-049's words", () => {
+    const line = (b: OwnerBlocker): string | null =>
+      nowLine(release({ status: "assembling", owner_blockers: [b] }), name);
+    expect(line(blocker({}))).toBe("Now: waiting for you to run a command on mac (H-244).");
+    expect(line(blocker({ kind: "decision", title: "Ship it?" }))).toBe(
+      "Now: waiting for you to decide “Ship it?”.",
+    );
+    expect(line(blocker({ kind: "question", bot: "dd", item_id: "H-241" }))).toBe(
+      "Now: waiting for you to answer Desktop Dev (H-241).",
+    );
+    expect(line(blocker({ kind: "permission", bot: "dd", title: "Bash" }))).toBe(
+      "Now: waiting for you to review Desktop Dev's request to run Bash.",
+    );
+    expect(line(blocker({ kind: "ruling", title: "0.17.5", bot: null }))).toBe(
+      "Now: waiting for you to test 0.17.5 and rule on it.",
+    );
   });
 
   it("names who else it waits on", () => {

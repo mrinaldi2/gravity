@@ -28,7 +28,8 @@ export function blockerWords(b: OwnerBlocker, botName: BotName): { glyph: string
     case "ruling":
       return { glyph: "◐", what: `Test ${b.title} and rule on it` };
     case "run":
-      return { glyph: "▶", what: `Run a command on ${b.computer ?? "a computer"}` };
+      // UX-049 §1: the Run card's own title; the reason stays on the card.
+      return { glyph: "▶", what: `${bot} asks you to run a command on ${computerOf(b)}` };
     case "decision":
       return { glyph: "◆", what: `Decide: ${b.title}` };
     case "question":
@@ -54,17 +55,34 @@ export function blockerAction(b: OwnerBlocker): string {
   }
 }
 
-/** Who to name in a row's meta: the bot, except where the row already does. */
+/** Who to name in a row's meta: the bot, where the row's title doesn't. */
 export function blockerBy(b: OwnerBlocker, botName: BotName): string | null {
-  if (b.kind === "ruling" || b.kind === "question" || b.kind === "permission" || !b.bot) {
+  if (b.kind !== "decision" || !b.bot) {
     return null;
   }
   return botName(b.bot) ?? "a bot";
 }
 
-/** What the first blocker asks, inside a sentence. */
-function lowerFirst(text: string): string {
-  return text.charAt(0).toLowerCase() + text.slice(1);
+function computerOf(b: OwnerBlocker): string {
+  return b.computer ?? "a computer";
+}
+
+/** What the owner is waited on for, after "waiting for you" (UX-049 §2). */
+function waitedFor(b: OwnerBlocker, botName: BotName): string {
+  const bot = (b.bot && botName(b.bot)) ?? "a bot";
+  const on = b.item_id ? ` (${b.item_id})` : "";
+  switch (b.kind) {
+    case "run":
+      return `to run a command on ${computerOf(b)}${on}`;
+    case "decision":
+      return `to decide “${b.title}”`;
+    case "question":
+      return `to answer ${bot}${on}`;
+    case "permission":
+      return `to review ${bot}'s request to run ${b.title}`;
+    default:
+      return `to test ${b.title} and rule on it`;
+  }
 }
 
 function andCount(items: readonly string[], named: number): string {
@@ -89,8 +107,7 @@ export function nowLine(release: Release, botName: BotName): string | null {
   }
   const first = release.owner_blockers[0];
   if (first) {
-    const on = first.item_id ? ` (${first.item_id})` : "";
-    return `Now: waiting for you, ${lowerFirst(blockerWords(first, botName).what)}${on}.`;
+    return `Now: waiting for you ${waitedFor(first, botName)}.`;
   }
   return (
     inProgress(release) ??

@@ -80,6 +80,22 @@ export function release(over: Partial<Release> = {}): Release {
     events: [],
     can_rule: true,
     rule_on: null,
+    // A current service's view (H-247): the ruling waits on the owner while
+    // the package is awaiting them. Pass `owner_blockers` to say otherwise.
+    owner_blockers:
+      (over.status ?? "awaiting_owner") === "awaiting_owner"
+        ? [
+            {
+              kind: "ruling",
+              id: "dec-rel-1",
+              title: over.display_version ?? "0.16.0",
+              item_id: null,
+              bot: null,
+              computer: null,
+              created_at: "2026-10-05T09:00:00Z",
+            },
+          ]
+        : [],
     ...over,
   };
 }
