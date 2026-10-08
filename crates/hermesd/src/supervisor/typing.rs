@@ -282,7 +282,9 @@ impl Supervisor {
         // A dialog on its way, or open: no CR may answer it (K4 a).
         let modal = c.pending() || c.state().modal_open;
         if !shown || modal {
-            c.state().draft_dirty = true;
+            // What was pasted may sit in its composer: unsure, so it lapses
+            // once idle rather than blocking for good (H-236).
+            c.state().draft.unsure(Instant::now());
             let why = if modal {
                 "a dialog opened"
             } else {

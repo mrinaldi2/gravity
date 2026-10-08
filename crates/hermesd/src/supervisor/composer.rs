@@ -18,9 +18,12 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
+#[path = "composer_draft.rs"]
+mod draft;
 #[path = "composer_text.rs"]
 mod text;
 
+pub use draft::Draft;
 pub use text::{digest, echo_needle, echoed, nonce, sanitize, typed_body, typed_text};
 use text::{Scan, Unit};
 
@@ -92,8 +95,8 @@ pub struct Composer {
     pub vim: bool,
     /// A dialog is mounted, from the pre-modal hooks (bot-forgeable).
     pub modal_open: bool,
-    /// The owner has an unsent line in the terminal.
-    pub draft_dirty: bool,
+    /// The owner's unsent line in the terminal, as counted (H-236).
+    pub draft: Draft,
     /// Inside a bracketed paste in the input the daemon forwarded.
     in_paste: bool,
     /// The bot is in a turn (an allowed prompt, until `Stop`).
@@ -134,42 +137,43 @@ impl Composer {
 
     /// Bytes the owner typed through a verified terminal (D5, M3), at `now`.
     /// A CR outside a paste, with no dialog open, after real input since the
-    /// last submit, mints a keyed token (K1).
+    /// last submit, mints a keyed token (K1). Only editing input counts
+    /// toward the draft (H-236): terminal reports and moves don't.
     pub fn on_owner_input(&mut self, data: &[u8], modal_pending: bool, now: Instant) {
         let mut units = Vec::new();
         for &byte in data {
-            self.input.feed(byte, |unit| {
-                units.push(match unit {
-                    Unit::Byte(b) => Owned::Byte(b),
-                    Unit::Csi(params, fin) => {
-                        Owned::Csi(params == &b"200"[..], params == &b"201"[..], fin)
-                    }
-                    Unit::Ss3 => Owned::Arrow,
-                    Unit::Esc(_) => Owned::Other,
-                })
-            });
+            self.input.feed(byte, |unit| units.push(owned(unit)));
+        }
+        if self.input.end_open_string() {
+            units.push(Owned::Unsized);
         }
         for unit in units {
+            let draft = &mut self.draft;
             match unit {
-                Owned::Csi(true, _, b'~') => {
-                    self.in_paste = true;
-                    self.draft_dirty = true;
+                Owned::PasteStart => self.in_paste = true,
+                Owned::PasteEnd => self.in_paste = false,
+                Owned::Report => {}
+                Owned::Unsized => draft.unsure(now),
+                // Pasted text is the line's: every byte of it counts.
+                Owned::Byte(b) if self.in_paste => {
+                    if !is_continuation(b) {
+                        draft.typed(now);
+                    }
                 }
-                Owned::Csi(_, true, b'~') => self.in_paste = false,
-                // Arrows recall history or move; they type nothing (K1 c).
-                Owned::Csi(_, _, b'A'..=b'D') | Owned::Arrow => {}
-                Owned::Csi(..) | Owned::Other => self.draft_dirty = true,
-                Owned::Byte(b'\r') if self.in_paste => {}
                 Owned::Byte(b'\r') => {
-                    if self.draft_dirty && !self.modal_open && !modal_pending {
+                    if draft.dirty() && !self.modal_open && !modal_pending {
                         let expires = (!self.working).then(|| now + KEYED_TTL);
                         self.push(TokenKind::Keyed, expires);
                     }
-                    self.draft_dirty = false;
+                    self.draft.clear();
                 }
-                // Ctrl-C clears the composer.
-                Owned::Byte(0x03) if !self.in_paste => self.draft_dirty = false,
-                Owned::Byte(_) => self.draft_dirty = true,
+                // Ctrl-C and Ctrl-U clear the line.
+                Owned::Byte(0x03 | 0x15) => draft.clear(),
+                Owned::Byte(0x7f | 0x08) => draft.erased(now),
+                // Tab completes, Ctrl-W and Ctrl-Y cut and paste words.
+                Owned::Byte(0x09 | 0x17 | 0x19) => draft.unsure(now),
+                Owned::Byte(b) if b >= 0x20 && !is_continuation(b) => draft.typed(now),
+                Owned::Byte(_) => {}
             }
         }
     }
@@ -247,7 +251,7 @@ impl Composer {
         };
         if verdict != Verdict::Blocked {
             self.working = true;
-            self.draft_dirty = false;
+            self.draft.clear();
         }
         verdict
     }
@@ -266,14 +270,21 @@ impl Composer {
 
     /// The allowlist (R2.2): `None` when typing is safe. The session state
     /// (Ready, or Working when `while_working`) is the caller's half.
-    pub fn unsafe_to_type(&self, modal_pending: bool) -> Option<Unsafe> {
+    pub fn unsafe_to_type(&mut self, modal_pending: bool) -> Option<Unsafe> {
+        self.unsafe_to_type_at(modal_pending, Instant::now())
+    }
+
+    /// [`Self::unsafe_to_type`] at `now`: an unsure draft with nothing
+    /// counted lapses once idle (H-236).
+    pub fn unsafe_to_type_at(&mut self, modal_pending: bool, now: Instant) -> Option<Unsafe> {
+        self.draft.expire(now);
         if self.vim {
             Some(Unsafe::Vim)
         } else if self.modal_open || modal_pending {
             Some(Unsafe::ModalOpen)
         } else if !self.paste_mode {
             Some(Unsafe::PasteModeOff)
-        } else if self.draft_dirty {
+        } else if self.draft.dirty() {
             Some(Unsafe::OwnerTyping)
         } else if self.awaiting.is_some() {
             Some(Unsafe::Busy)
@@ -283,12 +294,38 @@ impl Composer {
     }
 }
 
+/// What one unit of the owner's input does to the line (H-236).
 enum Owned {
     Byte(u8),
-    /// A CSI: opens a paste, closes one, its final byte.
-    Csi(bool, bool, u8),
-    Arrow,
-    Other,
+    PasteStart,
+    PasteEnd,
+    /// Changes nothing on the line: a terminal report or query reply
+    /// (focus, cursor position, device attributes, colours, mouse), a key
+    /// that moves (arrows, Home, End, PageUp) or a function key.
+    Report,
+    /// Edits the line by an amount the daemon can't count: an Alt-key, a
+    /// key in the kitty protocol (`CSI … u`).
+    Unsized,
+}
+
+fn owned(unit: Unit<'_>) -> Owned {
+    match unit {
+        Unit::Byte(b) => Owned::Byte(b),
+        Unit::Csi(b"200", b'~') => Owned::PasteStart,
+        Unit::Csi(b"201", b'~') => Owned::PasteEnd,
+        Unit::Csi(params, b'u') if !params.is_empty() && params[0].is_ascii_digit() => {
+            Owned::Unsized
+        }
+        Unit::Csi(..) | Unit::Ss3 | Unit::Str => Owned::Report,
+        // Alt with a printable key: a word move or edit, or a character.
+        Unit::Esc(b) if (0x20..0x7f).contains(&b) => Owned::Unsized,
+        Unit::Esc(_) => Owned::Report,
+    }
+}
+
+/// A UTF-8 continuation byte: part of a character already counted.
+fn is_continuation(byte: u8) -> bool {
+    (0x80..0xc0).contains(&byte)
 }
 
 fn is_paste_mode(params: &[u8]) -> bool {
@@ -297,6 +334,9 @@ fn is_paste_mode(params: &[u8]) -> bool {
         .is_some_and(|p| p.split(|&b| b == b';').any(|n| n == b"2004"))
 }
 
+#[cfg(test)]
+#[path = "composer_draft_tests.rs"]
+mod draft_tests;
 #[cfg(test)]
 #[path = "composer_tests.rs"]
 mod tests;

@@ -29,6 +29,10 @@ enum ScanState {
     Esc,
     Csi,
     Ss3,
+    /// Inside an OSC, DCS, APC, PM or SOS string, until BEL or `ESC \`.
+    Str,
+    /// An ESC inside such a string: `\` ends it.
+    StrEsc,
 }
 
 /// One unit the scanner yields.
@@ -41,9 +45,23 @@ pub(super) enum Unit<'a> {
     Ss3,
     /// Any other escape (`ESC x`).
     Esc(u8),
+    /// A whole OSC, DCS, APC, PM or SOS string: a terminal's reply to a
+    /// query (colours, version), never a key (H-236).
+    Str,
 }
 
 impl Scan {
+    /// Ends a string still open after a whole write and says so. A terminal
+    /// sends its replies whole, so an open one was a key: Alt with `]`, `P`,
+    /// `_`, `^` or `X` starts the same way, and what follows is typing.
+    pub(super) fn end_open_string(&mut self) -> bool {
+        let open = matches!(self.state, ScanState::Str | ScanState::StrEsc);
+        if open {
+            self.state = ScanState::Ground;
+        }
+        open
+    }
+
     pub(super) fn feed(&mut self, byte: u8, mut out: impl FnMut(Unit<'_>)) {
         match self.state {
             ScanState::Ground if byte == 0x1b => self.state = ScanState::Esc,
@@ -56,9 +74,21 @@ impl Scan {
                         self.state = ScanState::Csi;
                     }
                     b'O' => self.state = ScanState::Ss3,
+                    b']' | b'P' | b'_' | b'^' | b'X' => self.state = ScanState::Str,
                     _ => out(Unit::Esc(byte)),
                 }
             }
+            ScanState::Str if byte == 0x07 => {
+                self.state = ScanState::Ground;
+                out(Unit::Str);
+            }
+            ScanState::Str if byte == 0x1b => self.state = ScanState::StrEsc,
+            ScanState::Str => {}
+            ScanState::StrEsc if byte == b'\\' => {
+                self.state = ScanState::Ground;
+                out(Unit::Str);
+            }
+            ScanState::StrEsc => self.state = ScanState::Str,
             ScanState::Csi if (0x40..=0x7e).contains(&byte) => {
                 self.state = ScanState::Ground;
                 out(Unit::Csi(&self.params, byte));
