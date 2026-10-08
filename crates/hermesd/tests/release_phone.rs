@@ -1,10 +1,18 @@
 //! Installing an iOS package on a paired phone (H-229, UX-043): the
 //! desktop's Install box facts, Send to phone to one device's connections,
-//! the device's waiting offer, and the build site that doesn't answer.
+//! the device's waiting offer, and the build site that doesn't answer. The
+//! links are the daemon's own, derived from the file it serves, never the
+//! ones a bot wrote on the build row (CE review of H-229, M1); only the app
+//! or a paired device sends one (M2).
 
 mod common;
 
-use common::releases::releases_on;
+use std::io::ErrorKind;
+use std::net::TcpListener;
+use std::path::PathBuf;
+
+use bus::PermissionExtra;
+use common::releases::{releases_on, Releases};
 use common::WsClient;
 use hermesd::board::release::model::ReleaseStatus;
 use serde_json::{json, Value};
@@ -19,10 +27,27 @@ fn set_status(d: &common::TestDaemon, id: &str, status: ReleaseStatus) {
         .unwrap();
 }
 
-#[tokio::test]
-async fn send_to_phone_reaches_only_that_device_and_waits_there() {
-    let d = common::spawn_daemon().await;
+/// A release with an iPhone build DevOps published into the served folder:
+/// its id, the served folder and the build's sha256.
+async fn published() -> (Releases, String, PathBuf, String) {
+    let d = common::spawn_daemon_with(|cfg| {
+        cfg.releases.dir = Some(cfg.home.join("releases"));
+        cfg.releases.base_url = Some(SITE.into());
+        cfg.releases.source_roots = vec![cfg.home.join("builds").display().to_string()];
+    })
+    .await;
+    let home = d.app.cfg.home.clone();
     let mut r = releases_on(d, 1).await;
+    let builds = home.join("builds");
+    std::fs::create_dir_all(&builds).unwrap();
+    let ipa = builds.join("TheHermes.ipa");
+    std::fs::write(&ipa, "ipa bytes").unwrap();
+    r.pair
+        .d
+        .app
+        .db
+        .set_bot_permission_extras(&r.pair.ids[1], &[PermissionExtra::Publish])
+        .unwrap();
     let item = r.items[0].clone();
     let created = r.bots[1]
         .call(
@@ -31,16 +56,30 @@ async fn send_to_phone_reaches_only_that_device_and_waits_there() {
         )
         .await;
     let id = created["release"]["id"].as_str().unwrap().to_string();
-    let install_url =
-        format!("itms-services://?action=download-manifest&url={SITE}/{id}/ios/manifest.plist");
-    r.bots[1]
+    let done = r.bots[1]
         .call(
-            "release_attach_build",
-            json!({"release_id": id, "platform": "ios", "version": "12",
-                   "artifact": "/builds/TheHermes.ipa", "sha256": "b".repeat(64),
-                   "url": format!("{SITE}/{id}/ios/TheHermes.ipa"), "install_url": install_url}),
+            "release_publish",
+            json!({"release_id": id, "file": ipa.display().to_string(),
+                   "version": "12", "bundle_id": "com.example.hermes"}),
         )
         .await;
+    let sha = done["published"]["sha256"].as_str().unwrap().to_string();
+    let served = std::fs::canonicalize(home.join("releases").join(&id).join("ios")).unwrap();
+    (r, id, served, sha)
+}
+
+/// The page and install links this daemon derives for the release.
+fn ours(id: &str) -> (String, String) {
+    (
+        format!("{SITE}/{id}/ios/index.html"),
+        format!("itms-services://?action=download-manifest&url={SITE}/{id}/ios/manifest.plist"),
+    )
+}
+
+#[tokio::test]
+async fn send_to_phone_reaches_only_that_device_and_waits_there() {
+    let (r, id, _, _) = published().await;
+    let (page_url, install_url) = ours(&id);
     let d = &r.pair.d;
     let mut owner = WsClient::connect(d).await;
     let info =
@@ -60,8 +99,8 @@ async fn send_to_phone_reaches_only_that_device_and_waits_there() {
     assert_eq!(install["for_testing"], true, "{got}");
     assert_eq!(install["version"], "0.6.1");
     assert_eq!(install["build"], "12");
-    assert_eq!(install["page_url"], format!("{SITE}/{id}/ios/index.html"));
-    assert_eq!(install["install_url"], install_url.as_str());
+    assert_eq!(install["page_url"], page_url.as_str(), "{got}");
+    assert_eq!(install["install_url"], install_url.as_str(), "{got}");
     assert_eq!(
         install["site"]["serving"],
         Value::Null,
@@ -94,12 +133,20 @@ async fn send_to_phone_reaches_only_that_device_and_waits_there() {
     assert_eq!(device["name"], "iPhone 16", "{listed}");
     assert_eq!(device["connected"], true, "{listed}");
 
+    // The owner token a bot can read doesn't send it (M2).
+    let mut forger = WsClient::connect_owner_token(d).await;
+    let forged = forger.request(send(&device_id)).await;
+    assert_eq!(forged["code"], "forbidden", "{forged}");
+    let waiting = phone.request(json!({"type": "install_offers"})).await;
+    assert_eq!(waiting["offers"], json!([]), "nothing sent: {waiting}");
+
     let sent = owner.request(send(&device_id)).await;
     assert_eq!(sent["type"], "install_offer", "{sent}");
     let offer = &sent["offer"];
     assert_eq!(offer["title"], "The Hermes 0.6.1 (12) is ready to install");
     assert_eq!(offer["body"], "Ready to test. Tap to install.");
     assert_eq!(offer["install_url"], install_url.as_str());
+    assert_eq!(offer["page_url"], page_url.as_str());
     assert_eq!(offer["delivered"], true);
     assert_eq!(offer["device_name"], "iPhone 16");
 
@@ -140,6 +187,104 @@ async fn send_to_phone_reaches_only_that_device_and_waits_there() {
     set_status(d, &id, ReleaseStatus::Rejected);
     let refused = owner.request(send(&device_id)).await;
     assert_eq!(refused["code"], "conflict", "{refused}");
+}
+
+/// A build row is written by a bot: its `url` and `install_url` are never
+/// shown, sent, written into our page or probed. A row whose file isn't the
+/// one served as built gets no link at all.
+#[tokio::test]
+async fn a_build_row_never_chooses_the_link() {
+    let (mut r, id, served, sha) = published().await;
+    let (page_url, install_url) = ours(&id);
+    // The foreign host: anything that connects here was probed.
+    let foreign = TcpListener::bind("127.0.0.1:0").unwrap();
+    foreign.set_nonblocking(true).unwrap();
+    let evil = format!("https://{}", foreign.local_addr().unwrap());
+    let attach = |artifact: &str, sha: &str| {
+        json!({"release_id": id, "platform": "ios", "version": "12",
+               "artifact": artifact, "sha256": sha,
+               "url": format!("{evil}/x/index.html"),
+               "install_url": format!("itms-services://?action=download-manifest&url={evil}/m.plist")})
+    };
+    let ipa = served.join("TheHermes.ipa").display().to_string();
+    let page = served.join("index.html");
+    let mut owner = WsClient::connect(&r.pair.d).await;
+    let paired = owner
+        .request(json!({"type": "create_device", "name": "iPhone 16",
+                        "capabilities": ["read", "control"]}))
+        .await;
+    let device_id = paired["device"]["id"].as_str().unwrap().to_string();
+    let info = json!({"type": "release_install", "release_id": id, "check_site": true});
+    let send = json!({"type": "release_send_to_device", "release_id": id, "device_id": device_id});
+    let not_probed = |foreign: &TcpListener| {
+        let accepted = foreign.accept();
+        assert!(
+            accepted
+                .as_ref()
+                .is_err_and(|e| e.kind() == ErrorKind::WouldBlock),
+            "the foreign host was probed: {accepted:?}"
+        );
+    };
+
+    // The served file, as built, under foreign links: ours are used at all
+    // three points (the answer and the probe, the page, the offer).
+    std::fs::remove_file(&page).unwrap();
+    r.bots[1]
+        .call("release_attach_build", attach(&ipa, &sha))
+        .await;
+    set_status(&r.pair.d, &id, ReleaseStatus::AwaitingOwner);
+    let got = owner.request(info.clone()).await;
+    assert_eq!(got["install"]["page_url"], page_url.as_str(), "{got}");
+    assert_eq!(got["install"]["install_url"], install_url.as_str(), "{got}");
+    assert!(!got.to_string().contains(&evil), "{got}");
+    not_probed(&foreign);
+    let written = std::fs::read_to_string(&page).unwrap();
+    assert!(!written.contains(&evil), "{written}");
+    assert!(
+        written.contains(&install_url.replace('&', "&amp;")),
+        "{written}"
+    );
+    let sent = owner.request(send.clone()).await;
+    assert_eq!(sent["offer"]["install_url"], install_url.as_str(), "{sent}");
+    assert_eq!(sent["offer"]["page_url"], page_url.as_str(), "{sent}");
+
+    // A file this daemon doesn't serve, and the served file under another
+    // sha: no install info, nothing sent, no page written, nothing probed.
+    let outside = r.pair.d.app.cfg.home.join("builds/TheHermes.ipa");
+    for (artifact, sha) in [
+        (outside.display().to_string(), sha.clone()),
+        (ipa.clone(), "b".repeat(64)),
+    ] {
+        std::fs::remove_file(&page).ok();
+        set_status(&r.pair.d, &id, ReleaseStatus::Built);
+        r.bots[1]
+            .call("release_attach_build", attach(&artifact, &sha))
+            .await;
+        set_status(&r.pair.d, &id, ReleaseStatus::AwaitingOwner);
+        let got = owner.request(info.clone()).await;
+        let install = &got["install"];
+        assert_eq!(install["installable"], true, "{artifact}: {got}");
+        assert_eq!(install["page_url"], Value::Null, "{artifact}: {got}");
+        assert_eq!(install["install_url"], Value::Null, "{artifact}: {got}");
+        assert_eq!(install["site"], Value::Null, "not probed: {got}");
+        not_probed(&foreign);
+        assert!(!page.exists(), "{artifact}: a page was written");
+        let refused = owner.request(send.clone()).await;
+        assert_eq!(refused["code"], "conflict", "{artifact}: {refused}");
+        let waiting = waiting_offer(&r, &device_id);
+        assert!(!waiting.contains(&evil), "{waiting}");
+    }
+}
+
+/// The device's waiting offer as stored.
+fn waiting_offer(r: &Releases, device_id: &str) -> String {
+    r.pair
+        .d
+        .app
+        .db
+        .get_meta(&format!("install_offer:{device_id}"))
+        .unwrap()
+        .unwrap_or_default()
 }
 
 /// Waits until the daemon has seen the phone's connection close.

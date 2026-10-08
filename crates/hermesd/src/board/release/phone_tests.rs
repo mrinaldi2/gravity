@@ -1,24 +1,91 @@
 //! The install page, its url, and what a device's notification says (H-229).
 
+use std::fs;
+use std::path::{Path, PathBuf};
+
 use bus::contract::home::{InstallDevice, ReleaseInstall};
 
-use super::{installable, offer, page_html, page_url};
-use crate::board::release::model::ReleaseStatus;
+use super::{installable, links, offer, page_html, serve};
+use crate::board::release::model::{ReleaseBuild, ReleaseStatus};
+use crate::config::Config;
+
+const BASE: &str = "https://mac.tail.ts.net/releases";
+
+/// A config serving `<tmp>/served` at BASE, with `r1/ios/TheHermes.ipa`
+/// and its manifest published there; returns the build's path and sha.
+fn served(tmp: &Path) -> (Config, PathBuf, String) {
+    let mut cfg = Config {
+        home: tmp.to_path_buf(),
+        ..Config::default()
+    };
+    cfg.releases.dir = Some(tmp.join("served"));
+    cfg.releases.base_url = Some(format!("{BASE}/"));
+    let dir = tmp.join("served/r1/ios");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("TheHermes.ipa"), "ipa bytes").unwrap();
+    fs::write(dir.join("manifest.plist"), "plist").unwrap();
+    let path = fs::canonicalize(dir.join("TheHermes.ipa")).unwrap();
+    let sha = serve::sha256_file(&path).unwrap();
+    (cfg, path, sha)
+}
+
+/// A build row as a bot might write it: foreign links on any artifact.
+fn row(artifact: &Path, sha256: &str) -> ReleaseBuild {
+    ReleaseBuild {
+        platform: "ios".into(),
+        version: "12".into(),
+        artifact: artifact.display().to_string(),
+        url: Some("https://evil.example/r1/ios/TheHermes.ipa".into()),
+        install_url: Some(
+            "itms-services://?action=download-manifest&url=https://evil.example/m.plist".into(),
+        ),
+        sha256: sha256.into(),
+        built_at: chrono::Utc::now(),
+        source_commit: None,
+    }
+}
 
 #[test]
-fn the_page_sits_beside_the_build() {
+fn links_come_from_the_served_file_never_the_row() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (cfg, path, sha) = served(tmp.path());
+    let got = links(&cfg, "r1", &row(&path, &sha)).expect("a served build");
+    assert_eq!(got.page, format!("{BASE}/r1/ios/index.html"));
     assert_eq!(
-        page_url("https://mac.tail.ts.net/releases/r1/ios/TheHermes.ipa").as_deref(),
-        Some("https://mac.tail.ts.net/releases/r1/ios/index.html")
+        got.install,
+        format!("itms-services://?action=download-manifest&url={BASE}/r1/ios/manifest.plist")
     );
-    assert_eq!(
-        page_url("https://mac.tail.ts.net/ios/0.6.1-12/index.html").as_deref(),
-        Some("https://mac.tail.ts.net/ios/0.6.1-12/index.html"),
-        "a page url is kept as it is"
-    );
-    assert_eq!(page_url("http://mac.tail.ts.net/r1/ios/a.ipa"), None);
-    assert_eq!(page_url("/builds/TheHermes.ipa"), None);
-    assert_eq!(page_url("https://"), None);
+    assert_eq!(got.dir, path.parent().unwrap());
+}
+
+#[test]
+fn a_build_not_served_as_built_has_no_links() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (cfg, path, sha) = served(tmp.path());
+    // The sha on the row isn't the served file's.
+    assert_eq!(links(&cfg, "r1", &row(&path, &"b".repeat(64))), None);
+    // A file outside the served root.
+    let outside = tmp.path().join("TheHermes.ipa");
+    fs::write(&outside, "ipa bytes").unwrap();
+    assert_eq!(links(&cfg, "r1", &row(&outside, &sha)), None);
+    // Another release's folder.
+    assert_eq!(links(&cfg, "r2", &row(&path, &sha)), None);
+    // A path that climbs out and back in, or goes through a symlink.
+    let climbing = path.parent().unwrap().join("../ios/TheHermes.ipa");
+    assert_eq!(links(&cfg, "r1", &row(&climbing, &sha)), None);
+    #[cfg(unix)]
+    {
+        let link = path.parent().unwrap().join("Linked.ipa");
+        std::os::unix::fs::symlink(&path, &link).unwrap();
+        assert_eq!(links(&cfg, "r1", &row(&link, &sha)), None);
+    }
+    // No base_url configured.
+    let mut unset = cfg.clone();
+    unset.releases.base_url = None;
+    assert_eq!(links(&unset, "r1", &row(&path, &sha)), None);
+    // No manifest beside it.
+    fs::remove_file(path.parent().unwrap().join("manifest.plist")).unwrap();
+    assert_eq!(links(&cfg, "r1", &row(&path, &sha)), None);
 }
 
 #[test]

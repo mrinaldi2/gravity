@@ -293,14 +293,17 @@ impl Write for Hashing {
 }
 
 /// A path component that can't climb out, hide, or need URL encoding.
-fn safe_name(what: &str, name: &str) -> anyhow::Result<()> {
-    let ok = !name.is_empty()
+pub fn is_safe_name(name: &str) -> bool {
+    !name.is_empty()
         && name.len() <= 128
         && !name.starts_with('.')
         && name
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '+'));
-    if ok {
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '+'))
+}
+
+fn safe_name(what: &str, name: &str) -> anyhow::Result<()> {
+    if is_safe_name(name) {
         Ok(())
     } else {
         Err(invalid(format!(

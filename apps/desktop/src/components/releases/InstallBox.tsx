@@ -168,6 +168,25 @@ function SendStatus(props: {
   );
 }
 
+/** The QR code of the install page; dimmed, and with no caption inviting a
+ * scan, while the build site isn't serving (UX-046). */
+function QrTile(props: {
+  readonly page: string;
+  readonly label: string;
+  readonly ready: boolean;
+}): ReactElement {
+  return (
+    <div className={props.ready ? "install-qr" : "install-qr off"}>
+      <InstallQr text={props.page} label={props.label} />
+      {props.ready ? (
+        <p className="release-hint">
+          Scan with the iPhone camera, then tap Install. The phone must be on your tailnet.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Send, Copy and the QR code, disabled while the build site is off. */
 function InstallActions(props: {
   readonly release: Release;
@@ -201,14 +220,7 @@ function InstallActions(props: {
         <CopyLink page={page} disabled={!ready} />
       </div>
       {sent ? <SendStatus sent={sent} onRetry={send} /> : null}
-      {page ? (
-        <div className={ready ? "install-qr" : "install-qr off"}>
-          <InstallQr text={page} label={qrLabel} />
-          <p className="release-hint">
-            Scan with the iPhone camera, then tap Install. The phone must be on your tailnet.
-          </p>
-        </div>
-      ) : null}
+      {page ? <QrTile page={page} label={qrLabel} ready={ready} /> : null}
     </>
   );
 }

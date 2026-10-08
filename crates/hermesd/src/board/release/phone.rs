@@ -7,6 +7,7 @@
 //! replaces it, so a phone that wasn't connected sees it when it next opens.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -17,6 +18,7 @@ use super::model::{Release, ReleaseBuild, ReleaseStatus};
 use super::{confine, machines, serve};
 use crate::app::AppState;
 use crate::attention::timestamp;
+use crate::config::Config;
 use crate::decisions::{conflict, invalid, not_found};
 
 /// The install page's file name, next to the build it installs.
@@ -42,20 +44,6 @@ pub fn ios_build(release: &Release) -> Option<&ReleaseBuild> {
     release.builds.iter().find(|b| b.platform == "ios")
 }
 
-/// The HTTPS install page for a build's url: the url itself when it is a
-/// page, otherwise `index.html` in the same folder. None when it isn't HTTPS.
-pub fn page_url(build_url: &str) -> Option<String> {
-    let url = build_url.trim();
-    if !url.starts_with("https://") {
-        return None;
-    }
-    if url.ends_with(".html") {
-        return Some(url.to_string());
-    }
-    let (dir, _) = url.rsplit_once('/')?;
-    (dir.len() > "https://".len()).then(|| format!("{dir}/{PAGE}"))
-}
-
 /// The install page: one Install button for the itms-services link.
 pub fn page_html(title: &str, version: &str, install_url: &str) -> String {
     let [title, version, link] = [title, version, install_url].map(serve::xml_escape);
@@ -76,19 +64,59 @@ p{{color:#555}}</style></head>
     )
 }
 
+/// A build's install links, derived by this daemon (CE review of H-229,
+/// M1): never the `url` or `install_url` on the build row, which a bot
+/// writes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Links {
+    /// The HTTPS install page, under the configured `base_url`.
+    pub page: String,
+    /// The `itms-services` link to the manifest beside the build.
+    pub install: String,
+    /// The served folder the build, its manifest and its page sit in.
+    pub dir: PathBuf,
+}
+
+/// The links for a build this daemon serves, or `None`. The build's file
+/// must be a regular file at `<served root>/<release>/ios/<name>`, with no
+/// symlink on the way, beside its `manifest.plist`, and still hash to the
+/// build's sha256; the URLs are then `base_url` plus that folder. Anything
+/// else gets no install link: nothing is shown, sent, written or probed.
+pub fn links(cfg: &Config, release_id: &str, build: &ReleaseBuild) -> Option<Links> {
+    let path = serve::served_file(cfg, &build.artifact)?;
+    let root = std::fs::canonicalize(serve::served_root(cfg)).ok()?;
+    if std::fs::canonicalize(&path).ok()? != path {
+        return None;
+    }
+    let parts: Vec<&str> = path
+        .strip_prefix(&root)
+        .ok()?
+        .iter()
+        .map(|p| p.to_str())
+        .collect::<Option<_>>()?;
+    let [release, "ios", name] = parts[..] else {
+        return None;
+    };
+    if release != release_id || !serve::is_safe_name(release) || !serve::is_safe_name(name) {
+        return None;
+    }
+    let dir = path.parent()?.to_path_buf();
+    let manifest = std::fs::symlink_metadata(dir.join("manifest.plist")).ok()?;
+    if !manifest.is_file() || !serve::matches(&path, &build.sha256) {
+        return None;
+    }
+    let folder = format!("{}/{release}/ios", serve::base_url(cfg).ok()?);
+    Some(Links {
+        page: format!("{folder}/{PAGE}"),
+        install: format!("itms-services://?action=download-manifest&url={folder}/manifest.plist"),
+        dir,
+    })
+}
+
 /// Writes the install page beside a build this daemon serves, if it isn't
 /// there yet: builds published before H-229 have none.
-pub fn ensure_page(app: &AppState, build: &ReleaseBuild) -> anyhow::Result<()> {
-    let (Some(path), Some(install_url)) = (
-        serve::served_file(&app.cfg, &build.artifact),
-        build.install_url.as_deref(),
-    ) else {
-        return Ok(());
-    };
-    let Some(dir) = path.parent() else {
-        return Ok(());
-    };
-    if dir.join(PAGE).exists() {
+pub fn ensure_page(app: &AppState, version: &str, links: &Links) -> anyhow::Result<()> {
+    if links.dir.join(PAGE).exists() {
         return Ok(());
     }
     let dirs = confine::prepare(&app.cfg)?;
@@ -98,7 +126,11 @@ pub fn ensure_page(app: &AppState, build: &ReleaseBuild) -> anyhow::Result<()> {
         .ios_title
         .as_deref()
         .unwrap_or("The Hermes");
-    serve::write_page(&dirs, dir, &page_html(title, &build.version, install_url))
+    serve::write_page(
+        &dirs,
+        &links.dir,
+        &page_html(title, version, &links.install),
+    )
 }
 
 /// Asks the build site for the install page over HTTPS, with curl as the
@@ -148,21 +180,15 @@ const NULL_DEVICE: &str = "/dev/null";
 /// What the package offers for install, as of now (the site unchecked).
 pub fn info(app: &AppState, release: &Release) -> anyhow::Result<ReleaseInstall> {
     let build = ios_build(release);
-    if let Some(b) = build {
+    let links = build.and_then(|b| links(&app.cfg, &release.id, b));
+    if let (Some(b), Some(l)) = (build, &links) {
         // A missing page only costs the Copy link its target; say so in the
         // log rather than fail the whole answer.
-        if let Err(e) = ensure_page(app, b) {
+        if let Err(e) = ensure_page(app, &b.version, l) {
             tracing::warn!(release = %release.id, "couldn't write the install page: {e:#}");
         }
     }
-    let install_url = build
-        .and_then(|b| b.install_url.clone())
-        .unwrap_or_default();
-    let page = build
-        .and_then(|b| b.url.as_deref())
-        .and_then(page_url)
-        .filter(|_| !install_url.is_empty())
-        .unwrap_or_default();
+    let (page, install_url) = links.map(|l| (l.page, l.install)).unwrap_or_default();
     let computer = app.db.board_read(machines::this_computer)?;
     Ok(ReleaseInstall {
         release_id: release.id.clone(),
@@ -284,7 +310,8 @@ pub fn send(app: &AppState, release: &Release, device_id: &str) -> anyhow::Resul
     }
     if info.install_url.is_empty() {
         return Err(conflict(format!(
-            "release {} has no iPhone build to install yet; DevOps publishes it after building",
+            "release {} has no iPhone build this computer serves as built; DevOps publishes it \
+             after building",
             release.name
         )));
     }

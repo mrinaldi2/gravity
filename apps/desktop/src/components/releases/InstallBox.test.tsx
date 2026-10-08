@@ -110,6 +110,7 @@ describe("InstallBox", () => {
       .flatMap((row, y) => row.map((dark, x) => (dark ? `M${x} ${y}h1v1h-1z` : "")))
       .join("");
     expect(qr.querySelector("path")?.getAttribute("d")).toBe(path);
+    expect(within(box).getByText(/^Scan with the iPhone camera/)).toBeInTheDocument();
     expect(client.requests[0]?.body).toEqual({
       type: "release_install",
       release_id: "rel-1",
@@ -182,6 +183,8 @@ describe("InstallBox", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Send to iPhone 16" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Copy the install link" })).toBeDisabled();
+    // The dimmed QR doesn't invite a scan (UX-046).
+    expect(screen.queryByText(/^Scan with the iPhone camera/)).toBeNull();
   });
 
   it("has no buttons before the iPhone build is published", () => {

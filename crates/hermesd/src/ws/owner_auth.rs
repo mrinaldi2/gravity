@@ -32,6 +32,8 @@ const OWNER_DRIVEN: &[&str] = &[
     "clear_bot_session",
     "restart_bot",
     "set_project_repo",
+    // A one-tap install offer on the owner's phone (CE review of H-229, M2).
+    "release_send_to_device",
 ];
 
 /// Requests that mint or remove the credentials the rule above trusts: a
@@ -81,6 +83,7 @@ mod tests {
         assert!(owner_driven("browser_input"));
         assert!(owner_driven("update_bot"));
         assert!(owner_driven("delete_project"));
+        assert!(owner_driven("release_send_to_device"));
         for kind in CREDENTIALS {
             assert!(owner_driven(kind), "{kind}");
         }
