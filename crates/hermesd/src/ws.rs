@@ -52,6 +52,7 @@ mod probe;
 mod profiles;
 mod project_repo;
 mod quiesce;
+mod release_install;
 mod releases;
 mod routines;
 mod runtime;

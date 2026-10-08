@@ -80,6 +80,12 @@ async fn devops_publishes_and_installs_check_the_served_file() {
     );
     let manifest = std::fs::read_to_string(served.join("manifest.plist")).unwrap();
     assert!(manifest.contains("com.example.hermes"), "{manifest}");
+    // The install page Copy link and the QR code open (H-229).
+    let page = std::fs::read_to_string(served.join("index.html")).unwrap();
+    assert!(
+        page.contains("itms-services://?action=download-manifest&amp;url="),
+        "{page}"
+    );
 
     // Publishing again is a no-op; a different file under the same name is refused.
     let again = ops.call("release_publish", publish.clone()).await;

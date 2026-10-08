@@ -209,6 +209,17 @@ export type ReleaseRequestBody =
       readonly machines?: readonly string[];
       /** This computer's name for its testers. */
       readonly machine_name?: string;
+    }
+  | {
+      readonly type: "release_install";
+      readonly release_id: string;
+      /** Also ask the build site whether the install page answers. */
+      readonly check_site?: boolean;
+    }
+  | {
+      readonly type: "release_send_to_device";
+      readonly release_id: string;
+      readonly device_id: string;
     };
 
 /** The computers a package must pass on before it is submitted (H-115). */
@@ -228,7 +239,68 @@ export interface ReleaseMachines {
   readonly testers: readonly { readonly bot_id: string; readonly machine: string }[];
 }
 
+// Installing an iOS package on a paired iPhone or iPad (H-229, UX-043), as
+// `hermes.home.v1` ReleaseInstall and InstallOffer in proto3 JSON with the
+// proto field names: a field at its default (false, "", none) is left out.
+
+/** A paired device the install link can go to. */
+export interface InstallDevice {
+  readonly device_id: string;
+  readonly name?: string;
+  readonly last_seen_at?: string;
+  /** Holds a live connection to this computer now. */
+  readonly connected?: boolean;
+  /** "0.6.1 (12)" as the device last reported it; absent = unknown. */
+  readonly app_version?: string;
+}
+
+/** Whether the build site answered for the install page. */
+interface SiteCheck {
+  readonly serving?: boolean;
+  readonly problem?: string;
+  readonly checked_at?: string;
+}
+
+/** What an iOS package offers for install on a phone. */
+export interface ReleaseInstall {
+  readonly release_id: string;
+  readonly project_id?: string;
+  readonly version?: string;
+  /** The iOS build's version, e.g. "12". */
+  readonly build?: string;
+  readonly state?: string;
+  readonly installable?: boolean;
+  /** Awaiting the owner: installed to test it. */
+  readonly for_testing?: boolean;
+  /** The HTTPS install page (…/index.html); absent = not published. */
+  readonly page_url?: string;
+  /** The itms-services link a phone opens. */
+  readonly install_url?: string;
+  /** Absent when the site wasn't checked. */
+  readonly site?: SiteCheck;
+  /** The computer whose build site serves it. */
+  readonly computer?: string;
+  readonly can_start_site?: boolean;
+  readonly devices?: readonly InstallDevice[];
+  readonly app_title?: string;
+  readonly approved_at?: string;
+}
+
+/** The install link as sent to one device. */
+export interface InstallOffer {
+  readonly release_id: string;
+  readonly device_id: string;
+  readonly device_name?: string;
+  readonly install_url?: string;
+  readonly title?: string;
+  readonly body?: string;
+  /** The device was connected when it was sent. */
+  readonly delivered?: boolean;
+}
+
 export type ReleaseReply =
   | { readonly type: "releases"; readonly releases: readonly Release[] }
   | { readonly type: "release"; readonly release: Release }
-  | { readonly type: "release_machines"; readonly machines: ReleaseMachines };
+  | { readonly type: "release_machines"; readonly machines: ReleaseMachines }
+  | { readonly type: "release_install"; readonly install: ReleaseInstall }
+  | { readonly type: "install_offer"; readonly offer: InstallOffer };

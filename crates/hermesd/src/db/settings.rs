@@ -25,6 +25,12 @@ impl Db {
         )?;
         Ok(())
     }
+
+    pub fn delete_meta(&self, key: &str) -> anyhow::Result<()> {
+        self.lock()
+            .execute("DELETE FROM meta WHERE key = ?1", [key])?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

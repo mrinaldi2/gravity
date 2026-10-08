@@ -11,8 +11,8 @@
     "apps/desktop/src-tauri/Cargo.lock": "aff9a094408c272c1b6d45ef6f4596f0f37aafa182216c298d51ebbfa2f7812c",
     "apps/desktop/src-tauri/Cargo.toml": "aa56d9c4b25c706c0864279c2568338877bc268c6c55de807f6a45d939117157",
     "apps/desktop/src-tauri/tauri.conf.json": "42a37afce7d4cfe76176dc68581f2e3f82a0d29dbdf1ecfddabf14e1805b6b0a",
-    "apps/desktop/package.json": "5ebdc770f28e1a93c1037eabad5dc6b625ecc4ba90b18824437874ce791ea6a3",
-    "apps/desktop/pnpm-lock.yaml": "fcc8b17d5228db54ab5f16def81e603100d855d0634cdbfbf7b9f21a1872cef1",
+    "apps/desktop/package.json": "d2d5ddaf7a3009217917bca0e82a55935d12dbf9282f0c460dd667dd2f7787cf",
+    "apps/desktop/pnpm-lock.yaml": "d69d5d8452a548eb61481d44aa0e31adcfe4c35853b456fc85722bab287027d2",
     "apps/desktop/vite.config.ts": "029db7146e224ff4381cb2fb69d8a72c3c803ddfd56d8af2bf3ca5ab6d093fd9",
     "apps/marketing/package.json": "eb06e030ffa6b5a299377e0c772d4691d6f03740a76269a0ddb3629c1a9472ae",
     "apps/marketing/pnpm-lock.yaml": "8bac14609a15069e41ebb8c00a9a53075dc1c66cd6fd351fc39dd7b1b1d4e759",
@@ -61,7 +61,7 @@
   },
   "outputs": {
     "third-party/DAEMON_NOTICES.txt": "5af38698b5edbc10050803ea1f2645682cd990ddf0ef622a97d3e34b377ce997",
-    "third-party/DESKTOP_NOTICES.txt": "82eb28cd81191334703e34713180cd25c30bfd38227de964aba78421fce5c47d",
+    "third-party/DESKTOP_NOTICES.txt": "1b90ef87630fdbeaedda9f7bfc7015950c343e956225cf05bcdf5d73fe142f7c",
     "apps/marketing/public/THIRD_PARTY_NOTICES.txt": "fe0e343d06cefa62f499f856b77f463d6ef41f7a42f2be4d9726895fc39657a8"
   },
   "packages": [
@@ -2636,6 +2636,22 @@
         {
           "path": "license",
           "sha256": "ca4662cb5d1b738fbe5350c0d5485ba11773b4b7208974082ae6e129a52d631d"
+        }
+      ]
+    },
+    {
+      "ecosystem": "JavaScript",
+      "name": "uqr",
+      "version": "0.1.2",
+      "license": "MIT",
+      "components": {
+        "desktop": "runtime dependency closure"
+      },
+      "source": "https://registry.npmjs.org/uqr/-/uqr-0.1.2.tgz",
+      "notices": [
+        {
+          "path": "LICENSE",
+          "sha256": "b39d50e24727f341a0ebdb2ab040c57efaf4076a8ad5b1d0c8c45beb975b4571"
         }
       ]
     },

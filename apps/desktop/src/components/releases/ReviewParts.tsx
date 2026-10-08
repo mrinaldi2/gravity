@@ -31,6 +31,8 @@ export function ReviewTabs(props: {
   readonly onLeaveOut: (itemId: string) => void;
   readonly onInclude: (itemId: string) => void;
   readonly onPause: () => void;
+  /** The Install box, shown again on the Rollout tab (UX-043 §1). */
+  readonly install?: ReactElement | null;
 }): ReactElement {
   const { release, titles } = props;
   const rolling = ROLLING.has(release.status);
@@ -74,6 +76,7 @@ export function ReviewTabs(props: {
         {tab === "rollout" ? (
           <div className="release-rollout">
             <Rollout release={release} />
+            {props.install ?? null}
             {pausable ? (
               <button type="button" className="btn btn-small" onClick={props.onPause}>
                 Pause rollout

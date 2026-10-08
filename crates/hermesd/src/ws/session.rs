@@ -108,6 +108,12 @@ async fn serve(
     let push_tx = out_tx.clone();
     let mut push_rx = app.events.subscribe_push();
     let push_app = app.clone();
+    // Send to phone tells whether the device is connected (H-229), and its
+    // install offers go to its own connections only.
+    let _presence = device_id
+        .as_deref()
+        .map(|id| crate::board::release::phone::Presence::enter(&app, id));
+    let push_device = device_id.clone();
     let mut push_task = AbortOnDrop(tokio::spawn(async move {
         loop {
             let push = match push_rx.recv().await {
@@ -124,6 +130,11 @@ async fn serve(
             };
             if (!terminal_cards && is_terminal_card(&push)) || !owner.sees(&push) {
                 continue;
+            }
+            if let crate::events::Push::InstallOffer { device_id: to, .. } = &push {
+                if push_device.as_deref() != Some(to.as_str()) {
+                    continue;
+                }
             }
             // `BotUpdated` carries a database row, whose `state` and
             // `unread_count` are placeholders the supervisor normally overlays.

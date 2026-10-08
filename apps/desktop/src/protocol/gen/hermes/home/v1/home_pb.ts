@@ -21,7 +21,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file hermes/home/v1/home.proto.
  */
 export const file_hermes_home_v1_home: GenFile = /*@__PURE__*/
-  fileDesc("ChloZXJtZXMvaG9tZS92MS9ob21lLnByb3RvEg5oZXJtZXMuaG9tZS52MSIuChdQcm9qZWN0c092ZXJ2aWV3UmVxdWVzdBITCgtwcm9qZWN0X2lkcxgBIAMoCSIqChRBdHRlbnRpb25Sb3dzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIiUKF0F0dGVudGlvbkRpc21pc3NSZXF1ZXN0EgoKAmlkGAEgASgJIjcKEVByb2plY3RQaW5SZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSDgoGcGlubmVkGAIgASgIIhUKE093bmVyVGhyZWFkc1JlcXVlc3QibQoVT3duZXJUaHJlYWRHZXRSZXF1ZXN0Eg4KBmJvdF9pZBgBIAEoCRIXCgpiZWZvcmVfbnVtGAIgASgDSACIAQESEgoFbGltaXQYAyABKA1IAYgBAUINCgtfYmVmb3JlX251bUIICgZfbGltaXQiOwoWT3duZXJUaHJlYWRSZWFkUmVxdWVzdBIOCgZib3RfaWQYASABKAkSEQoJdXBfdG9fbnVtGAIgASgDIsEBChBQcm9qZWN0c092ZXJ2aWV3EikKBWFzX29mGAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIoCgRyb3dzGAIgAygLMhouaGVybWVzLmhvbWUudjEuUHJvamVjdFJvdxInCgdzb3VyY2VzGAMgAygLMhYuaGVybWVzLmhvbWUudjEuU291cmNlEi8KBXRvdGFsGAQgASgLMiAuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uU3VtbWFyeSLVBAoKUHJvamVjdFJvdxISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSJwoHbWVtYmVycxgDIAMoCzIWLmhlcm1lcy5ob21lLnYxLk1lbWJlchISCgpib2FyZF9ob21lGAQgASgJEjUKD2N1cnJlbnRfcmVsZWFzZRgFIAEoCzIcLmhlcm1lcy5ob21lLnYxLlJlbGVhc2VCcmllZhISCgpvcGVuX3Rhc2tzGAYgASgNEikKBWRvaW5nGAcgAygLMhouaGVybWVzLmhvbWUudjEuRG9pbmdCcmllZhIMCgRib3RzGAggASgNEhQKDGJvdHNfd29ya2luZxgJIAEoDRIzCglhdHRlbnRpb24YCiABKAsyIC5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25TdW1tYXJ5Eg8KB3BhcnRpYWwYCyABKAgSFQoNc3RhbGVfc291cmNlcxgMIAMoCRI0ChBsYXN0X2FjdGl2aXR5X2F0GA0gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZwaW5uZWQYDiABKAgSDAoEcmFuaxgPIAEoDRI0Cg5sYXRlc3Rfc3VtbWFyeRgQIAEoCzIcLmhlcm1lcy5ob21lLnYxLlN1bW1hcnlCcmllZhIOCgZsZWdhY3kYESABKAgSLAoHY29sdW1ucxgSIAMoCzIbLmhlcm1lcy5ob21lLnYxLkNvbHVtbkNvdW50EhMKC2RvaW5nX3RvdGFsGBMgASgNEhQKDGJvdHNfd2FpdGluZxgUIAEoDSJJCgtDb2x1bW5Db3VudBILCgNrZXkYASABKAkSDAoEbmFtZRgCIAEoCRIQCghjYXRlZ29yeRgDIAEoCRINCgVjb3VudBgEIAEoDSJGCgZNZW1iZXISEQoJZGFlbW9uX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSFQoNY29tcHV0ZXJfbmFtZRgDIAEoCSLUAQoGU291cmNlEhEKCWRhZW1vbl9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEisKBXN0YXRlGAMgASgOMhwuaGVybWVzLmhvbWUudjEuU291cmNlLlN0YXRlEikKBWFzX29mGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgVTdGF0ZRIVChFTVEFURV9VTlNQRUNJRklFRBAAEgYKAk9LEAESCwoHT0ZGTElORRACEgsKB1RJTUVPVVQQAxIPCgtPTERfVkVSU0lPThAEIs0BChBBdHRlbnRpb25TdW1tYXJ5Eg0KBWNvdW50GAEgASgNEg0KBXNjb3JlGAIgASgNEj0KB2J5X2tpbmQYAyADKAsyLC5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25TdW1tYXJ5LkJ5S2luZEVudHJ5Ei0KCW9sZGVzdF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAaLQoLQnlLaW5kRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgNOgI4ASKfAwoMQXR0ZW50aW9uUm93EgoKAmlkGAEgASgJEisKBGtpbmQYAiABKA4yHS5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25LaW5kEhEKCWRhZW1vbl9pZBgDIAEoCRISCgpwcm9qZWN0X2lkGAQgASgJEg0KBXRpdGxlGAUgASgJEi4KCmNyZWF0ZWRfYXQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg4KBndlaWdodBgHIAEoDRIVCgtkZWNpc2lvbl9pZBgKIAEoCUgAEhQKCnJlbGVhc2VfaWQYCyABKAlIABITCglhY3Rpb25faWQYDCABKAlIABIUCgpyZXF1ZXN0X2lkGA0gASgJSAASJQoDYm90GA4gASgLMhYuaGVybWVzLmhvbWUudjEuQm90UmVmSAASEQoHaXRlbV9pZBgPIAEoCUgAEhUKDXJlbGF5ZWRfY291bnQYFCABKA0SEAoIcHJpb3JpdHkYFSABKAkSGwoTcXVlc3Rpb25fY29tbWVudF9pZBgWIAEoCUIICgZ0YXJnZXQiZAoNQXR0ZW50aW9uUm93cxIqCgRyb3dzGAEgAygLMhwuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uUm93EicKB3NvdXJjZXMYAiADKAsyFi5oZXJtZXMuaG9tZS52MS5Tb3VyY2UiOQoGQm90UmVmEhEKCWRhZW1vbl9pZBgBIAEoCRIOCgZib3RfaWQYAiABKAkSDAoEbmFtZRgDIAEoCSLJAQoMUmVsZWFzZUJyaWVmEhIKCnJlbGVhc2VfaWQYASABKAkSDwoHdmVyc2lvbhgCIAEoCRINCgVzdGF0ZRgDIAEoCRIWCg5hd2FpdGluZ19vd25lchgEIAEoCBITCgtpdGVtc190b3RhbBgFIAEoDRISCgppdGVtc19kb25lGAYgASgNEi8KC2RlcGxveWVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBITCgtpdGVtc19yZWFkeRgIIAEoDSJcCgpEb2luZ0JyaWVmEg8KB2l0ZW1faWQYASABKAkSDQoFdGl0bGUYAiABKAkSFQoNYXNzaWduZWVfbmFtZRgDIAEoCRIXCg9hc3NpZ25lZV9ib3RfaWQYBCABKAkiWAoMU3VtbWFyeUJyaWVmEhIKCm1lZXRpbmdfaWQYASABKAkSDAoEdGV4dBgCIAEoCRImCgJhdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiPAoMT3duZXJUaHJlYWRzEiwKB3RocmVhZHMYASADKAsyGy5oZXJtZXMuaG9tZS52MS5Pd25lclRocmVhZCKZAQoLT3duZXJUaHJlYWQSIwoDYm90GAEgASgLMhYuaGVybWVzLmhvbWUudjEuQm90UmVmEhIKCnByb2plY3RfaWQYAiABKAkSKgoEbGFzdBgDIAEoCzIcLmhlcm1lcy5ob21lLnYxLk1lc3NhZ2VCcmllZhIOCgZ1bnJlYWQYBCABKA0SFQoNb3Blbl9xdWVzdGlvbhgFIAEoCCJzCgxNZXNzYWdlQnJpZWYSCwoDbnVtGAEgASgDEhIKCmZyb21fb3duZXIYAiABKAgSDAoEdGV4dBgDIAEoCRImCgJhdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDAoEYXNrcxgFIAEoCCIuChdQcm9qZWN0c092ZXJ2aWV3Q2hhbmdlZBITCgtwcm9qZWN0X2lkcxgBIAMoCSJNChJPd25lclRocmVhZFVwZGF0ZWQSIwoDYm90GAEgASgLMhYuaGVybWVzLmhvbWUudjEuQm90UmVmEhIKCnByb2plY3RfaWQYAiABKAkiLgoXUHJvamVjdEF0dGVudGlvblJlcXVlc3QSEwoLcHJvamVjdF9pZHMYASADKAkisgMKEFByb2plY3RBdHRlbnRpb24SNAoFcGFydHMYASADKAsyJS5oZXJtZXMuaG9tZS52MS5Qcm9qZWN0QXR0ZW50aW9uLlBhcnQa5wIKBFBhcnQSEgoKcHJvamVjdF9pZBgBIAEoCRIvCgVsb2NhbBgCIAEoCzIgLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvblN1bW1hcnkSKgoEcm93cxgDIAMoCzIcLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvblJvdxIUCgxib3RzX3dvcmtpbmcYBCABKA0SDwoHaXNfaG9tZRgFIAEoCBI1Cg9jdXJyZW50X3JlbGVhc2UYBiABKAsyHC5oZXJtZXMuaG9tZS52MS5SZWxlYXNlQnJpZWYSNAoObGF0ZXN0X3N1bW1hcnkYByABKAsyHC5oZXJtZXMuaG9tZS52MS5TdW1tYXJ5QnJpZWYSNAoQbGFzdF9hY3Rpdml0eV9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGcGlubmVkGAkgASgIEhQKDGJvdHNfd2FpdGluZxgKIAEoDSIuChdQcm9qZWN0QXR0ZW50aW9uQ2hhbmdlZBITCgtwcm9qZWN0X2lkcxgBIAMoCSLkAwoLSG9tZVJlcXVlc3QSRAoRcHJvamVjdHNfb3ZlcnZpZXcYASABKAsyJy5oZXJtZXMuaG9tZS52MS5Qcm9qZWN0c092ZXJ2aWV3UmVxdWVzdEgAEj4KDmF0dGVudGlvbl9yb3dzGAIgASgLMiQuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uUm93c1JlcXVlc3RIABJEChFhdHRlbnRpb25fZGlzbWlzcxgDIAEoCzInLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvbkRpc21pc3NSZXF1ZXN0SAASOAoLcHJvamVjdF9waW4YBCABKAsyIS5oZXJtZXMuaG9tZS52MS5Qcm9qZWN0UGluUmVxdWVzdEgAEjwKDW93bmVyX3RocmVhZHMYBSABKAsyIy5oZXJtZXMuaG9tZS52MS5Pd25lclRocmVhZHNSZXF1ZXN0SAASQQoQb3duZXJfdGhyZWFkX2dldBgGIAEoCzIlLmhlcm1lcy5ob21lLnYxLk93bmVyVGhyZWFkR2V0UmVxdWVzdEgAEkMKEW93bmVyX3RocmVhZF9yZWFkGAcgASgLMiYuaGVybWVzLmhvbWUudjEuT3duZXJUaHJlYWRSZWFkUmVxdWVzdEgAQgkKB3JlcXVlc3QiwAMKDEhvbWVSZXNwb25zZRI9ChFwcm9qZWN0c19vdmVydmlldxgBIAEoCzIgLmhlcm1lcy5ob21lLnYxLlByb2plY3RzT3ZlcnZpZXdIABI3Cg5hdHRlbnRpb25fcm93cxgCIAEoCzIdLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvblJvd3NIABJBChNhdHRlbnRpb25fZGlzbWlzc2VkGAMgASgLMiIuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uRGlzbWlzc2VkSAASNwoOcHJvamVjdF9waW5uZWQYBCABKAsyHS5oZXJtZXMuaG9tZS52MS5Qcm9qZWN0UGlubmVkSAASNQoNb3duZXJfdGhyZWFkcxgFIAEoCzIcLmhlcm1lcy5ob21lLnYxLk93bmVyVGhyZWFkc0gAEjcKDG93bmVyX3RocmVhZBgGIAEoCzIfLmhlcm1lcy5ob21lLnYxLk93bmVyVGhyZWFkUGFnZUgAEkAKE293bmVyX3RocmVhZF9tYXJrZWQYByABKAsyIS5oZXJtZXMuaG9tZS52MS5Pd25lclRocmVhZE1hcmtlZEgAQgoKCHJlc3BvbnNlIiAKEkF0dGVudGlvbkRpc21pc3NlZBIKCgJpZBgBIAEoCSIzCg1Qcm9qZWN0UGlubmVkEhIKCnByb2plY3RfaWQYASABKAkSDgoGcGlubmVkGAIgASgIIqQBCg9Pd25lclRocmVhZFBhZ2USIwoDYm90GAEgASgLMhYuaGVybWVzLmhvbWUudjEuQm90UmVmEhIKCnByb2plY3RfaWQYAiABKAkSLwoIbWVzc2FnZXMYAyADKAsyHS5oZXJtZXMuaG9tZS52MS5UaHJlYWRNZXNzYWdlEhUKDWxhc3RfcmVhZF9udW0YBCABKAMSEAoIaGFzX21vcmUYBSABKAgijgEKDVRocmVhZE1lc3NhZ2USCwoDbnVtGAEgASgDEgoKAmlkGAIgASgJEhIKCmZyb21fb3duZXIYAyABKAgSDAoEdGV4dBgEIAEoCRImCgJhdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDAoEYXNrcxgGIAEoCBIMCgRvcGVuGAcgASgIIkoKEU93bmVyVGhyZWFkTWFya2VkEg4KBmJvdF9pZBgBIAEoCRIVCg1sYXN0X3JlYWRfbnVtGAIgASgDEg4KBnVucmVhZBgDIAEoDSrjAQoNQXR0ZW50aW9uS2luZBIeChpBVFRFTlRJT05fS0lORF9VTlNQRUNJRklFRBAAEhQKEFJFTEVBU0VfQVdBSVRJTkcQARIQCgxPV05FUl9BQ1RJT04QAhIVChFQRVJNSVNTSU9OX1BST01QVBADEgwKCERFQ0lTSU9OEAQSEwoPUkVMQVlFRF9SVUxJTkdTEAUSCwoHUDBfSVRFTRAGEg8KC0JPVF9XQUlUSU5HEAcSDQoJT0ZGX0JPQVJEEAgSDwoLU0VSVklOR19PRkYQCRISCg5PV05FUl9RVUVTVElPThAKYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChloZXJtZXMvaG9tZS92MS9ob21lLnByb3RvEg5oZXJtZXMuaG9tZS52MSIuChdQcm9qZWN0c092ZXJ2aWV3UmVxdWVzdBITCgtwcm9qZWN0X2lkcxgBIAMoCSIqChRBdHRlbnRpb25Sb3dzUmVxdWVzdBISCgpwcm9qZWN0X2lkGAEgASgJIiUKF0F0dGVudGlvbkRpc21pc3NSZXF1ZXN0EgoKAmlkGAEgASgJIjcKEVByb2plY3RQaW5SZXF1ZXN0EhIKCnByb2plY3RfaWQYASABKAkSDgoGcGlubmVkGAIgASgIIhUKE093bmVyVGhyZWFkc1JlcXVlc3QibQoVT3duZXJUaHJlYWRHZXRSZXF1ZXN0Eg4KBmJvdF9pZBgBIAEoCRIXCgpiZWZvcmVfbnVtGAIgASgDSACIAQESEgoFbGltaXQYAyABKA1IAYgBAUINCgtfYmVmb3JlX251bUIICgZfbGltaXQiOwoWT3duZXJUaHJlYWRSZWFkUmVxdWVzdBIOCgZib3RfaWQYASABKAkSEQoJdXBfdG9fbnVtGAIgASgDIsEBChBQcm9qZWN0c092ZXJ2aWV3EikKBWFzX29mGAEgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIoCgRyb3dzGAIgAygLMhouaGVybWVzLmhvbWUudjEuUHJvamVjdFJvdxInCgdzb3VyY2VzGAMgAygLMhYuaGVybWVzLmhvbWUudjEuU291cmNlEi8KBXRvdGFsGAQgASgLMiAuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uU3VtbWFyeSLVBAoKUHJvamVjdFJvdxISCgpwcm9qZWN0X2lkGAEgASgJEgwKBG5hbWUYAiABKAkSJwoHbWVtYmVycxgDIAMoCzIWLmhlcm1lcy5ob21lLnYxLk1lbWJlchISCgpib2FyZF9ob21lGAQgASgJEjUKD2N1cnJlbnRfcmVsZWFzZRgFIAEoCzIcLmhlcm1lcy5ob21lLnYxLlJlbGVhc2VCcmllZhISCgpvcGVuX3Rhc2tzGAYgASgNEikKBWRvaW5nGAcgAygLMhouaGVybWVzLmhvbWUudjEuRG9pbmdCcmllZhIMCgRib3RzGAggASgNEhQKDGJvdHNfd29ya2luZxgJIAEoDRIzCglhdHRlbnRpb24YCiABKAsyIC5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25TdW1tYXJ5Eg8KB3BhcnRpYWwYCyABKAgSFQoNc3RhbGVfc291cmNlcxgMIAMoCRI0ChBsYXN0X2FjdGl2aXR5X2F0GA0gASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZwaW5uZWQYDiABKAgSDAoEcmFuaxgPIAEoDRI0Cg5sYXRlc3Rfc3VtbWFyeRgQIAEoCzIcLmhlcm1lcy5ob21lLnYxLlN1bW1hcnlCcmllZhIOCgZsZWdhY3kYESABKAgSLAoHY29sdW1ucxgSIAMoCzIbLmhlcm1lcy5ob21lLnYxLkNvbHVtbkNvdW50EhMKC2RvaW5nX3RvdGFsGBMgASgNEhQKDGJvdHNfd2FpdGluZxgUIAEoDSJJCgtDb2x1bW5Db3VudBILCgNrZXkYASABKAkSDAoEbmFtZRgCIAEoCRIQCghjYXRlZ29yeRgDIAEoCRINCgVjb3VudBgEIAEoDSJGCgZNZW1iZXISEQoJZGFlbW9uX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSFQoNY29tcHV0ZXJfbmFtZRgDIAEoCSLUAQoGU291cmNlEhEKCWRhZW1vbl9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEisKBXN0YXRlGAMgASgOMhwuaGVybWVzLmhvbWUudjEuU291cmNlLlN0YXRlEikKBWFzX29mGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJRCgVTdGF0ZRIVChFTVEFURV9VTlNQRUNJRklFRBAAEgYKAk9LEAESCwoHT0ZGTElORRACEgsKB1RJTUVPVVQQAxIPCgtPTERfVkVSU0lPThAEIs0BChBBdHRlbnRpb25TdW1tYXJ5Eg0KBWNvdW50GAEgASgNEg0KBXNjb3JlGAIgASgNEj0KB2J5X2tpbmQYAyADKAsyLC5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25TdW1tYXJ5LkJ5S2luZEVudHJ5Ei0KCW9sZGVzdF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAaLQoLQnlLaW5kRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgNOgI4ASKfAwoMQXR0ZW50aW9uUm93EgoKAmlkGAEgASgJEisKBGtpbmQYAiABKA4yHS5oZXJtZXMuaG9tZS52MS5BdHRlbnRpb25LaW5kEhEKCWRhZW1vbl9pZBgDIAEoCRISCgpwcm9qZWN0X2lkGAQgASgJEg0KBXRpdGxlGAUgASgJEi4KCmNyZWF0ZWRfYXQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg4KBndlaWdodBgHIAEoDRIVCgtkZWNpc2lvbl9pZBgKIAEoCUgAEhQKCnJlbGVhc2VfaWQYCyABKAlIABITCglhY3Rpb25faWQYDCABKAlIABIUCgpyZXF1ZXN0X2lkGA0gASgJSAASJQoDYm90GA4gASgLMhYuaGVybWVzLmhvbWUudjEuQm90UmVmSAASEQoHaXRlbV9pZBgPIAEoCUgAEhUKDXJlbGF5ZWRfY291bnQYFCABKA0SEAoIcHJpb3JpdHkYFSABKAkSGwoTcXVlc3Rpb25fY29tbWVudF9pZBgWIAEoCUIICgZ0YXJnZXQiZAoNQXR0ZW50aW9uUm93cxIqCgRyb3dzGAEgAygLMhwuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uUm93EicKB3NvdXJjZXMYAiADKAsyFi5oZXJtZXMuaG9tZS52MS5Tb3VyY2UiOQoGQm90UmVmEhEKCWRhZW1vbl9pZBgBIAEoCRIOCgZib3RfaWQYAiABKAkSDAoEbmFtZRgDIAEoCSLJAQoMUmVsZWFzZUJyaWVmEhIKCnJlbGVhc2VfaWQYASABKAkSDwoHdmVyc2lvbhgCIAEoCRINCgVzdGF0ZRgDIAEoCRIWCg5hd2FpdGluZ19vd25lchgEIAEoCBITCgtpdGVtc190b3RhbBgFIAEoDRISCgppdGVtc19kb25lGAYgASgNEi8KC2RlcGxveWVkX2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBITCgtpdGVtc19yZWFkeRgIIAEoDSJcCgpEb2luZ0JyaWVmEg8KB2l0ZW1faWQYASABKAkSDQoFdGl0bGUYAiABKAkSFQoNYXNzaWduZWVfbmFtZRgDIAEoCRIXCg9hc3NpZ25lZV9ib3RfaWQYBCABKAkiWAoMU3VtbWFyeUJyaWVmEhIKCm1lZXRpbmdfaWQYASABKAkSDAoEdGV4dBgCIAEoCRImCgJhdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiPAoMT3duZXJUaHJlYWRzEiwKB3RocmVhZHMYASADKAsyGy5oZXJtZXMuaG9tZS52MS5Pd25lclRocmVhZCKZAQoLT3duZXJUaHJlYWQSIwoDYm90GAEgASgLMhYuaGVybWVzLmhvbWUudjEuQm90UmVmEhIKCnByb2plY3RfaWQYAiABKAkSKgoEbGFzdBgDIAEoCzIcLmhlcm1lcy5ob21lLnYxLk1lc3NhZ2VCcmllZhIOCgZ1bnJlYWQYBCABKA0SFQoNb3Blbl9xdWVzdGlvbhgFIAEoCCJzCgxNZXNzYWdlQnJpZWYSCwoDbnVtGAEgASgDEhIKCmZyb21fb3duZXIYAiABKAgSDAoEdGV4dBgDIAEoCRImCgJhdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDAoEYXNrcxgFIAEoCCIuChdQcm9qZWN0c092ZXJ2aWV3Q2hhbmdlZBITCgtwcm9qZWN0X2lkcxgBIAMoCSJNChJPd25lclRocmVhZFVwZGF0ZWQSIwoDYm90GAEgASgLMhYuaGVybWVzLmhvbWUudjEuQm90UmVmEhIKCnByb2plY3RfaWQYAiABKAkiLgoXUHJvamVjdEF0dGVudGlvblJlcXVlc3QSEwoLcHJvamVjdF9pZHMYASADKAkisgMKEFByb2plY3RBdHRlbnRpb24SNAoFcGFydHMYASADKAsyJS5oZXJtZXMuaG9tZS52MS5Qcm9qZWN0QXR0ZW50aW9uLlBhcnQa5wIKBFBhcnQSEgoKcHJvamVjdF9pZBgBIAEoCRIvCgVsb2NhbBgCIAEoCzIgLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvblN1bW1hcnkSKgoEcm93cxgDIAMoCzIcLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvblJvdxIUCgxib3RzX3dvcmtpbmcYBCABKA0SDwoHaXNfaG9tZRgFIAEoCBI1Cg9jdXJyZW50X3JlbGVhc2UYBiABKAsyHC5oZXJtZXMuaG9tZS52MS5SZWxlYXNlQnJpZWYSNAoObGF0ZXN0X3N1bW1hcnkYByABKAsyHC5oZXJtZXMuaG9tZS52MS5TdW1tYXJ5QnJpZWYSNAoQbGFzdF9hY3Rpdml0eV9hdBgIIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGcGlubmVkGAkgASgIEhQKDGJvdHNfd2FpdGluZxgKIAEoDSIuChdQcm9qZWN0QXR0ZW50aW9uQ2hhbmdlZBITCgtwcm9qZWN0X2lkcxgBIAMoCSLkAwoLSG9tZVJlcXVlc3QSRAoRcHJvamVjdHNfb3ZlcnZpZXcYASABKAsyJy5oZXJtZXMuaG9tZS52MS5Qcm9qZWN0c092ZXJ2aWV3UmVxdWVzdEgAEj4KDmF0dGVudGlvbl9yb3dzGAIgASgLMiQuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uUm93c1JlcXVlc3RIABJEChFhdHRlbnRpb25fZGlzbWlzcxgDIAEoCzInLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvbkRpc21pc3NSZXF1ZXN0SAASOAoLcHJvamVjdF9waW4YBCABKAsyIS5oZXJtZXMuaG9tZS52MS5Qcm9qZWN0UGluUmVxdWVzdEgAEjwKDW93bmVyX3RocmVhZHMYBSABKAsyIy5oZXJtZXMuaG9tZS52MS5Pd25lclRocmVhZHNSZXF1ZXN0SAASQQoQb3duZXJfdGhyZWFkX2dldBgGIAEoCzIlLmhlcm1lcy5ob21lLnYxLk93bmVyVGhyZWFkR2V0UmVxdWVzdEgAEkMKEW93bmVyX3RocmVhZF9yZWFkGAcgASgLMiYuaGVybWVzLmhvbWUudjEuT3duZXJUaHJlYWRSZWFkUmVxdWVzdEgAQgkKB3JlcXVlc3QiwAMKDEhvbWVSZXNwb25zZRI9ChFwcm9qZWN0c19vdmVydmlldxgBIAEoCzIgLmhlcm1lcy5ob21lLnYxLlByb2plY3RzT3ZlcnZpZXdIABI3Cg5hdHRlbnRpb25fcm93cxgCIAEoCzIdLmhlcm1lcy5ob21lLnYxLkF0dGVudGlvblJvd3NIABJBChNhdHRlbnRpb25fZGlzbWlzc2VkGAMgASgLMiIuaGVybWVzLmhvbWUudjEuQXR0ZW50aW9uRGlzbWlzc2VkSAASNwoOcHJvamVjdF9waW5uZWQYBCABKAsyHS5oZXJtZXMuaG9tZS52MS5Qcm9qZWN0UGlubmVkSAASNQoNb3duZXJfdGhyZWFkcxgFIAEoCzIcLmhlcm1lcy5ob21lLnYxLk93bmVyVGhyZWFkc0gAEjcKDG93bmVyX3RocmVhZBgGIAEoCzIfLmhlcm1lcy5ob21lLnYxLk93bmVyVGhyZWFkUGFnZUgAEkAKE293bmVyX3RocmVhZF9tYXJrZWQYByABKAsyIS5oZXJtZXMuaG9tZS52MS5Pd25lclRocmVhZE1hcmtlZEgAQgoKCHJlc3BvbnNlIiAKEkF0dGVudGlvbkRpc21pc3NlZBIKCgJpZBgBIAEoCSIzCg1Qcm9qZWN0UGlubmVkEhIKCnByb2plY3RfaWQYASABKAkSDgoGcGlubmVkGAIgASgIIqQBCg9Pd25lclRocmVhZFBhZ2USIwoDYm90GAEgASgLMhYuaGVybWVzLmhvbWUudjEuQm90UmVmEhIKCnByb2plY3RfaWQYAiABKAkSLwoIbWVzc2FnZXMYAyADKAsyHS5oZXJtZXMuaG9tZS52MS5UaHJlYWRNZXNzYWdlEhUKDWxhc3RfcmVhZF9udW0YBCABKAMSEAoIaGFzX21vcmUYBSABKAgijgEKDVRocmVhZE1lc3NhZ2USCwoDbnVtGAEgASgDEgoKAmlkGAIgASgJEhIKCmZyb21fb3duZXIYAyABKAgSDAoEdGV4dBgEIAEoCRImCgJhdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDAoEYXNrcxgGIAEoCBIMCgRvcGVuGAcgASgIIkoKEU93bmVyVGhyZWFkTWFya2VkEg4KBmJvdF9pZBgBIAEoCRIVCg1sYXN0X3JlYWRfbnVtGAIgASgDEg4KBnVucmVhZBgDIAEoDSI/ChVSZWxlYXNlSW5zdGFsbFJlcXVlc3QSEgoKcmVsZWFzZV9pZBgBIAEoCRISCgpjaGVja19zaXRlGAIgASgIIv8CCg5SZWxlYXNlSW5zdGFsbBISCgpyZWxlYXNlX2lkGAEgASgJEhIKCnByb2plY3RfaWQYAiABKAkSDwoHdmVyc2lvbhgDIAEoCRINCgVidWlsZBgEIAEoCRINCgVzdGF0ZRgFIAEoCRITCgtpbnN0YWxsYWJsZRgGIAEoCBITCgtmb3JfdGVzdGluZxgHIAEoCBIQCghwYWdlX3VybBgIIAEoCRITCgtpbnN0YWxsX3VybBgJIAEoCRInCgRzaXRlGAogASgLMhkuaGVybWVzLmhvbWUudjEuU2l0ZUNoZWNrEhAKCGNvbXB1dGVyGAsgASgJEhYKDmNhbl9zdGFydF9zaXRlGAwgASgIEi4KB2RldmljZXMYDSADKAsyHS5oZXJtZXMuaG9tZS52MS5JbnN0YWxsRGV2aWNlEhEKCWFwcF90aXRsZRgOIAEoCRIvCgthcHByb3ZlZF9hdBgPIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiXQoJU2l0ZUNoZWNrEg8KB3NlcnZpbmcYASABKAgSDwoHcHJvYmxlbRgCIAEoCRIuCgpjaGVja2VkX2F0GAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCKKAQoNSW5zdGFsbERldmljZRIRCglkZXZpY2VfaWQYASABKAkSDAoEbmFtZRgCIAEoCRIwCgxsYXN0X3NlZW5fYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhEKCWNvbm5lY3RlZBgEIAEoCBITCgthcHBfdmVyc2lvbhgFIAEoCSJDChpSZWxlYXNlU2VuZFRvRGV2aWNlUmVxdWVzdBISCgpyZWxlYXNlX2lkGAEgASgJEhEKCWRldmljZV9pZBgCIAEoCSKXAgoMSW5zdGFsbE9mZmVyEhIKCnJlbGVhc2VfaWQYASABKAkSEgoKcHJvamVjdF9pZBgCIAEoCRIRCglkZXZpY2VfaWQYAyABKAkSEwoLZGV2aWNlX25hbWUYBCABKAkSDwoHdmVyc2lvbhgFIAEoCRINCgVidWlsZBgGIAEoCRITCgtpbnN0YWxsX3VybBgHIAEoCRIQCghwYWdlX3VybBgIIAEoCRINCgV0aXRsZRgJIAEoCRIMCgRib2R5GAogASgJEhMKC2Zvcl90ZXN0aW5nGAsgASgIEisKB3NlbnRfYXQYDCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEhEKCWRlbGl2ZXJlZBgNIAEoCCIWChRJbnN0YWxsT2ZmZXJzUmVxdWVzdCI9Cg1JbnN0YWxsT2ZmZXJzEiwKBm9mZmVycxgBIAMoCzIcLmhlcm1lcy5ob21lLnYxLkluc3RhbGxPZmZlciIwChpJbnN0YWxsT2ZmZXJEaXNtaXNzUmVxdWVzdBISCgpyZWxlYXNlX2lkGAEgASgJKuMBCg1BdHRlbnRpb25LaW5kEh4KGkFUVEVOVElPTl9LSU5EX1VOU1BFQ0lGSUVEEAASFAoQUkVMRUFTRV9BV0FJVElORxABEhAKDE9XTkVSX0FDVElPThACEhUKEVBFUk1JU1NJT05fUFJPTVBUEAMSDAoIREVDSVNJT04QBBITCg9SRUxBWUVEX1JVTElOR1MQBRILCgdQMF9JVEVNEAYSDwoLQk9UX1dBSVRJTkcQBxINCglPRkZfQk9BUkQQCBIPCgtTRVJWSU5HX09GRhAJEhIKDk9XTkVSX1FVRVNUSU9OEApiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * ---- requests (WS type in brackets; grant) ----
@@ -1395,6 +1395,387 @@ export type OwnerThreadMarked = Message<"hermes.home.v1.OwnerThreadMarked"> & {
  */
 export const OwnerThreadMarkedSchema: GenMessage<OwnerThreadMarked> = /*@__PURE__*/
   messageDesc(file_hermes_home_v1_home, 33);
+
+/**
+ * [release_install] what an iOS package offers for install on a phone.
+ *
+ * [release_install] read
+ *
+ * @generated from message hermes.home.v1.ReleaseInstallRequest
+ */
+export type ReleaseInstallRequest = Message<"hermes.home.v1.ReleaseInstallRequest"> & {
+  /**
+   * @generated from field: string release_id = 1;
+   */
+  releaseId: string;
+
+  /**
+   * also ask the build site whether it answers
+   *
+   * @generated from field: bool check_site = 2;
+   */
+  checkSite: boolean;
+};
+
+/**
+ * Describes the message hermes.home.v1.ReleaseInstallRequest.
+ * Use `create(ReleaseInstallRequestSchema)` to create a new message.
+ */
+export const ReleaseInstallRequestSchema: GenMessage<ReleaseInstallRequest> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 34);
+
+/**
+ * @generated from message hermes.home.v1.ReleaseInstall
+ */
+export type ReleaseInstall = Message<"hermes.home.v1.ReleaseInstall"> & {
+  /**
+   * @generated from field: string release_id = 1;
+   */
+  releaseId: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * what the owner sees, e.g. "0.6.1"
+   *
+   * @generated from field: string version = 3;
+   */
+  version: string;
+
+  /**
+   * the iOS build's version, e.g. "12"; empty = no build
+   *
+   * @generated from field: string build = 4;
+   */
+  build: string;
+
+  /**
+   * ReleaseStatus name
+   *
+   * @generated from field: string state = 5;
+   */
+  state: string;
+
+  /**
+   * the state offers install actions (UX-043 §1)
+   *
+   * @generated from field: bool installable = 6;
+   */
+  installable: boolean;
+
+  /**
+   * awaiting_owner: installed to test it
+   *
+   * @generated from field: bool for_testing = 7;
+   */
+  forTesting: boolean;
+
+  /**
+   * HTTPS install page (…/index.html); empty = not published
+   *
+   * @generated from field: string page_url = 8;
+   */
+  pageUrl: string;
+
+  /**
+   * the itms-services link; empty = not published
+   *
+   * @generated from field: string install_url = 9;
+   */
+  installUrl: string;
+
+  /**
+   * unset = not checked
+   *
+   * @generated from field: hermes.home.v1.SiteCheck site = 10;
+   */
+  site?: SiteCheck | undefined;
+
+  /**
+   * the computer whose build site serves it
+   *
+   * @generated from field: string computer = 11;
+   */
+  computer: string;
+
+  /**
+   * this computer may start the build site itself
+   *
+   * @generated from field: bool can_start_site = 12;
+   */
+  canStartSite: boolean;
+
+  /**
+   * paired and not revoked, last seen first
+   *
+   * @generated from field: repeated hermes.home.v1.InstallDevice devices = 13;
+   */
+  devices: InstallDevice[];
+
+  /**
+   * "The Hermes"
+   *
+   * @generated from field: string app_title = 14;
+   */
+  appTitle: string;
+
+  /**
+   * the owner's ruling; unset = not approved
+   *
+   * @generated from field: google.protobuf.Timestamp approved_at = 15;
+   */
+  approvedAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message hermes.home.v1.ReleaseInstall.
+ * Use `create(ReleaseInstallSchema)` to create a new message.
+ */
+export const ReleaseInstallSchema: GenMessage<ReleaseInstall> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 35);
+
+/**
+ * @generated from message hermes.home.v1.SiteCheck
+ */
+export type SiteCheck = Message<"hermes.home.v1.SiteCheck"> & {
+  /**
+   * the install page answered 2xx over HTTPS
+   *
+   * @generated from field: bool serving = 1;
+   */
+  serving: boolean;
+
+  /**
+   * why not, for the log; the copy is the client's
+   *
+   * @generated from field: string problem = 2;
+   */
+  problem: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp checked_at = 3;
+   */
+  checkedAt?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message hermes.home.v1.SiteCheck.
+ * Use `create(SiteCheckSchema)` to create a new message.
+ */
+export const SiteCheckSchema: GenMessage<SiteCheck> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 36);
+
+/**
+ * @generated from message hermes.home.v1.InstallDevice
+ */
+export type InstallDevice = Message<"hermes.home.v1.InstallDevice"> & {
+  /**
+   * @generated from field: string device_id = 1;
+   */
+  deviceId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp last_seen_at = 3;
+   */
+  lastSeenAt?: Timestamp | undefined;
+
+  /**
+   * holds a live connection to this computer now
+   *
+   * @generated from field: bool connected = 4;
+   */
+  connected: boolean;
+
+  /**
+   * "0.6.1 (12)" as it last reported (H-230); empty = unknown
+   *
+   * @generated from field: string app_version = 5;
+   */
+  appVersion: string;
+};
+
+/**
+ * Describes the message hermes.home.v1.InstallDevice.
+ * Use `create(InstallDeviceSchema)` to create a new message.
+ */
+export const InstallDeviceSchema: GenMessage<InstallDevice> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 37);
+
+/**
+ * [install_offer] answers `release_send_to_device`; also pushed, with no
+ * `req_id`, to that device's connections only.
+ *
+ * [release_send_to_device] control
+ *
+ * @generated from message hermes.home.v1.ReleaseSendToDeviceRequest
+ */
+export type ReleaseSendToDeviceRequest = Message<"hermes.home.v1.ReleaseSendToDeviceRequest"> & {
+  /**
+   * @generated from field: string release_id = 1;
+   */
+  releaseId: string;
+
+  /**
+   * @generated from field: string device_id = 2;
+   */
+  deviceId: string;
+};
+
+/**
+ * Describes the message hermes.home.v1.ReleaseSendToDeviceRequest.
+ * Use `create(ReleaseSendToDeviceRequestSchema)` to create a new message.
+ */
+export const ReleaseSendToDeviceRequestSchema: GenMessage<ReleaseSendToDeviceRequest> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 38);
+
+/**
+ * @generated from message hermes.home.v1.InstallOffer
+ */
+export type InstallOffer = Message<"hermes.home.v1.InstallOffer"> & {
+  /**
+   * @generated from field: string release_id = 1;
+   */
+  releaseId: string;
+
+  /**
+   * @generated from field: string project_id = 2;
+   */
+  projectId: string;
+
+  /**
+   * @generated from field: string device_id = 3;
+   */
+  deviceId: string;
+
+  /**
+   * @generated from field: string device_name = 4;
+   */
+  deviceName: string;
+
+  /**
+   * @generated from field: string version = 5;
+   */
+  version: string;
+
+  /**
+   * @generated from field: string build = 6;
+   */
+  build: string;
+
+  /**
+   * what a tap opens (itms-services)
+   *
+   * @generated from field: string install_url = 7;
+   */
+  installUrl: string;
+
+  /**
+   * the HTTPS page, for a device that can't open the link
+   *
+   * @generated from field: string page_url = 8;
+   */
+  pageUrl: string;
+
+  /**
+   * the notification's title
+   *
+   * @generated from field: string title = 9;
+   */
+  title: string;
+
+  /**
+   * the notification's body
+   *
+   * @generated from field: string body = 10;
+   */
+  body: string;
+
+  /**
+   * @generated from field: bool for_testing = 11;
+   */
+  forTesting: boolean;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp sent_at = 12;
+   */
+  sentAt?: Timestamp | undefined;
+
+  /**
+   * the device was connected when it was sent
+   *
+   * @generated from field: bool delivered = 13;
+   */
+  delivered: boolean;
+};
+
+/**
+ * Describes the message hermes.home.v1.InstallOffer.
+ * Use `create(InstallOfferSchema)` to create a new message.
+ */
+export const InstallOfferSchema: GenMessage<InstallOffer> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 39);
+
+/**
+ * [install_offers] this device's waiting offer, at most one: the latest
+ * sent, until it is dismissed or another replaces it.
+ *
+ * @generated from message hermes.home.v1.InstallOffersRequest
+ */
+export type InstallOffersRequest = Message<"hermes.home.v1.InstallOffersRequest"> & {
+};
+
+/**
+ * Describes the message hermes.home.v1.InstallOffersRequest.
+ * Use `create(InstallOffersRequestSchema)` to create a new message.
+ */
+export const InstallOffersRequestSchema: GenMessage<InstallOffersRequest> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 40);
+
+/**
+ * @generated from message hermes.home.v1.InstallOffers
+ */
+export type InstallOffers = Message<"hermes.home.v1.InstallOffers"> & {
+  /**
+   * @generated from field: repeated hermes.home.v1.InstallOffer offers = 1;
+   */
+  offers: InstallOffer[];
+};
+
+/**
+ * Describes the message hermes.home.v1.InstallOffers.
+ * Use `create(InstallOffersSchema)` to create a new message.
+ */
+export const InstallOffersSchema: GenMessage<InstallOffers> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 41);
+
+/**
+ * [install_offers] Not now: the banner stays hidden until the next package.
+ *
+ * [install_offer_dismiss] control
+ *
+ * @generated from message hermes.home.v1.InstallOfferDismissRequest
+ */
+export type InstallOfferDismissRequest = Message<"hermes.home.v1.InstallOfferDismissRequest"> & {
+  /**
+   * @generated from field: string release_id = 1;
+   */
+  releaseId: string;
+};
+
+/**
+ * Describes the message hermes.home.v1.InstallOfferDismissRequest.
+ * Use `create(InstallOfferDismissRequestSchema)` to create a new message.
+ */
+export const InstallOfferDismissRequestSchema: GenMessage<InstallOfferDismissRequest> = /*@__PURE__*/
+  messageDesc(file_hermes_home_v1_home, 42);
 
 /**
  * @generated from enum hermes.home.v1.AttentionKind

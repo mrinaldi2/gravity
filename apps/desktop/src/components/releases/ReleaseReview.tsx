@@ -3,7 +3,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
+import type { DaemonApi } from "../../protocol/api";
 import type { ItemVerdict, Release } from "../../protocol/releases";
+import InstallBox from "./InstallBox";
+import { useReleaseInstall } from "./useReleaseInstall";
 import { plural, releaseTitle, statusLabel } from "./labels";
 import type { BotName } from "./labels";
 import {
@@ -33,6 +36,8 @@ export interface ReleaseReviewProps {
   /** The connection may control the fleet (pause and resume a rollout). */
   readonly canControl: boolean;
   readonly now?: () => number;
+  /** Reads and sends an iOS package's install link (H-229); none, no Install box. */
+  readonly client?: DaemonApi;
 }
 
 /** The verdicts for an approval: every item ships unless left out. */
@@ -151,7 +156,10 @@ export default function ReleaseReview({
   actions,
   canControl,
   now = Date.now,
+  client,
 }: ReleaseReviewProps): ReactElement {
+  const install = useReleaseInstall(client, release);
+  const installBox = client ? <InstallBox release={release} install={install} now={now} /> : null;
   // The package's own live titles (H-137) fill what the board fetch lacks.
   const titles = new Map([
     ...boardTitles,
@@ -176,6 +184,7 @@ export default function ReleaseReview({
           <span aria-hidden="true">{status.glyph}</span> {status.word}
         </span>
       </header>
+      {installBox}
       <PackageFacts release={release} version={version} botName={botName} />
       <Banner release={release} actions={actions} canControl={canControl} />
       <ReleaseProgress release={release} botName={botName} />
@@ -195,6 +204,7 @@ export default function ReleaseReview({
           setLeftOut(next);
         }}
         onPause={() => setOpen("pause")}
+        install={installBox}
       />
       {ruling ? (
         <ReviewBar

@@ -147,6 +147,7 @@ export default function ReleasesView({
           botName={botNamer(bots)}
           actions={actions}
           canControl={canControl}
+          client={client}
         />
       ) : null}
     </div>

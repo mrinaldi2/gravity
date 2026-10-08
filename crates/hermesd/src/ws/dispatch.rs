@@ -66,6 +66,9 @@ const READ_ONLY: &[&str] = &[
     "meeting_list",
     "meeting_get",
     "metrics_get",
+    // What an iOS package offers a phone, and a device's waiting offer (H-229).
+    "release_install",
+    "install_offers",
 ];
 
 /// Requests that exercise the owner's ruling authority.
@@ -297,6 +300,10 @@ impl Conn {
             "release_unhold" => self.release_unhold(&req_id, req),
             "release_pause" => self.release_pause(&req_id, req),
             "release_resume" => self.release_resume(&req_id, req),
+            "release_install" => self.release_install(&req_id, req),
+            "release_send_to_device" => self.release_send_to_device(&req_id, req),
+            "install_offers" => self.install_offers(&req_id),
+            "install_offer_dismiss" => self.install_offer_dismiss(&req_id, req),
             "set_decision_tags" => self.set_decision_tags(&req_id, req),
             "list_tags" => self.list_tags(&req_id),
             "upsert_tag" => self.upsert_tag(&req_id, req),
