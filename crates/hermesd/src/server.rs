@@ -90,6 +90,11 @@ pub fn spawn_workers(app: &Arc<AppState>) {
     if let Err(e) = crate::board::release::ios_repair::repair_ios_deploy_targets(&app.db) {
         tracing::warn!(error = %e, "iOS deploy target repair failed");
     }
+    // `ios` and `iphone` are one target (H-231): an iOS package confirmed on
+    // `ios` while it waited for `iphone` is deployed.
+    if let Err(e) = crate::board::release::ios_repair::settle_ios_deploys(app) {
+        tracing::warn!(error = %e, "iOS deploy settle failed");
+    }
 
     // Bots are always-on: the first tick fires at once and brings every live
     // bot up, later ones bring crashes back so nothing waits on a Start.

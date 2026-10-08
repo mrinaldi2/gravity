@@ -38,6 +38,13 @@ pub fn is_ios_target(machine: &str) -> bool {
     machine.eq_ignore_ascii_case(IOS_TEST) || machine.eq_ignore_ascii_case(IOS_DEVICE)
 }
 
+/// Whether two target names are the same target: the same computer, or both
+/// the iOS target. `ios` and `iphone` are one name (H-231): the lead sets
+/// tester@ios, and packages frozen by the H-176 repair deploy to `iphone`.
+pub fn same_target(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b) || (is_ios_target(a) && is_ios_target(b))
+}
+
 /// A package whose every build is for iOS.
 pub fn is_ios_package(release: &Release) -> bool {
     !release.builds.is_empty()

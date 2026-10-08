@@ -126,11 +126,9 @@ fn roll(
     match action {
         DeployAction::Deploy => gate_open(app, &release)?,
         DeployAction::Rollback => {
-            if !release
-                .deployments
-                .iter()
-                .any(|d| d.machine == machine && d.action == DeployAction::Deploy)
-            {
+            if !release.deployments.iter().any(|d| {
+                machines::same_target(&d.machine, machine) && d.action == DeployAction::Deploy
+            }) {
                 return Err(conflict(format!(
                     "release {} was never deployed to {machine}",
                     release.name
@@ -244,7 +242,7 @@ pub fn confirm(
         let row = release
             .deployments
             .iter()
-            .find(|d| d.machine == machine && d.action == action);
+            .find(|d| machines::same_target(&d.machine, machine) && d.action == action);
         let Some(row) = row else {
             return Err(conflict(format!(
                 "release {} has no {} open on {machine}",
@@ -257,7 +255,8 @@ pub fn confirm(
                 "only the tester carrying it out or DevOps can confirm it",
             ));
         }
-        t.finish_deployment(&release.id, machine, action, result, smoke, log_artifact)?;
+        let machine = row.machine.clone();
+        t.finish_deployment(&release.id, &machine, action, result, smoke, log_artifact)?;
         let release = t.release(&release.id)?.expect("loaded");
         let (status, to, note) = match result {
             DeployResult::Failed => (
@@ -336,10 +335,12 @@ pub(super) fn post_install_checked(t: &BoardTx<'_>, release: &Release) -> anyhow
 
 /// Every machine the items' platforms require (or, with none configured,
 /// every machine it went to) has reported a good deploy.
-fn all_done(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<bool> {
+pub(super) fn all_done(t: &BoardTx<'_>, release: &Release) -> anyhow::Result<bool> {
     let ok = |m: &str| {
         release.deployments.iter().any(|d| {
-            d.machine == m && d.action == DeployAction::Deploy && d.result == Some(DeployResult::Ok)
+            machines::same_target(&d.machine, m)
+                && d.action == DeployAction::Deploy
+                && d.result == Some(DeployResult::Ok)
         })
     };
     // Every tester's computer unless the owner narrowed it, as frozen at
@@ -366,7 +367,7 @@ fn all_rolled_back(release: &Release) -> bool {
         .filter(|d| d.action == DeployAction::Deploy && d.result == Some(DeployResult::Ok))
         .all(|d| {
             release.deployments.iter().any(|r| {
-                r.machine == d.machine
+                machines::same_target(&r.machine, &d.machine)
                     && r.action == DeployAction::Rollback
                     && r.result == Some(DeployResult::RolledBack)
             })

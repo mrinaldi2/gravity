@@ -35,4 +35,22 @@ describe("eventLine", () => {
       "Hermes moved iOS 0.5.0's deploy to the iPhone: frozen before per-platform targets.",
     );
   });
+
+  it("says the daemon settled an iOS package installed on iOS", () => {
+    const line = eventLine(
+      {
+        release_id: "rel-6",
+        release_name: "iOS 0.6.1",
+        related_id: null,
+        kind: "targets_settled",
+        actor: "daemon",
+        note: "its deploy on ios counts for the iPhone (H-231)",
+        at: "2026-10-08T08:00:00Z",
+      },
+      () => undefined,
+    );
+    expect(line).toBe(
+      "Hermes marked iOS 0.6.1 deployed: its install on iOS counts for the iPhone.",
+    );
+  });
 });
