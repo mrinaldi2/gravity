@@ -58,7 +58,7 @@ mod glob;
 mod heredoc;
 mod links;
 mod mentions;
-mod path_key;
+pub(crate) mod path_key;
 pub(super) mod paths;
 mod powershell;
 mod ps_fold;

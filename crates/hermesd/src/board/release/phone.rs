@@ -18,6 +18,7 @@ use super::model::{Release, ReleaseBuild, ReleaseStatus};
 use super::{confine, machines, phone_version, serve, sha_cache};
 use crate::app::AppState;
 use crate::attention::timestamp;
+use crate::bot_permissions::guard::path_key::within;
 use crate::config::Config;
 use crate::decisions::{conflict, invalid, not_found};
 
@@ -83,16 +84,26 @@ pub struct Links {
 /// build's sha256; the URLs are then `base_url` plus that folder. Anything
 /// else gets no install link: nothing is shown, sent, written or probed.
 pub fn links(cfg: &Config, release_id: &str, build: &ReleaseBuild) -> Option<Links> {
-    let path = serve::served_file(cfg, &build.artifact)?;
-    let root = std::fs::canonicalize(serve::served_root(cfg)).ok()?;
-    if std::fs::canonicalize(&path).ok()? != path {
+    // A `.` or `..` step is refused as text: a verbatim `\\?\` path keeps
+    // them as names, so neither `canonicalize` nor `starts_with` sees the
+    // climb (H-245).
+    if build
+        .artifact
+        .split(['/', '\\'])
+        .any(|step| step == "." || step == "..")
+    {
         return None;
     }
+    let path = serve::served_file(cfg, &build.artifact)?;
+    let root = std::fs::canonicalize(serve::served_root(cfg)).ok()?;
+    if std::fs::canonicalize(&path).ok()? != path || !within(&path, &root) {
+        return None;
+    }
+    let depth = root.components().count();
     let parts: Vec<&str> = path
-        .strip_prefix(&root)
-        .ok()?
-        .iter()
-        .map(|p| p.to_str())
+        .components()
+        .skip(depth)
+        .map(|p| p.as_os_str().to_str())
         .collect::<Option<_>>()?;
     let [release, "ios", name] = parts[..] else {
         return None;

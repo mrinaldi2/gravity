@@ -131,6 +131,7 @@ mod tests {
     }
 
     /// Sets `path`'s modification time back to `to`.
+    #[cfg(unix)]
     fn set_mtime(path: &Path, to: SystemTime) {
         fs::File::options()
             .write(true)

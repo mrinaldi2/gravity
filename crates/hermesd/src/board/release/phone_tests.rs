@@ -71,7 +71,11 @@ fn a_build_not_served_as_built_has_no_links() {
     // Another release's folder.
     assert_eq!(links(&cfg, "r2", &row(&path, &sha)), None);
     // A path that climbs out and back in, or goes through a symlink.
-    let climbing = path.parent().unwrap().join("../ios/TheHermes.ipa");
+    // Spelled as text: `join` on a verbatim `\\?\` path folds the `..` away.
+    let climbing = PathBuf::from(format!(
+        "{}/../ios/TheHermes.ipa",
+        path.parent().unwrap().display()
+    ));
     assert_eq!(links(&cfg, "r1", &row(&climbing, &sha)), None);
     #[cfg(unix)]
     {
@@ -86,6 +90,30 @@ fn a_build_not_served_as_built_has_no_links() {
     // No manifest beside it.
     fs::remove_file(path.parent().unwrap().join("manifest.plist")).unwrap();
     assert_eq!(links(&cfg, "r1", &row(&path, &sha)), None);
+}
+
+#[test]
+fn a_dot_or_dot_dot_step_has_no_links_in_any_spelling() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (cfg, path, sha) = served(tmp.path());
+    let ios = path.parent().unwrap().display().to_string();
+    for sep in [std::path::MAIN_SEPARATOR, '/', '\\'] {
+        for steps in [
+            format!("{sep}..{sep}ios{sep}TheHermes.ipa"),
+            format!("{sep}.{sep}TheHermes.ipa"),
+            format!("{sep}..{sep}..{sep}r1{sep}ios{sep}TheHermes.ipa"),
+        ] {
+            let artifact = PathBuf::from(format!("{ios}{steps}"));
+            assert_eq!(
+                links(&cfg, "r1", &row(&artifact, &sha)),
+                None,
+                "{}",
+                artifact.display()
+            );
+        }
+    }
+    // The plain spelling of the same file still has its links.
+    assert!(links(&cfg, "r1", &row(&path, &sha)).is_some());
 }
 
 #[test]
