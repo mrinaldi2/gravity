@@ -43,8 +43,8 @@ fn the_releases_migration_runs_again_without_losing_packages() {
         .collect();
     assert_eq!(
         ours.len(),
-        5,
-        "releases, release events, build commits, required machines and plans"
+        6,
+        "releases, release events, build commits, required machines, plans and work cards"
     );
     for sql in ours {
         db.lock().execute_batch(sql).unwrap();
