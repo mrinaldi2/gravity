@@ -54,6 +54,7 @@ const READ_ONLY: &[&str] = &[
     "get_release",
     "dashboard_get",
     "projects_overview",
+    "item_cards_get",
     "attention_rows",
     // Reading an owner thread marks it read: the owner's own state (D6).
     "owner_threads",
@@ -273,6 +274,7 @@ impl Conn {
             "get_release" => self.get_release(&req_id, req),
             "dashboard_get" => self.dashboard_get(&req_id, req),
             "projects_overview" => self.projects_overview(&req_id, req),
+            "item_cards_get" => self.item_cards_get(&req_id, req),
             "attention_rows" => self.attention_rows(&req_id, req),
             "attention_dismiss" => self.attention_dismiss(&req_id, req),
             "project_pin" => self.project_pin(&req_id, req),
