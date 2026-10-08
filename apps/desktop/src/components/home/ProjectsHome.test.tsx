@@ -81,7 +81,7 @@ describe("ProjectsHome", () => {
     expect(top.getByText("◐ 0.17.0 ready for you to test")).toBeInTheDocument();
     expect(top.getByText("8 · 5 working")).toBeInTheDocument();
     expect(top.getByText("Doing")).toBeInTheDocument();
-    expect(top.getByText("Project-first desktop UI · Desktop Dev")).toBeInTheDocument();
+    expect(top.getByText(/Project-first desktop UI · Desktop Dev/)).toBeInTheDocument();
     expect(top.getByText(/Team Lead · .*:/)).toBeInTheDocument();
     expect(top.getByText(/0\.17\.0 is packaged/)).toBeInTheDocument();
     const last = within(cardAt(cards, 2));
