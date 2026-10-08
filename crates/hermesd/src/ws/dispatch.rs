@@ -136,6 +136,7 @@ impl Conn {
         let kind = req.get("type").and_then(Value::as_str).unwrap_or("");
         let req_id = req.get("req_id").cloned().unwrap_or(Value::Null);
         self.kind = kind.to_string();
+        let started = std::time::Instant::now();
         let served = contain::run(
             kind,
             || {
@@ -144,6 +145,7 @@ impl Conn {
             },
             || false,
         );
+        super::presence::note_handler(started.elapsed(), || kind.to_string());
         if !served {
             self.reply_err(&req_id, "internal", &contain::internal_message(kind));
         }
@@ -158,6 +160,7 @@ impl Conn {
         // Named only when it is logged: a board request's `Debug` form holds
         // its whole body. Spawned binary handlers name their own.
         let kind = || binary::decode(bytes).kind();
+        let started = std::time::Instant::now();
         let served = contain::run(
             "binary",
             || {
@@ -170,6 +173,7 @@ impl Conn {
             },
             || false,
         );
+        super::presence::note_handler(started.elapsed(), kind);
         if !served {
             let kind = kind();
             tracing::error!(kind, req_id, "the binary request that panicked");

@@ -53,6 +53,8 @@ pub mod service_audit;
 pub mod service_report;
 pub mod supervisor;
 pub mod terminal;
+#[cfg(test)]
+pub(crate) mod test_logs;
 pub mod workers;
 pub mod worktree;
 pub mod ws;

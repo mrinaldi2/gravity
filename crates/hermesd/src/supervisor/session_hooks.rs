@@ -46,8 +46,8 @@ pub(super) fn start(cfg: &Config, bot_id: &str, workspace: &Path, wanted: bool) 
 
 #[cfg(test)]
 mod tests {
-    use super::super::test_logs::Logs;
     use super::*;
+    use crate::test_logs::Logs;
 
     fn cfg(home: &Path) -> Config {
         Config {

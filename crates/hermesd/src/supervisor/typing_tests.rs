@@ -3,10 +3,10 @@
 
 use serde_json::json;
 
-use super::test_logs::Logs;
 use super::*;
 use crate::overrides::AutoCompactOverride;
 use crate::runtime::double::DoubleAdapter;
+use crate::test_logs::Logs;
 
 /// A terminal CLI that records what the daemon typed and echoes nothing.
 struct Recorder(Arc<Mutex<Vec<u8>>>);

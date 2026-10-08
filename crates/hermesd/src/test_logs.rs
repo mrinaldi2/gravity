@@ -17,7 +17,7 @@ thread_local! {
 }
 
 #[derive(Clone, Default)]
-pub(super) struct Logs(Arc<Mutex<Vec<u8>>>);
+pub(crate) struct Logs(Arc<Mutex<Vec<u8>>>);
 
 /// Writes to the capturing test's buffer; drops the line when none is.
 struct ThisThread;
@@ -37,7 +37,7 @@ impl std::io::Write for ThisThread {
 }
 
 /// Stops the capture when the test is done with it.
-pub(super) struct Capture;
+pub(crate) struct Capture;
 
 impl Drop for Capture {
     fn drop(&mut self) {
@@ -46,7 +46,7 @@ impl Drop for Capture {
 }
 
 impl Logs {
-    pub(super) fn capture(&self) -> Capture {
+    pub(crate) fn capture(&self) -> Capture {
         static INSTALL: Once = Once::new();
         INSTALL.call_once(|| {
             let subscriber = tracing_subscriber::fmt()
@@ -61,7 +61,7 @@ impl Logs {
         Capture
     }
 
-    pub(super) fn lines(&self, needle: &str) -> Vec<String> {
+    pub(crate) fn lines(&self, needle: &str) -> Vec<String> {
         String::from_utf8_lossy(&self.0.lock().unwrap())
             .lines()
             .filter(|l| l.contains(needle))

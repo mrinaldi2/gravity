@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
+use super::presence::{self, Presence, Reason, Who};
 use super::{
     board, handshake, owner_actions, writer, Conn, IDLE_TIMEOUT, MAX_FRAME_BYTES, PING_INTERVAL,
     WRITER_GRACE,
@@ -78,15 +79,20 @@ async fn serve(
     writer: &mut JoinHandle<()>,
 ) {
     // Handshake: first frame must be a valid hello.
-    let session = match tokio::time::timeout(IDLE_TIMEOUT, stream.next()).await {
-        Ok(Some(Ok(WsMessage::Text(text)))) => {
-            handshake(&app, &out_tx, &text).map(|session| (session, hello_features(&text)))
-        }
-        _ => None,
+    let hello = match tokio::time::timeout(IDLE_TIMEOUT, stream.next()).await {
+        Ok(Some(Ok(WsMessage::Text(text)))) => text,
+        Ok(Some(Ok(_))) => return presence::refused(&Who::unknown(None), Reason::BadHello),
+        Ok(_) => return presence::refused(&Who::unknown(None), Reason::Closed),
+        Err(_) => return presence::refused(&Who::unknown(None), Reason::Timeout),
     };
-    let Some(((caps, device_id, via_ticket), features)) = session else {
-        return;
+    let (caps, device_id, via_ticket) = match handshake(&app, &out_tx, &hello) {
+        Ok(session) => session,
+        Err(reason) => return presence::refused(&Who::unknown(Some(&hello)), reason),
     };
+    let features = hello_features(&hello);
+    // Logs the disconnect, and why, however this function ends (H-218).
+    let who = Who::of(&app, device_id.as_deref(), via_ticket, &hello);
+    let mut presence = Presence::connected(who, device_id.as_deref());
 
     // A client that renders permission cards and may answer them is what lets
     // the daemon hold a prompt for the app instead of the terminal.
@@ -174,22 +180,37 @@ async fn serve(
             // lost while the client waits. A push feed that stopped leaves
             // the client stale. Either way the client must reconnect.
             _ = &mut *writer => {
-                tracing::warn!("a connection's writer stopped; closing its socket");
+                tracing::warn!(
+                    conn = presence.conn(),
+                    client = %presence.who(),
+                    "a connection's writer stopped; closing its socket"
+                );
+                presence.reason = Reason::WriterStopped;
                 break;
             }
             _ = &mut push_task.0 => {
-                tracing::warn!("a connection's push feed stopped; closing its socket");
+                tracing::warn!(
+                    conn = presence.conn(),
+                    client = %presence.who(),
+                    "a connection's push feed stopped; closing its socket"
+                );
+                presence.reason = Reason::PushFeedStopped;
                 break;
             }
         };
         let frame = match next {
             Ok(Some(Ok(frame))) => frame,
-            Ok(_) => break,
+            Ok(_) => {
+                presence.reason = Reason::Closed;
+                break;
+            }
             Err(_) => {
                 tracing::info!(
+                    conn = presence.conn(),
                     idle_secs = IDLE_TIMEOUT.as_secs(),
                     "client went silent; closing its connection"
                 );
+                presence.reason = Reason::Timeout;
                 break;
             }
         };
@@ -212,7 +233,10 @@ async fn serve(
                     conn.handle_binary(&bytes);
                 }
             }
-            WsMessage::Close(_) => break,
+            WsMessage::Close(_) => {
+                presence.reason = Reason::Closed;
+                break;
+            }
             _ => {}
         }
     }
