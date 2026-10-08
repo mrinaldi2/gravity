@@ -205,6 +205,8 @@ export function HowToTest({
   );
 }
 
+const NO_PHONES: readonly InstallDevice[] = [];
+
 /**
  * Every target computer's rollout, live from the deploy records (§4A.4), so
  * the owner sees which are still on the old version. An iOS package adds
@@ -213,7 +215,7 @@ export function HowToTest({
  */
 export function Rollout({
   release,
-  phones = [],
+  phones = NO_PHONES,
   now = Date.now,
 }: {
   readonly release: Release;
