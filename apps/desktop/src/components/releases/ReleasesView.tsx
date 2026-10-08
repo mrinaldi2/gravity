@@ -12,6 +12,7 @@ import { isCurrent, releaseTitle, statusLabel } from "./labels";
 import type { BotName } from "./labels";
 import ReleaseReview from "./ReleaseReview";
 import TestedOn from "./TestedOn";
+import type { WaitingActions } from "./WaitingForYou";
 import { anyInProgress, useLiveProgress } from "./useLiveProgress";
 import { useProjectReleases, useReleaseActions } from "./useReleases";
 
@@ -22,6 +23,10 @@ export interface ReleasesViewProps {
   readonly connected: boolean;
   readonly canControl: boolean;
   readonly addToast: AddToast;
+  /** Opens a decision where the owner answers it ("Waiting for you", H-247). */
+  readonly onOpenDecision?: (decisionId: string) => void;
+  /** Opens Needs you. */
+  readonly onOpenNeedsYou?: () => void;
 }
 
 /** Item titles from the board, which a package only names by id. */
@@ -58,14 +63,21 @@ export function botNamer(bots: readonly Bot[]): BotName {
   return (id) => bots.find((b) => b.id === id)?.name;
 }
 
-export default function ReleasesView({
-  client,
-  project,
-  bots,
-  connected,
-  canControl,
-  addToast,
-}: ReleasesViewProps): ReactElement {
+/** A release's line changed on the service (H-247): read the releases again. */
+function useReleaseUpdates(client: DaemonApi, projectId: string, reload: () => Promise<void>) {
+  useEffect(
+    () =>
+      client.on("release_updated", (push) => {
+        if (push.project_id === projectId) {
+          void reload();
+        }
+      }),
+    [client, projectId, reload],
+  );
+}
+
+export default function ReleasesView(props: ReleasesViewProps): ReactElement {
+  const { client, project, bots, connected, canControl, addToast } = props;
   const { releases, loaded, replace, reload } = useProjectReleases(
     client,
     connected,
@@ -73,6 +85,15 @@ export default function ReleasesView({
     addToast,
   );
   useLiveProgress(client, project.id, connected && anyInProgress(releases), reload);
+  useReleaseUpdates(client, project.id, reload);
+  const waiting: WaitingActions = {
+    client,
+    connected,
+    bots,
+    addToast,
+    onDecision: (id) => props.onOpenDecision?.(id),
+    onNeedsYou: () => props.onOpenNeedsYou?.(),
+  };
   const actions = useReleaseActions(client, addToast, replace);
   const titles = useItemTitles(client, project.id, releases.length > 0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -97,6 +118,11 @@ export default function ReleasesView({
               : `${r.items.length} item${r.items.length === 1 ? "" : "s"}`}{" "}
             · {label.word}
           </span>
+          {r.owner_blockers?.length ? (
+            <span className="release-waits">
+              <span aria-hidden="true">▲</span> Waiting for you · {r.owner_blockers.length}
+            </span>
+          ) : null}
         </button>
       </li>
     );
@@ -148,6 +174,7 @@ export default function ReleasesView({
           actions={actions}
           canControl={canControl}
           client={client}
+          waiting={waiting}
         />
       ) : null}
     </div>

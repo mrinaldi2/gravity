@@ -51,6 +51,53 @@ export const CannotRule: Story = () => (
   <Review value={release({ can_rule: false, rule_on: "Mac" })} />
 );
 
+/** What only the owner can clear, at the top (H-247, UX-048 §2). */
+export const WaitingForYou: Story = () => (
+  <Review
+    value={release({
+      work_item_id: "H-244",
+      owner_blockers: [
+        {
+          kind: "ruling",
+          id: "d0",
+          title: "0.16.0",
+          item_id: "H-244",
+          bot: null,
+          computer: null,
+          created_at: "2026-10-05T11:00:00Z",
+        },
+        {
+          kind: "run",
+          id: "a1",
+          title: "Run the full test",
+          item_id: "H-244",
+          bot: "ops",
+          computer: "mac",
+          created_at: "2026-10-05T11:35:00Z",
+        },
+        {
+          kind: "decision",
+          id: "d1",
+          title: "Ship the new banner off by default?",
+          item_id: "H-017",
+          bot: "ops",
+          computer: null,
+          created_at: "2026-10-05T10:00:00Z",
+        },
+        {
+          kind: "question",
+          id: "c1",
+          title: "Which colour for the pill?",
+          item_id: "H-017",
+          bot: "tester",
+          computer: null,
+          created_at: "2026-10-05T11:00:00Z",
+        },
+      ],
+    })}
+  />
+);
+
 export const Held: Story = () => (
   <Review
     value={release({

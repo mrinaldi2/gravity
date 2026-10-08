@@ -24,6 +24,8 @@ import type { LeftOut } from "./ReleaseSections";
 import { Banner, ReviewBar, ReviewEvents, ReviewTabs, failingMachines } from "./ReviewParts";
 import type { BarAction } from "./ReviewParts";
 import type { ReleaseActions } from "./useReleases";
+import WaitingForYou, { NowLine } from "./WaitingForYou";
+import type { WaitingActions } from "./WaitingForYou";
 
 type Open = BarAction | "pause" | { readonly leaveOut: string } | null;
 
@@ -38,6 +40,15 @@ export interface ReleaseReviewProps {
   readonly now?: () => number;
   /** Reads and sends an iOS package's install link (H-229); none, no Install box. */
   readonly client?: DaemonApi;
+  /** Where "Waiting for you"'s buttons go (H-247); none, only the ruling row's. */
+  readonly waiting?: WaitingActions;
+}
+
+/** The release's own Approve / Hold / Reject, scrolled to and focused. */
+function focusReview(root: HTMLElement | null): void {
+  const target = root?.querySelector<HTMLElement>(".release-bar button:not([disabled])");
+  target?.scrollIntoView({ block: "nearest" });
+  target?.focus();
 }
 
 /** The verdicts for an approval: every item ships unless left out. */
@@ -157,6 +168,7 @@ export default function ReleaseReview({
   canControl,
   now = Date.now,
   client,
+  waiting,
 }: ReleaseReviewProps): ReactElement {
   const install = useReleaseInstall(client, release);
   const installBox = client ? <InstallBox release={release} install={install} now={now} /> : null;
@@ -184,9 +196,17 @@ export default function ReleaseReview({
           <span aria-hidden="true">{status.glyph}</span> {status.word}
         </span>
       </header>
+      <WaitingForYou
+        release={release}
+        botName={botName}
+        actions={waiting}
+        onReview={() => focusReview(root.current)}
+        now={now}
+      />
       {installBox}
       <PackageFacts release={release} version={version} botName={botName} />
       <Banner release={release} actions={actions} canControl={canControl} />
+      <NowLine release={release} botName={botName} onNeedsYou={waiting?.onNeedsYou} />
       <ReleaseProgress release={release} botName={botName} />
       <ReviewEvents release={release} botName={botName} />
       <PostInstall release={release} botName={botName} />

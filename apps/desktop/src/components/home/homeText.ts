@@ -54,6 +54,10 @@ export function releasePill(brief: ReleaseBrief | undefined): ReleasePill {
   if (brief === undefined || brief.version.length === 0) {
     return { text: "○ No release yet", tone: "off" };
   }
+  // Something only the owner can clear holds it up (H-247, UX-048 §2).
+  if (brief.ownerBlockerCount > 0) {
+    return { text: `◐ ${brief.version} waits for you`, tone: "you" };
+  }
   const label = statusLabel(brief.state as ReleaseStatus);
   const word = label.word.charAt(0).toLowerCase() + label.word.slice(1);
   return { text: `${label.glyph} ${brief.version} ${word}`, tone: label.tone };

@@ -176,6 +176,8 @@ function TabView({ ctx }: { readonly ctx: TabContext }): ReactElement {
           connected={connected}
           canControl={canControl}
           addToast={ctx.addToast}
+          onOpenDecision={(decisionId) => daemon.select({ kind: "control", decisionId })}
+          onOpenNeedsYou={() => daemon.select({ kind: "control" })}
         />
       );
     case "meetings":

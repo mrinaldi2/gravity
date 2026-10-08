@@ -1,0 +1,85 @@
+/* "Waiting for you" on a release (H-247, UX-048 §2): the warning-toned box
+   under the title, its rows, the "Now:" line and the list pill. */
+
+.waiting {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  background: var(--bg-raised);
+}
+
+.waiting-title {
+  margin: 0 0 6px;
+  color: var(--amber);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.waiting-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.waiting-row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.waiting-glyph {
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.waiting-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.waiting-what {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.waiting-meta {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.waiting-run {
+  grid-column: 2 / -1;
+}
+
+.waiting-more {
+  margin-top: 6px;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.waiting-more:hover,
+.waiting-more:focus-visible {
+  text-decoration: underline;
+}
+
+.release-now {
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.release-waits {
+  grid-column: 2;
+  color: var(--amber);
+  font-size: 12px;
+}

@@ -47,7 +47,6 @@ export class CardCache {
   }
 
   /** Asks for `id` unless a fresh answer or a request is already there. */
-  // fallow-ignore-next-line unused-class-member -- reached through the CardLinks context
   want(id: string): void {
     const cached = this.entries.get(id);
     const fresh = cached !== undefined && this.now() - cached.at < FRESH_MS;
