@@ -180,7 +180,7 @@ async fn no_echo_no_cr() {
     assert!(!f.written().contains('\r'), "{:?}", f.written());
     // The bot printing the prefix itself is no echo (K3).
     let msg = f.message("again");
-    f.sup.composer(&f.bot_id).state().draft_dirty = false;
+    f.sup.composer(&f.bot_id).state().draft.clear();
     let (typed, ()) = tokio::join!(
         f.sup.type_into(&f.bot_id, &msg.id, msg.num, &msg.body),
         async {
