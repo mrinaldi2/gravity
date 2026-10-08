@@ -3,7 +3,7 @@
 
 import { useId, useState } from "react";
 import type { ReactElement } from "react";
-import type { Release } from "../../protocol/releases";
+import type { InstallDevice, Release } from "../../protocol/releases";
 import { fmtTimestamp } from "../../util";
 import { eventLine, plural, statusLabel } from "./labels";
 import type { BotName } from "./labels";
@@ -33,6 +33,9 @@ export function ReviewTabs(props: {
   readonly onPause: () => void;
   /** The Install box, shown again on the Rollout tab (UX-043 §1). */
   readonly install?: ReactElement | null;
+  /** The paired devices, with what each reported it runs (H-241). */
+  readonly phones?: readonly InstallDevice[] | undefined;
+  readonly now?: () => number;
 }): ReactElement {
   const { release, titles } = props;
   const rolling = ROLLING.has(release.status);
@@ -75,7 +78,7 @@ export function ReviewTabs(props: {
         {tab === "howto" ? <HowToTest release={release} titles={titles} /> : null}
         {tab === "rollout" ? (
           <div className="release-rollout">
-            <Rollout release={release} />
+            <Rollout release={release} phones={props.phones} now={props.now} />
             {props.install ?? null}
             {pausable ? (
               <button type="button" className="btn btn-small" onClick={props.onPause}>

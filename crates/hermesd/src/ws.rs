@@ -203,6 +203,10 @@ fn handshake(
     };
     if let Some(id) = &device_id {
         let _ = app.db.touch_device(id);
+        // What the phone says it runs, for display only (H-241).
+        if let Err(e) = crate::board::release::phone_version::note(&app.db, id, &req) {
+            tracing::warn!(device = %id, "couldn't keep the device's app version: {e:#}");
+        }
     }
     let cap_strs: Vec<&str> = caps.iter().map(|c| c.as_str()).collect();
     // Per-surface contract versions (H-020 §1.4). Nothing is served by

@@ -319,6 +319,7 @@ message InstallDevice {
   google.protobuf.Timestamp last_seen_at = 3;
   bool connected = 4;                       // holds a live connection to this computer now
   string app_version = 5;                   // "0.6.1 (12)" as it last reported (H-230); empty = unknown
+  google.protobuf.Timestamp app_version_seen_at = 6;  // when it last reported it (H-241); unset = never
 }
 
 // [install_offer] answers `release_send_to_device`; also pushed, with no

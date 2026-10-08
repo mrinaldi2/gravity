@@ -6,8 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InstallDevice, Release, ReleaseInstall } from "../../protocol/releases";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { release } from "../../test/releaseFixtures";
-import { deviceLine, installLine, installStage } from "./install";
+import { deviceLine, installedLine, installLine, installStage } from "./install";
 import InstallBox from "./InstallBox";
+import { Rollout } from "./ReleaseSections";
 import { useReleaseInstall } from "./useReleaseInstall";
 
 const NOW = Date.parse("2026-10-08T12:00:00Z");
@@ -236,5 +237,28 @@ describe("install words", () => {
         NOW,
       ),
     ).toBe("Far · seen 3d ago");
+  });
+
+  it("shows what a device reported it runs on the Rollout tab (H-241)", () => {
+    const reported = {
+      ...IPHONE,
+      app_version: "0.6.1 (12)",
+      app_version_seen_at: "2026-10-08T11:58:00Z",
+    };
+    expect(installedLine(reported, NOW)).toBe("installed 0.6.1 (12) · 2m ago");
+    expect(installedLine({ ...reported, app_version_seen_at: "2026-10-08T11:59:45Z" }, NOW)).toBe(
+      "installed 0.6.1 (12) · just now",
+    );
+    expect(installedLine({ ...reported, app_version_seen_at: "2026-10-08T07:00:00Z" }, NOW)).toBe(
+      "installed 0.6.1 (12) · 5h ago",
+    );
+    expect(installedLine({ ...IPHONE, app_version: "0.6.1" }, NOW)).toBe("installed 0.6.1");
+    expect(installedLine(IPAD, NOW)).toBeNull();
+
+    render(<Rollout release={ios({ status: "deploying" })} phones={[reported, IPAD]} now={() => NOW} />);
+    const rows = screen.getByRole("status");
+    expect(within(rows).getByText("iPhone 16")).toBeTruthy();
+    expect(within(rows).getByText("installed 0.6.1 (12) · 2m ago")).toBeTruthy();
+    expect(within(rows).queryByText("iPad")).toBeNull();
   });
 });

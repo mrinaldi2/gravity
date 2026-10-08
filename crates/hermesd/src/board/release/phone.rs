@@ -15,7 +15,7 @@ use bus::contract::home::{InstallDevice, InstallOffer, ReleaseInstall, SiteCheck
 use bus::DecisionState;
 
 use super::model::{Release, ReleaseBuild, ReleaseStatus};
-use super::{confine, machines, serve};
+use super::{confine, machines, phone_version, serve, sha_cache};
 use crate::app::AppState;
 use crate::attention::timestamp;
 use crate::config::Config;
@@ -102,7 +102,7 @@ pub fn links(cfg: &Config, release_id: &str, build: &ReleaseBuild) -> Option<Lin
     }
     let dir = path.parent()?.to_path_buf();
     let manifest = std::fs::symlink_metadata(dir.join("manifest.plist")).ok()?;
-    if !manifest.is_file() || !serve::matches(&path, &build.sha256) {
+    if !manifest.is_file() || !sha_cache::SHAS.matches(&path, &build.sha256) {
         return None;
     }
     let folder = format!("{}/{release}/ios", serve::base_url(cfg).ok()?);
@@ -207,7 +207,7 @@ pub fn info(app: &AppState, release: &Release) -> anyhow::Result<ReleaseInstall>
         computer,
         // Starting `tailscale serve` is DevOps' job on this computer today.
         can_start_site: false,
-        devices: devices(app)?,
+        devices: phone_version::install_devices(app)?,
         app_title: app
             .cfg
             .releases
@@ -238,27 +238,6 @@ fn approved_at(
         .filter(|d| d.state != DecisionState::Held)
         .and_then(|d| d.ruling)
         .map(|r| r.answered_at))
-}
-
-/// The paired devices that may be sent a link, last seen first.
-fn devices(app: &AppState) -> anyhow::Result<Vec<InstallDevice>> {
-    let mut list: Vec<_> = app
-        .db
-        .list_devices()?
-        .into_iter()
-        .filter(|d| d.revoked_at.is_none())
-        .collect();
-    list.sort_by_key(|d| std::cmp::Reverse(d.last_seen_at));
-    Ok(list
-        .into_iter()
-        .map(|d| InstallDevice {
-            connected: app.live_devices.connected(&d.id),
-            last_seen_at: d.last_seen_at.map(timestamp),
-            device_id: d.id,
-            name: d.name,
-            app_version: String::new(),
-        })
-        .collect())
 }
 
 /// The offer for one device: what its notification says and opens.

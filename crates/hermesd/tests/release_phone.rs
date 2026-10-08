@@ -276,6 +276,68 @@ async fn a_build_row_never_chooses_the_link() {
     }
 }
 
+/// A paired phone's hello says what it runs (H-241): the desktop shows it,
+/// bounded and printable, and it never creates or confirms a deploy record,
+/// even when it names the very build being rolled out.
+#[tokio::test]
+async fn a_phone_reports_its_version_for_display_only() {
+    let (r, id, _, _) = published().await;
+    let d = &r.pair.d;
+    set_status(d, &id, ReleaseStatus::Deploying);
+    let release = || d.app.db.board_read(|t| t.release(&id)).unwrap().unwrap();
+    let before = release();
+    let mut owner = WsClient::connect(d).await;
+    let paired = owner
+        .request(json!({"type": "create_device", "name": "iPhone 16",
+                        "capabilities": ["read", "control"]}))
+        .await;
+    let token = paired["token"].as_str().unwrap();
+    assert_eq!(
+        reported(&mut owner, &id).await,
+        (Value::Null, Value::Null),
+        "not yet"
+    );
+
+    // The owner's own connection reports nothing for a device.
+    WsClient::connect_hello(d, &d.app.owner.mint(), json!({"app_version": "9.9.9"})).await;
+    assert_eq!(reported(&mut owner, &id).await.0, Value::Null);
+
+    let hello = |version: Value, build: Value| json!({"app_version": version, "app_build": build});
+    WsClient::connect_hello(d, token, hello(json!(" 0.6.1 "), json!("12"))).await;
+    let (version, seen) = reported(&mut owner, &id).await;
+    assert_eq!(version, "0.6.1 (12)");
+    assert!(seen.as_str().is_some_and(|s| !s.is_empty()), "{seen}");
+
+    // A hello without a usable version keeps the last report.
+    WsClient::connect_as(d, token).await;
+    let too_long = json!("9".repeat(33));
+    WsClient::connect_hello(d, token, hello(too_long, json!("13"))).await;
+    WsClient::connect_hello(d, token, hello(json!("0.7\u{202e}"), json!("13"))).await;
+    WsClient::connect_hello(d, token, hello(json!(7), json!("13"))).await;
+    assert_eq!(reported(&mut owner, &id).await.0, "0.6.1 (12)");
+    // A bad build alone is left out.
+    WsClient::connect_hello(d, token, hello(json!("0.6.2"), json!("1\n3"))).await;
+    assert_eq!(reported(&mut owner, &id).await.0, "0.6.2");
+
+    // Display only: the package, its deploy records and its events are as
+    // they were.
+    assert_eq!(release(), before);
+    assert!(before.deployments.is_empty(), "{:?}", before.deployments);
+}
+
+/// The first paired device's reported version and when it said so.
+async fn reported(owner: &mut WsClient, id: &str) -> (Value, Value) {
+    let got = owner
+        .request(json!({"type": "release_install", "release_id": id}))
+        .await;
+    let device = &got["install"]["devices"][0];
+    assert_eq!(device["name"], "iPhone 16", "{got}");
+    (
+        device["app_version"].clone(),
+        device["app_version_seen_at"].clone(),
+    )
+}
+
 /// The device's waiting offer as stored.
 fn waiting_offer(r: &Releases, device_id: &str) -> String {
     r.pair

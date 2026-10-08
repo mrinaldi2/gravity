@@ -63,7 +63,33 @@ function seen(device: InstallDevice, now: number): string {
   return hours < 24 ? `seen ${Math.round(hours)}h ago` : `seen ${Math.floor(hours / 24)}d ago`;
 }
 
-/** One device in Send's list: "iPad · seen 2h ago", or "iPhone 16 · has 0.6.1". */
+const MINUTE_MS = 60_000;
+
+/**
+ * "installed 0.6.1 (12) · 2m ago" for a device that reported what it runs
+ * (H-241, UX-043 §5), else null. The device's word, for display only.
+ */
+export function installedLine(device: InstallDevice, now: number): string | null {
+  if (!device.app_version) {
+    return null;
+  }
+  const then = device.app_version_seen_at ? Date.parse(device.app_version_seen_at) : Number.NaN;
+  if (!Number.isFinite(then)) {
+    return `installed ${device.app_version}`;
+  }
+  const minutes = Math.max(0, Math.floor((now - then) / MINUTE_MS));
+  let ago = `${Math.floor(minutes / 1440)}d ago`;
+  if (minutes < 1) {
+    ago = "just now";
+  } else if (minutes < 60) {
+    ago = `${minutes}m ago`;
+  } else if (minutes < 1440) {
+    ago = `${Math.floor(minutes / 60)}h ago`;
+  }
+  return `installed ${device.app_version} · ${ago}`;
+}
+
+/** One device in Send's list:"iPad · seen 2h ago", or "iPhone 16 · has 0.6.1". */
 export function deviceLine(device: InstallDevice, version: string, now: number): string {
   const name = device.name ?? "Device";
   if (device.app_version && version && device.app_version.startsWith(version)) {

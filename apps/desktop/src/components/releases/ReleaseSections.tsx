@@ -3,7 +3,8 @@
 
 import { useState } from "react";
 import type { ReactElement } from "react";
-import type { Release } from "../../protocol/releases";
+import type { InstallDevice, Release } from "../../protocol/releases";
+import { installedLine } from "./install";
 import type { BotName, StatusLabel } from "./labels";
 import { rolloutLabel, targetMachines, testLabel } from "./labels";
 
@@ -206,11 +207,26 @@ export function HowToTest({
 
 /**
  * Every target computer's rollout, live from the deploy records (§4A.4), so
- * the owner sees which are still on the old version.
+ * the owner sees which are still on the old version. An iOS package adds
+ * each paired device that reported what it runs (H-241): the device's word
+ * only, never a deploy record.
  */
-export function Rollout({ release }: { readonly release: Release }): ReactElement {
+export function Rollout({
+  release,
+  phones = [],
+  now = Date.now,
+}: {
+  readonly release: Release;
+  readonly phones?: readonly InstallDevice[] | undefined;
+  readonly now?: (() => number) | undefined;
+}): ReactElement {
   const machines = targetMachines(release);
-  if (machines.length === 0) {
+  const at = now();
+  const installed = phones.flatMap((d) => {
+    const line = installedLine(d, at);
+    return line === null ? [] : [{ id: d.device_id, name: d.name ?? "Device", line }];
+  });
+  if (machines.length === 0 && installed.length === 0) {
     return <p className="release-hint">DevOps hasn't started the rollout yet.</p>;
   }
   return (
@@ -219,6 +235,12 @@ export function Rollout({ release }: { readonly release: Release }): ReactElemen
         <div className="release-row" key={machine}>
           <b className="release-machine">{machine}</b>
           <Glyph label={rolloutLabel(release, machine)} />
+        </div>
+      ))}
+      {installed.map((p) => (
+        <div className="release-row" key={`device:${p.id}`}>
+          <b className="release-machine">{p.name}</b>
+          <span className="release-meta">{p.line}</span>
         </div>
       ))}
     </div>

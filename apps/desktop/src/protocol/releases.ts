@@ -252,6 +252,8 @@ export interface InstallDevice {
   readonly connected?: boolean;
   /** "0.6.1 (12)" as the device last reported it; absent = unknown. */
   readonly app_version?: string;
+  /** When the device last reported `app_version` (H-241). */
+  readonly app_version_seen_at?: string;
 }
 
 /** Whether the build site answered for the install page. */

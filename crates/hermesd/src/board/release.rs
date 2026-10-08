@@ -38,12 +38,14 @@ pub mod machines;
 pub mod model;
 pub mod package;
 pub mod phone;
+pub mod phone_version;
 pub mod plan;
 pub mod post_install;
 pub mod publish;
 pub mod quiesce_gate;
 pub mod rule;
 pub mod serve;
+pub mod sha_cache;
 #[cfg(test)]
 mod tests;
 

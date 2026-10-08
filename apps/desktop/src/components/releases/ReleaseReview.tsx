@@ -205,6 +205,8 @@ export default function ReleaseReview({
         }}
         onPause={() => setOpen("pause")}
         install={installBox}
+        phones={install.info?.devices}
+        now={now}
       />
       {ruling ? (
         <ReviewBar
