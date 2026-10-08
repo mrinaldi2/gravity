@@ -201,15 +201,17 @@ pub(super) fn info(handle: &OwnedHandle) -> std::io::Result<ByHandleFileInformat
     Ok(info)
 }
 
-/// Sets one FILE_INFO_BY_HANDLE_CLASS record on `handle`.
-pub(super) fn set_info(handle: &OwnedHandle, class: i32, record: &[u8]) -> std::io::Result<()> {
-    // SAFETY: `record` is a whole, aligned record of `class` for the call.
+/// Sets one FILE_INFO_BY_HANDLE_CLASS record on `handle`: a typed value, so
+/// it is aligned as its class needs.
+fn set_info<T>(handle: &OwnedHandle, class: i32, record: &T) -> std::io::Result<()> {
+    // SAFETY: `record` is a whole record of `class`, a live, aligned `T` of
+    // `size_of::<T>()` bytes for the call.
     let ok = unsafe {
         SetFileInformationByHandle(
             handle.as_raw_handle(),
             class,
-            record.as_ptr().cast(),
-            record.len() as u32,
+            std::ptr::from_ref(record).cast(),
+            std::mem::size_of::<T>() as u32,
         )
     };
     if ok == 0 {
@@ -228,46 +230,72 @@ pub(super) fn unsupported(error: &std::io::Error) -> bool {
 
 /// Deletes what `handle` is open on: the link itself for a reparse point.
 pub(super) fn delete(handle: &OwnedHandle) -> std::io::Result<()> {
-    let flags = (DISPOSITION_DELETE | DISPOSITION_POSIX_SEMANTICS).to_ne_bytes();
+    // FILE_DISPOSITION_INFO_EX is one ULONG; FILE_DISPOSITION_INFO one BOOLEAN.
+    let flags: u32 = DISPOSITION_DELETE | DISPOSITION_POSIX_SEMANTICS;
     match set_info(handle, FILE_DISPOSITION_INFO_EX, &flags) {
-        Err(e) if unsupported(&e) => set_info(handle, FILE_DISPOSITION_INFO, &[1]),
+        Err(e) if unsupported(&e) => set_info(handle, FILE_DISPOSITION_INFO, &1u8),
         other => other,
     }
 }
 
-/// A FILE_RENAME_INFO record: flags, the folder handle, then the name.
-pub(super) fn rename_record(flags: u32, dir: &OwnedHandle, name: &[u16]) -> Vec<u8> {
-    // Offsets of FILE_RENAME_INFO: the handle is pointer-aligned after the
-    // 4-byte flags; the name follows its 4-byte length.
-    let handle_at = std::mem::size_of::<usize>();
-    let name_at = handle_at + std::mem::size_of::<usize>() + 4;
-    let mut record = vec![0u8; name_at + (name.len() + 1) * 2];
-    record[..4].copy_from_slice(&flags.to_ne_bytes());
-    record[handle_at..handle_at + std::mem::size_of::<usize>()]
-        .copy_from_slice(&(dir.as_raw_handle() as usize).to_ne_bytes());
-    record[name_at - 4..name_at].copy_from_slice(&((name.len() * 2) as u32).to_ne_bytes());
-    for (i, unit) in name.iter().enumerate() {
-        record[name_at + i * 2..name_at + i * 2 + 2].copy_from_slice(&unit.to_ne_bytes());
+/// A FILE_RENAME_INFORMATION(_EX) record: flags, the folder handle, then
+/// the name. Built in `u64`s so the buffer is pointer-aligned, as
+/// `NtSetInformationFile` requires (a `Vec<u8>` is only byte-aligned).
+struct RenameRecord {
+    words: Vec<u64>,
+    len: usize,
+}
+
+impl RenameRecord {
+    fn new(flags: u32, dir: &OwnedHandle, name: &[u16]) -> Self {
+        // Offsets: the handle is pointer-aligned after the 4-byte flags; the
+        // name follows its 4-byte length.
+        let handle_at = std::mem::size_of::<usize>();
+        let name_at = handle_at + std::mem::size_of::<usize>() + 4;
+        let len = name_at + (name.len() + 1) * 2;
+        let mut record = Self {
+            words: vec![0u64; len.div_ceil(8)],
+            len,
+        };
+        let bytes = record.bytes_mut();
+        bytes[..4].copy_from_slice(&flags.to_ne_bytes());
+        bytes[handle_at..handle_at + std::mem::size_of::<usize>()]
+            .copy_from_slice(&(dir.as_raw_handle() as usize).to_ne_bytes());
+        bytes[name_at - 4..name_at].copy_from_slice(&((name.len() * 2) as u32).to_ne_bytes());
+        for (i, unit) in name.iter().enumerate() {
+            bytes[name_at + i * 2..name_at + i * 2 + 2].copy_from_slice(&unit.to_ne_bytes());
+        }
+        record
     }
-    record
+
+    fn bytes_mut(&mut self) -> &mut [u8] {
+        // SAFETY: the `u64`s own at least `len` initialized bytes, and any
+        // byte pattern is a valid `u8`; the view borrows `self` mutably.
+        unsafe { std::slice::from_raw_parts_mut(self.words.as_mut_ptr().cast(), self.len) }
+    }
+
+    fn as_ptr(&self) -> *const c_void {
+        self.words.as_ptr().cast()
+    }
 }
 
 /// Sets one FILE_RENAME_INFORMATION(_EX) record on `handle` through ntdll.
 /// Not `SetFileInformationByHandle`: kernelbase turns the name into a full
 /// DOS path first, and a full path with a `RootDirectory` is
 /// STATUS_INVALID_PARAMETER (os 87) for every rename.
-fn set_rename(handle: &OwnedHandle, class: i32, record: &[u8]) -> std::io::Result<()> {
+fn set_rename(handle: &OwnedHandle, class: i32, record: &RenameRecord) -> std::io::Result<()> {
     let mut status = IoStatusBlock {
         status: 0,
         information: 0,
     };
-    // SAFETY: `record` is a whole, aligned rename record for the call.
+    // SAFETY: `record` is a whole rename record of `len` bytes, live for the
+    // call and 8-byte aligned (its buffer is `u64`s), as ntdll probes it.
     let nt = unsafe {
         NtSetInformationFile(
             handle.as_raw_handle(),
             &mut status,
-            record.as_ptr().cast(),
-            record.len() as u32,
+            record.as_ptr(),
+            record.len as u32,
             class,
         )
     };
@@ -283,12 +311,14 @@ pub(super) fn rename_into(
     dir: &OwnedHandle,
     name: &[u16],
 ) -> std::io::Result<()> {
-    let ex = rename_record(RENAME_REPLACE_IF_EXISTS | RENAME_POSIX_SEMANTICS, dir, name);
+    let ex = RenameRecord::new(RENAME_REPLACE_IF_EXISTS | RENAME_POSIX_SEMANTICS, dir, name);
     match set_rename(file, FILE_RENAME_INFORMATION_EX, &ex) {
         // STATUS_INVALID_INFO_CLASS (os 87) before Windows 10 1709.
-        Err(e) if unsupported(&e) => {
-            set_rename(file, FILE_RENAME_INFORMATION, &rename_record(1, dir, name))
-        }
+        Err(e) if unsupported(&e) => set_rename(
+            file,
+            FILE_RENAME_INFORMATION,
+            &RenameRecord::new(1, dir, name),
+        ),
         other => other,
     }
 }
