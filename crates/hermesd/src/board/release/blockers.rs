@@ -201,10 +201,22 @@ fn questions(
         let Some(item) = q.item_id.clone().filter(|i| cards.contains(i)) else {
             continue;
         };
+        // The question as asked: the comment's own first line, not the
+        // thread's "<bot> asks on <card>: …" title.
+        let comment = app.db.question_comment(&q.id)?;
+        let asked = match &comment {
+            Some(id) => app
+                .db
+                .board_read(|t| t.item_comments(&item))?
+                .into_iter()
+                .find(|c| &c.id == id)
+                .map(|c| first_line(&c.body)),
+            None => None,
+        };
         out.push(Blocker {
             kind: "question",
-            id: app.db.question_comment(&q.id)?.unwrap_or(q.id),
-            title: first_line(&q.title),
+            id: comment.unwrap_or(q.id),
+            title: asked.unwrap_or_else(|| first_line(&q.title)),
             item_id: Some(item),
             bot: Some(q.bot_id),
             computer: None,
