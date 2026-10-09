@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::check_tree;
 use crate::config::Config;
 use crate::prs::check_checkout;
 use crate::prs::check_model::CheckResult;
@@ -33,7 +34,8 @@ pub const LOG: &str = "check.log";
 /// What the runner runs, written by the daemon before it starts it.
 const SPEC: &str = "job.json";
 
-/// The longest a check may run before it is stopped as an `error`.
+/// The longest a check may run by default (`checks.timeout_secs`) before
+/// its tree is stopped and it is an `error`.
 pub const DEADLINE: Duration = Duration::from_secs(6 * 3600);
 
 /// The variables a check keeps from the daemon's environment: where its
@@ -143,25 +145,34 @@ async fn run_inner(cfg: &Config, job: &str, spec: Spec) -> anyhow::Result<Outcom
                 .iter()
                 .filter_map(|k| Some((k, std::env::var_os(k)?))),
         )
-        .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .kill_on_drop(true);
-    let status = match runner.spawn() {
-        Ok(mut child) => tokio::time::timeout(DEADLINE, child.wait()).await,
+    check_tree::isolate(&mut runner);
+    let mut child = match runner.spawn() {
+        Ok(child) => child,
         Err(error) => {
             let _ = check_checkout::remove(&dir);
             anyhow::bail!("the runner didn't start: {error}");
         }
     };
-    if let Err(error) = check_checkout::remove(&dir) {
-        tracing::warn!(job, %error, "check checkout not removed");
+    // H-291: the whole tree ends before the checkout goes, however the
+    // check ends, this future being dropped (the runtime stopping) included.
+    let tree = check_tree::adopt(&cfg.home, &dir, &child);
+    let _lifeline = child.stdin.take();
+    let limit = Duration::from_secs(cfg.checks.timeout_secs);
+    let status = tokio::time::timeout(limit, child.wait()).await;
+    if status.is_err() {
+        tree.kill();
+        let _ = child.wait().await;
     }
+    let stopped = tree.finish();
     let log = Some(dir.join(LOG)).filter(|l| l.is_file());
     let (result, note) = match status {
+        _ if stopped => (CheckResult::Error, "the daemon stopped while it ran".into()),
         Err(_) => (
             CheckResult::Error,
-            "ran over 6 hours and was stopped".into(),
+            format!("ran over {} and was stopped", span(limit)),
         ),
         Ok(Err(error)) => (CheckResult::Error, format!("lost the runner: {error}")),
         Ok(Ok(status)) => match status.code() {
@@ -172,6 +183,15 @@ async fn run_inner(cfg: &Config, job: &str, spec: Spec) -> anyhow::Result<Outcom
         },
     };
     Ok(Outcome { result, note, log })
+}
+
+/// `limit` as a person says it: "6 hours", "90 seconds".
+fn span(limit: Duration) -> String {
+    match limit.as_secs() {
+        3600 => "an hour".into(),
+        s if s % 3600 == 0 => format!("{} hours", s / 3600),
+        s => format!("{s} seconds"),
+    }
 }
 
 fn remove_all(dir: &Path) -> std::io::Result<()> {
@@ -235,10 +255,12 @@ fn run_command(dir: &Path, log: &fs::File) -> anyhow::Result<std::process::ExitS
     let checkout = dir.join(check_checkout::DIR);
     anyhow::ensure!(checkout.is_dir(), "there is no checkout to run in");
     let mut command = shell(&spec.run);
-    Ok(command
+    let mut child = command
         .current_dir(&checkout)
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log.try_clone()?)
-        .status()?)
+        .spawn()?;
+    check_tree::watch_lifeline();
+    Ok(child.wait()?)
 }
