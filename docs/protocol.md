@@ -1114,6 +1114,11 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
   - The reviewer, the PR's author or the lead files a `should` or `nit` finding as an Inbox chore, labelled `follow-up`, related to the PR's card.
   - The finding records `follow_up_item_id`, so it can't be filed twice.
 
+**Checks (PR-5a, H-270).**
+- **Which checks:** each reported head queues the required checks of the base's `.hermes/checks.toml`, filtered by the paths the PR changes. A head's own `checks.toml` changes nothing.
+- **A broken base file:** if the base's `checks.toml` doesn't parse, a single `.hermes/checks.toml` check is recorded as `error`, so nothing counts as checked.
+- **Repairing it:** a PR that changes `checks.toml` to a file that parses gets the head's checks plus a passing `.hermes/checks.toml` check, so the repair can merge. Like any policy change, it still needs architect, ce and the owner.
+
 ## Meetings
 
 Meetings live with the board, on its home (H-017 §1.5, H-020 §4, H-102). A **series** (`standup`, `refinement`, `demo`, `retro` or `adhoc`) owns a routine: creating or changing one upserts the routine with the facilitator as its bot, the series' cron and time zone, and a prompt telling it to run the meeting. A new facilitator gets a new routine; disabling the series disables it. Each run, the facilitator calls `meeting_start`. That opens an occurrence (`MTG-<date>-<type>`, collecting), freezes `inputs_snapshot` (the board's columns with counts, Doing, blocked and stale items, the open action items) and sends each attendee bot one note. Attendees `meeting_contribute`, the facilitator (or the lead) records `action_add`s and `meeting_close`s it as held, with outputs by section and a summary of at most ten lines, or skipped with a reason. Open action items carry over: `meeting_get` lists those of the series' earlier meetings as `carried_over`. `action_promote` (lead) turns one into a chore in the board's Inbox, linked to its meeting (link kind `meeting`), and sets the action's `item_id`. Attendees and action owners are bot ids, or `owner`.

@@ -240,3 +240,49 @@ async fn only_the_dispatched_runner_reports_and_a_same_tree_pass_counts() {
         .clone();
     assert_eq!(windows["result"], "queued");
 }
+
+/// ARCH M1: a broken base `checks.toml` doesn't lock the repository: the PR
+/// that repairs it runs its own checks plus a passing `checks.toml`, while
+/// still needing architect, ce and the owner. A PR that leaves the file
+/// broken stays blocked.
+#[tokio::test]
+async fn a_pr_that_repairs_a_broken_checks_toml_can_pass() {
+    let mut r = setup().await;
+    set_policy(&r, "[[check]\nname = ");
+    let a = r.card("Fix the checks", "doing");
+    let tree = branch(&r, "H-1-fix", "crates/x.rs");
+    write(&tree, ".hermes/checks.toml", POLICY);
+    git(&tree, &["push", "-q", "origin", "H-1-fix"]);
+    let pr = r.bots[1]
+        .call("pr_open", json!({"item": a, "branch": "H-1-fix"}))
+        .await["pr"]
+        .clone();
+    let mut got = names(&pr);
+    got.sort();
+    let mut want = queued(&["rust", "windows"]);
+    want.push((".hermes/checks.toml".to_string(), "pass".to_string()));
+    want.sort();
+    assert_eq!(got, want, "{pr}");
+    let roles = r.pair.d.app.db.board_read(|t| {
+        let id = t.pr(&r.project, 1)?.unwrap().id;
+        t.pr_needs(&id)
+    });
+    let roles = roles.unwrap();
+    for role in ["architect", "ce", "owner"] {
+        assert!(roles.iter().any(|x| x == role), "{roles:?}");
+    }
+
+    // Still broken in the head: still blocked.
+    let b = r.card("Other", "doing");
+    let other = branch(&r, "H-2-other", "crates/y.rs");
+    write(&other, ".hermes/checks.toml", "still [broken");
+    git(&other, &["push", "-q", "origin", "H-2-other"]);
+    let blocked = r.bots[1]
+        .call("pr_open", json!({"item": b, "branch": "H-2-other"}))
+        .await["pr"]
+        .clone();
+    assert_eq!(
+        names(&blocked),
+        vec![(".hermes/checks.toml".to_string(), "error".to_string())]
+    );
+}

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use bus::contract::pr::CheckReport;
 
 use crate::app::AppState;
-use crate::board::policy::{base, CHECKS_PATH};
+use crate::board::policy::{base, parse_checks, Checks, CHECKS_PATH};
 use crate::board::release::{git_cache, machines};
 use crate::decisions::{conflict, forbidden, invalid, not_found};
 use crate::prs::check_log;
@@ -26,36 +26,65 @@ pub struct Required {
 /// The required checks for `head` under the `checks.toml` at `base_sha`,
 /// for the paths `head` changes since it left `base_sha`. A base whose file
 /// doesn't parse queues one `checks.toml` check as an error, so the head
-/// can't count as checked by a broken policy.
+/// can't count as checked by a broken policy, with one way out (H-270 ARCH
+/// M1): a PR that changes `checks.toml` to a file that parses runs the
+/// head's checks, plus a passing `checks.toml` check, so the repair can
+/// merge. It still needs architect, ce and the owner, as any policy change.
 pub fn required(cache: &Path, base_sha: &str, head: &str) -> anyhow::Result<Required> {
     let tree = git_cache::tree_of(cache, head)
         .ok_or_else(|| anyhow::anyhow!("{head} isn't in the repository"))?;
     let changed = git_cache::changed_paths(cache, base_sha, head)?;
     let checks = match base::read(cache, base_sha)?.checks {
-        Ok(policy) => policy
-            .for_change(&changed)
-            .filter(|c| c.required)
-            .map(|c| NewCheck {
-                name: c.name.clone(),
-                run: c.run.clone(),
-                needs: c.needs.clone(),
-                machine: c.machine.clone(),
-                required: true,
-                result: CheckResult::Queued,
-                note: None,
-            })
-            .collect(),
-        Err(e) => vec![NewCheck {
-            name: CHECKS_PATH.to_string(),
-            run: String::new(),
-            needs: Vec::new(),
-            machine: None,
-            required: true,
-            result: CheckResult::Error,
-            note: Some(e),
-        }],
+        Ok(policy) => queue(&policy, &changed),
+        Err(e) => match repair(cache, head, &changed)? {
+            Some(policy) => {
+                let mut checks = queue(&policy, &changed);
+                checks.push(policy_check(
+                    CheckResult::Pass,
+                    "repairs the base's broken checks.toml; the head's checks run",
+                ));
+                checks
+            }
+            None => vec![policy_check(CheckResult::Error, &e)],
+        },
     };
     Ok(Required { tree, checks })
+}
+
+fn queue(policy: &Checks, changed: &[String]) -> Vec<NewCheck> {
+    policy
+        .for_change(changed)
+        .filter(|c| c.required)
+        .map(|c| NewCheck {
+            name: c.name.clone(),
+            run: c.run.clone(),
+            needs: c.needs.clone(),
+            machine: c.machine.clone(),
+            required: true,
+            result: CheckResult::Queued,
+            note: None,
+        })
+        .collect()
+}
+
+fn policy_check(result: CheckResult, note: &str) -> NewCheck {
+    NewCheck {
+        name: CHECKS_PATH.to_string(),
+        run: String::new(),
+        needs: Vec::new(),
+        machine: None,
+        required: true,
+        result,
+        note: Some(note.to_string()),
+    }
+}
+
+/// The head's `checks.toml`, when the PR changes it and it parses.
+fn repair(cache: &Path, head: &str, changed: &[String]) -> anyhow::Result<Option<Checks>> {
+    if !changed.iter().any(|p| p == CHECKS_PATH) {
+        return Ok(None);
+    }
+    Ok(git_cache::file_at(cache, head, CHECKS_PATH)?.and_then(|text| parse_checks(&text).ok()))
 }
 
 /// Dispatches a queued check to `runner` (H-283 spawns the worker). Never to
