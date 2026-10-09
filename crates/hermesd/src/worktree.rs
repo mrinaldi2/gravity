@@ -3,10 +3,11 @@
 //! cleanup. Worktrees containing changes are never removed automatically.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
+
+use crate::safe_git::SafeGit;
 
 pub const METADATA_FILE: &str = ".gravity-worktree.json";
 
@@ -42,21 +43,10 @@ pub enum CleanupOutcome {
     },
 }
 
+/// git in `repo`, through the daemon's hardened runner (H-289): a bot works
+/// in these worktrees, so their config must not make this git run anything.
 fn git(repo: &Path, args: &[&str]) -> anyhow::Result<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(args)
-        .output()
-        .context("running git")?;
-    if !out.status.success() {
-        bail!(
-            "git {:?} failed: {}",
-            args,
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).to_string())
+    SafeGit::local(repo)?.args(args).run()
 }
 
 /// Create a worktree at `spec.dest` from `spec.base_ref`, on a bot-owned
@@ -135,11 +125,26 @@ pub fn cleanup(worktree: &Path) -> anyhow::Result<CleanupOutcome> {
     let meta =
         read_meta(worktree).context("refusing cleanup: not a daemon-provisioned worktree")?;
 
-    let status = git(worktree, &["status", "--porcelain"])?;
+    // Plumbing instead of `status`: tracked paths whose content or stat
+    // differs from HEAD (a stat-only change counts, so no file is read or
+    // filtered), then untracked paths.
+    let changed = git(
+        worktree,
+        &[
+            "diff-index",
+            "--name-only",
+            "--no-ext-diff",
+            "--no-textconv",
+            "HEAD",
+            "--",
+        ],
+    )?;
+    let untracked = git(worktree, &["ls-files", "--others", "--exclude-standard"])?;
     // Our metadata file itself is expectedly untracked.
-    let dirty: Vec<&str> = status
+    let dirty: Vec<&str> = changed
         .lines()
-        .filter(|l| !l.ends_with(METADATA_FILE))
+        .chain(untracked.lines())
+        .filter(|l| !l.is_empty() && *l != METADATA_FILE)
         .collect();
     if !dirty.is_empty() {
         return Ok(CleanupOutcome::KeptDirty {
@@ -183,6 +188,7 @@ fn sanitize_branch(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     fn init_repo() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();

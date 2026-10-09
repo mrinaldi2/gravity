@@ -42,6 +42,7 @@ pub mod redact;
 pub mod resume;
 pub mod routine_validation;
 pub mod runtime;
+pub mod safe_git;
 pub mod scheduler;
 pub mod secrets;
 pub mod server;

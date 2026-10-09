@@ -27,7 +27,7 @@ pub async fn setup() -> Repo {
     let remote_dir = tempfile::tempdir().expect("tempdir");
     let dev_dir = tempfile::tempdir().expect("tempdir");
     let origin = remote(remote_dir.path());
-    let dev = std::fs::canonicalize(dev_dir.path()).expect("dev");
+    let dev = hermesd::safe_git::canonical(dev_dir.path()).expect("dev");
     let trusted = dev.display().to_string();
     let d = super::spawn_daemon_with(|cfg| cfg.trusted_paths = vec![trusted]).await;
     let (pair, bots) = project_with_bots_on(d, &["Team Lead", "Desktop Dev", "Architect"]).await;

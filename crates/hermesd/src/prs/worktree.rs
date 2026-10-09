@@ -4,28 +4,15 @@
 //! merge (CL-1) removes only what was verified here.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use crate::app::AppState;
-use crate::board::release::git::no_hooks;
 use crate::bot_permissions::guard::slug;
 use crate::prs::model::PrWorktree;
+use crate::safe_git::SafeGit;
 
-/// git in `dir` with no config but the repository's own, hooks off.
+/// git in `dir`, through the daemon's hardened runner (H-289).
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
-    let null = if cfg!(windows) { "NUL" } else { "/dev/null" };
-    let out = Command::new("git")
-        .current_dir(dir)
-        .env("GIT_CONFIG_GLOBAL", null)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .args(no_hooks())
-        .args(args)
-        .output()
-        .ok()?;
-    out.status
-        .success()
-        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    SafeGit::local(dir).ok()?.args(args).run().ok()
 }
 
 fn expand(app: &AppState, path: &str) -> PathBuf {
@@ -39,12 +26,13 @@ fn expand(app: &AppState, path: &str) -> PathBuf {
 /// workspace (a worker's clones are there), or one of its
 /// `<repo>-wt-<slug>[-…]` worktrees in the trusted paths.
 fn allowed(app: &AppState, bot: &bus::Bot, path: &Path) -> bool {
-    if std::fs::canonicalize(&bot.workspace_path).is_ok_and(|w| path.starts_with(w)) {
+    if crate::safe_git::canonical(Path::new(&bot.workspace_path)).is_ok_and(|w| path.starts_with(w))
+    {
         return true;
     }
     let own = slug(&bot.name);
     app.cfg.trusted_paths.iter().any(|root| {
-        let Ok(root) = std::fs::canonicalize(expand(app, root)) else {
+        let Ok(root) = crate::safe_git::canonical(&expand(app, root)) else {
             return false;
         };
         let Ok(rest) = path.strip_prefix(&root) else {
@@ -70,7 +58,7 @@ pub fn verify(
     branch: &str,
     reported: &str,
 ) -> anyhow::Result<PrWorktree> {
-    let path = std::fs::canonicalize(reported).map_err(|_| {
+    let path = crate::safe_git::canonical(Path::new(reported)).map_err(|_| {
         anyhow::anyhow!(
             "worktree {reported} doesn't exist on {machine}; a worktree on another computer \
                  is checked by that computer's daemon once H-285 lands"
