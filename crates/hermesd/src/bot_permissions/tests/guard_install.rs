@@ -109,6 +109,7 @@ fn the_daemons_commands_go_to_this_computers_daemon_only() {
         "release publish r1",
         "release land r1",
         "release build-installer r1",
+        "pr merge 7",
     ] {
         assert_eq!(bash(&format!("{app} {sub}")), None, "{sub}");
         for odd in [

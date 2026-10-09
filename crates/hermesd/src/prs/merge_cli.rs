@@ -193,7 +193,7 @@ pub fn merge_in(checkout: &Path, plan: &Plan) -> anyhow::Result<Done> {
 
 fn remote_tip(url: &str, branch: &str) -> anyhow::Result<Option<String>> {
     let name = format!("refs/heads/{branch}");
-    Ok(git::remote_refs(url, &[name.clone()])?
+    Ok(git::remote_refs(url, std::slice::from_ref(&name))?
         .into_iter()
         .find(|(n, _)| *n == name)
         .map(|(_, sha)| sha))

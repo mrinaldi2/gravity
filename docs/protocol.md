@@ -1177,6 +1177,16 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
   - It returns the PR to `open` and withdraws the owner's approval of this change (kept in `review_withdrawn`, no longer counted).
   - The PR stays out of the queue until its change or the owner's approval changes. After the hand-off it is refused.
 
+**The merge executor (PR-6b, H-284; §5.2, §5.3, §6.5, §15.2).** Migrations `PERMISSION_EXTRAS_PR_MERGE` (the `pr_merge` extra) and `PR_MERGE` (one live PR per card **per repo**; the `pr_merge_stuck` table).
+- **`hermesd pr merge <n> [--dry-run]`**, run by DevOps in its own checkout of the PR's repo on its `pr_merge` task. It asks the daemon over the local endpoint, like `release land`:
+  - **`hermes/pr_merge {number}`:** the bot holds the `pr_merge` extra (off for every bot until the owner grants it), is the project's DevOps and holds the PR's open `pr_merge` task. The daemon fetches the repo; the branch must still be at the PR's head. It recomputes the roles and shape the change needs **at the merge** (main's tip to the head; the base's `reviewers.toml` at main's tip), then every §5.1 condition. A PR that no longer holds leaves the queue, its task is cancelled, and the reason comes back. Otherwise it answers `{number, head_sha, branch, main_sha, repo, repo_url}`.
+  - **In the checkout** (git hooks off): origin must be that repo; the branch on origin must be at the head and main an ancestor of it. Then `git push origin <head>:refs/heads/main`, never forced, and `ls-remote` of the repo must show main at the head.
+  - **The branch** is deleted with `--force-with-lease=refs/heads/<branch>:<head>`, so it goes only while its tip is still the merged commit; a branch that moved is kept and reported.
+  - **`hermes/pr_merged {number, sha, branch: {deleted, note}}`:** the daemon's own fetch must show main at `sha`, the PR's head. The PR becomes `merged` (`merged_sha`, `merged_at`, `merged_by`), leaves the queue, and its task is done. A kept branch is said on the card. Answers `{number, sha, card, moved, waiting_for[], branch_kept}`.
+- **Board:** once every PR of the card, in every repo, is merged, the daemon moves the card Review → Verify ("PR #n merged"). A manual Review → Verify on a card with a PR link is refused (`review.merged_by_pr`); spikes and chores without a PR keep the H-154 path.
+- **Guard:** the `pr_merge` extra pre-approves exactly `<this daemon's binary> pr merge`, run as given (no `--config` or home override). It doesn't lift the main denies: a raw `git push … main` stays refused.
+- **Stuck merges:** a merge `handed` for 30 min goes to DevOps again (the old task expires) and is recorded in `pr_merge_stuck`. Until it merges or leaves the queue, the owner's Needs you shows a `PR_MERGE_STUCK` row (weight 2): "PR #n (card) is waiting for DevOps to merge it; asked N times".
+
 **Checks (PR-5a, H-270).**
 - **Which checks:** each reported head queues the required checks of the base's `.hermes/checks.toml`, filtered by the paths the PR changes. A head's own `checks.toml` changes nothing.
 - **A broken base file:** if the base's `checks.toml` doesn't parse, a single `.hermes/checks.toml` check is recorded as `error`, so nothing counts as checked.
