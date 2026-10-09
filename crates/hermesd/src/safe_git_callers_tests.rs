@@ -51,6 +51,10 @@ const OTHER_PROGRAMS: &[(&str, &str)] = &[
         "the shell of an action the owner approved",
     ),
     ("service/stage.rs", "the staged hermesd binary"),
+    (
+        "machine_tools.rs",
+        "node, pnpm, cargo, xcodebuild, python3, mkdocs and docker, for their versions",
+    ),
 ];
 
 /// The modules where bots control the repository git runs in.

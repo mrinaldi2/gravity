@@ -23,6 +23,7 @@ pub mod delivery;
 pub mod events;
 pub mod holders;
 pub mod home;
+pub mod machine_tools;
 pub mod mcp;
 pub mod messaging;
 pub mod migrate_home;

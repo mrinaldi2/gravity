@@ -43,6 +43,10 @@ pub(super) async fn intercept(
         return Some(quiesce_here(app, &bot, &links, args).await);
     }
     if let Some(mut result) = forward(app, &bot, &links, name, args).await {
+        // The checkout of a check this computer ran goes once it's reported.
+        if let (Ok(answer), "check_report") = (&result, name) {
+            crate::prs::check_checkout::after_report(&bot, answer);
+        }
         // How to run it here, with this computer's own binary.
         if let (Ok(answer), "install_release") = (&mut result, name) {
             super::releases::with_command(answer);

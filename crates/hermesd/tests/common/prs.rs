@@ -24,12 +24,21 @@ pub struct Repo {
 }
 
 pub async fn setup() -> Repo {
+    setup_with(|_| {}).await
+}
+
+/// [`setup`] with the daemon's config tweaked first.
+pub async fn setup_with(tweak: impl FnOnce(&mut hermesd::config::Config)) -> Repo {
     let remote_dir = tempfile::tempdir().expect("tempdir");
     let dev_dir = tempfile::tempdir().expect("tempdir");
     let origin = remote(remote_dir.path());
     let dev = hermesd::safe_git::canonical(dev_dir.path()).expect("dev");
     let trusted = dev.display().to_string();
-    let d = super::spawn_daemon_with(|cfg| cfg.trusted_paths = vec![trusted]).await;
+    let d = super::spawn_daemon_with(|cfg| {
+        cfg.trusted_paths = vec![trusted];
+        tweak(cfg);
+    })
+    .await;
     let (pair, bots) = project_with_bots_on(d, &["Team Lead", "Desktop Dev", "Architect"]).await;
     let db = &pair.d.app.db;
     let project = db.get_bot(&pair.ids[0]).unwrap().unwrap().project_id;
@@ -225,4 +234,30 @@ pub fn move_main(r: &Repo, name: &str, file: &str, text: &str) {
     git(&other, &["checkout", "-q", "main"]);
     commit(&other, file, text);
     git(&other, &["push", "-q", "origin", "main"]);
+}
+
+// ---- checks (H-270, H-283) ----
+
+/// Puts `text` on main as `.hermes/checks.toml`.
+pub fn set_policy(r: &Repo, text: &str) {
+    let main = r.dev.join(format!("main-{}", uuid::Uuid::new_v4()));
+    clone(&r.origin, &main, "unused");
+    git(&main, &["checkout", "-q", "main"]);
+    std::fs::create_dir_all(main.join(".hermes")).unwrap();
+    commit(&main, ".hermes/checks.toml", text);
+    git(&main, &["push", "-q", "origin", "main"]);
+}
+
+/// A branch with one commit changing `file`, pushed.
+pub fn branch(r: &Repo, branch: &str, file: &str) -> PathBuf {
+    let path = r.dev.join(branch);
+    clone(&r.origin, &path, branch);
+    write(&path, file, "one\n");
+    git(&path, &["push", "-q", "origin", branch]);
+    path
+}
+
+pub fn write(tree: &Path, file: &str, text: &str) -> String {
+    std::fs::create_dir_all(tree.join(file).parent().unwrap()).unwrap();
+    commit(tree, file, text)
 }

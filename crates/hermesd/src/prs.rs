@@ -2,8 +2,12 @@
 //! PR-1 keeps the record, its verified head and its card's moves; PR-5a the
 //! checks each head must pass. Reviews and merges come with their own slices.
 
+pub mod check_checkout;
+pub mod check_jobs;
 pub mod check_log;
 pub mod check_model;
+pub mod check_rerun;
+pub mod check_route;
 pub mod checks;
 pub mod flow;
 pub mod follow_up;

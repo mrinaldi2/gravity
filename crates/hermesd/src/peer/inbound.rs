@@ -81,6 +81,7 @@ pub(super) fn event(app: &Arc<AppState>, peer_id: &str, frame: &Value) {
         "project_roster" => super::mirror::receive_roster(app, peer_id, frame),
         "project_links" => super::mirror::receive_links(app, peer_id, frame),
         "board_event" => super::board::receive_event(app, peer_id, frame),
+        crate::machine_tools::FRAME => crate::machine_tools::receive(app, peer_id, frame),
         "owner_action_update" => super::owner_actions::receive_update(app, peer_id, frame),
         "owner_action_output" => super::owner_actions::receive_output(app, peer_id, frame),
         "project_attention_changed" => crate::overview::receive_changed(app, peer_id),

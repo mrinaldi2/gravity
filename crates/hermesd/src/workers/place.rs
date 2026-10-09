@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use anyhow::bail;
-use bus::{Bot, MessageKind, Peer, Worker, WorkerState, MAX_TASK_HOPS};
+use bus::{Bot, MessageKind, Peer, Worker, WorkerState};
 use serde_json::json;
 
 use crate::app::AppState;
@@ -14,7 +14,10 @@ use crate::mcp::bot_sender;
 use crate::mcp::tasks::close_cancelled;
 use crate::messaging::{self, daemon_sender, Dm};
 use crate::peer::remote_bots;
+use crate::prs::check_checkout::LowDisk;
+use crate::prs::check_jobs;
 
+use super::spawn::delegation_chain;
 use super::{release_orphan, HERE};
 
 /// Instructions for a worker spawned without any. Non-empty so the charter
@@ -172,6 +175,7 @@ fn wait(app: &AppState, worker: &Worker, reason: &str) -> anyhow::Result<()> {
 /// machine — both of which waiting can fix.
 fn is_full(error: &anyhow::Error) -> bool {
     error.downcast_ref::<WorkersFull>().is_some()
+        || error.downcast_ref::<LowDisk>().is_some()
         || matches!(
             crate::peer::error_code(error, ""),
             "at_capacity" | "unavailable"
@@ -221,28 +225,6 @@ pub(super) fn linked_peer_named(
     Ok(peer)
 }
 
-/// The chain a worker's task extends: the parent's newest open task, so the
-/// hop limit holds through workers as through any delegation.
-pub(super) fn delegation_chain(app: &AppState, parent: &Bot) -> anyhow::Result<(i64, String)> {
-    let (hop, chain) = app
-        .db
-        .newest_open_task_for(&parent.id)?
-        .map(|t| (t.hop_count, t.origin_chain))
-        .unwrap_or((0, String::new()));
-    if hop + 1 > MAX_TASK_HOPS {
-        bail!(
-            "this delegation chain is {hop} hops deep (limit {MAX_TASK_HOPS}) — do the \
-             work yourself, or report what you have with complete_task"
-        );
-    }
-    let chain = if chain.is_empty() {
-        parent.id.clone()
-    } else {
-        format!("{chain},{}", parent.id)
-    };
-    Ok((hop + 1, chain))
-}
-
 fn instructions(worker: &Worker) -> &str {
     if worker.instructions.trim().is_empty() {
         DEFAULT_INSTRUCTIONS
@@ -256,8 +238,10 @@ fn start_here(app: &Arc<AppState>, worker: &Worker, parent: &Bot) -> anyhow::Res
     // A worker created for this spawn that never got its task — the daemon
     // stopped between the two — gets it now rather than blocking the name.
     if let Some(bot) = untasked_worker(app, worker, parent)? {
+        check_jobs::claim(app, worker, &bot)?;
         return hand_over(app, worker, parent, &bot, chain);
     }
+    check_jobs::before_start_here(app, worker)?;
     let runtime = worker.runtime.unwrap_or(parent.runtime);
     botmgmt::check_runtime_available(app, runtime)?;
     let edit = IdentityEdit {
@@ -278,6 +262,7 @@ fn start_here(app: &Arc<AppState>, worker: &Worker, parent: &Bot) -> anyhow::Res
         &actor,
         runtime,
     )?;
+    check_jobs::started_here(app, worker, &created.bot)?;
     hand_over(app, worker, parent, &created.bot, chain)
 }
 
@@ -317,8 +302,12 @@ async fn start_there(
     if let Some(repo) = app.db.project_repo(&worker.project_id)? {
         identity["repo"] = json!(repo);
     }
+    if let Some(check) = check_jobs::for_peer(app, worker)? {
+        identity["check"] = check;
+    }
     let stand_in =
         remote_bots::create(app, &worker.project_id, &peer.id, identity, Some(parent)).await?;
+    check_jobs::claim(app, worker, &stand_in)?;
     hand_over(app, worker, parent, &stand_in, chain)
 }
 

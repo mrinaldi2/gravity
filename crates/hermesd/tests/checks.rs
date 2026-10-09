@@ -6,9 +6,9 @@
 
 mod common;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use common::prs::{clone, commit, error, head, setup, Repo};
+use common::prs::{branch, error, head, set_policy, setup, write};
 use common::repo::git;
 use hermesd::board::release::machines;
 use hermesd::prs::checks::dispatch;
@@ -44,30 +44,6 @@ name = "docs"
 run = "scripts/docs-build.sh --strict"
 paths = ["docs/**"]
 "#;
-
-/// Puts `text` on main as `.hermes/checks.toml`.
-fn set_policy(r: &Repo, text: &str) {
-    let main = r.dev.join(format!("main-{}", uuid::Uuid::new_v4()));
-    clone(&r.origin, &main, "unused");
-    git(&main, &["checkout", "-q", "main"]);
-    std::fs::create_dir_all(main.join(".hermes")).unwrap();
-    commit(&main, ".hermes/checks.toml", text);
-    git(&main, &["push", "-q", "origin", "main"]);
-}
-
-/// A branch with one commit changing `file`, pushed.
-fn branch(r: &Repo, branch: &str, file: &str) -> PathBuf {
-    let path = r.dev.join(branch);
-    clone(&r.origin, &path, branch);
-    write(&path, file, "one\n");
-    git(&path, &["push", "-q", "origin", branch]);
-    path
-}
-
-fn write(tree: &Path, file: &str, text: &str) -> String {
-    std::fs::create_dir_all(tree.join(file).parent().unwrap()).unwrap();
-    commit(tree, file, text)
-}
 
 fn names(pr: &Value) -> Vec<(String, String)> {
     pr["checks"]

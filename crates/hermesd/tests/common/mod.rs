@@ -77,6 +77,9 @@ pub async fn spawn_daemon_on(
     };
     cfg.delivery.poll_interval_ms = 50;
     cfg.scheduler.tick_interval_ms = 100;
+    // No tool probe or check routing behind a test's back (H-283).
+    cfg.checks.probe_interval_secs = 0;
+    cfg.checks.dispatch_interval_secs = 0;
     tweak(&mut cfg);
 
     let db = Db::open(&cfg.db_path()).expect("db");
