@@ -23,6 +23,7 @@ mod peers;
 mod permissions;
 mod quiesce;
 mod releases;
+mod roles;
 mod workers;
 
 use base::MIGRATION_1;
@@ -54,6 +55,7 @@ use releases::{
     MIGRATION_RELEASE_EVENTS, MIGRATION_RELEASE_MACHINES, MIGRATION_RELEASE_PLANS,
     MIGRATION_RELEASE_WORK_ITEM,
 };
+use roles::MIGRATION_ROLES;
 use workers::{MIGRATION_18, MIGRATION_19};
 
 pub const MIGRATIONS: &[&str] = &[
@@ -105,6 +107,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_CARD_QUESTIONS,
     MIGRATION_DEPLOY_SUPERSEDED,
     MIGRATION_RELEASE_WORK_ITEM,
+    MIGRATION_ROLES,
 ];
 
 #[cfg(test)]
