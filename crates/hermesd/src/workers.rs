@@ -95,26 +95,6 @@ impl Workers {
 /// written when saving failed.
 const SALVAGED_MARKER: &str = ".gravity-salvaged";
 
-/// Queues a spawn and runs `then` on it before any placement pass can see
-/// it, so what `then` records (a check job, H-283) is there when it starts.
-/// When `then` fails the spawn is cancelled.
-pub(crate) async fn queue_with(
-    app: &Arc<AppState>,
-    new: &crate::db::NewWorker<'_>,
-    then: impl FnOnce(&Worker) -> anyhow::Result<()>,
-) -> anyhow::Result<Worker> {
-    let _placing = app.workers.placing.lock().await;
-    let worker = app.db.insert_worker(new)?;
-    if let Err(error) = then(&worker) {
-        let reason = format!("{error:#}");
-        app.db
-            .finish_worker(&worker.id, bus::WorkerState::Cancelled, Some(&reason))?;
-        return Err(error);
-    }
-    changed(app, &worker.project_id);
-    Ok(worker)
-}
-
 /// Tell clients a project's queue changed.
 pub(crate) fn changed(app: &AppState, project_id: &str) {
     app.events.push(crate::events::Push::WorkersUpdated {

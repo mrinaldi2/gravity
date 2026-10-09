@@ -43,8 +43,8 @@ CREATE TABLE IF NOT EXISTS machine_tool (
 );
 "#;
 
-/// `check_job`: each time a check is handed to a worker (H-283, §7). The
-/// machine it was routed to, the spawn and bot that run it, and why it ran:
+/// `check_job`: each time a check is handed to a computer's runner (H-283,
+/// §7). The machine it was routed to, and why it ran:
 /// `first`, `auto` (the one retry after an `error`) or `rerun` (asked for by
 /// the owner, the lead or the PR's author). A job is open until `ended_at`;
 /// open jobs per machine are what the per-machine cap counts.
@@ -54,13 +54,10 @@ CREATE TABLE IF NOT EXISTS check_job (
     check_id    TEXT NOT NULL REFERENCES check_run(id) ON DELETE CASCADE,
     project_id  TEXT NOT NULL,
     machine     TEXT NOT NULL,
-    worker_id   TEXT,
-    bot_id      TEXT,
     cause       TEXT NOT NULL CHECK(cause IN ('first', 'auto', 'rerun')),
     created_at  TEXT NOT NULL,
     ended_at    TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_check_job_open ON check_job(machine, ended_at);
 CREATE INDEX IF NOT EXISTS idx_check_job_check ON check_job(check_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_check_job_worker ON check_job(worker_id);
 "#;

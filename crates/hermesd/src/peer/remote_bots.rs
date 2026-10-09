@@ -236,8 +236,6 @@ pub(super) fn serve_create(
     let temporary = frame.get("temporary").and_then(Value::as_bool) == Some(true);
     // Adopted before the worker is created, so its prompt names it.
     shared_repo(app, &link.project_id, frame)?;
-    // A check worker (H-283): its checkout is made here once it exists.
-    let check = crate::prs::check_jobs::peer_check(app, &link.project_id, frame)?;
     let create = if temporary {
         botmgmt::create_worker_bot
     } else {
@@ -258,10 +256,6 @@ pub(super) fn serve_create(
     // Before the reply, not with the roster that follows it: the asker may
     // message its new bot the moment it hears back.
     app.db.expose_bot_to_peer(&peer.id, &created.bot.id)?;
-    if let Some((url, sha)) = check {
-        let workspace = created.bot.workspace_path.clone().into();
-        crate::prs::check_checkout::prepare_in_background(workspace, url, sha);
-    }
     tracing::info!(peer = %peer.name, bot = %created.bot.name, "peer created a bot in a linked project");
     Ok(json!({ "bot": super::inbound::remote_view(&created.bot, String::new()) }))
 }

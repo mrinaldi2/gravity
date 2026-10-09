@@ -6,6 +6,7 @@ pub mod check_checkout;
 pub mod check_jobs;
 pub mod check_log;
 pub mod check_model;
+pub mod check_remote;
 pub mod check_rerun;
 pub mod check_route;
 pub mod checks;

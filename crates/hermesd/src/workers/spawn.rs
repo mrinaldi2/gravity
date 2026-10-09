@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use anyhow::bail;
-use bus::{Bot, BotRuntime, Worker, WorkerState, MAX_TASK_HOPS};
+use bus::{Bot, BotRuntime, Worker, WorkerState};
 
 use crate::app::AppState;
 use crate::botmgmt;
@@ -11,7 +11,7 @@ use crate::db::NewWorker;
 use crate::mcp::bot_sender;
 use crate::mcp::tasks::close_cancelled;
 
-use super::place::linked_peer_named;
+use super::place::{delegation_chain, linked_peer_named};
 use super::{place_queued, HERE};
 
 /// Spawns one project may hold in its queue, so a runaway loop cannot fill
@@ -152,28 +152,6 @@ pub fn cancel_spawn(
         .db
         .get_worker(&worker.id)?
         .unwrap_or_else(|| worker.clone()))
-}
-
-/// The chain a worker's task extends: the parent's newest open task, so the
-/// hop limit holds through workers as through any delegation.
-pub(super) fn delegation_chain(app: &AppState, parent: &Bot) -> anyhow::Result<(i64, String)> {
-    let (hop, chain) = app
-        .db
-        .newest_open_task_for(&parent.id)?
-        .map(|t| (t.hop_count, t.origin_chain))
-        .unwrap_or((0, String::new()));
-    if hop + 1 > MAX_TASK_HOPS {
-        bail!(
-            "this delegation chain is {hop} hops deep (limit {MAX_TASK_HOPS}) — do the \
-             work yourself, or report what you have with complete_task"
-        );
-    }
-    let chain = if chain.is_empty() {
-        parent.id.clone()
-    } else {
-        format!("{chain},{}", parent.id)
-    };
-    Ok((hop + 1, chain))
 }
 
 /// Normalise a requested machine: `None` for any, [`HERE`], or a linked

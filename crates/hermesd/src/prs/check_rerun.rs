@@ -1,14 +1,16 @@
 //! A check's next run (H-283, H-261 §7): a re-run asked for by the owner,
 //! the lead or the PR's author; one automatic retry after an `error`, never
-//! after a `fail`; and an `error` for a job whose worker ended without a
-//! result, which counts as any error.
+//! after a `fail`; and an `error` for a job that ended without a result (a
+//! restart cut it short, or its computer never answered), which counts as
+//! any error.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::app::AppState;
+use crate::check_exec;
 use crate::db::check_jobs::JobCause;
 use crate::decisions::{conflict, forbidden, invalid, not_found};
+use crate::prs::check_jobs;
 use crate::prs::check_model::{CheckResult, CheckRun, Report};
 use crate::prs::checks::short;
 
@@ -65,7 +67,7 @@ pub fn rerun(
         t.check_run(project, sha, name)?
             .ok_or_else(|| not_found(format!("no check {name}")))
     })?;
-    super::check_jobs::nudge();
+    check_jobs::nudge();
     Ok(run)
 }
 
@@ -76,7 +78,7 @@ pub fn after_report(app: &AppState, run: &CheckRun) -> anyhow::Result<()> {
         return Ok(());
     }
     app.db.board_tx(|t| settle(t, run))?;
-    super::check_jobs::nudge();
+    check_jobs::nudge();
     Ok(())
 }
 
@@ -91,25 +93,26 @@ fn settle(t: &crate::db::BoardTx<'_>, run: &CheckRun) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Jobs whose worker is gone: a check it never finished is an `error`,
+/// Jobs that will never report: one open here that this daemon isn't
+/// running (a restart cut it short), or one on another computer with no
+/// result long after the longest a check may run. Each is an `error`,
 /// retried once like any.
 pub fn reconcile(app: &AppState, project: &str) -> anyhow::Result<()> {
+    let here = app
+        .db
+        .board_read(crate::board::release::machines::this_computer)?;
+    let patience = chrono::Duration::from_std(check_exec::DEADLINE)? + chrono::Duration::hours(1);
     for job in app.db.board_read(|t| t.open_jobs(project))? {
-        let Some(worker_id) = &job.worker_id else {
+        let why = if job.machine == here {
+            if check_jobs::is_running_here(&job.id) {
+                continue;
+            }
+            "the daemon stopped while it ran".to_string()
+        } else if bus::now() - job.created_at > patience {
+            format!("{} sent no result within 7 hours", job.machine)
+        } else {
             continue;
         };
-        let Some(worker) = app.db.get_worker(worker_id)? else {
-            continue;
-        };
-        if !worker.state.is_final() {
-            continue;
-        }
-        let why = format!(
-            "its worker {} {} without a result{}",
-            worker.name,
-            worker.state.as_str(),
-            worker.error.map(|e| format!(": {e}")).unwrap_or_default()
-        );
         app.db.board_tx(|t| {
             let Some(run) = t.check_by_id(&job.check_id)? else {
                 return Ok(());
@@ -123,7 +126,7 @@ pub fn reconcile(app: &AppState, project: &str) -> anyhow::Result<()> {
                     result: CheckResult::Error,
                     ran_on: &job.machine,
                     log_artifact: None,
-                    tool_versions: &BTreeMap::new(),
+                    tool_versions: &run.tool_versions,
                 },
             )?;
             t.set_check_note(&run.id, Some(&why))?;

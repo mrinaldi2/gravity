@@ -66,9 +66,9 @@ pub(super) const PR_TOOLS: &[BoardTool] = &[
         "check_report",
         "CheckReport",
         Audience::Everyone,
-        "Report the check you were spawned to run, on the full sha you ran it on: running \
-         when you start, then pass, fail or error. A pass or a fail needs 'log', a file in \
-         your workspace; add the tools you used in 'tool_versions'.",
+        "Report a check dispatched to you as running, or as error when it couldn't run \
+         ('log', a file in your workspace, says why). A pass or a fail is never reported: \
+         the daemon records it from the check's exit status.",
     ),
     shared(
         "check_rerun",
@@ -181,9 +181,7 @@ pub(super) fn call(
             let req: p::CheckReport = decode("CheckReport", args, project)?;
             let run = prs::checks::report(app, bot, &req)?;
             prs::check_rerun::after_report(app, &run)?;
-            let answer = json!({ "check": run.to_json() });
-            prs::check_checkout::after_report(bot, &answer);
-            Ok(answer)
+            Ok(json!({ "check": run.to_json() }))
         }
         "check_rerun" => {
             let req: p::CheckRerunRequest = decode("CheckRerunRequest", args, project)?;

@@ -1,29 +1,35 @@
 //! The check runner, PR-5b (H-283, H-261 §1.6, §7): a queued check is
-//! routed by its tools to a computer, run by a worker spawned for it there
-//! (never the PR's author) in a fresh checkout at the exact sha that goes
-//! once it reports; each computer runs at most its cap of jobs and none
-//! under the disk floor; an error is retried once, a fail never, and the
-//! owner, the lead or the author can ask for a re-run.
+//! routed by its tools to a computer, whose daemon runs it with
+//! `hermesd check run` in a fresh checkout at the exact sha that goes once
+//! it has run. Its result is the command's exit status (ARCH M1), and no
+//! bot or AI worker is in the loop (ARCH M2). Each computer runs at most its
+//! cap of jobs and none under the disk floor; an error is retried once, a
+//! fail never, and the owner, the lead or the author can ask for a re-run.
 
 mod common;
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use common::prs::{branch, error, give, head, set_policy, setup, setup_with, Repo};
-use common::repo::git;
-use common::McpClient;
 use hermesd::board::model::Role;
 use hermesd::board::release::machines;
-use hermesd::prs::check_jobs::dispatch;
+use hermesd::prs::check_jobs::{dispatch, SYSTEM_RUNNER};
+use hermesd::prs::check_model::{CheckResult, CheckRun};
 use hermesd::prs::check_rerun::{rerun, Asker};
-use serde_json::{json, Value};
+use serde_json::json;
 
 const POLICY: &str = r#"
 [[check]]
 name = "unit"
-run = "cargo test -q"
+run = "git rev-parse HEAD"
+needs = ["cargo"]
+paths = ["crates/**"]
+
+[[check]]
+name = "lint"
+run = "exit 3"
 needs = ["cargo"]
 paths = ["crates/**"]
 
@@ -45,7 +51,7 @@ fn here(r: &Repo) -> String {
     r.pair.d.app.db.board_read(machines::this_computer).unwrap()
 }
 
-/// This computer as a Mac with cargo and no Node.
+/// This computer's probed tools.
 fn tools(r: &Repo, list: &[(&str, &str)]) {
     let tools: BTreeMap<String, String> = list
         .iter()
@@ -60,7 +66,8 @@ fn tools(r: &Repo, list: &[(&str, &str)]) {
         .unwrap();
 }
 
-/// A PR on card "Search" touching `crates/`; returns its head.
+/// A PR on card "Search" touching `crates/`, here a Mac with cargo and no
+/// Node; returns its head.
 async fn opened(r: &mut Repo) -> String {
     give(r, 0, Role::Lead);
     set_policy(r, POLICY);
@@ -73,7 +80,7 @@ async fn opened(r: &mut Repo) -> String {
     head(&tree)
 }
 
-fn check(r: &Repo, sha: &str, name: &str) -> hermesd::prs::check_model::CheckRun {
+fn check(r: &Repo, sha: &str, name: &str) -> CheckRun {
     r.pair
         .d
         .app
@@ -88,67 +95,60 @@ fn open_jobs(r: &Repo) -> usize {
     r.pair.d.app.db.board_read(|t| t.open_jobs_on(&at)).unwrap()
 }
 
-/// The worker a check was dispatched to, as a client, and its workspace.
-fn runner(r: &Repo, sha: &str, name: &str) -> (bus::Bot, McpClient) {
-    let id = check(r, sha, name).runner.expect("dispatched");
-    let app = &r.pair.d.app;
-    let bot = app.db.get_bot(&id).unwrap().unwrap();
-    let token = app.secrets.bot_token(&id).expect("token");
-    (bot, McpClient::new(&r.pair.d, &token))
-}
-
-async fn wait_for(path: &Path) {
-    for _ in 0..300 {
-        if path.exists() {
-            return;
+/// The check, once `done` holds for it.
+async fn until(r: &Repo, sha: &str, name: &str, done: impl Fn(&CheckRun) -> bool) -> CheckRun {
+    for _ in 0..600 {
+        let run = check(r, sha, name);
+        if done(&run) {
+            return run;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    panic!("{} never appeared", path.display());
+    panic!("{name} never got there: {:?}", check(r, sha, name));
 }
 
-fn report(sha: &str, name: &str, result: &str) -> Value {
-    json!({"sha": sha, "name": name, "result": result})
+async fn finished(r: &Repo, sha: &str, name: &str) -> CheckRun {
+    until(r, sha, name, |c| c.result.is_final()).await
 }
 
-/// The worker's whole run: running, then `result` with a log.
-async fn run(r: &Repo, sha: &str, name: &str, result: &str) -> Value {
-    let (bot, mut worker) = runner(r, sha, name);
-    worker
-        .call("check_report", report(sha, name, "running"))
-        .await;
-    std::fs::write(Path::new(&bot.workspace_path).join("check.log"), "ran\n").unwrap();
-    let mut done = report(sha, name, result);
-    done["log"] = json!("check.log");
-    worker.call("check_report", done).await["check"].clone()
+fn published(r: &Repo, run: &CheckRun) -> String {
+    let app = &r.pair.d.app;
+    let project = app.db.get_project(&r.project).unwrap().unwrap();
+    let log = run.log_artifact.as_deref().expect("a log");
+    std::fs::read_to_string(hermesd::paths::artifacts_dir(&app.cfg, &project.dir_name).join(log))
+        .unwrap()
 }
 
-/// AC1 and AC3: each check goes where its tools are, to a new worker
-/// pinned there with the PR's card, which runs in a fresh checkout at the
-/// exact sha that is removed once it reports.
+/// Every job's checkout this daemon still has.
+fn checkouts(r: &Repo) -> Vec<PathBuf> {
+    let jobs = r.pair.d.app.cfg.home.join("run").join("checks");
+    std::fs::read_dir(jobs)
+        .map(|d| {
+            d.flatten()
+                .map(|e| e.path().join("check"))
+                .filter(|c| c.exists())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// AC1, AC3, ARCH M1 and M2: each check goes where its tools are and is run
+/// by the daemon there, not by a bot: in a fresh checkout at the exact sha,
+/// removed once it has run, with exit 0 as a pass and non-zero as a fail.
 #[tokio::test]
-async fn a_check_runs_on_its_own_worker_in_a_fresh_checkout_at_the_sha() {
+async fn a_check_runs_on_the_daemon_runner_and_its_exit_status_is_the_result() {
     let mut r = setup().await;
     let sha = opened(&mut r).await;
     let app = r.pair.d.app.clone();
     dispatch(&app, &r.project).await.unwrap();
 
     let unit = check(&r, &sha, "unit");
-    let id = unit.runner.clone().expect("unit is dispatched here");
-    assert!(!r.pair.ids.contains(&id), "never the author or a team bot");
-    let bot = app.db.get_bot(&id).unwrap().unwrap();
+    assert_eq!(unit.runner.as_deref(), Some(SYSTEM_RUNNER));
+    assert!(app.db.get_bot(SYSTEM_RUNNER).unwrap().is_none(), "no bot");
     assert!(
-        bot.temporary && bot.name.starts_with("check-unit-"),
-        "{}",
-        bot.name
+        app.db.project_workers(&r.project, 10).unwrap().is_empty(),
+        "no worker is spawned, so nobody gets its done"
     );
-    let worker = app.db.worker_for_bot(&id).unwrap().unwrap();
-    assert_eq!(worker.machine.as_deref(), Some("here"));
-    let card = app
-        .db
-        .task_card(worker.task_id.as_deref().unwrap())
-        .unwrap();
-    assert!(card.is_some(), "the task carries the PR's card");
     // No Windows computer and no Node here: those wait, and say why.
     let windows = check(&r, &sha, "windows");
     assert!(windows.runner.is_none());
@@ -157,14 +157,20 @@ async fn a_check_runs_on_its_own_worker_in_a_fresh_checkout_at_the_sha() {
     assert!(desktop.runner.is_none());
     assert!(desktop.note.unwrap().contains("node, pnpm"));
 
-    let checkout = Path::new(&bot.workspace_path).join("check");
-    wait_for(&checkout.join(".git")).await;
-    assert_eq!(git(&checkout, &["rev-parse", "HEAD"]).trim(), sha);
-    assert_eq!(open_jobs(&r), 1);
-
-    let done = run(&r, &sha, "unit", "pass").await;
-    assert_eq!(done["result"], "pass", "{done}");
-    assert!(!checkout.exists(), "the checkout goes once it reports");
+    let unit = finished(&r, &sha, "unit").await;
+    assert_eq!(unit.result, CheckResult::Pass, "{unit:?}");
+    assert_eq!(unit.note.as_deref(), Some("exited 0"));
+    assert_eq!(unit.ran_on, Some(here(&r)));
+    assert_eq!(unit.tool_versions["cargo"], "1.90.0");
+    let log = published(&r, &unit);
+    assert!(log.contains(&sha), "it ran at the exact sha: {log}");
+    let lint = finished(&r, &sha, "lint").await;
+    assert_eq!(lint.result, CheckResult::Fail, "{lint:?}");
+    assert!(
+        published(&r, &lint).contains(": 3]"),
+        "its exit status, logged"
+    );
+    assert!(checkouts(&r).is_empty(), "the checkouts go once run");
     assert_eq!(open_jobs(&r), 0);
 }
 
@@ -180,21 +186,22 @@ async fn the_cap_and_the_disk_floor_hold_jobs_back() {
     );
     let app = r.pair.d.app.clone();
     dispatch(&app, &r.project).await.unwrap();
-    let routed: Vec<_> = ["desktop", "unit"]
-        .iter()
+    let names = ["desktop", "lint", "unit"];
+    let routed: Vec<_> = names
+        .into_iter()
         .filter(|n| check(&r, &sha, n).runner.is_some())
         .collect();
     assert_eq!(routed.len(), 1, "one job at a time here");
-    assert_eq!(open_jobs(&r), 1);
-    let waiting = if routed[0] == &"unit" {
-        "desktop"
-    } else {
-        "unit"
-    };
-    assert!(check(&r, &sha, waiting).note.unwrap().contains("free slot"));
-    run(&r, &sha, routed[0], "pass").await;
+    for name in names.into_iter().filter(|n| *n != routed[0]) {
+        assert!(check(&r, &sha, name).note.unwrap().contains("free slot"));
+    }
+    finished(&r, &sha, routed[0]).await;
     dispatch(&app, &r.project).await.unwrap();
-    assert!(check(&r, &sha, waiting).runner.is_some(), "its turn now");
+    let next = names
+        .into_iter()
+        .filter(|n| check(&r, &sha, n).runner.is_some())
+        .count();
+    assert_eq!(next, 2, "the next one's turn");
 
     let mut low = setup_with(|cfg| cfg.checks.disk_floor_gb = u64::MAX / 2_000_000_000).await;
     let sha = opened(&mut low).await;
@@ -202,41 +209,34 @@ async fn the_cap_and_the_disk_floor_hold_jobs_back() {
     dispatch(&app, &low.project).await.unwrap();
     let unit = check(&low, &sha, "unit");
     assert!(unit.runner.is_none(), "no job starts under the floor");
-    let worker = app.db.project_workers(&low.project, 10).unwrap();
-    assert_eq!(worker.len(), 1);
-    assert!(worker[0].bot_id.is_none(), "its worker waits");
+    assert!(unit.note.unwrap().contains("floor"));
+    assert_eq!(open_jobs(&low), 0);
 }
 
 /// AC4: an error is retried once by itself, a fail never; the owner, the
-/// lead and the author re-run, nobody else; a worker gone without a result
-/// is an error.
+/// lead and the author re-run, nobody else.
 #[tokio::test]
 async fn an_error_retries_once_a_fail_never_and_reruns_are_the_owners_lead_and_author() {
     let mut r = setup().await;
     let sha = opened(&mut r).await;
     let app = r.pair.d.app.clone();
+    // The repository is gone: the checkout can't be made, an error.
+    let moved = r.origin.with_extension("moved");
+    std::fs::rename(&r.origin, &moved).unwrap();
     dispatch(&app, &r.project).await.unwrap();
-    let first = check(&r, &sha, "unit").runner.unwrap();
-    let (_, mut worker) = runner(&r, &sha, "unit");
-    let errored = worker
-        .call("check_report", report(&sha, "unit", "error"))
-        .await;
-    assert_eq!(errored["check"]["result"], "error");
-    let retry = check(&r, &sha, "unit");
-    assert_eq!(retry.result.as_str(), "queued", "an error retries once");
+    let retry = until(&r, &sha, "unit", |c| {
+        c.result == CheckResult::Queued && c.runner.is_none()
+    })
+    .await;
     assert!(retry.note.unwrap().contains("retrying once"));
     dispatch(&app, &r.project).await.unwrap();
-    let second = check(&r, &sha, "unit").runner.unwrap();
-    assert_ne!(first, second, "a new worker");
-    // That worker goes without a result: an error, not retried again.
-    let worker = app.db.worker_for_bot(&second).unwrap().unwrap();
-    app.db
-        .finish_worker(&worker.id, bus::WorkerState::Cancelled, Some("test"))
-        .unwrap();
+    let gone = finished(&r, &sha, "unit").await;
+    assert_eq!(gone.result, CheckResult::Error, "not retried again");
+    assert!(gone.note.unwrap().contains("couldn't check out"));
+    finished(&r, &sha, "lint").await;
+    std::fs::rename(&moved, &r.origin).unwrap();
     dispatch(&app, &r.project).await.unwrap();
-    let gone = check(&r, &sha, "unit");
-    assert_eq!(gone.result.as_str(), "error");
-    assert!(gone.note.unwrap().contains("without a result"));
+    assert_eq!(check(&r, &sha, "unit").result, CheckResult::Error);
     assert_eq!(open_jobs(&r), 0);
 
     // Re-runs: the Architect may not; the author may.
@@ -251,22 +251,23 @@ async fn an_error_retries_once_a_fail_never_and_reruns_are_the_owners_lead_and_a
     let busy = r.bots[0].call_raw("check_rerun", args.clone()).await;
     assert!(error(&busy).contains("already"), "{busy}");
     dispatch(&app, &r.project).await.unwrap();
-    let failed = run(&r, &sha, "unit", "fail").await;
-    assert_eq!(failed["result"], "fail");
+    assert_eq!(finished(&r, &sha, "unit").await.result, CheckResult::Pass);
+
+    // A fail never retries.
+    let lint = json!({"sha": sha, "name": "lint"});
+    r.bots[0].call("check_rerun", lint.clone()).await;
     dispatch(&app, &r.project).await.unwrap();
-    assert_eq!(
-        check(&r, &sha, "unit").result.as_str(),
-        "fail",
-        "a fail never retries"
-    );
+    assert_eq!(finished(&r, &sha, "lint").await.result, CheckResult::Fail);
+    dispatch(&app, &r.project).await.unwrap();
+    assert_eq!(check(&r, &sha, "lint").result, CheckResult::Fail);
 
     // The lead and the owner.
     let lead = r.bots[0].call("check_rerun", args).await;
     assert_eq!(lead["check"]["result"], "queued", "{lead}");
     dispatch(&app, &r.project).await.unwrap();
-    run(&r, &sha, "unit", "pass").await;
+    finished(&r, &sha, "unit").await;
     let owner = rerun(&app, &r.project, &sha, "unit", &Asker::Owner).unwrap();
-    assert_eq!(owner.result.as_str(), "queued");
+    assert_eq!(owner.result, CheckResult::Queued);
     assert!(owner.note.unwrap().contains("the owner"));
 }
 
@@ -285,7 +286,8 @@ async fn the_policy_check_is_never_routed() {
     let sha = head(&tree);
     let app = r.pair.d.app.clone();
     dispatch(&app, &r.project).await.unwrap();
-    assert!(app.db.project_workers(&r.project, 10).unwrap().is_empty());
+    assert!(check(&r, &sha, ".hermes/checks.toml").runner.is_none());
+    assert_eq!(open_jobs(&r), 0);
     let refused = r.bots[0]
         .call_raw(
             "check_rerun",

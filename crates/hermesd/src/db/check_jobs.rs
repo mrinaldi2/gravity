@@ -1,7 +1,6 @@
-//! Check jobs (H-283, H-261 §7): each hand-over of a queued check to a
-//! worker pinned to one computer. Open jobs are what the per-machine cap
-//! counts; a job ends when its check has a final result or its worker is
-//! gone.
+//! Check jobs (H-283, H-261 §7): each hand-over of a queued check to the
+//! daemon runner of one computer. Open jobs are what the per-machine cap
+//! counts; a job ends when its check has a final result.
 
 use bus::now;
 use rusqlite::{params, OptionalExtension, Row};
@@ -44,15 +43,12 @@ pub struct CheckJob {
     pub check_id: String,
     pub project_id: String,
     pub machine: String,
-    pub worker_id: Option<String>,
-    pub bot_id: Option<String>,
     pub cause: JobCause,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub ended_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-const JOB_COLUMNS: &str =
-    "id, check_id, project_id, machine, worker_id, bot_id, cause, created_at, ended_at";
+const JOB_COLUMNS: &str = "id, check_id, project_id, machine, cause, created_at, ended_at";
 
 fn job_row(r: &Row<'_>) -> rusqlite::Result<CheckJob> {
     Ok(CheckJob {
@@ -60,16 +56,14 @@ fn job_row(r: &Row<'_>) -> rusqlite::Result<CheckJob> {
         check_id: r.get(1)?,
         project_id: r.get(2)?,
         machine: r.get(3)?,
-        worker_id: r.get(4)?,
-        bot_id: r.get(5)?,
-        cause: JobCause::parse(&r.get::<_, String>(6)?),
-        created_at: parse_ts(&r.get::<_, String>(7)?),
-        ended_at: r.get::<_, Option<String>>(8)?.as_deref().map(parse_ts),
+        cause: JobCause::parse(&r.get::<_, String>(4)?),
+        created_at: parse_ts(&r.get::<_, String>(5)?),
+        ended_at: r.get::<_, Option<String>>(6)?.as_deref().map(parse_ts),
     })
 }
 
 impl BoardTx<'_> {
-    /// The project's queued checks no worker has been asked to run yet,
+    /// The project's queued checks no runner has been asked to run yet,
     /// oldest first. A check with nothing to run (the `checks.toml` check)
     /// is never one.
     pub fn undispatched_checks(&self, project_id: &str) -> anyhow::Result<Vec<CheckRun>> {
@@ -122,47 +116,65 @@ impl BoardTx<'_> {
         Ok(rows)
     }
 
-    /// Hands the check to `worker_id` on `machine`: the job a re-run or a
-    /// retry left pending, else a first one.
-    pub fn assign_check_job(
-        &self,
-        check: &CheckRun,
-        machine: &str,
-        worker_id: &str,
-    ) -> anyhow::Result<JobCause> {
-        if let Some((id, cause)) = self.pending_job(&check.id)? {
+    /// Hands the check to `machine`'s runner: the job a re-run or a retry
+    /// left pending, else a first one. Returns the job's id.
+    pub fn assign_check_job(&self, check: &CheckRun, machine: &str) -> anyhow::Result<String> {
+        if let Some((id, _)) = self.pending_job(&check.id)? {
             self.conn.execute(
-                "UPDATE check_job SET machine = ?2, worker_id = ?3 WHERE id = ?1",
-                params![id, machine, worker_id],
+                "UPDATE check_job SET machine = ?2 WHERE id = ?1",
+                params![id, machine],
             )?;
-            return Ok(cause);
+            return Ok(id);
         }
-        self.insert_job(check, machine, Some(worker_id), JobCause::First)?;
-        Ok(JobCause::First)
+        self.insert_job(check, machine, JobCause::First)
+    }
+
+    /// Takes back a job its computer wouldn't start: a first one goes, a
+    /// re-run or a retry waits again to be routed.
+    pub fn unassign_check_job(&self, job_id: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "DELETE FROM check_job WHERE id = ?1 AND cause = 'first'",
+            params![job_id],
+        )?;
+        self.conn.execute(
+            "UPDATE check_job SET machine = '' WHERE id = ?1",
+            params![job_id],
+        )?;
+        Ok(())
+    }
+
+    /// The job with this id.
+    pub fn check_job(&self, id: &str) -> anyhow::Result<Option<CheckJob>> {
+        Ok(self
+            .conn
+            .query_row(
+                &format!("SELECT {JOB_COLUMNS} FROM check_job WHERE id = ?1"),
+                params![id],
+                job_row,
+            )
+            .optional()?)
     }
 
     /// A job for the check's next run, routed when the dispatcher gets to it.
     pub fn pend_check_job(&self, check: &CheckRun, cause: JobCause) -> anyhow::Result<()> {
-        self.insert_job(check, "", None, cause).map(|_| ())
+        self.insert_job(check, "", cause).map(|_| ())
     }
 
     fn insert_job(
         &self,
         check: &CheckRun,
         machine: &str,
-        worker_id: Option<&str>,
         cause: JobCause,
     ) -> anyhow::Result<String> {
         let id = uuid::Uuid::new_v4().to_string();
         self.conn.execute(
-            "INSERT INTO check_job(id, check_id, project_id, machine, worker_id, cause, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO check_job(id, check_id, project_id, machine, cause, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 id,
                 check.id,
                 check.project_id,
                 machine,
-                worker_id,
                 cause.as_str(),
                 ts(now())
             ],
@@ -188,31 +200,6 @@ impl BoardTx<'_> {
             .optional()?)
     }
 
-    /// The open job a spawn was queued for, with its check.
-    pub fn job_for_worker(&self, worker_id: &str) -> anyhow::Result<Option<(CheckJob, CheckRun)>> {
-        let job = self
-            .conn
-            .query_row(
-                &format!(
-                    "SELECT {JOB_COLUMNS} FROM check_job
-                     WHERE worker_id = ?1 AND ended_at IS NULL AND machine != ''"
-                ),
-                params![worker_id],
-                job_row,
-            )
-            .optional()?;
-        let Some(job) = job else { return Ok(None) };
-        Ok(self.check_by_id(&job.check_id)?.map(|c| (job, c)))
-    }
-
-    pub fn set_job_bot(&self, job_id: &str, bot_id: &str) -> anyhow::Result<()> {
-        self.conn.execute(
-            "UPDATE check_job SET bot_id = ?2 WHERE id = ?1",
-            params![job_id, bot_id],
-        )?;
-        Ok(())
-    }
-
     /// Ends the check's routed jobs; a pending one waits for its run.
     pub fn end_check_jobs(&self, check_id: &str) -> anyhow::Result<()> {
         self.conn.execute(
@@ -235,6 +222,17 @@ impl BoardTx<'_> {
             )
             .optional()?;
         Ok(cause.as_deref().map(JobCause::parse))
+    }
+
+    /// Undoes a dispatch its computer refused: queued again, no runner.
+    pub fn undispatch_check(&self, id: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "UPDATE check_run SET result = 'queued', runner = NULL, ran_on = NULL,
+                tool_versions = '{}', started_at = NULL
+             WHERE id = ?1 AND result = 'running'",
+            params![id],
+        )?;
+        Ok(())
     }
 
     /// Puts a check back in the queue for a new run: no runner, no result.

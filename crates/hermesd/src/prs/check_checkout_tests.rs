@@ -64,11 +64,11 @@ fn a_checkout_is_fresh_at_the_exact_sha_and_runs_nothing() {
     let root = tempfile::tempdir().unwrap();
     let marker = root.path().join("ran");
     let (url, first, _) = origin(root.path(), &marker);
-    let workspace = root.path().join("worker");
-    std::fs::create_dir_all(workspace.join(DIR)).unwrap();
-    std::fs::write(workspace.join(DIR).join("stale"), "old\n").unwrap();
+    let job = root.path().join("job");
+    std::fs::create_dir_all(job.join(DIR)).unwrap();
+    std::fs::write(job.join(DIR).join("stale"), "old\n").unwrap();
 
-    let dest = prepare(&workspace, &url, &first).unwrap();
+    let dest = prepare(&job, &url, &first).unwrap();
     assert_eq!(git(&dest, &["rev-parse", "HEAD"]), first);
     assert_eq!(
         std::fs::read_to_string(dest.join("a.txt")).unwrap(),
@@ -77,29 +77,20 @@ fn a_checkout_is_fresh_at_the_exact_sha_and_runs_nothing() {
     assert!(!dest.join("stale").exists(), "fresh, not reused");
     assert!(!marker.exists(), "git ran a program from the origin");
 
-    let short = prepare(&workspace, &url, &first[..12]).unwrap_err();
+    let short = prepare(&job, &url, &first[..12]).unwrap_err();
     assert!(short.to_string().contains("full commit sha"), "{short}");
-    remove(&workspace).unwrap();
-    assert!(!workspace.join(DIR).exists());
+    remove(&job).unwrap();
+    assert!(!job.join(DIR).exists());
 }
 
 #[test]
 fn a_checkout_that_cant_be_made_says_why() {
     let root = tempfile::tempdir().unwrap();
-    let workspace = root.path().join("worker");
+    let job = root.path().join("job");
     let missing = root.path().join("nowhere.git").display().to_string();
-    prepare_in_background(workspace.clone(), missing, "a".repeat(40));
-    let failed = workspace.join(FAILED);
-    for _ in 0..200 {
-        if failed.exists() {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    assert!(std::fs::read_to_string(failed)
-        .unwrap()
-        .contains("git clone"));
-    assert!(!workspace.join(DIR).exists());
+    let error = prepare(&job, &missing, &"a".repeat(40)).unwrap_err();
+    assert!(format!("{error:#}").contains("git clone"), "{error:#}");
+    assert!(!job.join(DIR).exists());
 }
 
 #[test]

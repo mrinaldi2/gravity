@@ -80,6 +80,8 @@ pub async fn spawn_daemon_on(
     // No tool probe or check routing behind a test's back (H-283).
     cfg.checks.probe_interval_secs = 0;
     cfg.checks.dispatch_interval_secs = 0;
+    // The test binary isn't hermesd: checks run through the real runner.
+    cfg.checks.runner = Some(env!("CARGO_BIN_EXE_hermesd").into());
     tweak(&mut cfg);
 
     let db = Db::open(&cfg.db_path()).expect("db");

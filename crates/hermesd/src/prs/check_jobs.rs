@@ -1,30 +1,35 @@
 //! The check runner (H-283, H-261 §7). Each queued check is routed to a
-//! computer whose tools cover it, and a worker is spawned for it there,
-//! pinned to that computer, with the PR's card. The worker gets a fresh
-//! checkout at the exact sha in its workspace (made by that computer's
-//! daemon, removed once it reports), runs the check and reports it. The
-//! runner is always a new worker: never the PR's author or a pusher.
+//! computer whose tools cover it, and that computer's daemon runs it
+//! itself ([`check_exec`]): a fresh checkout at the exact sha, the command
+//! from the base's `checks.toml`, and a result from its exit status alone.
+//! No bot and no AI worker is in the loop (ARCH M1, M2): the runner is the
+//! daemon identity [`SYSTEM_RUNNER`], which has no inbox, no parent and
+//! no task, and is never a PR's author or pusher.
 //!
 //! Each computer runs at most `jobs_per_machine` check jobs at once, and a
 //! job doesn't start on a computer whose disk is under the floor.
 
-use std::sync::{Arc, OnceLock};
+use std::collections::{BTreeMap, HashSet};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use tokio::sync::Notify;
 
 use crate::app::AppState;
-use crate::board::model::Role;
 use crate::board::release::machines;
-use crate::db::NewWorker;
+use crate::check_exec::{self, Outcome, Spec};
 use crate::prs::check_checkout;
-use crate::prs::check_model::CheckRun;
+use crate::prs::check_model::{CheckResult, CheckRun, Report};
 use crate::prs::check_route::{needs_of, route, Limits, Machine, Route};
-use crate::prs::checks::{dispatch as dispatch_check, short};
+use crate::prs::checks::{self, short, RunLog};
 use crate::prs::repo;
-use crate::workers::{self, HERE};
+
+/// The runner every check is dispatched to: the daemon itself. Not a bot,
+/// so nothing can message it, and never a PR's author or pusher.
+pub const SYSTEM_RUNNER: &str = "daemon:check-runner";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -39,6 +44,9 @@ pub struct ChecksConfig {
     /// How often queued checks are routed when nothing nudges sooner, in
     /// seconds; 0 routes them only when asked (tests).
     pub dispatch_interval_secs: u64,
+    /// The `hermesd` that runs a check (`hermesd check run`); this
+    /// daemon's own binary when unset.
+    pub runner: Option<PathBuf>,
 }
 
 impl Default for ChecksConfig {
@@ -48,15 +56,10 @@ impl Default for ChecksConfig {
             disk_floor_gb: 20,
             probe_interval_secs: 3600,
             dispatch_interval_secs: 30,
+            runner: None,
         }
     }
 }
-
-/// How long a check worker's task may run.
-const DEADLINE_HOURS: i64 = 6;
-
-const INSTRUCTIONS: &str = "You run one check and report it with check_report, then \
-complete_task. Never edit, commit or push anything.";
 
 fn wake() -> &'static Notify {
     static WAKE: OnceLock<Notify> = OnceLock::new();
@@ -103,8 +106,8 @@ fn home_projects(app: &AppState) -> anyhow::Result<Vec<String>> {
     Ok(out)
 }
 
-/// Routes `project`'s queued checks and spawns a worker for each one that
-/// has a computer.
+/// Routes `project`'s queued checks and starts each one that has a
+/// computer.
 pub async fn dispatch(app: &Arc<AppState>, project: &str) -> anyhow::Result<()> {
     // One pass at a time, or two would route the same check twice.
     static DISPATCHING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -114,16 +117,6 @@ pub async fn dispatch(app: &Arc<AppState>, project: &str) -> anyhow::Result<()> 
     if checks.is_empty() {
         return Ok(());
     }
-    let Some(lead) = lead_here(app, project)? else {
-        for check in &checks {
-            note(
-                app,
-                check,
-                "waiting for a lead on the board's computer to spawn its worker",
-            );
-        }
-        return Ok(());
-    };
     let mut machines = inventory(app, project)?;
     let limits = Limits {
         jobs_per_machine: app.cfg.checks.jobs_per_machine.max(1),
@@ -137,16 +130,17 @@ pub async fn dispatch(app: &Arc<AppState>, project: &str) -> anyhow::Result<()> 
                 let Some(m) = machines.iter_mut().find(|m| m.name == name) else {
                     continue;
                 };
-                match queue(app, &lead, check, m).await {
+                match start(app, check, &needs, m).await {
                     Ok(()) => m.open_jobs += 1,
-                    Err(error) => {
-                        note(app, check, &format!("couldn't spawn its worker: {error:#}"))
-                    }
+                    Err(error) => note(
+                        app,
+                        check,
+                        &format!("waiting: {} didn't start it: {error:#}", m.name),
+                    ),
                 }
             }
         }
     }
-    workers::place_queued(app, project).await;
     Ok(())
 }
 
@@ -158,30 +152,8 @@ fn note(app: &AppState, check: &CheckRun, why: &str) {
     }
 }
 
-/// The bot check workers are spawned under: the project's lead, when it
-/// runs on this computer.
-fn lead_here(app: &AppState, project: &str) -> anyhow::Result<Option<bus::Bot>> {
-    let Some(p) = app.db.get_project(project)? else {
-        return Ok(None);
-    };
-    let id = match p.lead_bot_id {
-        Some(id) => Some(id),
-        None => app
-            .db
-            .project_roles(project)?
-            .into_iter()
-            .find(|r| r.role == Role::Lead)
-            .map(|r| r.bot_id),
-    };
-    let Some(id) = id else { return Ok(None) };
-    Ok(app
-        .db
-        .get_live_bot(&id)?
-        .filter(|b| !b.is_linked() && !b.temporary))
-}
-
 /// Every computer that reported its tools, as routing sees it: this one,
-/// and the linked ones this project may run workers on.
+/// and the linked ones this project may run checks on.
 fn inventory(app: &AppState, project: &str) -> anyhow::Result<Vec<Machine>> {
     let (here, reported, open) = app.db.board_read(|t| {
         let here = machines::this_computer(t)?;
@@ -207,172 +179,137 @@ fn inventory(app: &AppState, project: &str) -> anyhow::Result<Vec<Machine>> {
     Ok(out)
 }
 
-/// The linked, online peer named `name` that `project` may run workers on.
-fn peer_for(app: &AppState, project: &str, name: &str) -> Option<bus::Peer> {
+/// The linked, online peer named `name` that `project` may run checks on.
+pub(super) fn peer_for(app: &AppState, project: &str, name: &str) -> Option<bus::Peer> {
     let peer = app.db.get_peer_by_name(name).ok()??;
     let linked = app.db.project_link(project, &peer.id).ok()?.is_some();
     (peer.revoked_at.is_none() && linked && app.peers.is_online(&peer.id)).then_some(peer)
 }
 
-/// Queues the worker for `check` on `machine`, with its job.
-async fn queue(
+/// The jobs this daemon is running now: a job open here that isn't one
+/// was cut short by a restart.
+fn running_here() -> &'static Mutex<HashSet<String>> {
+    static RUNNING: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    RUNNING.get_or_init(Mutex::default)
+}
+
+pub(super) fn is_running_here(job: &str) -> bool {
+    running_here()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(job)
+}
+
+/// The probed versions of the tools `needs` names, as the run's record.
+fn versions(machine: &Machine, needs: &[String]) -> BTreeMap<String, String> {
+    needs
+        .iter()
+        .filter_map(|n| Some((n.clone(), machine.tools.get(n)?.clone())))
+        .collect()
+}
+
+/// Starts `check` on `machine`: its job, the daemon as its runner, and the
+/// run itself, here or on the linked computer.
+async fn start(
     app: &Arc<AppState>,
-    lead: &bus::Bot,
     check: &CheckRun,
+    needs: &[String],
     machine: &Machine,
 ) -> anyhow::Result<()> {
-    let url = repo::of_project(app, &check.project_id, Some(&check.repo))?.url;
-    let pr = app
-        .db
-        .board_read(|t| t.pr_of_head(&check.project_id, &check.sha))?;
-    let name = worker_name(app, check)?;
-    let brief = brief(check, &url, pr.as_ref().map(|p| p.2));
-    let description = format!("Runs check {} on {}", check.name, short(&check.sha));
-    let new = NewWorker {
-        project_id: &check.project_id,
-        parent_bot_id: &lead.id,
-        name: &name,
-        brief: &brief,
-        description: &description,
-        instructions: INSTRUCTIONS,
-        runtime: None,
-        machine: Some(if machine.here { HERE } else { &machine.name }),
-        deadline_hours: DEADLINE_HOURS,
-    };
-    workers::queue_with(app, &new, |worker| {
-        app.db.board_tx(|t| {
-            t.assign_check_job(check, &machine.name, &worker.id)?;
-            t.set_check_note(&check.id, None).map(|_| ())
-        })?;
-        if let Some((card, _, _)) = &pr {
-            app.db.set_worker_card(&worker.id, card)?;
-            app.db.set_worker_item(&worker.id, card)?;
-        }
-        Ok(())
-    })
-    .await?;
-    tracing::info!(check = %check.name, sha = short(&check.sha), machine = %machine.name, "check routed");
-    Ok(())
-}
-
-/// `check-<name>-<sha7>`, numbered when that is taken.
-fn worker_name(app: &Arc<AppState>, check: &CheckRun) -> anyhow::Result<String> {
-    let slug: String = check
-        .name
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect();
-    let base = format!("check-{}-{}", slug.trim_matches('-'), short(&check.sha));
-    (1..=50)
-        .map(|n| {
-            if n == 1 {
-                base.clone()
-            } else {
-                format!("{base}-{n}")
-            }
-        })
-        .find(|name| crate::botmgmt::validate_name(app, &check.project_id, name, None).is_ok())
-        .ok_or_else(|| anyhow::anyhow!("no free name for {base}"))
-}
-
-/// What the worker is told to do.
-pub fn brief(check: &CheckRun, url: &str, pr: Option<u32>) -> String {
-    let pr = pr.map(|n| format!(" (PR #{n})")).unwrap_or_default();
-    let (dir, failed) = (check_checkout::DIR, check_checkout::FAILED);
-    format!(
-        "Run check `{name}` on commit {sha} of {repo}{pr}.\n\n\
-         1. Wait until `{dir}/` exists in your workspace: the daemon is checking that commit \
-         out there for you. If `{failed}` appears instead, write it to `check.log` and report \
-         `error` with that log (step 4).\n\
-         2. check_report sha={sha} name={name} result=running.\n\
-         3. In `{dir}/` run, with all output going to `check.log` in your workspace (not inside \
-         `{dir}/`): `cd {dir} && ({run}) > ../check.log 2>&1`\n\
-         4. check_report sha={sha} name={name} with result `pass` if it exited 0, `fail` if it \
-         didn't, or `error` only if it couldn't run at all (a missing tool, a broken checkout); \
-         log=check.log, and tool_versions with the version of each tool it used.\n\
-         5. complete_task with one line: the result. Don't fix, commit or push anything.",
-        name = check.name,
-        sha = check.sha,
-        repo = repo::name_of(url),
-        run = check.run,
-    )
-}
-
-// ---- placement (workers/place.rs) ----
-
-/// Before a check worker is created here: this computer's disk floor.
-pub fn before_start_here(app: &AppState, worker: &bus::Worker) -> anyhow::Result<()> {
-    if app
-        .db
-        .board_read(|t| t.job_for_worker(&worker.id))?
-        .is_some()
-    {
+    if machine.here {
         check_checkout::disk_floor(&app.cfg.home, app.cfg.checks.disk_floor_gb)?;
     }
-    Ok(())
-}
-
-/// Once the worker's bot exists, here or as a peer's stand-in: the check is
-/// dispatched to it, the only bot whose report counts.
-pub fn claim(app: &AppState, worker: &bus::Worker, bot: &bus::Bot) -> anyhow::Result<()> {
-    let Some((job, check)) = app.db.board_read(|t| t.job_for_worker(&worker.id))? else {
-        return Ok(());
+    let url = repo::of_project(app, &check.project_id, Some(&check.repo))?.url;
+    let tools = versions(machine, needs);
+    let job = app.db.board_tx(|t| {
+        let job = t.assign_check_job(check, &machine.name)?;
+        anyhow::ensure!(
+            t.dispatch_check(&check.id, SYSTEM_RUNNER)?,
+            "{} isn't queued any more",
+            check.name
+        );
+        t.report_check(
+            &check.id,
+            &Report {
+                result: CheckResult::Running,
+                ran_on: &machine.name,
+                log_artifact: None,
+                tool_versions: &tools,
+            },
+        )?;
+        t.set_check_note(&check.id, None)?;
+        Ok(job)
+    })?;
+    let spec = Spec {
+        url,
+        sha: check.sha.clone(),
+        run: check.run.clone(),
     };
-    if check.runner.as_deref() != Some(bot.id.as_str()) {
-        dispatch_check(app, &check.project_id, &check.sha, &check.name, &bot.id)?;
+    let started = if machine.here {
+        running_here()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(job.clone());
+        tokio::spawn(run_here(app.clone(), job.clone(), spec));
+        Ok(())
+    } else {
+        super::check_remote::start(app, check, &machine.name, &job, &spec).await
+    };
+    if started.is_err() {
+        app.db.board_tx(|t| {
+            t.unassign_check_job(&job)?;
+            t.undispatch_check(&check.id)
+        })?;
     }
-    app.db.board_tx(|t| t.set_job_bot(&job.id, &bot.id))
-}
-
-/// A check worker created here: claimed, and its checkout started.
-pub fn started_here(app: &AppState, worker: &bus::Worker, bot: &bus::Bot) -> anyhow::Result<()> {
-    claim(app, worker, bot)?;
-    let Some((_, check)) = app.db.board_read(|t| t.job_for_worker(&worker.id))? else {
-        return Ok(());
-    };
-    let url = repo::of_project(app, &check.project_id, Some(&check.repo))?.url;
-    check_checkout::prepare_in_background(bot.workspace_path.clone().into(), url, check.sha);
+    started?;
+    tracing::info!(check = %check.name, sha = short(&check.sha), machine = %machine.name, "check started");
     Ok(())
 }
 
-/// What a peer needs to make a check worker's checkout: `check` in its
-/// `create_bot` frame.
-pub fn for_peer(app: &AppState, worker: &bus::Worker) -> anyhow::Result<Option<Value>> {
-    let Some((_, check)) = app.db.board_read(|t| t.job_for_worker(&worker.id))? else {
-        return Ok(None);
-    };
-    let url = repo::of_project(app, &check.project_id, Some(&check.repo))?.url;
-    Ok(Some(
-        json!({ "url": url, "sha": check.sha, "name": check.name }),
-    ))
+async fn run_here(app: Arc<AppState>, job: String, spec: Spec) {
+    let outcome = check_exec::run(&app.cfg, &job, spec).await;
+    let log = outcome.log.clone().map_or(RunLog::None, RunLog::Here);
+    finish(&app, &job, &outcome, log);
+    running_here()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&job);
 }
 
-/// A peer asks for a check worker here (`check` in its `create_bot` frame):
-/// the repository must be one this project has, cloned from this side's own
-/// URL for it, and the disk must be above the floor, else the asker waits.
-pub fn peer_check(
-    app: &AppState,
-    project: &str,
-    frame: &Value,
-) -> anyhow::Result<Option<(String, String)>> {
-    let Some(check) = frame.get("check").filter(|c| c.is_object()) else {
-        return Ok(None);
-    };
-    let asked = check["url"].as_str().unwrap_or_default();
-    let sha = check["sha"].as_str().unwrap_or_default().to_string();
-    let own = app.db.project_repo(project)?.map(|r| r.url);
-    let url = own
-        .into_iter()
-        .chain(app.db.extra_repos(project)?)
-        .find(|url| repo::same(url, asked))
-        .ok_or_else(|| anyhow::anyhow!("{asked} isn't one of this project's repositories"))?;
-    check_checkout::disk_floor(&app.cfg.home, app.cfg.checks.disk_floor_gb)
-        .map_err(|low| crate::peer::refuse("at_capacity", low.to_string()))?;
-    Ok(Some((url, sha)))
+/// Records how job `job` went, if it is still open: its check's result,
+/// then the retry an error gets.
+pub(super) fn finish(app: &AppState, job: &str, outcome: &Outcome, log: RunLog) {
+    let recorded = (|| -> anyhow::Result<()> {
+        let Some(job) = app
+            .db
+            .board_read(|t| t.check_job(job))?
+            .filter(|j| j.ended_at.is_none())
+        else {
+            return Ok(());
+        };
+        let run = checks::record(
+            app,
+            &job.check_id,
+            &job.machine,
+            outcome.result,
+            &outcome.note,
+            log,
+        )?;
+        super::check_rerun::after_report(app, &run)
+    })();
+    if let Err(error) = recorded {
+        tracing::warn!(job, %error, "check result not recorded");
+    }
+    nudge();
+}
+
+/// The frame a job's result travels in from the computer that ran it.
+pub(super) fn result_frame(job: &str, outcome: &Outcome) -> serde_json::Value {
+    json!({
+        "type": super::check_remote::RESULT,
+        "job": job,
+        "result": outcome.result.as_str(),
+        "note": outcome.note,
+        "log": outcome.log.as_ref().map(|l| l.display().to_string()),
+    })
 }
