@@ -100,12 +100,7 @@ pub(super) fn call(
         "item_query" => item_query(app, &me, decode("ItemQuery", args, project)?),
         "item_move" => item_move(app, &me, decode("ItemMove", args, project)?),
         "item_move_check" => check(app, &me, decode("ItemMoveCheck", args, project)?),
-        "role_set" => {
-            let req: c::RoleSet = decode("RoleSet", args, project)?;
-            crate::board::team::set_role(app, project, &req, false)?;
-            let roles = app.db.project_roles(project)?;
-            Ok(json!({ "roles": out(model_list_roles(roles))? }))
-        }
+        "role_set" => super::board_roles::role_set(app, &me, decode("RoleSet", args, project)?),
         meeting if super::meetings::handles(meeting) => {
             super::meetings::call(app, &me.bot, roles, meeting, args)
         }
@@ -134,10 +129,6 @@ fn works_on(app: &Arc<AppState>, bot: &bus::Bot, args: &Value) -> anyhow::Result
         .get_item(id)?
         .is_some_and(|item| item.assignee.as_deref() == Some(bot.id.as_str()));
     Ok(assigned || app.db.board_read(|t| t.task_holders(id))?.contains(&bot.id))
-}
-
-fn model_list_roles(roles: Vec<crate::board::model::ProjectRole>) -> Vec<c::ProjectRole> {
-    roles.into_iter().map(Into::into).collect()
 }
 
 /// Contract output, with short enum names.

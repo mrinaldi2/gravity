@@ -166,3 +166,63 @@ pub fn patch_id(r: &Repo, number: u32) -> String {
         .unwrap()
         .head_patch_id
 }
+
+// ---- reviews (H-268) ----
+
+pub fn give(r: &Repo, bot: usize, role: Role) {
+    r.pair
+        .d
+        .app
+        .db
+        .set_project_role(&ProjectRole {
+            project_id: r.project.clone(),
+            role,
+            bot_id: r.pair.ids[bot].clone(),
+            machine: None,
+        })
+        .unwrap();
+}
+
+/// A PR on card "Search": Architect holds reviewer.arch; returns the
+/// worktree and the head the PR opened at.
+pub async fn opened(r: &mut Repo) -> (std::path::PathBuf, String) {
+    give(r, 2, Role::ReviewerArch);
+    let item = r.card("Search", "doing");
+    let tree = r.worktree("a", "H-1-search");
+    let pr = r.bots[1]
+        .call("pr_open", json!({"item": item, "branch": "H-1-search"}))
+        .await["pr"]
+        .clone();
+    (tree, pr["head_sha"].as_str().unwrap().to_string())
+}
+
+pub async fn approve(r: &mut Repo, sha: &str) -> Value {
+    r.bots[2]
+        .call(
+            "pr_review",
+            json!({"number": 1, "sha": sha, "role": "architect", "verdict": "approved",
+                   "summary": "Looks right."}),
+        )
+        .await
+}
+
+pub async fn pr(r: &mut Repo) -> Value {
+    r.bots[0].call("pr_get", json!({"number": 1})).await["pr"].clone()
+}
+
+pub async fn report(r: &mut Repo, tree: &Path) -> String {
+    let sha = git(tree, &["rev-parse", "HEAD"]).trim().to_string();
+    r.bots[1]
+        .call("pr_push", json!({"number": 1, "sha": sha}))
+        .await;
+    sha
+}
+
+/// Main moves on with a commit touching `file`.
+pub fn move_main(r: &Repo, name: &str, file: &str, text: &str) {
+    let other = r.dev.join(format!("main-mover-{name}"));
+    clone(&r.origin, &other, "unused");
+    git(&other, &["checkout", "-q", "main"]);
+    commit(&other, file, text);
+    git(&other, &["push", "-q", "origin", "main"]);
+}

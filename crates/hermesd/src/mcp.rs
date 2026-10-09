@@ -19,6 +19,7 @@ mod board_comments;
 mod board_edit;
 mod board_import;
 mod board_remote;
+mod board_roles;
 mod board_schema;
 mod decisions;
 pub(crate) mod meetings;

@@ -25,25 +25,45 @@ pub fn project_bot(app: &AppState, project_id: &str, name_or_id: &str) -> anyhow
 }
 
 /// The roles the lead may give or take away over MCP. Lead, DevOps and
-/// tester are the owner's alone (ARCH-R30 M1).
-const LEAD_ASSIGNS: [Role; 5] = [
-    Role::Dev,
-    Role::Coach,
-    Role::ReviewerArch,
-    Role::ReviewerUx,
-    Role::ReviewerCe,
-];
+/// tester are the owner's alone (ARCH-R30 M1), and so is reviewer.ce: the
+/// security review is independent of the lead (H-268 ARCH M1).
+const LEAD_ASSIGNS: [Role; 4] = [Role::Dev, Role::Coach, Role::ReviewerArch, Role::ReviewerUx];
+
+/// Who assigns a role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Assigner<'a> {
+    /// The owner on the WebSocket; `proved` when from a paired device or the
+    /// app's ticket rather than the owner token a bot could read.
+    Owner { proved: bool },
+    /// The lead over MCP, by bot id.
+    Lead(&'a str),
+}
 
 /// Gives the bot the role, or takes it away. A tester's machine is updated
-/// in place. The owner assigns any role; the lead only `LEAD_ASSIGNS`.
+/// in place. The owner assigns any role (reviewer.ce only from a device or
+/// the app); the lead only `LEAD_ASSIGNS`, and never a reviewer role to
+/// itself.
 pub fn set_role(
     app: &Arc<AppState>,
     project_id: &str,
     req: &c::RoleSet,
-    by_owner: bool,
+    by: Assigner<'_>,
 ) -> anyhow::Result<()> {
     let role = Role::from_wire(req.role)?;
     let bot_id = project_bot(app, project_id, req.bot.trim())?;
+    let by_owner = matches!(by, Assigner::Owner { .. });
+    anyhow::ensure!(
+        role != Role::ReviewerCe || by == Assigner::Owner { proved: true },
+        "only the owner, from the app or a paired device, assigns reviewer.ce"
+    );
+    let reviewer = matches!(
+        role,
+        Role::ReviewerArch | Role::ReviewerUx | Role::ReviewerCe
+    );
+    anyhow::ensure!(
+        !(reviewer && by == Assigner::Lead(&bot_id)),
+        "the lead can't give itself a reviewer role"
+    );
     anyhow::ensure!(
         by_owner || LEAD_ASSIGNS.contains(&role) || lead_ios_tester(app, project_id, req, &bot_id)?,
         "only the owner assigns {}",

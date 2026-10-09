@@ -1093,15 +1093,19 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
   - Each role is filled by a board role: `architect` → reviewer.arch, `ux` → reviewer.ux, `ce` → reviewer.ce (new, `ROLE_REVIEWER_CE`), `devops` → devops, `qa` → tester.
 - **`pr_review {number, sha, role, verdict, summary?, findings[], artifact?}`:**
   - The bot must hold the role's board role, and `sha` must be the head.
+  - It is refused while the PR is `moved_unreported`; the pusher reports the tip first.
   - `changes_requested` needs at least one `must` finding.
   - The `owner` role is refused over MCP.
   - The verdict is stored with the head's patch-id. `stale` is computed as the review's patch-id ≠ the PR's head patch-id, so an update with main keeps it and a fix-up or a conflict resolution doesn't.
 - **Who may not review it (§4.4):**
   - the PR's author;
   - the card's assignee;
-  - a bot that reported a push since the PR's last approval;
+  - any bot that ever reported a push to it;
   - a bot whose worker (`created_by_bot_id`) did;
   - for architect, ux and ce, a bot with the dev role tasked on the card.
+- **Who seats reviewers:**
+  - `reviewer.ce` is the owner's to give, from a paired device or the app's ticket. The owner token and the lead are refused.
+  - The lead may give reviewer.arch and reviewer.ux to other bots, never to itself.
 - **Review tasks:**
   - When a PR opens or its head changes, each bot role with no fresh approval and no open review task gets one task from the daemon (`from_bot_id` empty), linked to the card.
   - It goes to the first holder §4.4 allows. A role nobody may fill gets none, and the daemon logs it.
