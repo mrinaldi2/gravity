@@ -42,6 +42,10 @@ pub(crate) fn plant(repo: &Path, marker: &Path) {
         script(&tools.join("hooks").join(hook), marker);
     }
     let fsmonitor = tools.join("fsmonitor").display().to_string();
+    // Git for Windows runs core.fsmonitor through sh, which would eat the
+    // backslashes; with '/' the plant really runs under plain git.
+    #[cfg(windows)]
+    let fsmonitor = fsmonitor.replace('\\', "/");
     let hooks = tools.join("hooks").display().to_string();
     plain(repo, &["config", "core.fsmonitor", &fsmonitor]);
     plain(repo, &["config", "core.hooksPath", &hooks]);
