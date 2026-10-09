@@ -70,3 +70,29 @@ fn the_role_rebuild_accepts_the_new_roles_and_runs_again() {
     );
     assert!(refused.is_err(), "the CHECK still refuses unknown roles");
 }
+
+/// A role row this build doesn't know (a newer daemon wrote it, then a
+/// rollback) is skipped, and the project's known roles still read.
+#[test]
+fn an_unknown_role_row_is_skipped_not_fatal() {
+    let (db, p) = board();
+    let known = db.project_roles(&p).unwrap();
+    assert!(!known.is_empty());
+    let bot: String = db
+        .lock()
+        .query_row(
+            "SELECT id FROM bot WHERE project_id = ?1 LIMIT 1",
+            [&p],
+            |r| r.get(0),
+        )
+        .unwrap();
+    // `qa` passes the CHECK since 048 but has no `Role` variant yet: the
+    // same row a later release writes and a rolled-back one reads.
+    db.lock()
+        .execute(
+            "INSERT INTO project_role(project_id, role, bot_id) VALUES (?1, 'qa', ?2)",
+            rusqlite::params![p, bot],
+        )
+        .unwrap();
+    assert_eq!(db.project_roles(&p).unwrap(), known);
+}
