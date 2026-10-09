@@ -75,6 +75,9 @@ mod permissions;
 mod project_links;
 mod project_repos;
 mod projects;
+pub mod prs;
+#[cfg(test)]
+mod prs_tests;
 mod quiesce;
 mod release_life;
 mod release_machines;

@@ -53,6 +53,13 @@ message PrComment {
   Severity severity = 8;                    // unset = a plain comment
 }
 
+// [pr_close] The PR's author or the lead closes it without merging; its
+// card goes back to Doing.
+message PrClose {
+  uint32 number = 1;
+  string reason = 2;
+}
+
 // [pr_get] One PR in full.
 message PrLookup {
   uint32 number = 1;

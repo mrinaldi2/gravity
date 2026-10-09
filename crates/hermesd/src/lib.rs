@@ -36,6 +36,7 @@ pub mod paths;
 pub mod peer;
 mod permissions;
 pub mod projectmgmt;
+pub mod prs;
 pub mod quiesce;
 pub mod redact;
 pub mod resume;

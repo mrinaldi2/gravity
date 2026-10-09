@@ -60,7 +60,8 @@ pub(super) fn conditions(
                     Some("Link the branch."),
                 ));
             }
-            if !ctx.has_link(&[LinkKind::Artifact]) {
+            // A PR carries its change note (H-261 §6.6).
+            if !ctx.has_link(&[LinkKind::Artifact, LinkKind::Pr]) {
                 out.push(unmet(
                     "review.change_note",
                     "No change note is linked.",

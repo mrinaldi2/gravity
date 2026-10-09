@@ -135,3 +135,57 @@ pub fn commit_time(cache: &Path, commit: &str) -> Option<chrono::DateTime<chrono
     let secs = String::from_utf8_lossy(&out.stdout).trim().parse().ok()?;
     chrono::DateTime::from_timestamp(secs, 0)
 }
+
+/// The best common ancestor of `a` and `b`.
+pub fn merge_base(cache: &Path, a: &str, b: &str) -> anyhow::Result<String> {
+    let out = git(cache, &["merge-base", a, b])?;
+    ok(&out, "merge-base")?;
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// `git patch-id --stable` of the change from `base` to `head` (H-261 §3):
+/// the same for the same change whatever it was rebased onto; empty when
+/// there is no change. A blob-less cache fetches the blobs it needs.
+pub fn patch_id(cache: &Path, base: &str, head: &str) -> anyhow::Result<String> {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let diff = git(
+        cache,
+        &[
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "--full-index",
+            base,
+            head,
+        ],
+    )?;
+    ok(&diff, "diff")?;
+    if diff.stdout.is_empty() {
+        return Ok(String::new());
+    }
+    let null = if cfg!(windows) { "NUL" } else { "/dev/null" };
+    let mut child = Command::new("git")
+        .current_dir(cache)
+        .env("GIT_CONFIG_GLOBAL", null)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .args(["patch-id", "--stable"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut stdin = child.stdin.take().expect("piped stdin");
+    let writer = std::thread::spawn(move || stdin.write_all(&diff.stdout));
+    let out = child.wait_with_output()?;
+    writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("writing the diff to git patch-id failed"))??;
+    ok(&out, "patch-id")?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(text
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_string())
+}

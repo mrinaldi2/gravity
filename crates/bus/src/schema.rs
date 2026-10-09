@@ -21,6 +21,7 @@ mod owner_actions;
 mod owner_messages;
 mod peers;
 mod permissions;
+mod prs;
 mod quiesce;
 mod releases;
 mod workers;
@@ -48,6 +49,7 @@ use permissions::{
     MIGRATION_PERMISSIONS, MIGRATION_PERMISSION_EXTRAS_QUIESCE,
     MIGRATION_PERMISSION_EXTRAS_RELEASE_MAIN,
 };
+use prs::MIGRATION_PR_CORE;
 use quiesce::MIGRATION_QUIESCE;
 use releases::{
     MIGRATION_DEPLOY_SUPERSEDED, MIGRATION_RELEASES, MIGRATION_RELEASE_BUILD_COMMIT,
@@ -105,6 +107,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_CARD_QUESTIONS,
     MIGRATION_DEPLOY_SUPERSEDED,
     MIGRATION_RELEASE_WORK_ITEM,
+    MIGRATION_PR_CORE,
 ];
 
 #[cfg(test)]
