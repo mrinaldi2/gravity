@@ -7,6 +7,7 @@
 use serde_json::{json, Value};
 
 use crate::app::AppState;
+use crate::board::release::git_cache;
 use crate::db::comments::{Comment, NewComment};
 use crate::decisions::{forbidden, invalid, not_found};
 use crate::prs::model::Pr;
@@ -58,6 +59,28 @@ pub fn add(
     }
     let side = side(w.side)?;
     let severity = severity(w.severity)?;
+    // The anchor is checked before the transaction: reading the repository
+    // takes the database lock the transaction holds.
+    let reply = w.reply_to.is_some_and(|r| !r.is_empty());
+    if !reply {
+        let pr = app
+            .db
+            .board_read(|t| t.pr(project, number))?
+            .ok_or_else(|| not_found(format!("no PR #{number} in this project")))?;
+        let (sha, path) = (w.sha.trim(), w.path.trim());
+        let known = pr.head_sha == sha
+            || app
+                .db
+                .board_read(|t| t.pr_pushes(&pr.id))?
+                .iter()
+                .any(|p| p.sha == sha);
+        if !known {
+            return Err(invalid(format!("{sha} isn't a commit of PR #{number}")));
+        }
+        if !path.is_empty() && w.line > 0 {
+            check_anchor(app, &pr, sha, path, w.line, side)?;
+        }
+    }
     app.db.board_tx(|t| {
         let pr = t
             .pr(project, number)?
@@ -102,8 +125,41 @@ pub fn add(
     })
 }
 
-/// Resolves a thread. A bot may resolve one it started or one on its own PR;
-/// the owner (`by_owner`) any.
+/// The anchor names a line of a text file at that commit (ARCH M2): on the
+/// `new` side the commit itself, on the `old` side its merge-base with the
+/// PR's base. A missing path, a folder, a binary file or a line past the
+/// end is refused.
+fn check_anchor(
+    app: &AppState,
+    pr: &Pr,
+    sha: &str,
+    path: &str,
+    line: u32,
+    side: &str,
+) -> anyhow::Result<()> {
+    let cache = repo::of_project(app, &pr.project_id, Some(&pr.repo))?.cached(app);
+    let at = if side == "old" {
+        git_cache::merge_base(&cache, &pr.base_sha, sha)?
+    } else {
+        sha.to_string()
+    };
+    let lines = git_cache::line_count(&cache, &at, path)?.ok_or_else(|| {
+        invalid(format!(
+            "{path} isn't a text file at {}",
+            &at[..at.len().min(7)]
+        ))
+    })?;
+    if line as usize > lines {
+        return Err(invalid(format!(
+            "{path} has {lines} lines there, not {line}"
+        )));
+    }
+    Ok(())
+}
+
+/// Resolves a thread (ARCH M1). A `must` thread only by its author or the
+/// owner, and one the owner started only by the owner, so a PR's author never
+/// clears a reviewer's must-fix; other threads also by the PR's author.
 pub fn resolve(
     app: &AppState,
     project: &str,
@@ -126,10 +182,18 @@ pub fn resolve(
                 .ok_or_else(|| not_found("no such thread"))?,
             None => c,
         };
-        if !by_owner && root.author != by && pr.author != by {
-            return Err(forbidden(
-                "the thread's author, the PR's author or the owner resolves it",
-            ));
+        let owners = root.author.starts_with("owner:");
+        let must = root.severity.as_deref() == Some("must");
+        let allowed =
+            by_owner || (!owners && root.author == by) || (!owners && !must && pr.author == by);
+        if !allowed {
+            return Err(forbidden(if owners {
+                "only the owner resolves a thread the owner started"
+            } else if must {
+                "a must-fix thread is resolved by its author or the owner"
+            } else {
+                "the thread's author, the PR's author or the owner resolves it"
+            }));
         }
         t.resolve_comment(&root.id, by)?;
         t.comment(&root.id)?

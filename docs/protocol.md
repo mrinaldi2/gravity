@@ -1141,18 +1141,21 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 **Line comments (PR-3b, H-282; §1.4, §5.1(3)).** They're stored in `review_comment`, from H-268; no migration.
 - **`pr_comment {number, sha?, path?, line?, side?, body, severity?, reply_to?}`** (MCP, any bot in the project):
   - It comments on a line at a commit the PR has had; `side` is `new` (default) or `old`.
+  - The anchor must name a line of a text file at that commit (`old` side: at its merge-base with the PR's base). A missing path, a folder, a binary file or a line past the end is refused.
   - A reply (`reply_to`) joins the thread of the comment it answers, takes the thread's anchor, and carries no severity.
 - **`pr_comments {number, sha?}`** (MCP) lists every comment as shown on `sha` (default: the head):
   - each one has `shown_line`, where its line went, through the zero-context diff of its file from the commit it was written on;
-  - it's `outdated`, with no line, when that line was changed or removed, or when the file is gone;
+  - it's `outdated`, with no line, when that line was changed or removed, when the file is gone or isn't a file, or when it changed without line hunks (binary or `-diff`);
   - a comment on the `old` side is outdated on any other commit;
   - it's never shown on a line it wasn't written about, and `line`/`sha` keep the original anchor.
   - `pr_get` includes `comments` as shown on the head.
 - **The diff:** it runs through SafeGit (H-289), so no external diff or textconv runs.
 - **`pr_comment_resolve {number, comment_id}`:**
   - It resolves a thread; resolving a reply resolves its thread.
-  - Over MCP: the thread's author or the PR's author.
-  - Over WS: the owner, from a device or the app's ticket.
+  - A `must` thread: only its author or the owner.
+  - A thread the owner started: only the owner.
+  - Any other thread: its author or the PR's author, over MCP.
+  - The owner resolves any thread over WS, from a device or the app's ticket.
 - **An open `must` thread** (a thread's first comment with `severity: must`, unresolved) is a mergeable blocker: `unresolved_must`, subject `comments`.
 
 **Merging (PR-6a, H-271; §5.1, §5.2, §16).** Migration `MERGE_QUEUE` adds the tables `pr_merge` and `review_withdrawn`.

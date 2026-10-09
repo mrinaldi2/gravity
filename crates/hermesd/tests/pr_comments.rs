@@ -140,7 +140,21 @@ async fn a_must_thread_blocks_until_resolved() {
             json!({"number": 1, "comment_id": must}),
         )
         .await;
-    assert!(error(&stranger).contains("resolves it"), "{stranger}");
+    assert!(
+        error(&stranger).contains("resolved by its author or the owner"),
+        "{stranger}"
+    );
+    // Nor the PR's author: a reviewer's must-fix is theirs to clear (ARCH M1).
+    let author = r.bots[1]
+        .call_raw(
+            "pr_comment_resolve",
+            json!({"number": 1, "comment_id": must}),
+        )
+        .await;
+    assert!(
+        error(&author).contains("resolved by its author or the owner"),
+        "{author}"
+    );
     // Resolving through a reply resolves the thread.
     let resolved = r.bots[2]
         .call(
@@ -174,4 +188,81 @@ async fn a_must_thread_blocks_until_resolved() {
     let mut app = WsClient::connect(&r.pair.d).await;
     let done = app.request(resolve).await;
     assert_eq!(done["comment"]["resolved"], true, "{done}");
+}
+
+/// ARCH M1: the PR's author resolves a should thread but no owner-started
+/// one; only the owner does.
+#[tokio::test]
+async fn the_owners_threads_are_the_owners_to_resolve() {
+    let mut r = setup().await;
+    let (_, head) = opened(&mut r).await;
+    let should = r.bots[2]
+        .call(
+            "pr_comment",
+            json!({"number": 1, "sha": head, "path": "a.txt", "line": 1,
+                   "body": "Maybe rename.", "severity": "should"}),
+        )
+        .await["comment"]["id"]
+        .clone();
+    r.bots[1]
+        .call(
+            "pr_comment_resolve",
+            json!({"number": 1, "comment_id": should}),
+        )
+        .await;
+    let mut app = WsClient::connect(&r.pair.d).await;
+    let owners = app
+        .request(
+            json!({"type": "pr_comment_add", "project_id": r.project, "number": 1,
+                        "sha": head, "path": "a.txt", "line": 1, "body": "Not like this."}),
+        )
+        .await["comment"]["id"]
+        .clone();
+    for bot in [1, 2] {
+        let refused = r.bots[bot]
+            .call_raw(
+                "pr_comment_resolve",
+                json!({"number": 1, "comment_id": owners}),
+            )
+            .await;
+        assert!(error(&refused).contains("only the owner"), "{refused}");
+    }
+    let done = app
+        .request(
+            json!({"type": "pr_comment_resolve", "project_id": r.project,
+                        "number": 1, "comment_id": owners}),
+        )
+        .await;
+    assert_eq!(done["comment"]["resolved"], true, "{done}");
+}
+
+/// ARCH M2: an anchor names a line of a text file at that commit; a file
+/// turned binary leaves its comments outdated.
+#[tokio::test]
+async fn anchors_are_checked_and_binary_changes_outdate() {
+    let mut r = setup().await;
+    let (tree, _) = opened(&mut r).await;
+    std::fs::create_dir_all(tree.join("dir")).unwrap();
+    commit(&tree, "dir/f.txt", "x\n");
+    commit(&tree, "notes.txt", NOTES);
+    git(&tree, &["push", "-q", "origin", "H-1-search"]);
+    let head = report(&mut r, &tree).await;
+    let try_at = |path: &str, line: u32| json!({"number": 1, "sha": head, "path": path, "line": line, "body": "?"});
+    for (path, line, why) in [
+        ("missing.txt", 1, "isn't a text file"),
+        ("dir", 1, "isn't a text file"),
+        ("notes.txt", 6, "has 5 lines"),
+    ] {
+        let refused = r.bots[2].call_raw("pr_comment", try_at(path, line)).await;
+        assert!(error(&refused).contains(why), "{path}: {refused}");
+    }
+    let on_three =
+        r.bots[2].call("pr_comment", try_at("notes.txt", 3)).await["comment"]["id"].clone();
+    std::fs::write(tree.join("notes.txt"), [0u8, 159, 146, 150, 0, 1, 2]).unwrap();
+    git(&tree, &["add", "notes.txt"]);
+    git(&tree, &["commit", "-q", "-m", "binary"]);
+    git(&tree, &["push", "-q", "origin", "H-1-search"]);
+    report(&mut r, &tree).await;
+    let all = comments(&mut r).await;
+    assert_eq!(by_id(&all, &on_three)["outdated"], true, "{all:?}");
 }

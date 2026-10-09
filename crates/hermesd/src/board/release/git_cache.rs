@@ -261,9 +261,7 @@ pub struct Hunk {
 /// The hunks that turn `path` at `from` into `path` at `to`, or `None` when
 /// `to` has no such file. No textconv or external diff runs (SafeGit).
 pub fn hunks(cache: &Path, from: &str, to: &str, path: &str) -> anyhow::Result<Option<Vec<Hunk>>> {
-    let listed = git(cache, &["ls-tree", "--name-only", to, "--", path])?;
-    ok(&listed, "ls-tree")?;
-    if String::from_utf8_lossy(&listed.stdout).trim() != path {
+    if !is_blob(cache, to, path)? {
         return Ok(None);
     }
     let out = git(
@@ -282,7 +280,37 @@ pub fn hunks(cache: &Path, from: &str, to: &str, path: &str) -> anyhow::Result<O
     )?;
     ok(&out, "diff")?;
     let text = String::from_utf8_lossy(&out.stdout);
-    Ok(Some(text.lines().filter_map(parse_hunk).collect()))
+    let hunks: Vec<Hunk> = text.lines().filter_map(parse_hunk).collect();
+    // Changed with no line hunks (binary, or `-diff`): no line maps across.
+    if hunks.is_empty() && !text.trim().is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(hunks))
+}
+
+/// Whether `path` at `commit` is a file (a blob), not missing or a folder.
+pub fn is_blob(cache: &Path, commit: &str, path: &str) -> anyhow::Result<bool> {
+    let out = git(cache, &["ls-tree", commit, "--", path])?;
+    ok(&out, "ls-tree")?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(text.lines().any(|l| {
+        l.split_once('\t').is_some_and(|(meta, name)| {
+            name == path && meta.split_whitespace().nth(1) == Some("blob")
+        })
+    }))
+}
+
+/// How many lines `path` has at `commit`: `None` when it isn't a text file
+/// there.
+pub fn line_count(cache: &Path, commit: &str, path: &str) -> anyhow::Result<Option<usize>> {
+    if !is_blob(cache, commit, path)? {
+        return Ok(None);
+    }
+    let out = git(cache, &["cat-file", "blob", &format!("{commit}:{path}")])?;
+    ok(&out, "cat-file")?;
+    Ok(String::from_utf8(out.stdout)
+        .ok()
+        .map(|t| t.lines().count()))
 }
 
 /// `@@ -a[,b] +c[,d] @@`, where a missing count is 1.
