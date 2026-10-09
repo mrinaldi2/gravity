@@ -70,8 +70,12 @@ pub fn verify(
     branch: &str,
     reported: &str,
 ) -> anyhow::Result<PrWorktree> {
-    let path = std::fs::canonicalize(reported)
-        .map_err(|_| anyhow::anyhow!("worktree {reported} doesn't exist on {machine}"))?;
+    let path = std::fs::canonicalize(reported).map_err(|_| {
+        anyhow::anyhow!(
+            "worktree {reported} doesn't exist on {machine}; a worktree on another computer \
+                 is checked by that computer's daemon once H-285 lands"
+        )
+    })?;
     anyhow::ensure!(
         allowed(app, bot, &path),
         "worktree {reported} isn't in your workspace or one of your <repo>-wt-{} folders",
