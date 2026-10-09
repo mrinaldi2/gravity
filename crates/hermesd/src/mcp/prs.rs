@@ -9,7 +9,8 @@ use serde_json::{json, Value};
 
 use crate::app::AppState;
 use crate::board::model::Role;
-use crate::prs::{self, flow};
+use crate::prs::review_model::{Finding, Verdict};
+use crate::prs::{self, flow, follow_up, review};
 
 use super::board_schema::{decode, shared, Audience, BoardTool};
 
@@ -35,10 +36,24 @@ pub(super) const PR_TOOLS: &[BoardTool] = &[
         "Close a PR without merging (its author or the lead); the card goes back to Doing.",
     ),
     shared(
+        "pr_review",
+        "PrReview",
+        Audience::Everyone,
+        "Review a PR as a role you hold (architect, ux, ce, devops, qa), on its current head \
+         sha. Asking for changes needs a `must` finding. Refused for its author, its card's \
+         assignee, a bot that pushed to it since its last approval, or one whose worker did.",
+    ),
+    shared(
+        "pr_follow_up",
+        "PrFollowUp",
+        Audience::Everyone,
+        "File a review's `should` or `nit` finding as an Inbox card related to the PR's card.",
+    ),
+    shared(
         "pr_get",
         "PrLookup",
         Audience::Everyone,
-        "One PR, with its pushes and worktrees.",
+        "One PR, with its reviews, the roles it needs, its pushes and worktrees.",
     ),
     shared(
         "pr_list",
@@ -100,6 +115,46 @@ pub(super) fn call(
             let lead = roles.contains(&Role::Lead);
             one(flow::close(app, bot, lead, req.number, &req.reason)?)
         }
+        "pr_review" => {
+            let req: p::PrReview = decode("PrReview", args, project)?;
+            let verdict = match p::Verdict::try_from(req.verdict) {
+                Ok(p::Verdict::Approved) => Verdict::Approved,
+                Ok(p::Verdict::ChangesRequested) => Verdict::ChangesRequested,
+                _ => anyhow::bail!("verdict must be approved or changes_requested"),
+            };
+            let findings = req.findings.iter().map(finding).collect();
+            let review = review::submit(
+                app,
+                bot,
+                roles,
+                &review::Submit {
+                    number: req.number,
+                    sha: &req.sha,
+                    role: &req.role,
+                    verdict,
+                    summary: &req.summary,
+                    findings,
+                    artifact: req.artifact.as_deref(),
+                },
+            )?;
+            let pr = app
+                .db
+                .board_read(|t| t.pr(project, req.number))?
+                .ok_or_else(|| anyhow::anyhow!("no PR #{}", req.number))?;
+            Ok(json!({ "review": review.to_json(&pr), "pr": prs::detail(app, &pr)? }))
+        }
+        "pr_follow_up" => {
+            let req: p::PrFollowUp = decode("PrFollowUp", args, project)?;
+            let item = follow_up::file(
+                app,
+                bot,
+                roles,
+                req.number,
+                &req.review_id,
+                req.finding as usize,
+            )?;
+            Ok(json!({ "item_id": item }))
+        }
         "pr_get" => {
             let req: p::PrLookup = decode("PrLookup", args, project)?;
             prs::look(app, project);
@@ -122,5 +177,22 @@ pub(super) fn call(
             Ok(json!({ "check": run.to_json() }))
         }
         other => anyhow::bail!("unknown PR tool: {other}"),
+    }
+}
+
+fn finding(f: &p::Finding) -> Finding {
+    let severity = match p::Severity::try_from(f.severity) {
+        Ok(p::Severity::Must) => "must",
+        Ok(p::Severity::Should) => "should",
+        Ok(p::Severity::Nit) => "nit",
+        _ => "",
+    };
+    Finding {
+        severity: severity.to_string(),
+        text: f.text.clone(),
+        path: Some(f.path.clone()).filter(|p| !p.is_empty()),
+        line: Some(f.line).filter(|l| *l > 0),
+        resolved_in: None,
+        follow_up_item_id: None,
     }
 }

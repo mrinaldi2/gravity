@@ -1065,6 +1065,9 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 **Bots' PR tools (PR-1, H-266).** Every bot on a project with a board gets these; the checks below decide who may act. All of them run on the board's home computer (`pr`, `pr_push`, `pr_worktree`, migration `PR_CORE`).
 - **`pr_open {item, branch, worktree?, title?, body?, repo?}`:**
   - Only the card's assignee, or a bot tasked on the card, may open it. The card must be in Doing (or already in Review), with no other open PR.
+  - `repo` must be the project's repository or one the owner added. Anything else is refused with "<name> isn't one of this project's repositories", and nothing is fetched.
+    - The owner adds them with the WS request `set_project_extra_repos {project_id, urls}` (approve), from the app's ticket or a paired device only. The owner token is refused and no bot tool sets it.
+    - It answers `{type: "project", project}`, with `extra_repos`.
   - The daemon fetches the repository into its own cache, `<home>/cache/repos`, and reads the branch's tip there: that tip is the head.
   - It records PR #n, numbered per project. `head_patch_id` is `git patch-id --stable` of the diff from the head's merge-base with main to the head.
   - It links the branch and `#n` on the card, and moves the card Doing → Review. A linked PR counts as the change note.
@@ -1082,6 +1085,30 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **`pr_close {number, reason}`:** only the author or the lead closes a PR. It is closed unmerged, and its card goes back to Doing.
 - **`pr_get {number}` and `pr_list {states?}`:** a PR with its pushes and worktrees; empty `states` means open and merging.
 - **Off the board's home:** a call is forwarded there like any board tool, and a worktree path from another computer is refused (PR-9 handles that).
+
+**Reviews (PR-3a, H-268).** These use migration `REVIEWS`, which adds the tables `review`, `review_comment`, `pr_need` and `pr_review_task`.
+- **Required roles:**
+  - After every head, the daemon reads `.hermes/reviewers.toml` at the PR's base, from its own cache.
+  - The changed paths of `merge-base..head` give the required roles. They are listed as `required_roles` on `pr_get`.
+  - Each role is filled by a board role: `architect` → reviewer.arch, `ux` → reviewer.ux, `ce` → reviewer.ce (new, `ROLE_REVIEWER_CE`), `devops` → devops, `qa` → tester.
+- **`pr_review {number, sha, role, verdict, summary?, findings[], artifact?}`:**
+  - The bot must hold the role's board role, and `sha` must be the head.
+  - `changes_requested` needs at least one `must` finding.
+  - The `owner` role is refused over MCP.
+  - The verdict is stored with the head's patch-id. `stale` is computed as the review's patch-id ≠ the PR's head patch-id, so an update with main keeps it and a fix-up or a conflict resolution doesn't.
+- **Who may not review it (§4.4):**
+  - the PR's author;
+  - the card's assignee;
+  - a bot that reported a push since the PR's last approval;
+  - a bot whose worker (`created_by_bot_id`) did;
+  - for architect, ux and ce, a bot with the dev role tasked on the card.
+- **Review tasks:**
+  - When a PR opens or its head changes, each bot role with no fresh approval and no open review task gets one task from the daemon (`from_bot_id` empty), linked to the card.
+  - It goes to the first holder §4.4 allows. A role nobody may fill gets none, and the daemon logs it.
+  - The review closes it.
+- **`pr_follow_up {number, review_id, finding}`:**
+  - The reviewer, the PR's author or the lead files a `should` or `nit` finding as an Inbox chore, labelled `follow-up`, related to the PR's card.
+  - The finding records `follow_up_item_id`, so it can't be filed twice.
 
 ## Meetings
 

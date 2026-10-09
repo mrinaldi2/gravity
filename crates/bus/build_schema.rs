@@ -16,7 +16,15 @@ const PACKAGES: &[&str] = &["hermes.board.v1", "hermes.pr.v1"];
 
 /// Plain (implicit-presence) fields a bot may leave out, where "" means not
 /// given: they shipped plain, and `optional` would break the wire (buf breaking).
-const MAY_OMIT: &[(&str, &str)] = &[("ReleaseTest", "machine")];
+const MAY_OMIT: &[(&str, &str)] = &[
+    ("ReleaseTest", "machine"),
+    // A review needs no summary to approve, and a finding no place (H-268).
+    ("PrReview", "summary"),
+    ("Finding", "path"),
+    ("Finding", "line"),
+    ("Finding", "resolved_in"),
+    ("Finding", "follow_up_item_id"),
+];
 
 pub fn message_schemas(set: &FileDescriptorSet) -> Value {
     let files: Vec<_> = set
@@ -126,7 +134,8 @@ fn object_schema(
     for field in &message.field {
         let optional = field.proto3_optional()
             || field.label() == Label::Repeated
-            || field.r#type() == Type::Message;
+            || field.r#type() == Type::Message
+            || MAY_OMIT.contains(&(message.name(), field.name()));
         if !optional {
             required.push(field.name().to_string());
         }

@@ -177,6 +177,10 @@ fn public(schema: &Value) -> Value {
     if let Some(items) = obj.get("items").map(public) {
         obj.insert("items".into(), items);
     }
+    if let Some(props) = obj.get("properties").and_then(Value::as_object) {
+        let props: Map<String, Value> = props.iter().map(|(k, v)| (k.clone(), public(v))).collect();
+        obj.insert("properties".into(), Value::Object(props));
+    }
     out
 }
 
@@ -249,6 +253,21 @@ fn wire_enum(enum_name: &str, field: &str, value: &Value) -> anyhow::Result<Valu
 fn to_wire(schema: &Value, field: &str, value: &Value) -> anyhow::Result<Value> {
     if let Some(name) = schema.get("x-enum").and_then(Value::as_str) {
         return wire_enum(name, field, value);
+    }
+    // A nested message (a review's findings): its own fields, enums named.
+    if let (Some(props), Some(given)) = (
+        schema.get("properties").and_then(Value::as_object),
+        value.as_object(),
+    ) {
+        let mut out = Map::new();
+        for (key, v) in given {
+            let wire = match props.get(key) {
+                Some(prop) if !v.is_null() => to_wire(prop, key, v)?,
+                _ => v.clone(),
+            };
+            out.insert(key.clone(), wire);
+        }
+        return Ok(Value::Object(out));
     }
     let Some(items) = schema.get("items") else {
         return Ok(value.clone());
@@ -355,7 +374,7 @@ mod tests;
 /// Plain proto3 fields a tool takes as optional. Their wire cardinality stays
 /// as it shipped (buf breaking), and an empty value means "left out":
 /// `ReleaseTest.machine`, the tester's one computer (H-115).
-const OPTIONAL: &[(&str, &str)] = &[("ReleaseTest", "machine")];
+const OPTIONAL: &[(&str, &str)] = &[("ReleaseTest", "machine"), ("PrReview", "summary")];
 
 fn leave_out(message: &str, field: &str) -> bool {
     OPTIONAL.contains(&(message, field))

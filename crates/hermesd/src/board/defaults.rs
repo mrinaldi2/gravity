@@ -181,8 +181,10 @@ pub fn guess_role(bot_name: &str) -> Option<Role> {
         "team lead" => Some(Role::Lead),
         "scrum master" => Some(Role::Coach),
         "devops" => Some(Role::Devops),
-        // Context Engineer reviews security work (H-099).
-        "architect" | "context engineer" => Some(Role::ReviewerArch),
+        "architect" => Some(Role::ReviewerArch),
+        // Context Engineer reviews security work (H-099), in its own role
+        // since PRs require it by area (H-261 §2.1, H-268).
+        "context engineer" => Some(Role::ReviewerCe),
         "ux designer" => Some(Role::ReviewerUx),
         "desktop dev" | "ios dev" => Some(Role::Dev),
         _ if name.starts_with("tester") => Some(Role::Tester),
@@ -224,8 +226,8 @@ mod tests {
         assert_eq!(guess_role("Tester Win"), Some(Role::Tester));
         assert_eq!(guess_role("Desktop Dev"), Some(Role::Dev));
         assert_eq!(guess_role("iOS Dev"), Some(Role::Dev));
-        // Context Engineer reviews security work (H-099).
-        assert_eq!(guess_role("Context Engineer"), Some(Role::ReviewerArch));
+        // Context Engineer reviews security work (H-099, H-268).
+        assert_eq!(guess_role("Context Engineer"), Some(Role::ReviewerCe));
         assert_eq!(guess_role("Lead Writer"), None);
         assert_eq!(guess_role("Writer"), None);
         assert_eq!(seed_role("Writer", true), Some(Role::Lead));

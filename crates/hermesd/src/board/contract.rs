@@ -85,7 +85,8 @@ map_enum!(Role {
     ReviewerArch,
     ReviewerUx,
     Tester,
-    Dev
+    Dev,
+    ReviewerCe
 });
 map_enum!(ItemType {
     Epic,

@@ -272,3 +272,61 @@ async fn closing_a_pr_unmerged_returns_its_card_to_doing() {
         .await;
     assert_eq!(reopened["pr"]["number"], 2);
 }
+
+/// ARCH M1: a PR names the project's repository or one the owner added;
+/// only the owner's app or a paired device adds one, never the owner token.
+#[tokio::test]
+async fn a_pr_names_only_a_repository_the_owner_allowed() {
+    let mut r = setup().await;
+    let other_dir = tempfile::tempdir().unwrap();
+    let other = remote(other_dir.path());
+    let other_url = other.display().to_string();
+    let a = r.card("Phone half", "doing");
+    let tree = r.dev.join("gravity-wt-desktopdev-ios");
+    clone(&other, &tree, "H-1-phone");
+    commit(&tree, "phone.txt", "1\n");
+    git(&tree, &["push", "-q", "origin", "H-1-phone"]);
+
+    let unlisted = r.bots[1]
+        .call_raw(
+            "pr_open",
+            json!({"item": a, "branch": "H-1-phone", "repo": other_url}),
+        )
+        .await;
+    assert!(
+        error(&unlisted).contains("isn't one of this project's repositories"),
+        "{unlisted}"
+    );
+
+    let set =
+        json!({"type": "set_project_extra_repos", "project_id": r.project, "urls": [other_url]});
+    let mut token = common::WsClient::connect_owner_token(&r.pair.d).await;
+    let refused = token.request(set.clone()).await;
+    assert_eq!(refused["type"], "error", "{refused}");
+    assert!(r.pair.d.app.db.extra_repos(&r.project).unwrap().is_empty());
+
+    let mut app = common::WsClient::connect(&r.pair.d).await;
+    let allowed = app.request(set).await;
+    assert_eq!(
+        allowed["project"]["extra_repos"][0],
+        other_url.as_str(),
+        "{allowed}"
+    );
+
+    let opened = r.bots[1]
+        .call(
+            "pr_open",
+            json!({"item": a, "branch": "H-1-phone", "repo": other_url,
+                   "worktree": tree.display().to_string()}),
+        )
+        .await["pr"]
+        .clone();
+    assert_eq!(opened["number"], 1);
+    assert_eq!(opened["head_sha"], head(&tree));
+    // No bot tool sets the list.
+    let tools = r.bots[0].tools().await.to_string();
+    assert!(
+        !tools.contains("extra_repos"),
+        "a bot can set the repositories"
+    );
+}

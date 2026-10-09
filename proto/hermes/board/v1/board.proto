@@ -43,6 +43,8 @@ enum Role {
   ROLE_REVIEWER_UX = 5;
   ROLE_TESTER = 6;
   ROLE_DEV = 7;
+  // Reviews security work: permissions, identity, peers, confinement (H-261 §2.1).
+  ROLE_REVIEWER_CE = 8;
 }
 
 enum ItemType {

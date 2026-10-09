@@ -34,7 +34,9 @@ pub fn same(a: &str, b: &str) -> bool {
     name_of(a).eq_ignore_ascii_case(&name_of(b))
 }
 
-/// The repository `asked` names ("owner/name"), or the project's own.
+/// The repository `asked` names ("owner/name"), or the project's own. Only
+/// the project's repository or one the owner added (`project_repo_extra`) is
+/// ever fetched: a bot can't point the daemon at any other (ARCH M1).
 pub fn of_project(app: &AppState, project_id: &str, asked: Option<&str>) -> anyhow::Result<Repo> {
     let own = app.db.project_repo(project_id)?.map(|r| r.url);
     let asked = asked.map(str::trim).filter(|a| !a.is_empty());
@@ -49,22 +51,28 @@ pub fn of_project(app: &AppState, project_id: &str, asked: Option<&str>) -> anyh
             url,
             key: project_id.to_string(),
         }),
-        (_, Some(name)) => {
-            let ok = name.split('/').count() == 2
-                && name
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || "-_./".contains(c))
-                && !name.contains("..");
-            anyhow::ensure!(ok, "repo must be a GitHub \"owner/name\", not {name:?}");
-            Ok(Repo {
-                name: name.to_string(),
-                url: format!("https://github.com/{name}.git"),
-                key: format!("{project_id}--{}", name.replace('/', "--")),
-            })
-        }
         (None, None) => anyhow::bail!(
             "the project has no repository set; the owner sets it in the project's settings"
         ),
+        (_, Some(name)) => {
+            let url = app
+                .db
+                .extra_repos(project_id)?
+                .into_iter()
+                .find(|url| same(url, name))
+                .ok_or_else(|| {
+                    crate::decisions::forbidden(format!(
+                        "{name} isn't one of this project's repositories; the owner adds it \
+                         in the project's settings"
+                    ))
+                })?;
+            let repo = name_of(&url);
+            Ok(Repo {
+                key: format!("{project_id}--{}", repo.replace(['/', ':', '\\'], "--")),
+                name: repo,
+                url,
+            })
+        }
     }
 }
 

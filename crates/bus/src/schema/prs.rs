@@ -6,6 +6,7 @@
 /// (or merging) PR. `pr_push`: each head the daemon accepted or saw, with
 /// who reported it (`pushed_by` NULL: it moved without a report).
 /// `pr_worktree`: where a bot works on the branch, as its computer verified.
+/// `project_repo_extra`: the other repositories the owner lets its PRs use.
 pub(super) const MIGRATION_PR_CORE: &str = r#"
 CREATE TABLE IF NOT EXISTS pr (
     id                    TEXT PRIMARY KEY,
@@ -50,6 +51,17 @@ CREATE TABLE IF NOT EXISTS pr_push (
     at         TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pr_push_pr ON pr_push(pr_id, id);
+
+-- Repositories besides the project's own that its PRs may live in, set by
+-- the owner only (from a device or the app, never a bot): a PR names one of
+-- them or the project's repository, nothing else.
+CREATE TABLE IF NOT EXISTS project_repo_extra (
+    project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    url        TEXT NOT NULL,
+    added_by   TEXT NOT NULL,
+    added_at   TEXT NOT NULL,
+    PRIMARY KEY (project_id, url)
+);
 
 CREATE TABLE IF NOT EXISTS pr_worktree (
     pr_id       TEXT NOT NULL REFERENCES pr(id) ON DELETE CASCADE,
