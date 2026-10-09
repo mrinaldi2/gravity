@@ -1,7 +1,10 @@
 //! Pull requests (H-261): a card's change, reviewed and merged in the app.
-//! PR-1 keeps the record, its verified head and its card's moves; reviews,
-//! checks and merges come with their own slices.
+//! PR-1 keeps the record, its verified head and its card's moves; PR-5a the
+//! checks each head must pass. Reviews and merges come with their own slices.
 
+pub mod check_log;
+pub mod check_model;
+pub mod checks;
 pub mod flow;
 pub mod model;
 pub mod repo;
@@ -24,6 +27,12 @@ pub fn spellings(enum_name: &str) -> Option<Vec<(&'static str, &'static str)>> {
             PrState::ALL
                 .iter()
                 .map(|s| (s.as_str(), wire(*s).as_str_name()))
+                .collect(),
+        ),
+        "CheckResult" => Some(
+            check_model::CheckResult::ALL
+                .iter()
+                .map(|r| (r.as_str(), r.wire().as_str_name()))
                 .collect(),
         ),
         _ => None,
@@ -66,13 +75,19 @@ pub fn look(app: &AppState, project: &str) {
     }
 }
 
-/// One PR in full: the record, its pushes and its worktrees.
+/// One PR in full: the record, its pushes, its worktrees and its head's
+/// checks as they count.
 pub fn detail(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
-    let (pushes, worktrees) = app
-        .db
-        .board_read(|t| Ok((t.pr_pushes(&pr.id)?, t.pr_worktrees(&pr.id)?)))?;
+    let (pushes, worktrees, checks) = app.db.board_read(|t| {
+        Ok((
+            t.pr_pushes(&pr.id)?,
+            t.pr_worktrees(&pr.id)?,
+            t.checks_on(&pr.project_id, &pr.head_sha)?,
+        ))
+    })?;
     let mut out = pr.to_json();
     out["pushes"] = pushes.iter().map(model::PrPush::to_json).collect();
     out["worktrees"] = worktrees.iter().map(model::PrWorktree::to_json).collect();
+    out["checks"] = checks.iter().map(check_model::CheckRun::to_json).collect();
     Ok(out)
 }

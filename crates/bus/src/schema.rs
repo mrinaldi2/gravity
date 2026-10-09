@@ -12,6 +12,7 @@
 mod base;
 mod board;
 mod board_links;
+mod checks;
 mod decisions;
 mod grants;
 mod history;
@@ -33,6 +34,7 @@ use board_links::{
     MIGRATION_AC_POST_INSTALL, MIGRATION_BOARD_LINKS, MIGRATION_BOARD_WORKFLOW,
     MIGRATION_GUARDRAILS_2, MIGRATION_TASK_CARDS, MIGRATION_TASK_RELEASE,
 };
+use checks::MIGRATION_CHECKS;
 use decisions::{MIGRATION_12, MIGRATION_COMMENT_SYSTEM_AUTHOR};
 use grants::MIGRATION_PEER_GRANTS;
 use history::{
@@ -111,6 +113,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_RELEASE_WORK_ITEM,
     MIGRATION_ROLES,
     MIGRATION_PR_CORE,
+    MIGRATION_CHECKS,
 ];
 
 #[cfg(test)]

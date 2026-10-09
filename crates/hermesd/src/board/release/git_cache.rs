@@ -101,13 +101,17 @@ pub fn contains(cache: &Path, descendant: &str, ancestor: &str) -> anyhow::Resul
 
 /// The commit a ref names in the cache, if it names one.
 pub fn resolve(cache: &Path, reference: &str) -> Option<String> {
+    resolve_kind(cache, reference, "commit")
+}
+
+fn resolve_kind(cache: &Path, reference: &str, kind: &str) -> Option<String> {
     let out = git(
         cache,
         &[
             "rev-parse",
             "--verify",
             "--quiet",
-            &format!("{reference}^{{commit}}"),
+            &format!("{reference}^{{{kind}}}"),
         ],
     )
     .ok()?;
@@ -115,6 +119,12 @@ pub fn resolve(cache: &Path, reference: &str) -> Option<String> {
         .success()
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
         .filter(|c| !c.is_empty())
+}
+
+/// The tree `commit` records, if the cache has it: two commits with the
+/// same tree hold the same files (H-261 §1.5).
+pub fn tree_of(cache: &Path, commit: &str) -> Option<String> {
+    resolve_kind(cache, commit, "tree")
 }
 
 /// When `commit` was committed (its committer date), if the cache has it.

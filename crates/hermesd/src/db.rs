@@ -49,6 +49,9 @@ mod board_tx;
 mod bot_runtime;
 mod bots;
 mod card_questions;
+mod checks;
+#[cfg(test)]
+mod checks_tests;
 mod conversations;
 pub mod dashboard;
 mod decision_threads;

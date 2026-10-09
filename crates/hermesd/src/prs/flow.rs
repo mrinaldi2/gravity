@@ -1,7 +1,8 @@
 //! Opening, updating and closing a PR (H-261 §1.2, §5.3). Every head is
 //! read from the daemon's own fetch of the remote: a report is accepted
 //! only when the remote tip is the reported commit, and a tip that moved
-//! with no report is flagged and attributed to no one.
+//! with no report is flagged and attributed to no one. A reported head gets
+//! its required checks queued in the same transaction (§7).
 
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ use crate::board::model::{ColumnCategory, LinkKind};
 use crate::board::release::{daemon_move, machines, publish_moves};
 use crate::db::prs::{Head, NewPr};
 use crate::decisions::{conflict, forbidden, not_found};
+use crate::prs::checks;
 use crate::prs::model::{Pr, PrState};
 use crate::prs::repo::{self, Repo};
 use crate::prs::worktree;
@@ -81,6 +83,7 @@ pub fn open(app: &Arc<AppState>, bot: &bus::Bot, req: &Open<'_>) -> anyhow::Resu
     let head = repo::tip(&cache, branch)
         .ok_or_else(|| conflict(format!("{branch} isn't on {}; push it first", repo.name)))?;
     let facts = repo::facts(&cache, &head)?;
+    let required = checks::required(&cache, &facts.base_sha, &head)?;
     let title = req.title.map(str::trim).filter(|t| !t.is_empty());
     let mut feed = app.board.writer();
     let (pr, moved) = app.db.board_tx(|t| {
@@ -119,6 +122,7 @@ pub fn open(app: &Arc<AppState>, bot: &bus::Bot, req: &Open<'_>) -> anyhow::Resu
             title: title.unwrap_or(&item.title),
             change_note: req.body.unwrap_or_default(),
         })?;
+        t.queue_checks(project, &repo.name, &head, &required.tree, &required.checks)?;
         if let Some(tree) = &tree {
             t.add_pr_worktree(&pr.id, tree)?;
         }
@@ -187,6 +191,7 @@ pub fn push(
         )));
     }
     let facts = repo::facts(&cache, &tip)?;
+    let required = checks::required(&cache, &facts.base_sha, &tip)?;
     app.db.board_tx(|t| {
         let pr = t
             .pr(project, number)?
@@ -202,6 +207,7 @@ pub fn push(
                 },
             )?;
         }
+        t.queue_checks(project, &pr.repo, &tip, &required.tree, &required.checks)?;
         if let Some(tree) = &tree {
             t.add_pr_worktree(&pr.id, tree)?;
         }

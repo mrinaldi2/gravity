@@ -1,6 +1,6 @@
 //! The pull-request tools (H-261 §9, PR-1): bots open a PR for their card's
-//! branch, report what they pushed, read PRs and close one unmerged.
-//! Reviews, checks and merges come with their own slices.
+//! branch, report what they pushed, read PRs and close one unmerged; a check
+//! worker reports its result. Reviews and merges come with their own slices.
 
 use std::sync::Arc;
 
@@ -45,6 +45,14 @@ pub(super) const PR_TOOLS: &[BoardTool] = &[
         "PrQuery",
         Audience::Everyone,
         "The project's PRs, open ones first.",
+    ),
+    shared(
+        "check_report",
+        "CheckReport",
+        Audience::Everyone,
+        "Report the check you were spawned to run, on the full sha you ran it on: running \
+         when you start, then pass, fail or error. A pass or a fail needs 'log', a file in \
+         your workspace; add the tools you used in 'tool_versions'.",
     ),
 ];
 
@@ -107,6 +115,11 @@ pub(super) fn call(
             let states = prs::states(&req.states);
             let all = app.db.board_read(|t| t.prs(project, &states))?;
             Ok(json!({ "prs": all.iter().map(prs::model::Pr::to_json).collect::<Vec<_>>() }))
+        }
+        "check_report" => {
+            let req: p::CheckReport = decode("CheckReport", args, project)?;
+            let run = prs::checks::report(app, bot, &req)?;
+            Ok(json!({ "check": run.to_json() }))
         }
         other => anyhow::bail!("unknown PR tool: {other}"),
     }
