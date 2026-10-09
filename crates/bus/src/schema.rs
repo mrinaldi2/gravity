@@ -25,6 +25,7 @@ mod permissions;
 mod prs;
 mod quiesce;
 mod releases;
+mod review_settings;
 mod reviews;
 mod roles;
 mod workers;
@@ -60,6 +61,7 @@ use releases::{
     MIGRATION_RELEASE_EVENTS, MIGRATION_RELEASE_MACHINES, MIGRATION_RELEASE_PLANS,
     MIGRATION_RELEASE_WORK_ITEM,
 };
+use review_settings::MIGRATION_REVIEW_SETTINGS;
 use reviews::MIGRATION_REVIEWS;
 use roles::MIGRATION_ROLES;
 use workers::{MIGRATION_18, MIGRATION_19};
@@ -117,6 +119,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_PR_CORE,
     MIGRATION_REVIEWS,
     MIGRATION_CHECKS,
+    MIGRATION_REVIEW_SETTINGS,
 ];
 
 #[cfg(test)]

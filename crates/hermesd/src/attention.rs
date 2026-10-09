@@ -14,6 +14,7 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 mod legacy;
+mod prs;
 mod rows;
 #[cfg(test)]
 mod tests;
@@ -28,6 +29,7 @@ pub(crate) use waiting::waiting_bots;
 pub(crate) fn weight(kind: AttentionKind) -> u32 {
     match kind {
         AttentionKind::ReleaseAwaiting
+        | AttentionKind::PrReview
         | AttentionKind::OwnerAction
         | AttentionKind::PermissionPrompt => 3,
         AttentionKind::P0Item | AttentionKind::ServingOff => 2,

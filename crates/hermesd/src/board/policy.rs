@@ -194,6 +194,15 @@ fn any_match<S: AsRef<str>>(patterns: &[S], changed: &[String]) -> bool {
         .any(|path| patterns.iter().any(|p| glob::matches(p.as_ref(), path)))
 }
 
+/// The areas a change to `changed` falls in.
+pub fn matched_areas<'a>(reviewers: &'a Reviewers, changed: &[String]) -> Vec<&'a Area> {
+    reviewers
+        .areas
+        .iter()
+        .filter(|area| any_match(&area.paths, changed))
+        .collect()
+}
+
 /// Whether the change touches the policy files.
 pub fn touches_policy(changed: &[String]) -> bool {
     any_match(POLICY_PATHS, changed)

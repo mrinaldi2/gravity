@@ -5,9 +5,11 @@
 pub mod check_log;
 pub mod check_model;
 pub mod checks;
+pub mod comments;
 pub mod flow;
 pub mod follow_up;
 pub mod model;
+pub mod owner;
 pub mod repo;
 pub mod review;
 pub mod review_model;
@@ -102,6 +104,9 @@ pub fn detail(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
     let mut out = pr.to_json();
     out["reviews"] = reviews.iter().map(|r| r.to_json(pr)).collect();
     out["required_roles"] = serde_json::json!(needs);
+    let owner = owner::owner_json(app, pr)?;
+    out["owner_review_required"] = owner["owner_review_required"].clone();
+    out["areas"] = owner["areas"].clone();
     out["pushes"] = pushes.iter().map(model::PrPush::to_json).collect();
     out["worktrees"] = worktrees.iter().map(model::PrWorktree::to_json).collect();
     out["checks"] = checks.iter().map(check_model::CheckRun::to_json).collect();

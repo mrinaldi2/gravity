@@ -89,6 +89,7 @@ mod release_work;
 mod releases;
 #[cfg(test)]
 mod releases_tests;
+pub mod review_settings;
 pub mod reviews;
 mod revisions;
 #[cfg(test)]

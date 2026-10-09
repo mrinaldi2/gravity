@@ -1114,6 +1114,27 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
   - The reviewer, the PR's author or the lead files a `should` or `nit` finding as an Inbox chore, labelled `follow-up`, related to the PR's card.
   - The finding records `follow_up_item_id`, so it can't be filed twice.
 
+**The owner as a reviewer (PR-4, H-269; ruling 7629a873).** It uses migration `REVIEW_SETTINGS`, which adds the tables `project_review_settings` and `pr_shape`.
+- **The setting:**
+  - `review_settings_get {project_id}` (read) answers `{type: "review_settings", review_settings: {owner_review, owner_review_areas, areas}}`. `areas` are the `reviewers.toml` area names on main.
+  - `review_settings_set {project_id, owner_review: all|areas|flagged|none, owner_review_areas?}` (approve) is accepted only from a paired device or the app's ticket. The owner token is refused and nothing is stored.
+  - No row means `all`.
+- **`owner_review_required`, shown on `pr_get`:**
+  - `none`: never.
+  - Otherwise, always for security work: a matched area whose roles include `ce`, or the policy files.
+  - Then by setting: `all` → yes; `areas` → when an area the PR matches is listed; `flagged` → when the PR is `owner_flagged`.
+  - Docs-only PRs follow the setting.
+- **Needs you:** a row `PR_REVIEW` (target `pr_number`) on the board's home appears only once every required bot role has a fresh approval. It leaves when the owner approves the current change.
+- **`pr_review_submit {project_id, number, sha, verdict, summary?, findings?}`** (approve; device or ticket only):
+  - records the owner's verdict on the head, with provenance `device:<id>` or `ticket`;
+  - is refused while the branch moved unreported;
+  - `changes_requested` needs a `summary`, and sends the card back to Doing.
+  - Answers `{type: "pr", pr, review}`.
+- **`pr_comment_add {project_id, number, sha, path, line, side?, body, severity?, reply_to?}`** (approve; device or ticket only) stores an owner line comment on a commit of the PR. Bots' comments and re-anchoring come in H-282.
+- **`pr_flag`:**
+  - The owner uses WS `pr_flag {project_id, number, flagged, reason}`; the lead uses the MCP `pr_flag` tool. Flagging needs a reason.
+  - The PR shows `owner_flagged` and `owner_flag_reason`.
+
 **Checks (PR-5a, H-270).**
 - **Which checks:** each reported head queues the required checks of the base's `.hermes/checks.toml`, filtered by the paths the PR changes. A head's own `checks.toml` changes nothing.
 - **A broken base file:** if the base's `checks.toml` doesn't parse, a single `.hermes/checks.toml` check is recorded as `error`, so nothing counts as checked.

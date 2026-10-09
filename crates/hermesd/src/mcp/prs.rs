@@ -50,6 +50,13 @@ pub(super) const PR_TOOLS: &[BoardTool] = &[
         "File a review's `should` or `nit` finding as an Inbox card related to the PR's card.",
     ),
     shared(
+        "pr_flag",
+        "PrFlagRequest",
+        Audience::Lead,
+        "Flag a PR for the owner's review, with the reason, or clear the flag (flagged: false). \
+         Under the owner's \"only flagged\" setting, a flagged PR waits for the owner.",
+    ),
+    shared(
         "pr_get",
         "PrLookup",
         Audience::Everyone,
@@ -154,6 +161,16 @@ pub(super) fn call(
                 req.finding as usize,
             )?;
             Ok(json!({ "item_id": item }))
+        }
+        "pr_flag" => {
+            let req: p::PrFlagRequest = decode("PrFlagRequest", args, project)?;
+            one(prs::owner::flag(
+                app,
+                project,
+                req.number,
+                req.flagged,
+                &req.reason,
+            )?)
         }
         "pr_get" => {
             let req: p::PrLookup = decode("PrLookup", args, project)?;

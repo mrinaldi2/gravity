@@ -16,6 +16,7 @@ use crate::db::reviews::NewReview;
 use crate::decisions::{conflict, forbidden, invalid, not_found};
 use crate::messaging::{self, daemon_sender, Dm};
 use crate::prs::model::Pr;
+use crate::prs::owner::Shape;
 use crate::prs::repo;
 use crate::prs::review_model::{Finding, Review, Verdict};
 
@@ -164,21 +165,37 @@ pub fn submit(
 
 /// The roles the PR's head needs under its base's `reviewers.toml` (§4.1),
 /// from the daemon's cache of its repository.
-pub fn needs(app: &AppState, pr: &Pr) -> anyhow::Result<Vec<ReviewRole>> {
+pub fn needs(app: &AppState, pr: &Pr) -> anyhow::Result<(Vec<ReviewRole>, Shape)> {
     let cache = repo::of_project(app, &pr.project_id, Some(&pr.repo))?.cached(app);
     let base = policy::read(&cache, &pr.base_sha)?;
     let changed = git_cache::changed_paths(&cache, &pr.base_sha, &pr.head_sha)?;
-    Ok(base.required_roles(&changed).into_iter().collect())
+    let shape = match &base.reviewers {
+        Ok(reviewers) => {
+            let areas = crate::board::policy::matched_areas(reviewers, &changed);
+            Shape {
+                security: crate::board::policy::touches_policy(&changed)
+                    || areas.iter().any(|a| a.roles.contains(&ReviewRole::Ce)),
+                areas: areas.iter().map(|a| a.name.clone()).collect(),
+            }
+        }
+        // A broken reviewers.toml asks for everything, the owner included.
+        Err(_) => Shape {
+            areas: Vec::new(),
+            security: true,
+        },
+    };
+    Ok((base.required_roles(&changed).into_iter().collect(), shape))
 }
 
 /// After a PR opens or its head changes: records the roles it needs and
 /// opens a review task for each bot role with no fresh approval and no open
 /// task (§4.2). A role with no eligible holder gets none, and says so.
 pub fn assign(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<()> {
-    let roles = needs(app, pr)?;
+    let (roles, shape) = needs(app, pr)?;
     let names: Vec<&str> = roles.iter().map(|r| r.as_str()).collect();
     let reviews = app.db.board_tx(|t| {
         t.set_pr_needs(&pr.id, &names)?;
+        t.set_pr_shape(&pr.id, &shape)?;
         t.reviews(&pr.id)
     })?;
     for role in roles {

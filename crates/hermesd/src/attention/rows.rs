@@ -104,6 +104,7 @@ pub(crate) fn rows(
     }
     if scope.home {
         awaiting_releases(&releases, &mut b, release_json)?;
+        super::prs::owner_reviews(app, &mut b)?;
     }
     if scope.local {
         decisions(app, &releases, &mut b)?;
