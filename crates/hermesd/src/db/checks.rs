@@ -59,7 +59,7 @@ impl BoardTx<'_> {
         let at = ts(now());
         for c in checks {
             let finished = c.result.is_final().then_some(&at);
-            self.conn.execute(
+            let added = self.conn.execute(
                 "INSERT INTO check_run(id, project_id, repo, sha, tree, name, run, needs,
                     machine, required, result, note, queued_at, finished_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
@@ -81,6 +81,9 @@ impl BoardTx<'_> {
                     finished,
                 ],
             )?;
+            if added == 1 {
+                self.note_check(project_id, sha, &c.name)?;
+            }
         }
         Ok(())
     }
@@ -152,6 +155,9 @@ impl BoardTx<'_> {
             "UPDATE check_run SET runner = ?2 WHERE id = ?1 AND result = 'queued'",
             params![id, runner],
         )?;
+        if n == 1 {
+            self.note_check_id(id)?;
+        }
         Ok(n == 1)
     }
 
@@ -187,7 +193,7 @@ impl BoardTx<'_> {
                 finished,
             ],
         )?;
-        Ok(())
+        self.note_check_id(id)
     }
 
     /// A computer's probed tools (§1.6) replace what it reported before.

@@ -12,16 +12,20 @@ pub mod check_rerun;
 pub mod check_route;
 pub mod checks;
 pub mod comments;
+pub mod diff;
+pub mod feed;
 pub mod flow;
 pub mod follow_up;
 pub mod mergeable;
 pub mod model;
 pub mod owner;
 pub mod queue;
+pub mod read;
 pub mod repo;
 pub mod review;
 pub mod review_model;
 pub mod watch;
+pub mod wire;
 pub mod worktree;
 
 use std::sync::Arc;
@@ -101,10 +105,30 @@ pub fn look(app: &AppState, project: &str) {
 /// One PR in full: the record, its reviews (each with `stale`), the roles
 /// it needs, its pushes, its worktrees and its head's checks as they count.
 pub fn detail(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
-    let (pushes, worktrees, checks, reviews, needs) = app.db.board_read(|t| {
+    let (pushes, worktrees) = app
+        .db
+        .board_read(|t| Ok((t.pr_pushes(&pr.id)?, t.pr_worktrees(&pr.id)?)))?;
+    let mut out = shown(app, pr, true)?;
+    let comments = comments::list(app, pr, None)?;
+    out["comment_count"] = serde_json::json!(comments.len());
+    out["comments"] = serde_json::json!(comments);
+    out["pushes"] = pushes.iter().map(model::PrPush::to_json).collect();
+    out["worktrees"] = worktrees.iter().map(model::PrWorktree::to_json).collect();
+    Ok(out)
+}
+
+/// A PR for a list (H-273): `detail` without its comments, pushes and
+/// worktrees, and without asking git whether a head behind main conflicts.
+pub fn summary(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
+    let mut out = shown(app, pr, false)?;
+    let comments = app.db.board_read(|t| t.comments(&pr.id))?;
+    out["comment_count"] = serde_json::json!(comments.len());
+    Ok(out)
+}
+
+fn shown(app: &Arc<AppState>, pr: &Pr, exact: bool) -> anyhow::Result<Value> {
+    let (checks, reviews, needs) = app.db.board_read(|t| {
         Ok((
-            t.pr_pushes(&pr.id)?,
-            t.pr_worktrees(&pr.id)?,
             t.checks_on(&pr.project_id, &pr.head_sha)?,
             t.reviews(&pr.id)?,
             t.pr_needs(&pr.id)?,
@@ -116,16 +140,13 @@ pub fn detail(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
     let owner = owner::owner_json(app, pr)?;
     out["owner_review_required"] = owner["owner_review_required"].clone();
     out["areas"] = owner["areas"].clone();
-    out["mergeable"] = mergeable::compute(app, pr, true)?.to_json();
-    out["comments"] = serde_json::json!(comments::list(app, pr, None)?);
+    out["mergeable"] = mergeable::compute(app, pr, exact)?.to_json();
     if let Some(row) = app.db.board_read(|t| t.queue_row(&pr.id))? {
         out["merge"] = serde_json::json!({
             "state": row.state, "queued_at": row.queued_at, "merge_at": row.merge_at,
             "task_id": row.task_id,
         });
     }
-    out["pushes"] = pushes.iter().map(model::PrPush::to_json).collect();
-    out["worktrees"] = worktrees.iter().map(model::PrWorktree::to_json).collect();
     out["checks"] = checks.iter().map(check_model::CheckRun::to_json).collect();
     Ok(out)
 }

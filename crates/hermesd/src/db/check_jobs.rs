@@ -232,7 +232,7 @@ impl BoardTx<'_> {
              WHERE id = ?1 AND result = 'running'",
             params![id],
         )?;
-        Ok(())
+        self.note_check_id(id)
     }
 
     /// Puts a check back in the queue for a new run: no runner, no result.
@@ -246,7 +246,7 @@ impl BoardTx<'_> {
              WHERE id = ?1",
             params![id, note, ts(now())],
         )?;
-        Ok(())
+        self.note_check_id(id)
     }
 
     /// Why a queued check still waits, shown with it.
@@ -255,6 +255,9 @@ impl BoardTx<'_> {
             "UPDATE check_run SET note = ?2 WHERE id = ?1 AND note IS NOT ?2",
             params![id, note],
         )?;
+        if n == 1 {
+            self.note_check_id(id)?;
+        }
         Ok(n == 1)
     }
 

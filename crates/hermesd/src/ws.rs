@@ -34,6 +34,7 @@ mod decisions;
 mod decisions_publish;
 mod dispatch;
 mod entities;
+mod frames;
 mod home;
 mod item_cards;
 mod later;
@@ -54,6 +55,7 @@ mod probe;
 mod profiles;
 mod project_repo;
 mod prs;
+mod prs_binary;
 mod quiesce;
 mod release_install;
 mod releases;
@@ -119,6 +121,8 @@ struct Conn {
     bin: mpsc::UnboundedSender<Vec<u8>>,
     /// The boards this connection watches.
     watch: board::Watch,
+    /// The projects whose PR pushes it gets (H-273).
+    pr_watch: prs_binary::PrWatch,
     /// The client renders terminal cards and may see and answer them.
     terminal_cards: bool,
     /// How this client may see and run owner actions (H-117 R1).

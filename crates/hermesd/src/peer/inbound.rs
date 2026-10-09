@@ -32,6 +32,7 @@ pub(super) fn handle(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> anyho
         "board_call" => super::board_home::serve_call(app, &peer, frame),
         "board_snapshot" => super::board_home::serve_snapshot(app, &peer, frame),
         "board_read" => super::board_home::serve_read(app, &peer, frame),
+        "pr_read" => super::pr_relay::serve_read(app, &peer, frame),
         "owner_action_offer" => super::owner_actions::serve_offer(app, &peer, frame),
         "owner_action_run" => super::owner_actions::serve_run(app, &peer, frame),
         "owner_action_close" => super::owner_actions::serve_close(app, &peer, frame),
@@ -82,6 +83,7 @@ pub(super) fn event(app: &Arc<AppState>, peer_id: &str, frame: &Value) {
         "project_roster" => super::mirror::receive_roster(app, peer_id, frame),
         "project_links" => super::mirror::receive_links(app, peer_id, frame),
         "board_event" => super::board::receive_event(app, peer_id, frame),
+        "pr_event" => super::pr_relay::receive_event(app, peer_id, frame),
         crate::machine_tools::FRAME => crate::machine_tools::receive(app, peer_id, frame),
         crate::prs::check_remote::RESULT => {
             crate::prs::check_remote::receive_result(app, peer_id, frame)
