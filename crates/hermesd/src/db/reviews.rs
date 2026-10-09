@@ -85,7 +85,9 @@ impl BoardTx<'_> {
     /// A PR's reviews, oldest first.
     pub fn reviews(&self, pr_id: &str) -> anyhow::Result<Vec<Review>> {
         let mut stmt = self.conn.prepare(&format!(
-            "SELECT {COLUMNS} FROM review WHERE pr_id = ?1 ORDER BY at, rowid"
+            "SELECT {COLUMNS} FROM review WHERE pr_id = ?1
+               AND id NOT IN (SELECT review_id FROM review_withdrawn)
+             ORDER BY at, rowid"
         ))?;
         let rows = stmt
             .query_map(params![pr_id], review_row)?

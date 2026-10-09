@@ -18,6 +18,7 @@ mod grants;
 mod history;
 mod home;
 mod meetings;
+mod merge_queue;
 mod owner_actions;
 mod owner_messages;
 mod peers;
@@ -47,6 +48,7 @@ use home::{
     MIGRATION_CARD_QUESTIONS, MIGRATION_OWNER_ANSWER, MIGRATION_OWNER_READ, MIGRATION_PROJECT_PIN,
 };
 use meetings::MIGRATION_MEETINGS;
+use merge_queue::MIGRATION_MERGE_QUEUE;
 use owner_actions::MIGRATION_OWNER_ACTIONS;
 use owner_messages::{MIGRATION_OWNER_MESSAGES, MIGRATION_TYPED_PROMPTS};
 use peers::{MIGRATION_14, MIGRATION_15, MIGRATION_16};
@@ -120,6 +122,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_REVIEWS,
     MIGRATION_CHECKS,
     MIGRATION_REVIEW_SETTINGS,
+    MIGRATION_MERGE_QUEUE,
 ];
 
 #[cfg(test)]

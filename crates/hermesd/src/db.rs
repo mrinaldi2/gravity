@@ -64,6 +64,7 @@ mod deliveries;
 mod devices;
 mod guardrails;
 mod meetings;
+pub mod merge_queue;
 pub mod metrics;
 mod overview;
 mod owner_actions;

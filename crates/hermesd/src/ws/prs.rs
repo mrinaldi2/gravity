@@ -18,6 +18,7 @@ pub(super) const KINDS: &[&str] = &[
     "pr_review_submit",
     "pr_comment_add",
     "pr_flag",
+    "pr_merge_undo",
 ];
 
 /// The ones that are the owner's own acts: device or ticket only.
@@ -26,6 +27,7 @@ pub(super) const OWNER_ONLY: &[&str] = &[
     "pr_review_submit",
     "pr_comment_add",
     "pr_flag",
+    "pr_merge_undo",
 ];
 
 fn number(req: &Value) -> anyhow::Result<u32> {
@@ -114,6 +116,10 @@ impl Conn {
                     reason,
                     owner::Flagger::Owner,
                 )?;
+                json!({ "type": "pr", "pr": crate::prs::detail(&self.app, &pr)? })
+            }
+            "pr_merge_undo" => {
+                let pr = crate::prs::queue::undo(&self.app, project, number(req)?, &self.proof()?)?;
                 json!({ "type": "pr", "pr": crate::prs::detail(&self.app, &pr)? })
             }
             other => anyhow::bail!("unknown PR request {other}"),

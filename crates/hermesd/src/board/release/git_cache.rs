@@ -228,3 +228,33 @@ pub fn changed_paths(cache: &Path, base: &str, head: &str) -> anyhow::Result<Vec
         .map(str::to_string)
         .collect())
 }
+
+/// The files merging `a` and `b` would conflict on, or empty when it merges
+/// cleanly (`git merge-tree --write-tree`, writing nothing to any ref).
+pub fn conflicts(cache: &Path, a: &str, b: &str) -> anyhow::Result<Vec<String>> {
+    let out = git(
+        cache,
+        &[
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            "--no-messages",
+            a,
+            b,
+        ],
+    )?;
+    match out.status.code() {
+        Some(0) => Ok(Vec::new()),
+        // The first line is the tree written; the conflicted files follow.
+        Some(1) => Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .skip(1)
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect()),
+        _ => {
+            ok(&out, "merge-tree")?;
+            Ok(Vec::new())
+        }
+    }
+}

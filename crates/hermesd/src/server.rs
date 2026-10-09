@@ -137,6 +137,7 @@ pub fn spawn_workers(app: &Arc<AppState>) {
     crate::overview::spawn(app.clone());
     crate::board::release::blockers_watch::spawn(app.clone());
     crate::prs::watch::spawn(app.clone());
+    crate::prs::queue::spawn(app.clone());
     crate::peer::spawn_dialers(app);
 
     let worker = DeliveryWorker {

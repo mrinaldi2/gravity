@@ -8,8 +8,10 @@ pub mod checks;
 pub mod comments;
 pub mod flow;
 pub mod follow_up;
+pub mod mergeable;
 pub mod model;
 pub mod owner;
+pub mod queue;
 pub mod repo;
 pub mod review;
 pub mod review_model;
@@ -107,6 +109,13 @@ pub fn detail(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
     let owner = owner::owner_json(app, pr)?;
     out["owner_review_required"] = owner["owner_review_required"].clone();
     out["areas"] = owner["areas"].clone();
+    out["mergeable"] = mergeable::compute(app, pr, true)?.to_json();
+    if let Some(row) = app.db.board_read(|t| t.queue_row(&pr.id))? {
+        out["merge"] = serde_json::json!({
+            "state": row.state, "queued_at": row.queued_at, "merge_at": row.merge_at,
+            "task_id": row.task_id,
+        });
+    }
     out["pushes"] = pushes.iter().map(model::PrPush::to_json).collect();
     out["worktrees"] = worktrees.iter().map(model::PrWorktree::to_json).collect();
     out["checks"] = checks.iter().map(check_model::CheckRun::to_json).collect();

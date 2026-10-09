@@ -1138,6 +1138,25 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
   - Only the owner clears a flag, so under `flagged` no bot can take the owner's review away. The lead's flag never replaces the owner's.
   - The PR shows `owner_flagged` and `owner_flag_reason`.
 
+**Merging (PR-6a, H-271; §5.1, §5.2, §16).** Migration `MERGE_QUEUE` adds the tables `pr_merge` and `review_withdrawn`.
+- **`pr_get` shows `mergeable {ok, blockers[]}`.** Each blocker is `{kind, text, subject, paths}`, where `kind` is a lowercase `BlockerKind` (§5.1):
+  - **open and reported:** `not_open`, `moved_unreported`;
+  - **every required role approved this change:** `review_missing`, `changes_requested`;
+  - **the owner, if needed:** `owner_review`;
+  - **no open `must`:** `unresolved_must`;
+  - **every required check passed on the head or its tree:** `check_pending`, `check_failed`;
+  - **the head descends from main's tip:** `behind_main`, or `conflicts` with `paths` from `git merge-tree`;
+  - **the card isn't blocked and its ACs other than post-install ones are ticked:** `card_blocked`, `ac_unticked`.
+- **The queue (nobody presses merge):**
+  - every 2 s the daemon puts each newly mergeable PR at the back of its project's queue, and takes out any that stopped being mergeable;
+  - the head of the queue gets a 10 s `merging` window (`pr.state = merging`, `merge.merge_at`) in which nothing is pushed;
+  - once the window ends, DevOps gets a `pr_merge` daemon task, linked to the card, naming `hermesd pr merge <n>` (`merge.state = handed`; H-284 runs it);
+  - one PR at a time per project: after a merge, main moved, so the next one shows `behind_main` until its author updates it, and is out of the queue meanwhile. Updated without conflict, its approvals carry (same patch-id) and its checks are queued again on the new head.
+- **Undo:**
+  - `pr_merge_undo {project_id, number}` (approve; from a device or the app's ticket only) works only in the window.
+  - It returns the PR to `open` and withdraws the owner's approval of this change (kept in `review_withdrawn`, no longer counted).
+  - The PR stays out of the queue until its change or the owner's approval changes. After the hand-off it is refused.
+
 **Checks (PR-5a, H-270).**
 - **Which checks:** each reported head queues the required checks of the base's `.hermes/checks.toml`, filtered by the paths the PR changes. A head's own `checks.toml` changes nothing.
 - **A broken base file:** if the base's `checks.toml` doesn't parse, a single `.hermes/checks.toml` check is recorded as `error`, so nothing counts as checked.
