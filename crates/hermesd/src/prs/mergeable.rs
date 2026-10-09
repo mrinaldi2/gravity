@@ -136,6 +136,17 @@ pub fn compute(app: &AppState, pr: &Pr, exact: bool) -> anyhow::Result<Mergeable
             );
         }
     }
+    // ...and no open `must` comment thread (H-282).
+    let musts = crate::prs::comments::open_musts(app, pr)?;
+    if musts > 0 {
+        out.push(
+            Blocker::new(
+                "unresolved_must",
+                format!("{musts} must-fix comment(s) are open"),
+            )
+            .about("comments"),
+        );
+    }
     // 4. Every required check passed on the head (or its tree).
     for c in checks.iter().filter(|c| c.required) {
         match c.result {

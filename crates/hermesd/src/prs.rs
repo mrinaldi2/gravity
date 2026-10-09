@@ -2,6 +2,7 @@
 //! PR-1 keeps the record, its verified head and its card's moves; PR-5a the
 //! checks each head must pass. Reviews and merges come with their own slices.
 
+pub mod anchor;
 pub mod check_log;
 pub mod check_model;
 pub mod checks;
@@ -46,6 +47,7 @@ pub fn spellings(enum_name: &str) -> Option<Vec<(&'static str, &'static str)>> {
             ("approved", "VERDICT_APPROVED"),
             ("changes_requested", "VERDICT_CHANGES_REQUESTED"),
         ]),
+        "Side" => Some(vec![("old", "SIDE_OLD"), ("new", "SIDE_NEW")]),
         "Severity" => Some(vec![
             ("must", "SEVERITY_MUST"),
             ("should", "SEVERITY_SHOULD"),
@@ -110,6 +112,7 @@ pub fn detail(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
     out["owner_review_required"] = owner["owner_review_required"].clone();
     out["areas"] = owner["areas"].clone();
     out["mergeable"] = mergeable::compute(app, pr, true)?.to_json();
+    out["comments"] = serde_json::json!(comments::list(app, pr, None)?);
     if let Some(row) = app.db.board_read(|t| t.queue_row(&pr.id))? {
         out["merge"] = serde_json::json!({
             "state": row.state, "queued_at": row.queued_at, "merge_at": row.merge_at,

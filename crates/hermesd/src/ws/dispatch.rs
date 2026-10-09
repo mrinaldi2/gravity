@@ -125,6 +125,7 @@ const APPROVE_ONLY: &[&str] = &[
     "pr_comment_add",
     "pr_flag",
     "pr_merge_undo",
+    "pr_comment_resolve",
 ];
 
 /// Capability required for each request type.

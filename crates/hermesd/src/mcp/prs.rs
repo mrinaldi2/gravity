@@ -57,6 +57,27 @@ pub(super) const PR_TOOLS: &[BoardTool] = &[
          setting a flagged PR waits for the owner. Only the owner clears a flag.",
     ),
     shared(
+        "pr_comment",
+        "PrComment",
+        Audience::Everyone,
+        "Comment on a line of a PR at a commit it has had (sha, path, line, side new|old), \
+         or reply to a comment (reply_to). A `must` comment keeps the PR from merging until \
+         its thread is resolved.",
+    ),
+    shared(
+        "pr_comment_resolve",
+        "PrCommentResolve",
+        Audience::Everyone,
+        "Resolve a comment thread: its author or the PR's author.",
+    ),
+    shared(
+        "pr_comments",
+        "PrCommentsRequest",
+        Audience::Everyone,
+        "A PR's comments as shown on a commit (its head by default): each at its line \
+         there, or outdated when the line it was written on is gone.",
+    ),
+    shared(
         "pr_get",
         "PrLookup",
         Audience::Everyone,
@@ -173,6 +194,48 @@ pub(super) fn call(
                 prs::owner::Flagger::Lead(&bot.id),
             )?)
         }
+        "pr_comment" => {
+            let req: p::PrComment = decode("PrComment", args, project)?;
+            let side = match p::Side::try_from(req.side) {
+                Ok(p::Side::Old) => "old",
+                _ => "new",
+            };
+            let severity = match p::Severity::try_from(req.severity) {
+                Ok(p::Severity::Must) => Some("must"),
+                Ok(p::Severity::Should) => Some("should"),
+                Ok(p::Severity::Nit) => Some("nit"),
+                _ => None,
+            };
+            let c = prs::comments::add(
+                app,
+                project,
+                req.number,
+                &prs::comments::Write {
+                    sha: &req.sha,
+                    path: &req.path,
+                    line: req.line,
+                    side,
+                    body: &req.body,
+                    severity,
+                    reply_to: req.reply_to.as_deref(),
+                },
+                &bot.id,
+            )?;
+            let pr = live_pr(app, project, req.number)?;
+            Ok(json!({ "comment": prs::comments::shown(app, &pr, &c, &pr.head_sha)? }))
+        }
+        "pr_comment_resolve" => {
+            let req: p::PrCommentResolve = decode("PrCommentResolve", args, project)?;
+            let c =
+                prs::comments::resolve(app, project, req.number, &req.comment_id, &bot.id, false)?;
+            let pr = live_pr(app, project, req.number)?;
+            Ok(json!({ "comment": prs::comments::shown(app, &pr, &c, &pr.head_sha)? }))
+        }
+        "pr_comments" => {
+            let req: p::PrCommentsRequest = decode("PrCommentsRequest", args, project)?;
+            let pr = live_pr(app, project, req.number)?;
+            Ok(json!({ "comments": prs::comments::list(app, &pr, req.sha.as_deref())? }))
+        }
         "pr_get" => {
             let req: p::PrLookup = decode("PrLookup", args, project)?;
             prs::look(app, project);
@@ -213,4 +276,10 @@ fn finding(f: &p::Finding) -> Finding {
         resolved_in: None,
         follow_up_item_id: None,
     }
+}
+
+fn live_pr(app: &AppState, project: &str, number: u32) -> anyhow::Result<prs::model::Pr> {
+    app.db
+        .board_read(|t| t.pr(project, number))?
+        .ok_or_else(|| anyhow::anyhow!("no PR #{number} in this project"))
 }

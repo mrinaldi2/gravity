@@ -19,6 +19,7 @@ pub(super) const KINDS: &[&str] = &[
     "pr_comment_add",
     "pr_flag",
     "pr_merge_undo",
+    "pr_comment_resolve",
 ];
 
 /// The ones that are the owner's own acts: device or ticket only.
@@ -28,6 +29,7 @@ pub(super) const OWNER_ONLY: &[&str] = &[
     "pr_comment_add",
     "pr_flag",
     "pr_merge_undo",
+    "pr_comment_resolve",
 ];
 
 fn number(req: &Value) -> anyhow::Result<u32> {
@@ -117,6 +119,14 @@ impl Conn {
                     owner::Flagger::Owner,
                 )?;
                 json!({ "type": "pr", "pr": crate::prs::detail(&self.app, &pr)? })
+            }
+            "pr_comment_resolve" => {
+                let by = format!("owner:{}", owner::provenance(&self.proof()?)?);
+                let id = Self::str_field(req, "comment_id")?;
+                let c =
+                    crate::prs::comments::resolve(&self.app, project, number(req)?, id, &by, true)?;
+                let pr = self.pr(project, number(req)?)?;
+                json!({ "type": "comment", "comment": crate::prs::comments::shown(&self.app, &pr, &c, &pr.head_sha)? })
             }
             "pr_merge_undo" => {
                 let pr = crate::prs::queue::undo(&self.app, project, number(req)?, &self.proof()?)?;

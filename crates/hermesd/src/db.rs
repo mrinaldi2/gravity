@@ -52,6 +52,7 @@ mod card_questions;
 mod checks;
 #[cfg(test)]
 mod checks_tests;
+pub mod comments;
 mod conversations;
 pub mod dashboard;
 mod decision_threads;

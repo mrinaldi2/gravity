@@ -291,7 +291,7 @@ fn github_token() -> Option<String> {
 
 #[cfg(test)]
 #[path = "safe_git_tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
 #[cfg(test)]
 #[path = "safe_git_callers_tests.rs"]

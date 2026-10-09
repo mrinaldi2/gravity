@@ -248,3 +248,59 @@ pub fn conflicts(cache: &Path, a: &str, b: &str) -> anyhow::Result<Vec<String>> 
         }
     }
 }
+
+/// One hunk of a zero-context diff: old lines `old_start..old_start+old_len`
+/// became `new_len` lines.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Hunk {
+    pub old_start: u32,
+    pub old_len: u32,
+    pub new_len: u32,
+}
+
+/// The hunks that turn `path` at `from` into `path` at `to`, or `None` when
+/// `to` has no such file. No textconv or external diff runs (SafeGit).
+pub fn hunks(cache: &Path, from: &str, to: &str, path: &str) -> anyhow::Result<Option<Vec<Hunk>>> {
+    let listed = git(cache, &["ls-tree", "--name-only", to, "--", path])?;
+    ok(&listed, "ls-tree")?;
+    if String::from_utf8_lossy(&listed.stdout).trim() != path {
+        return Ok(None);
+    }
+    let out = git(
+        cache,
+        &[
+            "diff",
+            "-U0",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-textconv",
+            from,
+            to,
+            "--",
+            path,
+        ],
+    )?;
+    ok(&out, "diff")?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(Some(text.lines().filter_map(parse_hunk).collect()))
+}
+
+/// `@@ -a[,b] +c[,d] @@`, where a missing count is 1.
+fn parse_hunk(line: &str) -> Option<Hunk> {
+    let rest = line.strip_prefix("@@ -")?;
+    let (old, rest) = rest.split_once(" +")?;
+    let new = rest.split_once(" @@")?.0;
+    let range = |s: &str| -> Option<(u32, u32)> {
+        match s.split_once(',') {
+            Some((start, len)) => Some((start.parse().ok()?, len.parse().ok()?)),
+            None => Some((s.parse().ok()?, 1)),
+        }
+    };
+    let (old_start, old_len) = range(old)?;
+    let (_, new_len) = range(new)?;
+    Some(Hunk {
+        old_start,
+        old_len,
+        new_len,
+    })
+}
