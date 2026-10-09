@@ -77,8 +77,20 @@ pub async fn spawn_daemon_on(
     };
     cfg.delivery.poll_interval_ms = 50;
     cfg.scheduler.tick_interval_ms = 100;
+    // No tool probe or check routing behind a test's back (H-283).
+    cfg.checks.probe_interval_secs = 0;
+    cfg.checks.dispatch_interval_secs = 0;
+    // The test binary isn't hermesd: checks run through the real runner.
+    cfg.checks.runner = Some(env!("CARGO_BIN_EXE_hermesd").into());
+    // A shared computer's free disk is no test's business; AC2 sets its own.
+    cfg.checks.disk_floor_gb = 0;
     tweak(&mut cfg);
 
+    // SafeGit's home is the process's, and the first daemon names it: name
+    // one that outlives every test here, not a daemon's tempdir that goes
+    // when its test ends while others still run git.
+    static GIT_HOME: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    hermesd::safe_git::set_home(GIT_HOME.get_or_init(|| tempfile::tempdir().unwrap().keep()));
     let db = Db::open(&cfg.db_path()).expect("db");
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await

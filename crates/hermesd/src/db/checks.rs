@@ -11,11 +11,12 @@ use super::board_tx::BoardTx;
 use super::{parse_ts, ts};
 use crate::prs::check_model::{CheckResult, CheckRun, NewCheck, Report};
 
-const COLUMNS: &str = "id, project_id, repo, sha, tree, name, run, needs, machine, required,
+pub(super) const COLUMNS: &str =
+    "id, project_id, repo, sha, tree, name, run, needs, machine, required,
     result, note, runner, ran_on, log_artifact, tool_versions, queued_at, started_at,
     finished_at";
 
-fn check_row(r: &Row<'_>) -> rusqlite::Result<CheckRun> {
+pub(super) fn check_row(r: &Row<'_>) -> rusqlite::Result<CheckRun> {
     let opt_ts = |i: usize| -> rusqlite::Result<_> {
         Ok(r.get::<_, Option<String>>(i)?.as_deref().map(parse_ts))
     };

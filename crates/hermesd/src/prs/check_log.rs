@@ -1,6 +1,7 @@
 //! A check's log, published as an artifact on the board home (H-261 §7):
-//! copied from the runner's own folder into the project's artifacts, under
-//! `checks/<sha>-<name>.log`, so it outlives the worker.
+//! copied from the job's folder (or a reporter's workspace) into the
+//! project's artifacts, under `checks/<sha>-<name>.log`, so it outlives the
+//! run.
 
 use std::fs;
 use std::io::Read;
@@ -54,18 +55,24 @@ pub fn publish(
     if !fs::metadata(&file)?.is_file() {
         return Err(invalid(format!("{path} isn't a file")));
     }
+    publish_file(app, run, &file)
+}
+
+/// Copies the log at `file`, on this computer, into `run`'s project's
+/// artifacts and returns its artifact name.
+pub fn publish_file(app: &AppState, run: &CheckRun, file: &Path) -> anyhow::Result<String> {
     let project = app
         .db
-        .get_project(&bot.project_id)?
+        .get_project(&run.project_id)?
         .ok_or_else(|| not_found("no such project"))?;
     let name = artifact_name(run);
     let dest = crate::paths::artifacts_dir(&app.cfg, &project.dir_name).join(&name);
     fs::create_dir_all(dest.parent().expect("checks/ has a parent"))?;
     let mut text = Vec::new();
-    fs::File::open(&file)?
+    fs::File::open(file)?
         .take(MAX_LOG_BYTES)
         .read_to_end(&mut text)?;
-    if fs::metadata(&file)?.len() > MAX_LOG_BYTES {
+    if fs::metadata(file)?.len() > MAX_LOG_BYTES {
         text.extend_from_slice(b"\n[log cut at 8 MB]\n");
     }
     let tmp = dest.with_extension("log.part");

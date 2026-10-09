@@ -218,6 +218,7 @@ impl PeerHub {
         tokio::spawn(super::browser::link_up(app.clone(), peer_id.clone()));
         tokio::spawn(super::board::link_up(app.clone(), peer_id.clone()));
         tokio::spawn(crate::overview::link_up(app.clone(), peer_id.clone()));
+        crate::machine_tools::link_up(&app, &peer_id);
         {
             // Grants that waited for this computer (H-163).
             let (app, peer_id) = (app.clone(), peer_id.clone());
