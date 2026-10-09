@@ -10,6 +10,7 @@ pub(super) fn record(pid: Option<u32>, event: &'static str) {
     }
 }
 
+#[cfg(unix)]
 fn events(pid: u32) -> Vec<&'static str> {
     let events = EVENTS.lock().unwrap();
     events.iter().filter(|e| e.0 == pid).map(|e| e.1).collect()
