@@ -1,0 +1,37 @@
+# Test fixture: the H-261 §2.1 example. The real file is committed at cut-over (H-279).
+[[area]]
+name = "daemon"
+paths = ["crates/**", "proto/**", "docs/protocol.md"]
+roles = ["architect"]
+
+[[area]]
+name = "security"
+paths = ["crates/hermesd/src/bot_permissions/**", "crates/hermesd/src/bus_auth/**",
+         "crates/hermesd/src/ws/owner_*", "crates/hermesd/src/peer/**",
+         "crates/hermesd/src/board/release/confine*", "crates/hermesd/src/paths/no_follow*"]
+roles = ["ce"]
+
+[[area]]
+name = "ui"
+paths = ["apps/desktop/src/**", "TheHermes/UI/**"]
+roles = ["ux"]
+
+[[area]]
+name = "bot-prompts"
+paths = ["crates/hermesd/src/prompts/**", ".agents/**"]
+roles = ["ce"]
+
+[[area]]
+name = "release"
+paths = ["crates/hermesd/src/board/release/**", "scripts/release*", ".github/**"]
+roles = ["architect", "devops"]
+
+[[area]]
+name = "docs-user"
+paths = ["docs/user/**"]
+roles = ["ux"]
+
+[[area]]
+name = "docs-dev"
+paths = ["docs/**"]
+roles = ["architect"]

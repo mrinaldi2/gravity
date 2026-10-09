@@ -189,3 +189,32 @@ pub fn patch_id(cache: &Path, base: &str, head: &str) -> anyhow::Result<String> 
         .unwrap_or_default()
         .to_string())
 }
+
+/// The text of `path` at `commit`, or `None` when that tree has no such
+/// file. Its blob is fetched on demand, the cache being blob-less.
+pub fn file_at(cache: &Path, commit: &str, path: &str) -> anyhow::Result<Option<String>> {
+    let out = git(cache, &["ls-tree", "--name-only", commit, "--", path])?;
+    ok(&out, "ls-tree")?;
+    if String::from_utf8_lossy(&out.stdout).trim() != path {
+        return Ok(None);
+    }
+    let out = git(cache, &["cat-file", "blob", &format!("{commit}:{path}")])?;
+    ok(&out, "cat-file")?;
+    Ok(Some(String::from_utf8(out.stdout)?))
+}
+
+/// The paths `head` changes since it left `base` (their merge base). A
+/// rename counts as both its paths; no blobs are needed.
+pub fn changed_paths(cache: &Path, base: &str, head: &str) -> anyhow::Result<Vec<String>> {
+    let range = format!("{base}...{head}");
+    let out = git(
+        cache,
+        &["diff", "--name-only", "--no-renames", "-z", &range, "--"],
+    )?;
+    ok(&out, "diff")?;
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .collect())
+}

@@ -1,0 +1,36 @@
+# Test fixture: the H-261 §2.2 example. The real file is committed at cut-over (H-279).
+[[check]]
+name = "rust"
+run = "node scripts/verify.mjs --only rust"
+needs = ["cargo"]
+required = true
+paths = ["crates/**", "Cargo.*", "proto/**"]
+
+[[check]]
+name = "desktop"
+run = "node scripts/verify.mjs --only desktop"
+needs = ["node", "pnpm"]
+required = true
+paths = ["apps/desktop/**", "proto/**"]
+
+[[check]]
+name = "vr"
+run = "CI=true scripts/vr-ci.sh"
+needs = ["node", "docker"]
+required = true
+paths = ["apps/desktop/src/**"]
+
+[[check]]
+name = "windows"
+run = "cargo test --workspace -j 2"
+needs = ["cargo"]
+machine = "windows"
+required = true
+paths = ["crates/**"]
+
+[[check]]
+name = "docs"
+run = "scripts/docs-build.sh --strict"
+needs = ["python3", "mkdocs"]
+required = true
+paths = ["docs/**", "mkdocs.yml", "proto/**"]
