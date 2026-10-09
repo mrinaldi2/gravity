@@ -21,7 +21,8 @@
     "ROLE_REVIEWER_ARCH",
     "ROLE_REVIEWER_UX",
     "ROLE_TESTER",
-    "ROLE_DEV"
+    "ROLE_DEV",
+    "ROLE_REVIEWER_CE"
   ],
   "ItemType": [
     "ITEM_TYPE_EPIC",

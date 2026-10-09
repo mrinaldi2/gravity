@@ -59,9 +59,11 @@ impl Who {
         let tasked = matches!(self, Who::Bot { id, .. } if ctx.task_holders.contains(id))
             && !self.is(item.assignee.as_deref());
         tasked
-            || self
-                .named(item, PersonRole::Reviewer)
-                .unwrap_or_else(|| self.has(Role::ReviewerArch) || self.has(Role::ReviewerUx))
+            || self.named(item, PersonRole::Reviewer).unwrap_or_else(|| {
+                self.has(Role::ReviewerArch)
+                    || self.has(Role::ReviewerUx)
+                    || self.has(Role::ReviewerCe)
+            })
     }
 
     fn verifies(&self, item: &Item) -> bool {

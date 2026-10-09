@@ -26,7 +26,13 @@ pub fn project_bot(app: &AppState, project_id: &str, name_or_id: &str) -> anyhow
 
 /// The roles the lead may give or take away over MCP. Lead, DevOps and
 /// tester are the owner's alone (ARCH-R30 M1).
-const LEAD_ASSIGNS: [Role; 4] = [Role::Dev, Role::Coach, Role::ReviewerArch, Role::ReviewerUx];
+const LEAD_ASSIGNS: [Role; 5] = [
+    Role::Dev,
+    Role::Coach,
+    Role::ReviewerArch,
+    Role::ReviewerUx,
+    Role::ReviewerCe,
+];
 
 /// Gives the bot the role, or takes it away. A tester's machine is updated
 /// in place. The owner assigns any role; the lead only `LEAD_ASSIGNS`.

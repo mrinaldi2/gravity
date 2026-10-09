@@ -65,6 +65,7 @@ text_enum!(WipScope { Column => "column", PerAssignee => "per_assignee" });
 text_enum!(Role {
     Lead => "lead", Coach => "coach", Devops => "devops", ReviewerArch => "reviewer.arch",
     ReviewerUx => "reviewer.ux", Tester => "tester", Dev => "dev",
+    ReviewerCe => "reviewer.ce",
 });
 text_enum!(ItemType { Epic => "epic", Feature => "feature", Bug => "bug", Spike => "spike", Chore => "chore" });
 text_enum!(Platform { Desktop => "desktop", Ios => "ios", Daemon => "daemon", Infra => "infra" });

@@ -17,7 +17,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file hermes/pr/v1/tools.proto.
  */
 export const file_hermes_pr_v1_tools: GenFile = /*@__PURE__*/
-  fileDesc("ChhoZXJtZXMvcHIvdjEvdG9vbHMucHJvdG8SDGhlcm1lcy5wci52MSKgAQoGUHJPcGVuEgwKBGl0ZW0YASABKAkSDgoGYnJhbmNoGAIgASgJEhIKBXRpdGxlGAMgASgJSACIAQESEQoEYm9keRgEIAEoCUgBiAEBEhUKCHdvcmt0cmVlGAUgASgJSAKIAQESEQoEcmVwbxgGIAEoCUgDiAEBQggKBl90aXRsZUIHCgVfYm9keUILCglfd29ya3RyZWVCBwoFX3JlcG8iTQoKUHVzaFJlcG9ydBIOCgZudW1iZXIYASABKA0SCwoDc2hhGAIgASgJEhUKCHdvcmt0cmVlGAMgASgJSACIAQFCCwoJX3dvcmt0cmVlIrsBCghQclJldmlldxIOCgZudW1iZXIYASABKA0SCwoDc2hhGAIgASgJEgwKBHJvbGUYAyABKAkSJgoHdmVyZGljdBgEIAEoDjIVLmhlcm1lcy5wci52MS5WZXJkaWN0Eg8KB3N1bW1hcnkYBSABKAkSJwoIZmluZGluZ3MYBiADKAsyFS5oZXJtZXMucHIudjEuRmluZGluZxIVCghhcnRpZmFjdBgHIAEoCUgAiAEBQgsKCV9hcnRpZmFjdCLCAQoJUHJDb21tZW50Eg4KBm51bWJlchgBIAEoDRILCgNzaGEYAiABKAkSDAoEcGF0aBgDIAEoCRIMCgRsaW5lGAQgASgNEiAKBHNpZGUYBSABKA4yEi5oZXJtZXMucHIudjEuU2lkZRIMCgRib2R5GAYgASgJEhUKCHJlcGx5X3RvGAcgASgJSACIAQESKAoIc2V2ZXJpdHkYCCABKA4yFi5oZXJtZXMucHIudjEuU2V2ZXJpdHlCCwoJX3JlcGx5X3RvIikKB1ByQ2xvc2USDgoGbnVtYmVyGAEgASgNEg4KBnJlYXNvbhgCIAEoCSIaCghQckxvb2t1cBIOCgZudW1iZXIYASABKA0iMAoHUHJRdWVyeRIlCgZzdGF0ZXMYASADKA4yFS5oZXJtZXMucHIudjEuUHJTdGF0ZSLmAQoLQ2hlY2tSZXBvcnQSCwoDc2hhGAEgASgJEgwKBG5hbWUYAiABKAkSKQoGcmVzdWx0GAMgASgOMhkuaGVybWVzLnByLnYxLkNoZWNrUmVzdWx0EhAKA2xvZxgEIAEoCUgAiAEBEkIKDXRvb2xfdmVyc2lvbnMYBSADKAsyKy5oZXJtZXMucHIudjEuQ2hlY2tSZXBvcnQuVG9vbFZlcnNpb25zRW50cnkaMwoRVG9vbFZlcnNpb25zRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUIGCgRfbG9nYgZwcm90bzM", [file_hermes_pr_v1_pr]);
+  fileDesc("ChhoZXJtZXMvcHIvdjEvdG9vbHMucHJvdG8SDGhlcm1lcy5wci52MSKgAQoGUHJPcGVuEgwKBGl0ZW0YASABKAkSDgoGYnJhbmNoGAIgASgJEhIKBXRpdGxlGAMgASgJSACIAQESEQoEYm9keRgEIAEoCUgBiAEBEhUKCHdvcmt0cmVlGAUgASgJSAKIAQESEQoEcmVwbxgGIAEoCUgDiAEBQggKBl90aXRsZUIHCgVfYm9keUILCglfd29ya3RyZWVCBwoFX3JlcG8iTQoKUHVzaFJlcG9ydBIOCgZudW1iZXIYASABKA0SCwoDc2hhGAIgASgJEhUKCHdvcmt0cmVlGAMgASgJSACIAQFCCwoJX3dvcmt0cmVlIrsBCghQclJldmlldxIOCgZudW1iZXIYASABKA0SCwoDc2hhGAIgASgJEgwKBHJvbGUYAyABKAkSJgoHdmVyZGljdBgEIAEoDjIVLmhlcm1lcy5wci52MS5WZXJkaWN0Eg8KB3N1bW1hcnkYBSABKAkSJwoIZmluZGluZ3MYBiADKAsyFS5oZXJtZXMucHIudjEuRmluZGluZxIVCghhcnRpZmFjdBgHIAEoCUgAiAEBQgsKCV9hcnRpZmFjdCLCAQoJUHJDb21tZW50Eg4KBm51bWJlchgBIAEoDRILCgNzaGEYAiABKAkSDAoEcGF0aBgDIAEoCRIMCgRsaW5lGAQgASgNEiAKBHNpZGUYBSABKA4yEi5oZXJtZXMucHIudjEuU2lkZRIMCgRib2R5GAYgASgJEhUKCHJlcGx5X3RvGAcgASgJSACIAQESKAoIc2V2ZXJpdHkYCCABKA4yFi5oZXJtZXMucHIudjEuU2V2ZXJpdHlCCwoJX3JlcGx5X3RvIikKB1ByQ2xvc2USDgoGbnVtYmVyGAEgASgNEg4KBnJlYXNvbhgCIAEoCSJACgpQckZvbGxvd1VwEg4KBm51bWJlchgBIAEoDRIRCglyZXZpZXdfaWQYAiABKAkSDwoHZmluZGluZxgDIAEoDSIaCghQckxvb2t1cBIOCgZudW1iZXIYASABKA0iMAoHUHJRdWVyeRIlCgZzdGF0ZXMYASADKA4yFS5oZXJtZXMucHIudjEuUHJTdGF0ZSLmAQoLQ2hlY2tSZXBvcnQSCwoDc2hhGAEgASgJEgwKBG5hbWUYAiABKAkSKQoGcmVzdWx0GAMgASgOMhkuaGVybWVzLnByLnYxLkNoZWNrUmVzdWx0EhAKA2xvZxgEIAEoCUgAiAEBEkIKDXRvb2xfdmVyc2lvbnMYBSADKAsyKy5oZXJtZXMucHIudjEuQ2hlY2tSZXBvcnQuVG9vbFZlcnNpb25zRW50cnkaMwoRVG9vbFZlcnNpb25zRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUIGCgRfbG9nYgZwcm90bzM", [file_hermes_pr_v1_pr]);
 
 /**
  * [pr_open] The card's assignee opens a PR for its branch; the card moves
@@ -243,6 +243,38 @@ export const PrCloseSchema: GenMessage<PrClose> = /*@__PURE__*/
   messageDesc(file_hermes_pr_v1_tools, 4);
 
 /**
+ * [pr_follow_up] File a `should` or `nit` finding of a review as an Inbox
+ * card related to the PR's card: the reviewer, the PR's author or the lead.
+ *
+ * @generated from message hermes.pr.v1.PrFollowUp
+ */
+export type PrFollowUp = Message<"hermes.pr.v1.PrFollowUp"> & {
+  /**
+   * @generated from field: uint32 number = 1;
+   */
+  number: number;
+
+  /**
+   * @generated from field: string review_id = 2;
+   */
+  reviewId: string;
+
+  /**
+   * its index in the review's findings
+   *
+   * @generated from field: uint32 finding = 3;
+   */
+  finding: number;
+};
+
+/**
+ * Describes the message hermes.pr.v1.PrFollowUp.
+ * Use `create(PrFollowUpSchema)` to create a new message.
+ */
+export const PrFollowUpSchema: GenMessage<PrFollowUp> = /*@__PURE__*/
+  messageDesc(file_hermes_pr_v1_tools, 5);
+
+/**
  * [pr_get] One PR in full.
  *
  * @generated from message hermes.pr.v1.PrLookup
@@ -259,7 +291,7 @@ export type PrLookup = Message<"hermes.pr.v1.PrLookup"> & {
  * Use `create(PrLookupSchema)` to create a new message.
  */
 export const PrLookupSchema: GenMessage<PrLookup> = /*@__PURE__*/
-  messageDesc(file_hermes_pr_v1_tools, 5);
+  messageDesc(file_hermes_pr_v1_tools, 6);
 
 /**
  * [pr_list] The project's PRs.
@@ -280,7 +312,7 @@ export type PrQuery = Message<"hermes.pr.v1.PrQuery"> & {
  * Use `create(PrQuerySchema)` to create a new message.
  */
 export const PrQuerySchema: GenMessage<PrQuery> = /*@__PURE__*/
-  messageDesc(file_hermes_pr_v1_tools, 6);
+  messageDesc(file_hermes_pr_v1_tools, 7);
 
 /**
  * [check_report] A check worker's result for the commit it was spawned
@@ -324,5 +356,5 @@ export type CheckReport = Message<"hermes.pr.v1.CheckReport"> & {
  * Use `create(CheckReportSchema)` to create a new message.
  */
 export const CheckReportSchema: GenMessage<CheckReport> = /*@__PURE__*/
-  messageDesc(file_hermes_pr_v1_tools, 7);
+  messageDesc(file_hermes_pr_v1_tools, 8);
 

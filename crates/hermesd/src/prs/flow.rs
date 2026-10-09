@@ -146,6 +146,7 @@ pub fn open(app: &Arc<AppState>, bot: &bus::Bot, req: &Open<'_>) -> anyhow::Resu
         Ok((pr, moved))
     })?;
     publish_moves(app, &mut feed, project, &moved);
+    super::review::after_head(app, &pr);
     Ok(pr)
 }
 
@@ -187,7 +188,7 @@ pub fn push(
         )));
     }
     let facts = repo::facts(&cache, &tip)?;
-    app.db.board_tx(|t| {
+    let pr = app.db.board_tx(|t| {
         let pr = t
             .pr(project, number)?
             .ok_or_else(|| not_found(format!("no PR #{number}")))?;
@@ -207,7 +208,10 @@ pub fn push(
         }
         t.pr(project, number)?
             .ok_or_else(|| not_found(format!("no PR #{number}")))
-    })
+    })?;
+    // A new change makes approvals stale: their roles are asked again.
+    super::review::after_head(app, &pr);
+    Ok(pr)
 }
 
 /// `pr_close`: the author or the lead closes a PR without merging; its card

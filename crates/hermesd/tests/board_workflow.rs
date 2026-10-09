@@ -249,7 +249,7 @@ async fn the_bot_working_or_reviewing_an_item_may_act_on_it() {
     let roles = pair.d.app.db.project_roles(&project).unwrap();
     assert!(roles
         .iter()
-        .any(|r| r.bot_id == pair.ids[2] && r.role == hermesd::board::model::Role::ReviewerArch));
+        .any(|r| r.bot_id == pair.ids[2] && r.role == hermesd::board::model::Role::ReviewerCe));
     ce.call("item_move_check", json!({"id": id})).await;
 }
 
