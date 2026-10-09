@@ -129,8 +129,19 @@ const ROWS: &[Row] = &[
             c.who = bot("arch", &[Role::ReviewerArch]);
             c.ctx.links.push(link(LinkKind::Branch, "dev"));
         },
-        bad: |c| c.ctx.links.push(link(LinkKind::Pr, "arch")),
+        bad: |c| c.ctx.links.push(link(LinkKind::Branch, "arch")),
         expect: &["review.author"],
+    },
+    Row {
+        rule: "Review → Verify: a card with a PR moves when its PRs merge (H-284)",
+        from: Cat::Review,
+        to: Cat::Verify,
+        ok: |c| {
+            c.who = bot("arch", &[Role::ReviewerArch]);
+            c.ctx.links.push(link(LinkKind::Branch, "dev"));
+        },
+        bad: |c| c.ctx.links.push(link(LinkKind::Pr, "dev")),
+        expect: &["review.merged_by_pr"],
     },
     Row {
         rule: "Review → Doing: reviewer or lead, with a reason",

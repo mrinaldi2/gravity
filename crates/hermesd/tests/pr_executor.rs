@@ -15,8 +15,8 @@ use common::prs::{approve, clone, commit, error, give, move_main, opened, setup,
 use common::repo::{git, remote};
 use common::WsClient;
 use hermesd::board::model::Role;
+use hermesd::pr_cli::{merge_in, Plan};
 use hermesd::prs::merge::answer;
-use hermesd::prs::merge_cli::{merge_in, Plan};
 use hermesd::prs::queue;
 use serde_json::{json, Value};
 

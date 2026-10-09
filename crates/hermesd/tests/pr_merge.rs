@@ -14,6 +14,9 @@ use common::prs::{approve, clone, commit, give, opened, pr, setup, Repo};
 use common::repo::git;
 use common::WsClient;
 use hermesd::board::model::Role;
+use hermesd::prs::check_jobs::SYSTEM_RUNNER;
+use hermesd::prs::check_model::CheckResult;
+use hermesd::prs::checks::RunLog;
 use hermesd::prs::{checks, queue};
 use serde_json::{json, Value};
 
@@ -29,20 +32,27 @@ fn set_policy(r: &Repo) {
     git(&main, &["push", "-q", "origin", "main"]);
 }
 
-/// Every queued check on `sha` runs on Architect's worker and passes.
+/// Every queued check on `sha` runs on the daemon's runner and passes.
 async fn pass_checks(r: &mut Repo, sha: &str) {
     let app = r.pair.d.app.clone();
-    let runner = r.pair.ids[2].clone();
-    checks::dispatch(&app, &r.project, sha, "unit", &runner).unwrap();
-    let workspace = app.db.get_bot(&runner).unwrap().unwrap().workspace_path;
-    std::fs::create_dir_all(&workspace).unwrap();
-    std::fs::write(Path::new(&workspace).join("unit.log"), "ok\n").unwrap();
-    r.bots[2]
-        .call(
-            "check_report",
-            json!({"sha": sha, "name": "unit", "result": "pass", "log": "unit.log"}),
-        )
-        .await;
+    checks::dispatch(&app, &r.project, sha, "unit", SYSTEM_RUNNER).unwrap();
+    let ran = r.dev.join(format!("unit-{sha}.log"));
+    std::fs::write(&ran, "ok\n").unwrap();
+    let id = app
+        .db
+        .board_read(|t| t.check_run(&r.project, sha, "unit"))
+        .unwrap()
+        .unwrap()
+        .id;
+    checks::record(
+        &app,
+        &id,
+        "mac",
+        CheckResult::Pass,
+        "exited 0",
+        RunLog::Here(ran),
+    )
+    .unwrap();
 }
 
 async fn owner_approve(r: &Repo, sha: &str) -> Value {

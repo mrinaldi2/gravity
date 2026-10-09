@@ -15,6 +15,11 @@
 //! - the daemon records it (`hermes/pr_merged`) after its own fetch.
 //!
 //! A raw `git push … main` still goes through the guard, unchanged.
+//!
+//! Like `release land`, this runs as DevOps' own process in its own
+//! checkout, never in the daemon, so it uses the release commands' git
+//! (`board::release::git`), not `SafeGit`, which guards the daemon's git on
+//! bot-controlled paths (`prs/`).
 
 use std::path::Path;
 

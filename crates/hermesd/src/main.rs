@@ -157,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         Some("pr") => {
-            hermesd::prs::merge_cli::run(&cfg, &args[1..]).await?;
+            hermesd::pr_cli::run(&cfg, &args[1..]).await?;
             return Ok(());
         }
         Some("quiesce") => {
