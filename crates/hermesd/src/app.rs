@@ -113,6 +113,7 @@ impl AppState {
         adapter: Arc<dyn RuntimeAdapter>,
     ) -> anyhow::Result<Arc<Self>> {
         std::fs::create_dir_all(&cfg.home)?;
+        crate::safe_git::set_home(&cfg.home);
         std::fs::create_dir_all(cfg.logs_dir())?;
         std::fs::create_dir_all(cfg.projects_dir())?;
         let secrets = Arc::new(Secrets::open_for(&cfg.secrets_dir(), cfg.auth.storage())?);
