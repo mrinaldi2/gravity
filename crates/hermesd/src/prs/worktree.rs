@@ -4,28 +4,15 @@
 //! merge (CL-1) removes only what was verified here.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use crate::app::AppState;
-use crate::board::release::git::no_hooks;
 use crate::bot_permissions::guard::slug;
 use crate::prs::model::PrWorktree;
+use crate::safe_git::SafeGit;
 
-/// git in `dir` with no config but the repository's own, hooks off.
+/// git in `dir`, through the daemon's hardened runner (H-289).
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
-    let null = if cfg!(windows) { "NUL" } else { "/dev/null" };
-    let out = Command::new("git")
-        .current_dir(dir)
-        .env("GIT_CONFIG_GLOBAL", null)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .args(no_hooks())
-        .args(args)
-        .output()
-        .ok()?;
-    out.status
-        .success()
-        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    SafeGit::local(dir).ok()?.args(args).run().ok()
 }
 
 fn expand(app: &AppState, path: &str) -> PathBuf {

@@ -2,11 +2,13 @@
 //! commit contains another without trusting any bot's checkout: a bare,
 //! blob-less clone under `<home>/cache/repos/<project>.git`, cloned and
 //! fetched with hooks off and no git config of the user's (ARCH-R52 S1).
+//! Bots fill it by pushing, so every git here goes through the daemon's
+//! hardened runner (H-289).
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
-use super::git::{github_https, no_hooks};
+use super::git::github_https;
+use crate::safe_git::SafeGit;
 
 /// The cache for a project.
 pub fn dir(home: &Path, project_id: &str) -> PathBuf {
@@ -15,18 +17,9 @@ pub fn dir(home: &Path, project_id: &str) -> PathBuf {
         .join(format!("{project_id}.git"))
 }
 
-/// git with no config but ours, outside any checkout.
+/// git in `cwd`, allowed to fetch from the project's repository.
 fn git(cwd: &Path, args: &[&str]) -> anyhow::Result<std::process::Output> {
-    let null = if cfg!(windows) { "NUL" } else { "/dev/null" };
-    Ok(Command::new("git")
-        .current_dir(cwd)
-        .env("GIT_CONFIG_GLOBAL", null)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .args(no_hooks())
-        .args(["-c", "credential.helper=!gh auth git-credential"])
-        .args(args)
-        .output()?)
+    SafeGit::fetching(cwd)?.args(args).output()
 }
 
 fn ok(out: &std::process::Output, what: &str) -> anyhow::Result<()> {
@@ -147,15 +140,13 @@ pub fn merge_base(cache: &Path, a: &str, b: &str) -> anyhow::Result<String> {
 /// the same for the same change whatever it was rebased onto; empty when
 /// there is no change. A blob-less cache fetches the blobs it needs.
 pub fn patch_id(cache: &Path, base: &str, head: &str) -> anyhow::Result<String> {
-    use std::io::Write;
-    use std::process::Stdio;
-
     let diff = git(
         cache,
         &[
             "diff",
             "--no-color",
             "--no-ext-diff",
+            "--no-textconv",
             "--full-index",
             base,
             head,
@@ -165,22 +156,9 @@ pub fn patch_id(cache: &Path, base: &str, head: &str) -> anyhow::Result<String> 
     if diff.stdout.is_empty() {
         return Ok(String::new());
     }
-    let null = if cfg!(windows) { "NUL" } else { "/dev/null" };
-    let mut child = Command::new("git")
-        .current_dir(cache)
-        .env("GIT_CONFIG_GLOBAL", null)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .args(["patch-id", "--stable"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let mut stdin = child.stdin.take().expect("piped stdin");
-    let writer = std::thread::spawn(move || stdin.write_all(&diff.stdout));
-    let out = child.wait_with_output()?;
-    writer
-        .join()
-        .map_err(|_| anyhow::anyhow!("writing the diff to git patch-id failed"))??;
+    let out = SafeGit::local(cache)?
+        .args(&["patch-id", "--stable"])
+        .output_with_stdin(diff.stdout)?;
     ok(&out, "patch-id")?;
     let text = String::from_utf8_lossy(&out.stdout);
     Ok(text
