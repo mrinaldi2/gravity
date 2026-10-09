@@ -1065,6 +1065,9 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 **Bots' PR tools (PR-1, H-266).** Every bot on a project with a board gets these; the checks below decide who may act. All of them run on the board's home computer (`pr`, `pr_push`, `pr_worktree`, migration `PR_CORE`).
 - **`pr_open {item, branch, worktree?, title?, body?, repo?}`:**
   - Only the card's assignee, or a bot tasked on the card, may open it. The card must be in Doing (or already in Review), with no other open PR.
+  - `repo` must be the project's repository or one the owner added. Anything else is refused with "<name> isn't one of this project's repositories", and nothing is fetched.
+    - The owner adds them with the WS request `set_project_extra_repos {project_id, urls}` (approve), from the app's ticket or a paired device only. The owner token is refused and no bot tool sets it.
+    - It answers `{type: "project", project}`, with `extra_repos`.
   - The daemon fetches the repository into its own cache, `<home>/cache/repos`, and reads the branch's tip there: that tip is the head.
   - It records PR #n, numbered per project. `head_patch_id` is `git patch-id --stable` of the diff from the head's merge-base with main to the head.
   - It links the branch and `#n` on the card, and moves the card Doing → Review. A linked PR counts as the change note.

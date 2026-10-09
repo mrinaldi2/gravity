@@ -22,6 +22,41 @@ impl Db {
             .optional()?)
     }
 
+    /// The other repositories the owner lets this project's PRs use (H-266).
+    pub fn extra_repos(&self, project_id: &str) -> anyhow::Result<Vec<String>> {
+        let conn = self.lock();
+        let mut stmt =
+            conn.prepare("SELECT url FROM project_repo_extra WHERE project_id = ?1 ORDER BY url")?;
+        let urls = stmt
+            .query_map(params![project_id], |r| r.get(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+        Ok(urls)
+    }
+
+    /// Replaces that list; `by` is how the owner proved it (device or ticket).
+    pub fn set_extra_repos(
+        &self,
+        project_id: &str,
+        urls: &[String],
+        by: &str,
+    ) -> anyhow::Result<()> {
+        let mut conn = self.lock();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "DELETE FROM project_repo_extra WHERE project_id = ?1",
+            params![project_id],
+        )?;
+        for url in urls {
+            tx.execute(
+                "INSERT OR IGNORE INTO project_repo_extra(project_id, url, added_by, added_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![project_id, url, by, ts(now())],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Set the project's repository, or clear it with `None`.
     pub fn set_project_repo(
         &self,

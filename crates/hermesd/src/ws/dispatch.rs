@@ -116,6 +116,8 @@ const APPROVE_ONLY: &[&str] = &[
     "link_peer_bot",
     "link_project",
     "unlink_project",
+    // Which repositories a project's PRs may name (H-266, ARCH M1).
+    "set_project_extra_repos",
 ];
 
 /// Capability required for each request type.
@@ -318,6 +320,7 @@ impl Conn {
             "delete_tag" => self.delete_tag(&req_id, req),
             "set_project_lead" => self.set_project_lead(&req_id, req),
             "set_project_repo" => self.set_project_repo(&req_id, req),
+            "set_project_extra_repos" => self.set_project_extra_repos(&req_id, req),
             "set_project_permission_profile" => self.set_project_permission_profile(&req_id, req),
             "set_bot_permission_extras" => self.set_bot_permission_extras(&req_id, req),
             "bot_grants" => self.bot_grants(&req_id, req),
