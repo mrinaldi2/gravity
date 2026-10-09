@@ -56,6 +56,7 @@ fn every_pr_fixture_round_trips_with_proto_field_names() {
         let (_, json) = round_trip::<PullRequest>(name);
         assert!(json.get("head_sha").is_some(), "{name}: {json}");
         assert!(json.get("headSha").is_none(), "{name}");
+        assert!(json.get("repo").is_some(), "{name} names its repository");
     }
     let (list, _) = round_trip::<PrList>("pr_list");
     assert_eq!(list.prs.len(), PRS.len());

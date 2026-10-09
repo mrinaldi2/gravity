@@ -260,6 +260,9 @@ message PullRequest {
   uint32 additions = 31;
   uint32 deletions = 32;
   uint32 files_changed = 33;
+  // The repository, "owner/name" (e.g. "mrinaldi2/gravity_os"): a project's
+  // board can span several; numbers stay per project.
+  string repo = 34;
 }
 
 message LineComment {
@@ -299,6 +302,7 @@ message PrRef {
   string item_id = 2;
   string merged_sha = 3;
   string title = 4;
+  string repo = 5;                          // "owner/name"
 }
 
 // What a release cut from main adds to the release payload (§6.1, §9),
@@ -331,7 +335,7 @@ message DiskReport {
 
 message PrListRequest {                     // [pr_list] read
   string project_id = 1;
-  PrState state = 2;                        // unset = open and merging
+  repeated PrState states = 2;              // empty = open and merging
 }
 message PrGetRequest {                      // [pr_get] read
   string project_id = 1;

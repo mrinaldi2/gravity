@@ -3,7 +3,10 @@
   "prRequest": {
     "pr_list": {
       "project_id": "p-gravity",
-      "state": "PR_STATE_OPEN"
+      "states": [
+        "PR_STATE_OPEN",
+        "PR_STATE_MERGING"
+      ]
     }
   }
 }

@@ -17,6 +17,8 @@ message PrOpen {
   optional string body = 4;                 // the change note, markdown
   // The bot's worktree for the branch, checked by its computer (§15.1).
   optional string worktree = 5;
+  // The repository, "owner/name"; unset = the project's repository.
+  optional string repo = 6;
 }
 
 // [pr_push] Report a push to the PR's branch. Accepted only when the
@@ -58,7 +60,7 @@ message PrLookup {
 
 // [pr_list] The project's PRs.
 message PrQuery {
-  PrState state = 1;                        // unset = open and merging
+  repeated PrState states = 1;              // empty = open and merging
 }
 
 // [check_report] A check worker's result for the commit it was spawned

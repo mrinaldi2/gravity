@@ -1054,6 +1054,8 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **Transport:** binary `PrRequest`/`PrResponse`/`PrPush` envelopes (arms 7–9), or JSON `{type, req_id, ...fields}` with the proto field names.
 - **Requests:** `pr_list`, `pr_get`, `pr_diff`, `pr_comments` and `review_settings_get` (read). `pr_flag` and `check_rerun` (control). `pr_review_submit`, `pr_comment_add`, `pr_merge_undo`, `review_settings_set` and `cleanup_resolve` (approve; the owner's device or ticket only, never the owner token or a bot). `disk_report` (read).
 - **Pushes:** `pr_updated`, `check_updated`, `merge_queue_changed` and `cleanup_updated`.
+- **Repositories:** a PR names its `repo` ("owner/name"), because a project's board can span several repositories (gravity and gravity_os). PR numbers stay per project. `pr_list` filters on `states`, a list; an empty list means open and merging.
+- **Gate on the capability:** clients show the PR tab only when `hello_ok.capabilities` has `pull_requests`.
 - **Bots' MCP tools:** `pr_open`, `pr_push`, `pr_review`, `pr_comment`, `pr_get`, `pr_list` and `check_report`, defined in `proto/hermes/pr/v1/tools.proto`.
 - **Releases cut from main:** they gain `tag`, `commit`, `prs` and `also_included` (`ReleaseFromMain`) at the top level of the release payload. These are new keys, so a client reading today's release is unaffected.
 - **Fixtures:** golden fixtures are in `crates/bus/fixtures/pr/`.

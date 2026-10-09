@@ -196,6 +196,8 @@ interface PrRef {
   readonly item_id: string;
   readonly merged_sha: string;
   readonly title?: string;
+  /** Its repository, "owner/name". */
+  readonly repo?: string;
 }
 
 /**

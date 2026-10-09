@@ -70,7 +70,8 @@
         "owner"
       ],
       "item_title": "PR-0: hermes.pr.v1 contract",
-      "merge_at": "2026-10-09T12:05:10Z"
+      "merge_at": "2026-10-09T12:05:10Z",
+      "repo": "mrinaldi2/gravity"
     },
     {
       "id": "pr-uuid-42",
@@ -278,7 +279,8 @@
       "docs_changed": true,
       "additions": 412,
       "deletions": 37,
-      "files_changed": 14
+      "files_changed": 14,
+      "repo": "mrinaldi2/gravity"
     },
     {
       "id": "pr-uuid-45",
@@ -368,7 +370,8 @@
           "reason": "No screens change",
           "at": "2026-10-09T08:05:00Z"
         }
-      ]
+      ],
+      "repo": "mrinaldi2/gravity_os"
     },
     {
       "id": "pr-uuid-40",
@@ -499,7 +502,8 @@
             "path": "H-203-card-links"
           }
         ]
-      }
+      },
+      "repo": "mrinaldi2/gravity"
     },
     {
       "id": "pr-uuid-41",
@@ -544,7 +548,8 @@
             "path": "H-235-waiting-reason"
           }
         ]
-      }
+      },
+      "repo": "mrinaldi2/gravity"
     }
   ]
 }

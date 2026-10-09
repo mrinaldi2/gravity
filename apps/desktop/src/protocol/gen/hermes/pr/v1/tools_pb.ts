@@ -17,7 +17,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file hermes/pr/v1/tools.proto.
  */
 export const file_hermes_pr_v1_tools: GenFile = /*@__PURE__*/
-  fileDesc("ChhoZXJtZXMvcHIvdjEvdG9vbHMucHJvdG8SDGhlcm1lcy5wci52MSKEAQoGUHJPcGVuEgwKBGl0ZW0YASABKAkSDgoGYnJhbmNoGAIgASgJEhIKBXRpdGxlGAMgASgJSACIAQESEQoEYm9keRgEIAEoCUgBiAEBEhUKCHdvcmt0cmVlGAUgASgJSAKIAQFCCAoGX3RpdGxlQgcKBV9ib2R5QgsKCV93b3JrdHJlZSJNCgpQdXNoUmVwb3J0Eg4KBm51bWJlchgBIAEoDRILCgNzaGEYAiABKAkSFQoId29ya3RyZWUYAyABKAlIAIgBAUILCglfd29ya3RyZWUiuwEKCFByUmV2aWV3Eg4KBm51bWJlchgBIAEoDRILCgNzaGEYAiABKAkSDAoEcm9sZRgDIAEoCRImCgd2ZXJkaWN0GAQgASgOMhUuaGVybWVzLnByLnYxLlZlcmRpY3QSDwoHc3VtbWFyeRgFIAEoCRInCghmaW5kaW5ncxgGIAMoCzIVLmhlcm1lcy5wci52MS5GaW5kaW5nEhUKCGFydGlmYWN0GAcgASgJSACIAQFCCwoJX2FydGlmYWN0IsIBCglQckNvbW1lbnQSDgoGbnVtYmVyGAEgASgNEgsKA3NoYRgCIAEoCRIMCgRwYXRoGAMgASgJEgwKBGxpbmUYBCABKA0SIAoEc2lkZRgFIAEoDjISLmhlcm1lcy5wci52MS5TaWRlEgwKBGJvZHkYBiABKAkSFQoIcmVwbHlfdG8YByABKAlIAIgBARIoCghzZXZlcml0eRgIIAEoDjIWLmhlcm1lcy5wci52MS5TZXZlcml0eUILCglfcmVwbHlfdG8iGgoIUHJMb29rdXASDgoGbnVtYmVyGAEgASgNIi8KB1ByUXVlcnkSJAoFc3RhdGUYASABKA4yFS5oZXJtZXMucHIudjEuUHJTdGF0ZSLmAQoLQ2hlY2tSZXBvcnQSCwoDc2hhGAEgASgJEgwKBG5hbWUYAiABKAkSKQoGcmVzdWx0GAMgASgOMhkuaGVybWVzLnByLnYxLkNoZWNrUmVzdWx0EhAKA2xvZxgEIAEoCUgAiAEBEkIKDXRvb2xfdmVyc2lvbnMYBSADKAsyKy5oZXJtZXMucHIudjEuQ2hlY2tSZXBvcnQuVG9vbFZlcnNpb25zRW50cnkaMwoRVG9vbFZlcnNpb25zRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4AUIGCgRfbG9nYgZwcm90bzM", [file_hermes_pr_v1_pr]);
+  fileDesc("ChhoZXJtZXMvcHIvdjEvdG9vbHMucHJvdG8SDGhlcm1lcy5wci52MSKgAQoGUHJPcGVuEgwKBGl0ZW0YASABKAkSDgoGYnJhbmNoGAIgASgJEhIKBXRpdGxlGAMgASgJSACIAQESEQoEYm9keRgEIAEoCUgBiAEBEhUKCHdvcmt0cmVlGAUgASgJSAKIAQESEQoEcmVwbxgGIAEoCUgDiAEBQggKBl90aXRsZUIHCgVfYm9keUILCglfd29ya3RyZWVCBwoFX3JlcG8iTQoKUHVzaFJlcG9ydBIOCgZudW1iZXIYASABKA0SCwoDc2hhGAIgASgJEhUKCHdvcmt0cmVlGAMgASgJSACIAQFCCwoJX3dvcmt0cmVlIrsBCghQclJldmlldxIOCgZudW1iZXIYASABKA0SCwoDc2hhGAIgASgJEgwKBHJvbGUYAyABKAkSJgoHdmVyZGljdBgEIAEoDjIVLmhlcm1lcy5wci52MS5WZXJkaWN0Eg8KB3N1bW1hcnkYBSABKAkSJwoIZmluZGluZ3MYBiADKAsyFS5oZXJtZXMucHIudjEuRmluZGluZxIVCghhcnRpZmFjdBgHIAEoCUgAiAEBQgsKCV9hcnRpZmFjdCLCAQoJUHJDb21tZW50Eg4KBm51bWJlchgBIAEoDRILCgNzaGEYAiABKAkSDAoEcGF0aBgDIAEoCRIMCgRsaW5lGAQgASgNEiAKBHNpZGUYBSABKA4yEi5oZXJtZXMucHIudjEuU2lkZRIMCgRib2R5GAYgASgJEhUKCHJlcGx5X3RvGAcgASgJSACIAQESKAoIc2V2ZXJpdHkYCCABKA4yFi5oZXJtZXMucHIudjEuU2V2ZXJpdHlCCwoJX3JlcGx5X3RvIhoKCFByTG9va3VwEg4KBm51bWJlchgBIAEoDSIwCgdQclF1ZXJ5EiUKBnN0YXRlcxgBIAMoDjIVLmhlcm1lcy5wci52MS5QclN0YXRlIuYBCgtDaGVja1JlcG9ydBILCgNzaGEYASABKAkSDAoEbmFtZRgCIAEoCRIpCgZyZXN1bHQYAyABKA4yGS5oZXJtZXMucHIudjEuQ2hlY2tSZXN1bHQSEAoDbG9nGAQgASgJSACIAQESQgoNdG9vbF92ZXJzaW9ucxgFIAMoCzIrLmhlcm1lcy5wci52MS5DaGVja1JlcG9ydC5Ub29sVmVyc2lvbnNFbnRyeRozChFUb29sVmVyc2lvbnNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBQgYKBF9sb2diBnByb3RvMw", [file_hermes_pr_v1_pr]);
 
 /**
  * [pr_open] The card's assignee opens a PR for its branch; the card moves
@@ -58,6 +58,13 @@ export type PrOpen = Message<"hermes.pr.v1.PrOpen"> & {
    * @generated from field: optional string worktree = 5;
    */
   worktree?: string | undefined;
+
+  /**
+   * The repository, "owner/name"; unset = the project's repository.
+   *
+   * @generated from field: optional string repo = 6;
+   */
+  repo?: string | undefined;
 };
 
 /**
@@ -236,11 +243,11 @@ export const PrLookupSchema: GenMessage<PrLookup> = /*@__PURE__*/
  */
 export type PrQuery = Message<"hermes.pr.v1.PrQuery"> & {
   /**
-   * unset = open and merging
+   * empty = open and merging
    *
-   * @generated from field: hermes.pr.v1.PrState state = 1;
+   * @generated from field: repeated hermes.pr.v1.PrState states = 1;
    */
-  state: PrState;
+  states: PrState[];
 };
 
 /**
