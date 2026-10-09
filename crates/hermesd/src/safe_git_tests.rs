@@ -49,7 +49,7 @@ pub(crate) fn plant(repo: &Path, marker: &Path) {
 
 fn repo() -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().unwrap();
-    let repo = std::fs::canonicalize(dir.path()).unwrap().join("repo");
+    let repo = super::canonical(dir.path()).unwrap().join("repo");
     std::fs::create_dir(&repo).unwrap();
     plain(&repo, &["init", "-q", "-b", "main"]);
     plain(&repo, &["config", "user.email", "t@t"]);
@@ -132,7 +132,7 @@ fn a_local_run_reaches_no_remote_and_inherits_no_git_env() {
         .args(&["ls-remote", "origin"])
         .run();
     assert!(refused.is_err(), "a local run used a transport");
-    let fetched = SafeGit::fetching(&other)
+    let fetched = SafeGit::fetching(&other, &repo.display().to_string())
         .unwrap()
         .args(&["ls-remote", "origin"])
         .run()
@@ -152,77 +152,108 @@ fn a_local_run_reaches_no_remote_and_inherits_no_git_env() {
     }
 }
 
-/// Source files (outside test code) allowed to start git themselves, and
-/// why none of them runs the daemon's git in a bot-controlled repository.
-const DIRECT_GIT: &[(&str, &str)] = &[
-    ("safe_git.rs", "the helper itself"),
-    (
-        "board/release/git.rs",
-        "the `hermesd release` CLI, run by DevOps in its own terminal and checkout",
-    ),
-    (
-        "bot_permissions/guard/git.rs",
-        "the `hermesd guard` hook, run by the bot on its own command",
-    ),
-    (
-        "migrate_home/steps.rs",
-        "the owner's home migration, run from the owner's terminal",
-    ),
-    (
-        "workers/git.rs",
-        "a worker's clone, fetch and push with the owner's SSH setup; moves to the helper in a follow-up",
-    ),
-];
-
-fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
-    for entry in std::fs::read_dir(dir).unwrap() {
-        let path = entry.unwrap().path();
-        if path.is_dir() {
-            sources(&path, out);
-        } else if path.extension().is_some_and(|e| e == "rs") {
-            out.push(path);
-        }
-    }
+/// The variables git is started with.
+fn env_of(git: &SafeGit) -> Vec<(String, Option<String>)> {
+    git.cmd
+        .get_envs()
+        .map(|(k, v)| {
+            let v = v.map(|v| v.to_string_lossy().into_owned());
+            (k.to_string_lossy().into_owned(), v)
+        })
+        .collect()
 }
 
-/// AC1: every daemon git call in a bot-controlled path goes through the
-/// helper. A file that starts git itself must be on the list above.
+/// CE M1: git is given no folder a bot could fill. Its hooks path can't be
+/// made into a folder or written to, and its HOME is under the daemon's
+/// `run/`. A worktree add and remove still run no planted hook.
 #[test]
-fn callers_start_git_only_through_the_helper() {
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let mut files = Vec::new();
-    sources(&src, &mut files);
-    let mut offenders = Vec::new();
-    for file in files {
-        let rel = file
-            .strip_prefix(&src)
-            .unwrap()
-            .to_string_lossy()
-            .replace('\\', "/");
-        if rel.ends_with("_tests.rs") || rel.contains("/tests/") {
-            continue;
-        }
-        let text = std::fs::read_to_string(&file).unwrap();
-        let code = text.split("#[cfg(test)]").next().unwrap_or_default();
-        let compact: String = code.chars().filter(|c| !c.is_whitespace()).collect();
-        let direct = compact.contains("Command::new(\"git\")");
-        if direct && !DIRECT_GIT.iter().any(|(f, _)| *f == rel) {
-            offenders.push(rel);
+fn git_gets_no_folder_a_bot_could_fill() {
+    let (dir, repo) = repo();
+    let marker = dir.path().join("marker");
+    plant(&repo, &marker);
+
+    // The repository's own hooks path loses to the one git is given.
+    let hooks = SafeGit::local(&repo)
+        .unwrap()
+        .args(&["config", "--get", "core.hooksPath"])
+        .run()
+        .unwrap();
+    assert_eq!(hooks, super::hooks_path());
+    // The bot step: make that folder, or put a hook in it. Both fail.
+    let hooks = PathBuf::from(hooks);
+    assert!(std::fs::create_dir_all(&hooks).is_err());
+    assert!(std::fs::write(hooks.join("post-checkout"), "#!/bin/sh\n").is_err());
+    assert!(!hooks.exists());
+
+    let run = super::daemon_home().unwrap().join("run");
+    let git = SafeGit::local(&repo).unwrap();
+    for (key, value) in env_of(&git) {
+        if ["HOME", "USERPROFILE", "XDG_CONFIG_HOME"].contains(&key.as_str()) {
+            let value = PathBuf::from(value.unwrap());
+            assert!(value.starts_with(&run), "{key}={}", value.display());
         }
     }
-    assert!(
-        offenders.is_empty(),
-        "these start git directly; use crate::safe_git::SafeGit: {offenders:?}"
-    );
+
+    let wt = dir.path().join("wt-bob");
+    provision(&WorktreeSpec {
+        repo: repo.clone(),
+        base_ref: "main".into(),
+        dest: wt.clone(),
+        bot_id: "b2".into(),
+        bot_name: "bob".into(),
+        copy_files: vec![],
+    })
+    .unwrap();
+    assert_eq!(cleanup(&wt).unwrap(), CleanupOutcome::Removed);
+    assert!(!marker.exists(), "the daemon's git ran a planted hook");
 }
 
+/// No token in git's environment: only the fixed variables, whatever the
+/// kind of run.
 #[test]
-fn the_bot_controlled_paths_are_not_on_the_list() {
-    for path in [
-        "prs/worktree.rs",
-        "worktree.rs",
-        "board/release/git_cache.rs",
+fn git_env_holds_only_the_fixed_variables() {
+    let (_dir, repo) = repo();
+    const FIXED: &[&str] = &[
+        "PATH",
+        "HOME",
+        "USERPROFILE",
+        "XDG_CONFIG_HOME",
+        "GIT_CONFIG_NOSYSTEM",
+        "GIT_CONFIG_GLOBAL",
+        "GIT_TERMINAL_PROMPT",
+        "GIT_OPTIONAL_LOCKS",
+        "SystemRoot",
+        "TEMP",
+        "TMP",
+    ];
+    let local_url = repo.display().to_string();
+    for git in [
+        SafeGit::local(&repo).unwrap(),
+        SafeGit::fetching(&repo, &local_url).unwrap(),
     ] {
-        assert!(DIRECT_GIT.iter().all(|(f, _)| *f != path), "{path}");
+        assert!(git.token_file.is_none());
+        for (key, _) in env_of(&git) {
+            assert!(FIXED.contains(&key.as_str()), "{key}");
+        }
+    }
+}
+
+/// Paths are handed to git without a Windows verbatim prefix; Unix paths
+/// stay as they are.
+#[test]
+fn paths_reach_git_in_a_spelling_it_can_use() {
+    use super::plain_path;
+    if cfg!(windows) {
+        for (from, to) in [
+            (r"\\?\C:\dev\repo", r"C:\dev\repo"),
+            (r"\\?\UNC\host\share\repo", r"\\host\share\repo"),
+            (r"\\?\GLOBALROOT\x", r"\\?\GLOBALROOT\x"),
+            (r"C:\dev\repo", r"C:\dev\repo"),
+        ] {
+            assert_eq!(plain_path(Path::new(from)), PathBuf::from(to));
+        }
+    } else {
+        let path = Path::new(r"/tmp/\\?\x");
+        assert_eq!(plain_path(path), path);
     }
 }

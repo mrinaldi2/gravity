@@ -17,9 +17,19 @@ pub fn dir(home: &Path, project_id: &str) -> PathBuf {
         .join(format!("{project_id}.git"))
 }
 
-/// git in `cwd`, allowed to fetch from the project's repository.
-fn git(cwd: &Path, args: &[&str]) -> anyhow::Result<std::process::Output> {
-    SafeGit::fetching(cwd)?.args(args).output()
+/// git in the cache. A blob-less cache may fetch what it lacks from the
+/// repository it was cloned from, so this may fetch from there too.
+fn git(cache: &Path, args: &[&str]) -> anyhow::Result<std::process::Output> {
+    let origin = SafeGit::local(cache)?
+        .args(&["config", "--get", "remote.origin.url"])
+        .run()
+        .unwrap_or_default();
+    fetch(cache, &origin, args)
+}
+
+/// git in `cwd`, allowed to fetch from `url`, the project's repository.
+fn fetch(cwd: &Path, url: &str, args: &[&str]) -> anyhow::Result<std::process::Output> {
+    SafeGit::fetching(cwd, url)?.args(args).output()
 }
 
 fn ok(out: &std::process::Output, what: &str) -> anyhow::Result<()> {
@@ -37,8 +47,9 @@ pub fn refresh(home: &Path, project_id: &str, url: &str) -> anyhow::Result<PathB
     let url = github_https(url).unwrap_or_else(|| url.to_string());
     let cache = dir(home, project_id);
     if cache.join("HEAD").exists() {
-        let out = git(
+        let out = fetch(
             &cache,
+            &url,
             &[
                 "fetch",
                 "--quiet",
@@ -54,8 +65,9 @@ pub fn refresh(home: &Path, project_id: &str, url: &str) -> anyhow::Result<PathB
         let parent = cache.parent().expect("cache has a parent");
         std::fs::create_dir_all(parent)?;
         let target = cache.display().to_string();
-        let out = git(
+        let out = fetch(
             parent,
+            &url,
             &[
                 "clone",
                 "--quiet",

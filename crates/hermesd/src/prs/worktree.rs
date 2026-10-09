@@ -26,12 +26,13 @@ fn expand(app: &AppState, path: &str) -> PathBuf {
 /// workspace (a worker's clones are there), or one of its
 /// `<repo>-wt-<slug>[-…]` worktrees in the trusted paths.
 fn allowed(app: &AppState, bot: &bus::Bot, path: &Path) -> bool {
-    if std::fs::canonicalize(&bot.workspace_path).is_ok_and(|w| path.starts_with(w)) {
+    if crate::safe_git::canonical(Path::new(&bot.workspace_path)).is_ok_and(|w| path.starts_with(w))
+    {
         return true;
     }
     let own = slug(&bot.name);
     app.cfg.trusted_paths.iter().any(|root| {
-        let Ok(root) = std::fs::canonicalize(expand(app, root)) else {
+        let Ok(root) = crate::safe_git::canonical(&expand(app, root)) else {
             return false;
         };
         let Ok(rest) = path.strip_prefix(&root) else {
@@ -57,7 +58,7 @@ pub fn verify(
     branch: &str,
     reported: &str,
 ) -> anyhow::Result<PrWorktree> {
-    let path = std::fs::canonicalize(reported).map_err(|_| {
+    let path = crate::safe_git::canonical(Path::new(reported)).map_err(|_| {
         anyhow::anyhow!(
             "worktree {reported} doesn't exist on {machine}; a worktree on another computer \
                  is checked by that computer's daemon once H-285 lands"
