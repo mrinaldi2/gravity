@@ -7,71 +7,11 @@
 
 mod common;
 
-use std::path::Path;
-
-use common::prs::{clone, commit, error, setup, Repo};
+use common::prs::{approve, clone, commit, error, give, move_main, opened, pr, report, setup};
 use common::repo::git;
-use hermesd::board::model::{ProjectRole, Role};
+use hermesd::board::model::Role;
 use hermesd::db::prs::Head;
-use serde_json::{json, Value};
-
-fn give(r: &Repo, bot: usize, role: Role) {
-    r.pair
-        .d
-        .app
-        .db
-        .set_project_role(&ProjectRole {
-            project_id: r.project.clone(),
-            role,
-            bot_id: r.pair.ids[bot].clone(),
-            machine: None,
-        })
-        .unwrap();
-}
-
-/// A PR on card "Search": Architect holds reviewer.arch; returns the
-/// worktree and the head the PR opened at.
-async fn opened(r: &mut Repo) -> (std::path::PathBuf, String) {
-    give(r, 2, Role::ReviewerArch);
-    let item = r.card("Search", "doing");
-    let tree = r.worktree("a", "H-1-search");
-    let pr = r.bots[1]
-        .call("pr_open", json!({"item": item, "branch": "H-1-search"}))
-        .await["pr"]
-        .clone();
-    (tree, pr["head_sha"].as_str().unwrap().to_string())
-}
-
-async fn approve(r: &mut Repo, sha: &str) -> Value {
-    r.bots[2]
-        .call(
-            "pr_review",
-            json!({"number": 1, "sha": sha, "role": "architect", "verdict": "approved",
-                   "summary": "Looks right."}),
-        )
-        .await
-}
-
-async fn pr(r: &mut Repo) -> Value {
-    r.bots[0].call("pr_get", json!({"number": 1})).await["pr"].clone()
-}
-
-async fn report(r: &mut Repo, tree: &Path) -> String {
-    let sha = git(tree, &["rev-parse", "HEAD"]).trim().to_string();
-    r.bots[1]
-        .call("pr_push", json!({"number": 1, "sha": sha}))
-        .await;
-    sha
-}
-
-/// Main moves on with a commit touching `file`.
-fn move_main(r: &Repo, name: &str, file: &str, text: &str) {
-    let other = r.dev.join(format!("main-mover-{name}"));
-    clone(&r.origin, &other, "unused");
-    git(&other, &["checkout", "-q", "main"]);
-    commit(&other, file, text);
-    git(&other, &["push", "-q", "origin", "main"]);
-}
+use serde_json::json;
 
 /// AC1: an approval holds across an update with main that keeps the change,
 /// and goes stale after a fix-up commit or a conflict resolution.

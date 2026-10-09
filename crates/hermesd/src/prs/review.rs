@@ -52,20 +52,12 @@ pub fn conflict_of_interest(
     if item.assignee.as_deref() == Some(bot_id) {
         return Ok(Some(format!("you're {}'s assignee", item.id)));
     }
-    let (since, tasked) = app.db.board_read(|t| {
-        let last_approval = t
-            .reviews(&pr.id)?
-            .iter()
-            .filter(|r| r.verdict == Verdict::Approved)
-            .map(|r| r.at)
-            .max();
-        Ok((
-            t.pushers_since(&pr.id, last_approval)?,
-            t.task_holders(&item.id)?,
-        ))
-    })?;
+    // Anyone who ever pushed to it wrote some of it (H-268 ARCH M2).
+    let (since, tasked) = app
+        .db
+        .board_read(|t| Ok((t.pushers_since(&pr.id, None)?, t.task_holders(&item.id)?)))?;
     if since.iter().any(|p| p == bot_id) {
-        return Ok(Some("you pushed to it since its last approval".into()));
+        return Ok(Some("you pushed to it".into()));
     }
     for pusher in &since {
         let spawned = app
@@ -124,6 +116,12 @@ pub fn submit(
         return Err(conflict(format!(
             "PR #{} is at {}; review the head that is there",
             pr.number, pr.head_sha
+        )));
+    }
+    if pr.moved_unreported {
+        return Err(conflict(format!(
+            "PR #{}'s branch moved without a report; the pusher reports it with pr_push first",
+            pr.number
         )));
     }
     if let Some(why) = conflict_of_interest(app, &pr, &bot.id, role)? {
