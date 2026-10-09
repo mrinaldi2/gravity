@@ -86,6 +86,11 @@ pub async fn spawn_daemon_on(
     cfg.checks.disk_floor_gb = 0;
     tweak(&mut cfg);
 
+    // SafeGit's home is the process's, and the first daemon names it: name
+    // one that outlives every test here, not a daemon's tempdir that goes
+    // when its test ends while others still run git.
+    static GIT_HOME: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    hermesd::safe_git::set_home(GIT_HOME.get_or_init(|| tempfile::tempdir().unwrap().keep()));
     let db = Db::open(&cfg.db_path()).expect("db");
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
