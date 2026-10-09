@@ -1,0 +1,8 @@
+{
+  "reqId": "72",
+  "prRequest": {
+    "disk_report": {
+      "machine": "imac"
+    }
+  }
+}

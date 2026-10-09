@@ -1,0 +1,9 @@
+{
+  "reqId": "60",
+  "prRequest": {
+    "pr_list": {
+      "project_id": "p-gravity",
+      "state": "PR_STATE_OPEN"
+    }
+  }
+}

@@ -30,6 +30,12 @@ mod hermes {
             include!(concat!(env!("OUT_DIR"), "/hermes.home.v1.serde.rs"));
         }
     }
+    pub mod pr {
+        pub mod v1 {
+            include!(concat!(env!("OUT_DIR"), "/hermes.pr.v1.rs"));
+            include!(concat!(env!("OUT_DIR"), "/hermes.pr.v1.serde.rs"));
+        }
+    }
     pub mod wire {
         pub mod v1 {
             include!(concat!(env!("OUT_DIR"), "/hermes.wire.v1.rs"));
@@ -58,6 +64,20 @@ pub mod home {
 
     /// Bumped only on a breaking change to this surface.
     pub const VERSION: u32 = 1;
+}
+
+/// Pull requests and checks (H-261): PRs bound to the commits reviewed,
+/// checks per commit, cleanup after merge, and the bots' tools.
+pub mod pr {
+    pub use super::hermes::pr::v1::*;
+
+    /// Bumped only on a breaking change to this surface.
+    pub const VERSION: u32 = 1;
+
+    /// The `hello_ok.capabilities` this surface goes with. Not advertised
+    /// (nor `pr` in [`super::CONTRACTS`]) until the daemon serves the
+    /// requests (H-273), so a client never shows a panel it can't fill.
+    pub const CAPABILITIES: &[&str] = &["pull_requests", "checks"];
 }
 
 /// What a WebSocket binary frame carries: an `Envelope` per frame.

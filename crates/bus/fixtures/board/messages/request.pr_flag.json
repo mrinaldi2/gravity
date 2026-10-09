@@ -1,0 +1,11 @@
+{
+  "reqId": "67",
+  "prRequest": {
+    "pr_flag": {
+      "project_id": "p-gravity",
+      "number": 45,
+      "flagged": true,
+      "reason": "Touches the peer link"
+    }
+  }
+}

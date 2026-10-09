@@ -1,0 +1,41 @@
+{
+  "reqId": "82",
+  "prResponse": {
+    "pr_diff": {
+      "from_sha": "f0678fc1a2b3c4d5e6f708192a3b4c5d6e7f8091",
+      "to_sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "files": [
+        {
+          "path": "crates/hermesd/src/mcp/releases.rs",
+          "status": "FILE_STATUS_MODIFIED",
+          "additions": 12,
+          "deletions": 3
+        },
+        {
+          "path": "apps/desktop/src/components/releases/WaitingForYou.tsx",
+          "status": "FILE_STATUS_ADDED",
+          "additions": 120
+        },
+        {
+          "path": "apps/desktop/src/components/releases/Waiting.tsx",
+          "old_path": "apps/desktop/src/components/releases/Old.tsx",
+          "status": "FILE_STATUS_RENAMED",
+          "additions": 2,
+          "deletions": 2
+        },
+        {
+          "path": "docs/old.md",
+          "status": "FILE_STATUS_DELETED",
+          "deletions": 40
+        },
+        {
+          "path": "apps/desktop/tests/visual/release.png",
+          "status": "FILE_STATUS_MODIFIED",
+          "binary": true
+        }
+      ],
+      "diff": "diff --git a/crates/hermesd/src/mcp/releases.rs b/crates/hermesd/src/mcp/releases.rs\n--- a/crates/hermesd/src/mcp/releases.rs\n+++ b/crates/hermesd/src/mcp/releases.rs\n@@ -85,3 +85,3 @@\n-    payload(r)\n+    r.to_json()\n",
+      "truncated": false
+    }
+  }
+}

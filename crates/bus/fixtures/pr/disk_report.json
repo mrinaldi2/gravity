@@ -1,0 +1,24 @@
+{
+  "machine": "mac",
+  "free_bytes": "14000000000",
+  "total_bytes": "494000000000",
+  "uses": [
+    {
+      "bot": {
+        "daemon_id": "d-mac",
+        "bot_id": "b-dev",
+        "name": "Desktop Dev"
+      },
+      "workspace_bytes": "200000000",
+      "worktree_bytes": "6000000000",
+      "cache_bytes": "21000000000",
+      "reclaimable_bytes": "9000000000"
+    },
+    {
+      "workspace_bytes": "0",
+      "worktree_bytes": "2000000000",
+      "reclaimable_bytes": "2000000000"
+    }
+  ],
+  "as_of": "2026-10-09T12:00:00Z"
+}

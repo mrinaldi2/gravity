@@ -1048,6 +1048,18 @@ The typed surface `hermes.home.v1` (`proto/hermes/home/v1/home.proto`, contract 
 
 Without a board, `metrics` is null. Off the board's home, the daemon asks the home (peer request `metrics_get {project_id, days}`) and answers once it has. If the home can't be reached, `metrics` is null and `note` names it.
 
+## Pull requests and checks (H-261)
+
+The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1, capabilities `pull_requests` and `checks`). It's the same shape as the projects home:
+- **Transport:** binary `PrRequest`/`PrResponse`/`PrPush` envelopes (arms 7–9), or JSON `{type, req_id, ...fields}` with the proto field names.
+- **Requests:** `pr_list`, `pr_get`, `pr_diff`, `pr_comments` and `review_settings_get` (read). `pr_flag` and `check_rerun` (control). `pr_review_submit`, `pr_comment_add`, `pr_merge_undo`, `review_settings_set` and `cleanup_resolve` (approve; the owner's device or ticket only, never the owner token or a bot). `disk_report` (read).
+- **Pushes:** `pr_updated`, `check_updated`, `merge_queue_changed` and `cleanup_updated`.
+- **Bots' MCP tools:** `pr_open`, `pr_push`, `pr_review`, `pr_comment`, `pr_get`, `pr_list` and `check_report`, defined in `proto/hermes/pr/v1/tools.proto`.
+- **Releases cut from main:** they gain `tag`, `commit`, `prs` and `also_included` (`ReleaseFromMain`) at the top level of the release payload. These are new keys, so a client reading today's release is unaffected.
+- **Fixtures:** golden fixtures are in `crates/bus/fixtures/pr/`.
+
+**Not served yet (H-265 is the contract only).** This daemon answers a binary `PrRequest` with `unsupported`. It doesn't advertise the capabilities or `contracts.pr` until it serves the requests (H-273).
+
 ## Meetings
 
 Meetings live with the board, on its home (H-017 §1.5, H-020 §4, H-102). A **series** (`standup`, `refinement`, `demo`, `retro` or `adhoc`) owns a routine: creating or changing one upserts the routine with the facilitator as its bot, the series' cron and time zone, and a prompt telling it to run the meeting. A new facilitator gets a new routine; disabling the series disables it. Each run, the facilitator calls `meeting_start`. That opens an occurrence (`MTG-<date>-<type>`, collecting), freezes `inputs_snapshot` (the board's columns with counts, Doing, blocked and stale items, the open action items) and sends each attendee bot one note. Attendees `meeting_contribute`, the facilitator (or the lead) records `action_add`s and `meeting_close`s it as held, with outputs by section and a summary of at most ten lines, or skipped with a reason. Open action items carry over: `meeting_get` lists those of the series' earlier meetings as `carried_over`. `action_promote` (lead) turns one into a chore in the board's Inbox, linked to its meeting (link kind `meeting`), and sets the action's `item_id`. Attendees and action owners are bot ids, or `owner`.

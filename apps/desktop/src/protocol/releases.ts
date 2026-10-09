@@ -179,6 +179,23 @@ export interface Release {
   readonly work_item_id?: string | null;
   /** What it waits on from the owner (H-247); absent from older services. */
   readonly owner_blockers?: readonly OwnerBlocker[];
+  /**
+   * A release cut from main (H-261 §6.1; `hermes.pr.v1.ReleaseFromMain`),
+   * absent from older services: its tag, its commit on main, the pull
+   * requests merged since the last release, and those not planned for it.
+   */
+  readonly tag?: string;
+  readonly commit?: string;
+  readonly prs?: readonly PrRef[];
+  readonly also_included?: readonly PrRef[];
+}
+
+/** A merged pull request as a release lists it (`hermes.pr.v1.PrRef`). */
+interface PrRef {
+  readonly number: number;
+  readonly item_id: string;
+  readonly merged_sha: string;
+  readonly title?: string;
 }
 
 /**

@@ -1,0 +1,26 @@
+{
+  "tag": "desktop-v0.18.0",
+  "commit": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+  "prs": [
+    {
+      "number": 40,
+      "item_id": "H-203",
+      "merged_sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "title": "Card ids as links"
+    },
+    {
+      "number": 42,
+      "item_id": "H-247",
+      "merged_sha": "8f35e95a1b2c3d4e5f60718293a4b5c6d7e8f901",
+      "title": "Waiting for you on releases"
+    }
+  ],
+  "also_included": [
+    {
+      "number": 43,
+      "item_id": "H-250",
+      "merged_sha": "f0678fc1a2b3c4d5e6f708192a3b4c5d6e7f8091",
+      "title": "Typo in the About box"
+    }
+  ]
+}

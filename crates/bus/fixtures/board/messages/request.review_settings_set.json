@@ -1,0 +1,12 @@
+{
+  "reqId": "69",
+  "prRequest": {
+    "review_settings_set": {
+      "project_id": "p-gravity",
+      "owner_review": "OWNER_REVIEW_AREAS",
+      "owner_review_areas": [
+        "security"
+      ]
+    }
+  }
+}

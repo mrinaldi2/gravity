@@ -1,0 +1,45 @@
+{
+  "id": "pr-uuid-41",
+  "project_id": "p-gravity",
+  "number": 41,
+  "item_id": "H-235",
+  "branch": "H-235-waiting-reason",
+  "base": "main",
+  "base_sha": "f0678fc1a2b3c4d5e6f708192a3b4c5d6e7f8091",
+  "head_sha": "8f35e95a1b2c3d4e5f60718293a4b5c6d7e8f901",
+  "state": "PR_STATE_CLOSED",
+  "author": {
+    "daemon_id": "d-mac",
+    "bot_id": "b-dev",
+    "name": "Desktop Dev"
+  },
+  "title": "Why a message waits",
+  "mergeable": {
+    "ok": false,
+    "blockers": [
+      {
+        "kind": "BLOCKER_KIND_NOT_OPEN",
+        "text": "Closed"
+      }
+    ]
+  },
+  "opened_at": "2026-10-08T06:52:00Z",
+  "closed_at": "2026-10-08T06:55:00Z",
+  "required_roles": [
+    "architect",
+    "ce"
+  ],
+  "item_title": "Why a message waits",
+  "cleanup": {
+    "state": "CLEANUP_STATE_QUEUED",
+    "items": [
+      {
+        "job_id": "cj-9",
+        "machine": "mac",
+        "kind": "CLEANUP_KIND_REMOTE_BRANCH",
+        "state": "CLEANUP_STATE_QUEUED",
+        "path": "H-235-waiting-reason"
+      }
+    ]
+  }
+}

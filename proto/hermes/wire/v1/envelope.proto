@@ -7,6 +7,7 @@ package hermes.wire.v1;
 
 import "hermes/board/v1/requests.proto";
 import "hermes/home/v1/home.proto";
+import "hermes/pr/v1/pr.proto";
 
 message Envelope {
   // Correlates a response with its request, as `req_id` does in JSON frames.
@@ -21,6 +22,10 @@ message Envelope {
     // The projects home (H-128).
     hermes.home.v1.HomeRequest home_request = 5;
     hermes.home.v1.HomeResponse home_response = 6;
+    // Pull requests and checks (H-261).
+    hermes.pr.v1.PrRequest pr_request = 7;
+    hermes.pr.v1.PrResponse pr_response = 8;
+    hermes.pr.v1.PrPush pr_push = 9;
     Error error = 15;
   }
 }

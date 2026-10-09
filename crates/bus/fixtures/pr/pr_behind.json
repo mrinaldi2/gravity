@@ -1,0 +1,90 @@
+{
+  "id": "pr-uuid-45",
+  "project_id": "p-gravity",
+  "number": 45,
+  "item_id": "H-259",
+  "branch": "H-259-search-docs",
+  "base": "main",
+  "base_sha": "f0678fc1a2b3c4d5e6f708192a3b4c5d6e7f8091",
+  "head_sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+  "state": "PR_STATE_OPEN",
+  "author": {
+    "daemon_id": "d-mac",
+    "bot_id": "b-dev",
+    "name": "Desktop Dev"
+  },
+  "title": "Search in Docs",
+  "reviews": [
+    {
+      "role": "architect",
+      "reviewer": {
+        "bot": {
+          "daemon_id": "d-mac",
+          "bot_id": "b-arch",
+          "name": "Architect"
+        }
+      },
+      "sha": "8f35e95a1b2c3d4e5f60718293a4b5c6d7e8f901",
+      "verdict": "VERDICT_APPROVED",
+      "summary": "OK.",
+      "stale": false,
+      "at": "2026-10-09T08:00:00Z"
+    }
+  ],
+  "checks": [
+    {
+      "name": "rust",
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "result": "CHECK_RESULT_PASS",
+      "required": true,
+      "ran_on": "mac",
+      "tree_of": "8f35e95a1b2c3d4e5f60718293a4b5c6d7e8f901"
+    }
+  ],
+  "owner_review_required": false,
+  "owner_flagged": true,
+  "owner_flag_reason": "Touches the peer link",
+  "mergeable": {
+    "ok": false,
+    "blockers": [
+      {
+        "kind": "BLOCKER_KIND_MOVED_UNREPORTED",
+        "text": "The branch moved without a reported push"
+      },
+      {
+        "kind": "BLOCKER_KIND_BEHIND_MAIN",
+        "text": "Needs update with main"
+      },
+      {
+        "kind": "BLOCKER_KIND_CONFLICTS",
+        "text": "Has conflicts: waiting for Desktop Dev to resolve",
+        "paths": [
+          "apps/desktop/src/styles/base.css",
+          "crates/hermesd/src/app.rs"
+        ]
+      },
+      {
+        "kind": "BLOCKER_KIND_CARD_BLOCKED",
+        "text": "H-259 is blocked"
+      }
+    ]
+  },
+  "opened_at": "2026-10-08T15:00:00Z",
+  "required_roles": [
+    "architect"
+  ],
+  "moved_unreported": true,
+  "item_title": "Search in Docs",
+  "waivers": [
+    {
+      "role": "ux",
+      "by": {
+        "daemon_id": "d-mac",
+        "bot_id": "b-lead",
+        "name": "Team Lead"
+      },
+      "reason": "No screens change",
+      "at": "2026-10-09T08:05:00Z"
+    }
+  ]
+}

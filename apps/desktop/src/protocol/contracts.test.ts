@@ -31,6 +31,18 @@ import {
   ProjectAttentionSchema,
   ProjectsOverviewSchema,
 } from "./gen/hermes/home/v1/home_pb";
+import {
+  DiskReportSchema,
+  PrCommentsSchema,
+  PrDiffSchema,
+  PrListSchema,
+  PrPushSchema,
+  PrRequestSchema,
+  PrResponseSchema,
+  PullRequestSchema,
+  ReleaseFromMainSchema,
+  ReviewSettingsSchema,
+} from "./gen/hermes/pr/v1/pr_pb";
 import { EnvelopeSchema } from "./gen/hermes/wire/v1/envelope_pb";
 import type { Envelope } from "./gen/hermes/wire/v1/envelope_pb";
 
@@ -126,6 +138,12 @@ function armOf(envelope: Envelope): string {
       return `request.${protoName(HomeRequestSchema, body.value.request.case)}`;
     case "homeResponse":
       return `response.${protoName(HomeResponseSchema, body.value.response.case)}`;
+    case "prRequest":
+      return `request.${protoName(PrRequestSchema, body.value.request.case)}`;
+    case "prResponse":
+      return `response.${protoName(PrResponseSchema, body.value.response.case)}`;
+    case "prPush":
+      return `push.${protoName(PrPushSchema, body.value.push.case)}`;
     case "error":
       return "error";
     case undefined:
@@ -147,6 +165,9 @@ function everyArm(): Set<string> {
     ...names(BoardPushSchema).map((n) => `push.${n}`),
     ...names(HomeRequestSchema).map((n) => `request.${n}`),
     ...names(HomeResponseSchema).map((n) => `response.${n}`),
+    ...names(PrRequestSchema).map((n) => `request.${n}`),
+    ...names(PrResponseSchema).map((n) => `response.${n}`),
+    ...names(PrPushSchema).map((n) => `push.${n}`),
     "error",
   ]);
 }
@@ -192,6 +213,38 @@ describe("home contract", () => {
       throw new Error(`no schema for ${name}`);
     }
     const message = fromJson(schema, readJson(name, HOME));
+    expect(equals(schema, fromBinary(schema, toBinary(schema, message)), message)).toBe(true);
+  });
+});
+
+// Pull requests and checks (H-265): the golden fixtures the PR tab is built
+// on, shared with the daemon and iOS.
+const PR = join(process.cwd(), "..", "..", "crates", "bus", "fixtures", "pr");
+const PRS = ["pr_open", "pr_behind", "pr_merging", "pr_merged", "pr_closed"];
+const PR_MESSAGES: Readonly<Record<string, DescMessage>> = {
+  ...Object.fromEntries(PRS.map((name) => [name, PullRequestSchema])),
+  pr_list: PrListSchema,
+  comments: PrCommentsSchema,
+  diff: PrDiffSchema,
+  review_settings: ReviewSettingsSchema,
+  release_from_main: ReleaseFromMainSchema,
+  disk_report: DiskReportSchema,
+};
+
+describe("pr contract", () => {
+  it("has a schema for every fixture", () => {
+    const files = readdirSync(PR)
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => name.replace(/\.json$/, ""));
+    expect(new Set(files)).toEqual(new Set(Object.keys(PR_MESSAGES)));
+  });
+
+  it.each(Object.keys(PR_MESSAGES))("decodes the %s fixture and round-trips it", (name) => {
+    const schema = PR_MESSAGES[name];
+    if (schema === undefined) {
+      throw new Error(`no schema for ${name}`);
+    }
+    const message = fromJson(schema, readJson(name, PR));
     expect(equals(schema, fromBinary(schema, toBinary(schema, message)), message)).toBe(true);
   });
 });
