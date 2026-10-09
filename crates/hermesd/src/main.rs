@@ -68,6 +68,11 @@ async fn main() -> anyhow::Result<()> {
     if args.first().map(String::as_str) == Some("hook") {
         std::process::exit(hermesd::bus_auth::hook::run(&args[1..]).await);
     }
+    // A check's runner (H-283): the daemon starts it and reads its exit
+    // status, the check's result.
+    if args.first().map(String::as_str) == Some("check") {
+        std::process::exit(hermesd::check_exec::run_cli(&args[1..]));
+    }
     // `service install` runs a staged binary with this to check it starts.
     if args.first().map(String::as_str) == Some("--version") {
         println!("hermesd {}", hermesd::app::DAEMON_VERSION);

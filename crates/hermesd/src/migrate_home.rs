@@ -23,7 +23,7 @@
 //! The daemon must be stopped: `service install` stops the old agent first,
 //! and the migration checks both lock files before it moves anything.
 
-mod disk;
+pub(crate) mod disk;
 #[cfg(test)]
 mod env_home_tests;
 mod files;

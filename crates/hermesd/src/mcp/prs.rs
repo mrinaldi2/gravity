@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 
 use crate::app::AppState;
 use crate::board::model::Role;
+use crate::prs::check_rerun::{self, Asker};
 use crate::prs::review_model::{Finding, Verdict};
 use crate::prs::{self, flow, follow_up, review};
 
@@ -93,9 +94,16 @@ pub(super) const PR_TOOLS: &[BoardTool] = &[
         "check_report",
         "CheckReport",
         Audience::Everyone,
-        "Report the check you were spawned to run, on the full sha you ran it on: running \
-         when you start, then pass, fail or error. A pass or a fail needs 'log', a file in \
-         your workspace; add the tools you used in 'tool_versions'.",
+        "Report a check dispatched to you as running, or as error when it couldn't run \
+         ('log', a file in your workspace, says why). A pass or a fail is never reported: \
+         the daemon records it from the check's exit status.",
+    ),
+    shared(
+        "check_rerun",
+        "CheckRerunRequest",
+        Audience::Everyone,
+        "Run a check on a sha again once it has a result (the lead or the PR's author). An \
+         error is already retried once by itself; a fail never is.",
     ),
 ];
 
@@ -115,7 +123,7 @@ pub(super) fn call(
     match name {
         "pr_open" => {
             let req: p::PrOpen = decode("PrOpen", args, project)?;
-            one(flow::open(
+            let opened = flow::open(
                 app,
                 bot,
                 &flow::Open {
@@ -126,17 +134,15 @@ pub(super) fn call(
                     worktree: req.worktree.as_deref(),
                     repo: req.repo.as_deref(),
                 },
-            )?)
+            )?;
+            prs::check_jobs::nudge();
+            one(opened)
         }
         "pr_push" => {
             let req: p::PushReport = decode("PushReport", args, project)?;
-            one(flow::push(
-                app,
-                bot,
-                req.number,
-                &req.sha,
-                req.worktree.as_deref(),
-            )?)
+            let pushed = flow::push(app, bot, req.number, &req.sha, req.worktree.as_deref())?;
+            prs::check_jobs::nudge();
+            one(pushed)
         }
         "pr_close" => {
             let req: p::PrClose = decode("PrClose", args, project)?;
@@ -255,6 +261,16 @@ pub(super) fn call(
         "check_report" => {
             let req: p::CheckReport = decode("CheckReport", args, project)?;
             let run = prs::checks::report(app, bot, &req)?;
+            prs::check_rerun::after_report(app, &run)?;
+            Ok(json!({ "check": run.to_json() }))
+        }
+        "check_rerun" => {
+            let req: p::CheckRerunRequest = decode("CheckRerunRequest", args, project)?;
+            let asker = Asker::Bot {
+                bot,
+                lead: roles.contains(&Role::Lead),
+            };
+            let run = check_rerun::rerun(app, project, req.sha.trim(), req.name.trim(), &asker)?;
             Ok(json!({ "check": run.to_json() }))
         }
         other => anyhow::bail!("unknown PR tool: {other}"),
