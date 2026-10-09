@@ -110,6 +110,7 @@ enum AttentionKind {
   SERVING_OFF = 9;
   OWNER_QUESTION = 10;
   PR_REVIEW = 11;                           // a PR waits for the owner's review (H-269)
+  PR_MERGE_STUCK = 12;                      // DevOps hasn't run a PR's merge in 30 min (H-284)
 }
 
 message AttentionRow {

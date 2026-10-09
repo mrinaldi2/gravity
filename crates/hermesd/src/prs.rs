@@ -14,6 +14,8 @@ pub mod checks;
 pub mod comments;
 pub mod flow;
 pub mod follow_up;
+pub mod merge;
+pub mod merge_cli;
 pub mod mergeable;
 pub mod model;
 pub mod owner;

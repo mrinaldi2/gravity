@@ -9,12 +9,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bus::{MessageKind, DEFAULT_TASK_DEADLINE_HOURS};
+use bus::{MessageKind, TaskState, DEFAULT_TASK_DEADLINE_HOURS};
 use chrono::{DateTime, Utc};
 
 use crate::actor::Actor;
 use crate::app::AppState;
 use crate::board::model::Role;
+use crate::db::merge_queue::QueueRow;
 use crate::db::OwnerProof;
 use crate::decisions::{conflict, not_found};
 use crate::messaging::{self, daemon_sender, Dm};
@@ -24,6 +25,9 @@ use crate::prs::{mergeable, owner};
 
 /// The owner's Undo window (ruling 7629a873, UX-051 decision 4).
 pub const WINDOW: chrono::Duration = chrono::Duration::seconds(10);
+/// A handed merge DevOps hasn't run by then goes to DevOps again, and the
+/// owner sees it (H-284, Architect S2 on H-271).
+pub const STUCK_AFTER: chrono::Duration = chrono::Duration::minutes(30);
 const EVERY: Duration = Duration::from_secs(2);
 
 pub fn spawn(app: Arc<AppState>) {
@@ -69,7 +73,11 @@ pub fn tick(app: &Arc<AppState>, project: &str, now: DateTime<Utc>) -> anyhow::R
         let row = app.db.board_read(|t| t.queue_row(&pr.id))?;
         if let Some(row) = &row {
             if row.state == "handed" {
-                continue; // DevOps runs it now (H-284).
+                // DevOps runs it now (`hermesd pr merge`), unless it's stuck.
+                if now - row.updated_at >= STUCK_AFTER {
+                    stuck(app, pr, row, now)?;
+                }
+                continue;
             }
             if row.state == "undone" {
                 if row.patch_id == pr.head_patch_id && !undo_lifted(app, pr, row.updated_at)? {
@@ -165,6 +173,29 @@ fn hand_off(
     app.db.link_task_item(&task.id, &pr.item_id, &Actor::User)?;
     app.db
         .board_tx(|t| t.set_queue_state(&pr.id, "handed", None, Some(&task.id), patch_id, now))
+}
+
+/// A handed merge timed out: its task expires, DevOps gets it again, and
+/// it's recorded as stuck since it was first handed, for the owner's
+/// Needs you.
+fn stuck(app: &Arc<AppState>, pr: &Pr, row: &QueueRow, now: DateTime<Utc>) -> anyhow::Result<()> {
+    if let Some(task) = &row.task_id {
+        app.db.try_close_task(task, TaskState::Expired)?;
+    }
+    let since = app
+        .db
+        .board_read(|t| t.merge_stuck(&pr.id))?
+        .map_or(row.updated_at, |s| s.since);
+    app.db.board_tx(|t| {
+        t.mark_merge_stuck(pr, since, now)?;
+        // Restarts the clock even with no DevOps to hand it to.
+        t.set_queue_state(&pr.id, "handed", None, None, &row.patch_id, now)
+    })?;
+    tracing::warn!(
+        pr = pr.number,
+        "a handed merge timed out; DevOps gets it again"
+    );
+    hand_off(app, pr, &row.patch_id, now)
 }
 
 /// The owner's Undo within the window (device or ticket): the PR goes back

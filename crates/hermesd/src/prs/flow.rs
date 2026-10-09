@@ -87,10 +87,10 @@ pub fn open(app: &Arc<AppState>, bot: &bus::Bot, req: &Open<'_>) -> anyhow::Resu
     let title = req.title.map(str::trim).filter(|t| !t.is_empty());
     let mut feed = app.board.writer();
     let (pr, moved) = app.db.board_tx(|t| {
-        if let Some(live) = t.live_pr_of(&item.id)? {
+        if let Some(live) = t.live_pr_of(&item.id, &repo.name)? {
             return Err(conflict(format!(
-                "{} already has PR #{}; push to it, or close it first",
-                item.id, live.number
+                "{} already has PR #{} in {}; push to it, or close it first",
+                item.id, live.number, repo.name
             )));
         }
         let item = t

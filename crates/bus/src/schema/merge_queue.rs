@@ -26,3 +26,25 @@ CREATE TABLE IF NOT EXISTS review_withdrawn (
     at        TEXT NOT NULL
 );
 "#;
+
+/// The merge executor (H-284; H-261 §5.2, §5.3, §6.5). Named rather than
+/// numbered (ARCH-R1); safe to run again.
+///
+/// - One live PR per card **per repo**: a card may have a PR in each of the
+///   project's repos (§6.5), and moves to Verify once all of them merge.
+/// - `pr_merge_stuck`: a `handed` merge DevOps hasn't run within 30 min:
+///   when it was first handed, how often it was handed again. Shown to the
+///   owner until the PR merges or leaves the queue.
+pub(super) const MIGRATION_PR_MERGE: &str = r#"
+DROP INDEX IF EXISTS idx_pr_one_open_per_card;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pr_one_open_per_card_repo
+    ON pr(project_id, item_id, repo) WHERE state IN ('open', 'merging');
+
+CREATE TABLE IF NOT EXISTS pr_merge_stuck (
+    pr_id      TEXT PRIMARY KEY REFERENCES pr(id) ON DELETE CASCADE,
+    project_id TEXT NOT NULL,
+    since      TEXT NOT NULL,
+    retasks    INTEGER NOT NULL DEFAULT 0,
+    at         TEXT NOT NULL
+);
+"#;

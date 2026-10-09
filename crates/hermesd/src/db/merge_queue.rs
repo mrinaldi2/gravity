@@ -68,6 +68,10 @@ impl BoardTx<'_> {
     pub fn dequeue(&self, pr_id: &str) -> anyhow::Result<()> {
         self.conn
             .execute("DELETE FROM pr_merge WHERE pr_id = ?1", params![pr_id])?;
+        self.conn.execute(
+            "DELETE FROM pr_merge_stuck WHERE pr_id = ?1",
+            params![pr_id],
+        )?;
         Ok(())
     }
 
@@ -121,4 +125,60 @@ impl BoardTx<'_> {
             .collect::<rusqlite::Result<Vec<String>>>()?;
         Ok(ids)
     }
+
+    /// A handed merge that timed out (H-284 S2): when it was first handed,
+    /// and how often it went to DevOps again.
+    pub fn merge_stuck(&self, pr_id: &str) -> anyhow::Result<Option<Stuck>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT pr_id, since, retasks FROM pr_merge_stuck WHERE pr_id = ?1",
+                params![pr_id],
+                stuck_row,
+            )
+            .optional()?)
+    }
+
+    /// The project's stuck merges, oldest first.
+    pub fn merges_stuck(&self, project_id: &str) -> anyhow::Result<Vec<Stuck>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT pr_id, since, retasks FROM pr_merge_stuck WHERE project_id = ?1 ORDER BY since",
+        )?;
+        let rows = stmt
+            .query_map(params![project_id], stuck_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Records one more timeout of a handed merge first handed at `since`.
+    pub fn mark_merge_stuck(
+        &self,
+        pr: &Pr,
+        since: DateTime<Utc>,
+        at: DateTime<Utc>,
+    ) -> anyhow::Result<()> {
+        self.conn.execute(
+            "INSERT INTO pr_merge_stuck(pr_id, project_id, since, retasks, at)
+             VALUES (?1, ?2, ?3, 1, ?4)
+             ON CONFLICT(pr_id) DO UPDATE SET retasks = retasks + 1, at = ?4",
+            params![pr.id, pr.project_id, ts(since), ts(at)],
+        )?;
+        Ok(())
+    }
+}
+
+/// A handed merge DevOps didn't run in time (H-284 S2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Stuck {
+    pub pr_id: String,
+    pub since: DateTime<Utc>,
+    pub retasks: u32,
+}
+
+fn stuck_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Stuck> {
+    Ok(Stuck {
+        pr_id: r.get(0)?,
+        since: parse_ts(&r.get::<_, String>(1)?),
+        retasks: r.get(2)?,
+    })
 }

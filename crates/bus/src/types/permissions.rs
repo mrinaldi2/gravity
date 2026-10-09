@@ -58,10 +58,14 @@ pub enum PermissionExtra {
     /// Build the Windows installer with `hermesd release build-installer`,
     /// which runs the repo's own script only as committed (H-117 X3, H-104).
     BuildInstallers,
+    /// Fast-forward `main` to a mergeable PR's head with `hermesd pr merge`
+    /// (H-284), on the daemon's `pr_merge` task. Off for every bot until the
+    /// owner grants it; a raw push to `main` stays refused.
+    PrMerge,
 }
 
 impl PermissionExtra {
-    pub const ALL: [PermissionExtra; 7] = [
+    pub const ALL: [PermissionExtra; 8] = [
         Self::Publish,
         Self::DaemonRestart,
         Self::AppRestart,
@@ -69,6 +73,7 @@ impl PermissionExtra {
         Self::ReleaseMain,
         Self::Quiesce,
         Self::BuildInstallers,
+        Self::PrMerge,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -80,6 +85,7 @@ impl PermissionExtra {
             Self::ReleaseMain => "release_main",
             Self::Quiesce => "quiesce",
             Self::BuildInstallers => "build_installers",
+            Self::PrMerge => "pr_merge",
         }
     }
 

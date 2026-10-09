@@ -32,7 +32,7 @@ pub(crate) fn weight(kind: AttentionKind) -> u32 {
         | AttentionKind::PrReview
         | AttentionKind::OwnerAction
         | AttentionKind::PermissionPrompt => 3,
-        AttentionKind::P0Item | AttentionKind::ServingOff => 2,
+        AttentionKind::P0Item | AttentionKind::ServingOff | AttentionKind::PrMergeStuck => 2,
         AttentionKind::RelayedRulings
         | AttentionKind::BotWaiting
         | AttentionKind::OffBoard
