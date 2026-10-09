@@ -224,19 +224,14 @@ async fn a_restart_turns_a_check_running_here_into_an_error_retried_once() {
 #[cfg(unix)]
 #[test]
 fn a_runner_whose_daemon_dies_ends_its_own_tree() {
-    use std::process::{Command, Stdio};
+    use std::io::Write;
     let dir = tempfile::tempdir().unwrap();
     let job = dir.path();
     std::fs::create_dir(job.join("check")).unwrap();
     let spec = json!({"url": "", "sha": "", "run": POLICY_RUN});
     std::fs::write(job.join("job.json"), spec.to_string()).unwrap();
-    let mut runner = Command::new(env!("CARGO_BIN_EXE_hermesd"))
-        .args(["check", "run"])
-        .arg(job)
-        .stdin(Stdio::piped())
-        .process_group(0)
-        .spawn()
-        .unwrap();
+    let mut runner = runner(job);
+    runner.stdin.as_mut().unwrap().write_all(b"g").unwrap();
     let alive = job.join("alive");
     let since = std::time::Instant::now();
     while !alive.exists() {
@@ -249,4 +244,38 @@ fn a_runner_whose_daemon_dies_ends_its_own_tree() {
     std::fs::remove_file(&alive).unwrap();
     std::thread::sleep(Duration::from_secs(2));
     assert!(!alive.exists(), "a child outlived its runner");
+}
+
+/// `hermesd check run` as the daemon starts it, in job folder `job`.
+#[cfg(unix)]
+fn runner(job: &std::path::Path) -> std::process::Child {
+    use std::process::{Command, Stdio};
+    Command::new(env!("CARGO_BIN_EXE_hermesd"))
+        .args(["check", "run"])
+        .arg(job)
+        .env(hermesd::check_tree::LIFELINE_ENV, "1")
+        .stdin(Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .unwrap()
+}
+
+/// M2: the runner starts nothing until the daemon says go, once the tree
+/// is contained; a daemon gone before that leaves nothing running.
+#[cfg(unix)]
+#[test]
+fn a_runner_starts_nothing_before_go() {
+    let dir = tempfile::tempdir().unwrap();
+    let job = dir.path();
+    std::fs::create_dir(job.join("check")).unwrap();
+    let spec = json!({"url": "", "sha": "", "run": POLICY_RUN});
+    std::fs::write(job.join("job.json"), spec.to_string()).unwrap();
+    let mut runner = runner(job);
+    std::thread::sleep(Duration::from_secs(1));
+    assert!(!job.join("alive").exists(), "it ran before go");
+    drop(runner.stdin.take());
+    let status = runner.wait().unwrap();
+    assert_eq!(status.code(), Some(hermesd::check_exec::COULDNT_RUN));
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(!job.join("alive").exists(), "it ran without go");
 }

@@ -149,7 +149,7 @@ async fn run_inner(cfg: &Config, job: &str, spec: Spec) -> anyhow::Result<Outcom
         .stderr(Stdio::null())
         .kill_on_drop(true);
     check_tree::isolate(&mut runner);
-    let mut child = match runner.spawn() {
+    let child = match runner.spawn() {
         Ok(child) => child,
         Err(error) => {
             let _ = check_checkout::remove(&dir);
@@ -158,24 +158,29 @@ async fn run_inner(cfg: &Config, job: &str, spec: Spec) -> anyhow::Result<Outcom
     };
     // H-291: the whole tree ends before the checkout goes, however the
     // check ends, this future being dropped (the runtime stopping) included.
-    let tree = check_tree::adopt(&cfg.home, &dir, &child);
-    let _lifeline = child.stdin.take();
+    // It starts only once contained, or not at all.
+    let mut tree = match check_tree::start(&cfg.home, &dir, child).await {
+        Ok(tree) => tree,
+        Err(error) => {
+            return Ok(Outcome {
+                result: CheckResult::Error,
+                note: format!("couldn't contain the check: {error:#}"),
+                log: None,
+            })
+        }
+    };
     let limit = Duration::from_secs(cfg.checks.timeout_secs);
-    let status = tokio::time::timeout(limit, child.wait()).await;
-    if status.is_err() {
-        tree.kill();
-        let _ = child.wait().await;
-    }
+    let (over, status) = tree.wait(limit).await;
     let stopped = tree.finish();
     let log = Some(dir.join(LOG)).filter(|l| l.is_file());
     let (result, note) = match status {
         _ if stopped => (CheckResult::Error, "the daemon stopped while it ran".into()),
-        Err(_) => (
+        _ if over => (
             CheckResult::Error,
             format!("ran over {} and was stopped", span(limit)),
         ),
-        Ok(Err(error)) => (CheckResult::Error, format!("lost the runner: {error}")),
-        Ok(Ok(status)) => match status.code() {
+        Err(error) => (CheckResult::Error, format!("lost the runner: {error}")),
+        Ok(status) => match status.code() {
             Some(PASS) => (CheckResult::Pass, "exited 0".into()),
             Some(FAIL) => (CheckResult::Fail, "exited non-zero; see its log".into()),
             Some(COULDNT_RUN) => (CheckResult::Error, "its command couldn't start".into()),
@@ -254,13 +259,17 @@ fn run_command(dir: &Path, log: &fs::File) -> anyhow::Result<std::process::ExitS
     let spec: Spec = serde_json::from_slice(&fs::read(dir.join(SPEC))?)?;
     let checkout = dir.join(check_checkout::DIR);
     anyhow::ensure!(checkout.is_dir(), "there is no checkout to run in");
+    let lifeline = check_tree::wait_for_go()?;
     let mut command = shell(&spec.run);
     let mut child = command
         .current_dir(&checkout)
+        .env_remove(check_tree::LIFELINE_ENV)
         .stdin(Stdio::null())
         .stdout(log.try_clone()?)
         .stderr(log.try_clone()?)
         .spawn()?;
-    check_tree::watch_lifeline();
+    if lifeline {
+        check_tree::watch_lifeline();
+    }
     Ok(child.wait()?)
 }
