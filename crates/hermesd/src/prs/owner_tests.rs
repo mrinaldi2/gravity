@@ -77,3 +77,19 @@ fn areas_flagged_and_none_behave_and_security_always_needs_the_owner() {
     let none = set(Mode::None, &[]);
     assert!(!required(&none, &security, &pr(true)), "none is none");
 }
+
+/// A review or setting relayed by a linked computer is never recorded as the
+/// owner's (H-269 should): it has no device or ticket here.
+#[test]
+fn a_peer_relayed_owner_act_is_refused() {
+    let peer = crate::db::OwnerProof::Peer {
+        peer_id: "d-imac".into(),
+        origin_message_id: "m".into(),
+        origin_via: crate::db::OwnerVia::Device,
+    };
+    assert!(provenance(&peer).is_err());
+    assert_eq!(
+        provenance(&crate::db::OwnerProof::Ticket).unwrap(),
+        "ticket"
+    );
+}

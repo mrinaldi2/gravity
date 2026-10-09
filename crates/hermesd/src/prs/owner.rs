@@ -206,25 +206,45 @@ pub fn settings_json(project: &str, settings: &Settings, areas: &[String]) -> Va
     })
 }
 
-/// `pr_flag`: the owner (WS) or the lead (MCP) flags a PR for the owner's
-/// review with a reason, or clears the flag. Under `flagged` a flagged PR
-/// waits for the owner.
+/// Who flags a PR.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Flagger<'a> {
+    /// The owner, proved by a device or the app's ticket.
+    Owner,
+    /// The lead over MCP, by bot id.
+    Lead(&'a str),
+}
+
+/// `pr_flag`: the owner (WS, device or ticket) or the lead (MCP) flags a PR
+/// for the owner's review with a reason. Only the owner clears a flag, so
+/// under `flagged` no bot can take the owner's review away (H-269 M1); the
+/// lead's flag never replaces the owner's.
 pub fn flag(
     app: &AppState,
     project: &str,
     number: u32,
     flagged: bool,
     reason: &str,
+    by: Flagger<'_>,
 ) -> anyhow::Result<Pr> {
     let reason = reason.trim();
     if flagged && reason.is_empty() {
         return Err(invalid("say why the owner should review it"));
     }
+    if !flagged && by != Flagger::Owner {
+        return Err(crate::decisions::forbidden("only the owner clears a flag"));
+    }
     app.db.board_tx(|t| {
         let pr = t
             .pr(project, number)?
             .ok_or_else(|| not_found(format!("no PR #{number} in this project")))?;
-        t.set_pr_flag(&pr, flagged, flagged.then_some(reason))?;
+        let owners = t.pr_flagged_by(&pr.id)?.as_deref() == Some("owner");
+        match by {
+            Flagger::Lead(_) if owners => {}
+            Flagger::Lead(lead) => t.set_pr_flag(&pr, Some((lead, reason)))?,
+            Flagger::Owner if flagged => t.set_pr_flag(&pr, Some(("owner", reason)))?,
+            Flagger::Owner => t.set_pr_flag(&pr, None)?,
+        }
         t.pr(project, number)?
             .ok_or_else(|| not_found(format!("no PR #{number}")))
     })

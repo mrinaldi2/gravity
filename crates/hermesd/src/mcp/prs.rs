@@ -53,8 +53,8 @@ pub(super) const PR_TOOLS: &[BoardTool] = &[
         "pr_flag",
         "PrFlagRequest",
         Audience::Lead,
-        "Flag a PR for the owner's review, with the reason, or clear the flag (flagged: false). \
-         Under the owner's \"only flagged\" setting, a flagged PR waits for the owner.",
+        "Flag a PR for the owner's review, with the reason. Under the owner's \"only flagged\" \
+         setting a flagged PR waits for the owner. Only the owner clears a flag.",
     ),
     shared(
         "pr_get",
@@ -170,6 +170,7 @@ pub(super) fn call(
                 req.number,
                 req.flagged,
                 &req.reason,
+                prs::owner::Flagger::Lead(&bot.id),
             )?)
         }
         "pr_get" => {

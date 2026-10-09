@@ -21,8 +21,12 @@ pub(super) const KINDS: &[&str] = &[
 ];
 
 /// The ones that are the owner's own acts: device or ticket only.
-pub(super) const OWNER_ONLY: &[&str] =
-    &["review_settings_set", "pr_review_submit", "pr_comment_add"];
+pub(super) const OWNER_ONLY: &[&str] = &[
+    "review_settings_set",
+    "pr_review_submit",
+    "pr_comment_add",
+    "pr_flag",
+];
 
 fn number(req: &Value) -> anyhow::Result<u32> {
     req.get("number")
@@ -101,7 +105,15 @@ impl Conn {
                     .get("reason")
                     .and_then(Value::as_str)
                     .unwrap_or_default();
-                let pr = owner::flag(&self.app, project, number(req)?, flagged, reason)?;
+                self.proof()?;
+                let pr = owner::flag(
+                    &self.app,
+                    project,
+                    number(req)?,
+                    flagged,
+                    reason,
+                    owner::Flagger::Owner,
+                )?;
                 json!({ "type": "pr", "pr": crate::prs::detail(&self.app, &pr)? })
             }
             other => anyhow::bail!("unknown PR request {other}"),

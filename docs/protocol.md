@@ -1132,7 +1132,10 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
   - Answers `{type: "pr", pr, review}`.
 - **`pr_comment_add {project_id, number, sha, path, line, side?, body, severity?, reply_to?}`** (approve; device or ticket only) stores an owner line comment on a commit of the PR. Bots' comments and re-anchoring come in H-282.
 - **`pr_flag`:**
-  - The owner uses WS `pr_flag {project_id, number, flagged, reason}`; the lead uses the MCP `pr_flag` tool. Flagging needs a reason.
+  - The owner uses WS `pr_flag {project_id, number, flagged, reason}` (approve, from a device or the app's ticket only; the owner token is refused).
+  - The lead uses the MCP `pr_flag` tool, which can only set a flag.
+  - Flagging needs a reason, and `pr_flag` records who flagged.
+  - Only the owner clears a flag, so under `flagged` no bot can take the owner's review away. The lead's flag never replaces the owner's.
   - The PR shows `owner_flagged` and `owner_flag_reason`.
 
 **Checks (PR-5a, H-270).**

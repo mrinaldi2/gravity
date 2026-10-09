@@ -91,15 +91,43 @@ impl BoardTx<'_> {
     }
 
     /// The owner or the lead flags the PR for the owner's review, with a
-    /// reason, or clears the flag.
-    pub fn set_pr_flag(&self, pr: &Pr, flagged: bool, reason: Option<&str>) -> anyhow::Result<()> {
+    /// reason and who did it (`owner` or the lead's id); `None` clears it.
+    pub fn set_pr_flag(&self, pr: &Pr, flag: Option<(&str, &str)>) -> anyhow::Result<()> {
         self.conn.execute(
             "UPDATE pr SET owner_flagged = ?2, owner_flag_reason = ?3, version = version + 1,
                 updated_at = ?4
              WHERE id = ?1",
-            params![pr.id, flagged, reason, ts(now())],
+            params![
+                pr.id,
+                flag.is_some(),
+                flag.map(|(_, reason)| reason),
+                ts(now())
+            ],
         )?;
+        match flag {
+            Some((by, reason)) => self.conn.execute(
+                "INSERT INTO pr_flag(pr_id, by, reason, at) VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(pr_id) DO UPDATE SET by = excluded.by, reason = excluded.reason,
+                    at = excluded.at",
+                params![pr.id, by, reason, ts(now())],
+            )?,
+            None => self
+                .conn
+                .execute("DELETE FROM pr_flag WHERE pr_id = ?1", params![pr.id])?,
+        };
         Ok(())
+    }
+
+    /// Who flagged the PR, if it is flagged.
+    pub fn pr_flagged_by(&self, pr_id: &str) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT by FROM pr_flag WHERE pr_id = ?1",
+                params![pr_id],
+                |r| r.get(0),
+            )
+            .optional()?)
     }
 }
 

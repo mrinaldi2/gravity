@@ -149,8 +149,52 @@ async fn the_lead_flags_a_pr_for_the_owner() {
     let other = r.bots[1]
         .call_raw(
             "pr_flag",
-            json!({"number": 1, "flagged": false, "reason": ""}),
+            json!({"number": 1, "flagged": true, "reason": "x"}),
         )
         .await;
     assert_eq!(other["isError"], true, "{other}");
+}
+
+/// H-269 M1: only the owner's device or ticket flags over WS, the lead only
+/// sets a flag, and only the owner clears one; the lead never replaces the
+/// owner's flag.
+#[tokio::test]
+async fn only_the_owner_clears_a_flag() {
+    let mut r = setup().await;
+    opened(&mut r).await;
+    let project = r.project.clone();
+    let flag = |flagged: bool, reason: &str| {
+        json!({"type": "pr_flag", "project_id": project, "number": 1,
+               "flagged": flagged, "reason": reason})
+    };
+    let mut token = WsClient::connect_owner_token(&r.pair.d).await;
+    let refused = token.request(flag(true, "mine")).await;
+    assert_eq!(refused["type"], "error", "{refused}");
+    assert_eq!(pr(&mut r).await["owner_flagged"], false);
+
+    let mut app = WsClient::connect(&r.pair.d).await;
+    let flagged = app.request(flag(true, "Security review")).await;
+    assert_eq!(flagged["pr"]["owner_flagged"], true, "{flagged}");
+
+    let clear = r.bots[0]
+        .call_raw(
+            "pr_flag",
+            json!({"number": 1, "flagged": false, "reason": ""}),
+        )
+        .await;
+    assert!(error(&clear).contains("only the owner clears"), "{clear}");
+    r.bots[0]
+        .call(
+            "pr_flag",
+            json!({"number": 1, "flagged": true, "reason": "Lead's reason"}),
+        )
+        .await;
+    assert_eq!(
+        pr(&mut r).await["owner_flag_reason"],
+        "Security review",
+        "the lead's flag doesn't replace the owner's"
+    );
+
+    let cleared = app.request(flag(false, "")).await;
+    assert_eq!(cleared["pr"]["owner_flagged"], false, "{cleared}");
 }

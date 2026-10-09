@@ -123,6 +123,7 @@ const APPROVE_ONLY: &[&str] = &[
     "review_settings_set",
     "pr_review_submit",
     "pr_comment_add",
+    "pr_flag",
 ];
 
 /// Capability required for each request type.
