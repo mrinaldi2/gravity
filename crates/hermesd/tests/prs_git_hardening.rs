@@ -39,14 +39,12 @@ async fn verifying_a_planted_worktree_runs_nothing_from_its_config() {
     ] {
         script(&tools.join("hooks").join(hook), &marker);
     }
-    git(
-        &tree,
-        &[
-            "config",
-            "core.fsmonitor",
-            &tools.join("fsmonitor").display().to_string(),
-        ],
-    );
+    let fsmonitor = tools.join("fsmonitor").display().to_string();
+    // Git for Windows runs core.fsmonitor through sh, which would eat the
+    // backslashes; with '/' the plant really runs under plain git.
+    #[cfg(windows)]
+    let fsmonitor = fsmonitor.replace('\\', "/");
+    git(&tree, &["config", "core.fsmonitor", &fsmonitor]);
     git(
         &tree,
         &[
