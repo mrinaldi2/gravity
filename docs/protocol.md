@@ -1060,7 +1060,16 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **Releases cut from main:** they gain `tag`, `commit`, `prs` and `also_included` (`ReleaseFromMain`) at the top level of the release payload. These are new keys, so a client reading today's release is unaffected.
 - **Fixtures:** golden fixtures are in `crates/bus/fixtures/pr/`.
 
-**Not served to clients yet.** This daemon answers a binary `PrRequest` with `unsupported`. It doesn't advertise the capabilities or `contracts.pr` until it serves the requests (H-273).
+**Served to clients (PR-8, H-273).** `hello_ok` advertises `pull_requests`, `checks` and `contracts.pr = 1`.
+- **Binary reads:** `pr_list {project_id, states[]}`, `pr_get {project_id, number}`, `pr_diff {project_id, number, from_sha?, to_sha?, path?}` and `pr_comments {project_id, number, sha?}`, as `PrRequest` arms, answered by `PrResponse` (`pr_list`, `pr`, `pr_diff`, `pr_comments`). They need `read`.
+  - `pr_list` gives each PR without its comments, and its `mergeable` without the conflict check; `pr_get` gives it in full.
+  - `pr_diff` reads the daemon's blob-less cache through SafeGit. `from_sha` defaults to the head's merge-base with main and `to_sha` to the head; any commit the cache holds works, so `from_sha = <approved sha>` gives the delta since an approval. Only hex commit ids are accepted, and a `path` can't start with `:`. The answer has `files` (status, old path, +/−, binary) and `diff`, cut on a whole line at 2 MB with `truncated` set.
+  - A comment's `line` is where it is on the shown commit, or the line it was written on when it's `outdated` there.
+  - A check's `log_url` is opaque text: `checks/<sha12>-<name>.log` in the project's artifacts on the board's home, or `<computer>:<path>` for a log kept on a linked computer. It's never a path on the reader's disk.
+- **`check_rerun {project_id, sha, name}`** (binary, `control`): the owner's re-run, from the app's ticket or a paired device only. The owner token is refused. It answers with the check, queued. Bots use the MCP tool, where the lead and the PR's author may.
+- **Other arms** (`pr_review_submit`, `pr_comment_add`, `pr_flag`, `pr_merge_undo`, `review_settings_*`, `pr_comment_resolve`) are JSON requests on this daemon. A binary one is answered `unsupported`.
+- **Pushes:** a connection's first PR request for a project starts that project's `PrPush`es (`req_id` 0): `pr_updated {project_id, number}`, `check_updated {project_id, sha, name}` and `merge_queue_changed {project_id}`. They're sent when the board transaction behind them commits, so every change to a PR, its pushes, reviews, comments, checks, flag or merge queue sends one. A check change also sends `pr_updated` for each live PR whose head it counts on.
+- **Linked computers (B9):** PRs live on the board's home. A computer that mirrors the board forwards the reads to the home as the peer request `pr_read {project_id, request}` and answers in its own project id. The home relays each change as the peer event `pr_event {project_id, push}`, which is published there in the linked project. While the home can't be reached, a read answers `unavailable`. `check_rerun` there answers `no_board`: re-run it on the home. A linked bot's PR tools go through `board_call` like every board tool.
 
 **Bots' PR tools (PR-1, H-266).** Every bot on a project with a board gets these; the checks below decide who may act. All of them run on the board's home computer (`pr`, `pr_push`, `pr_worktree`, migration `PR_CORE`).
 - **`pr_open {item, branch, worktree?, title?, body?, repo?}`:**
@@ -1189,7 +1198,7 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **Linked computers:** the home asks with the peer request `check_run {project_id, job, url, sha, run}`. The computer clones from its own URL for that repository (it refuses one the linked project doesn't have, and refuses `at_capacity` under its disk floor, so the check waits) and answers at once. When the run ends it sends the event `check_result {job, result, note, log}`; the home accepts it only from the computer the job was routed to.
 - **`check_report` (MCP):** a bot a check was dispatched to may report `running` or `error` only. A `pass` or a `fail` over MCP is refused: they come only from the exit status.
 - **Load:** at most `checks.jobs_per_machine` (default 2) open check jobs per computer, every project's. No job starts on a computer with less than `checks.disk_floor_gb` (default 20) GB free; it waits instead.
-- **Re-runs:** `check_rerun {sha, name}` (MCP) for the lead or the PR's author, and for the owner over the `hermes.pr.v1` `check_rerun` request once H-273 serves it. An `error` is retried once automatically, including a job that ended without a result (the daemon restarted while it ran, or a linked computer sent nothing within 7 hours); a `fail` never is.
+- **Re-runs:** `check_rerun {sha, name}` (MCP) for the lead or the PR's author, and for the owner over the `hermes.pr.v1` `check_rerun` request (H-273). An `error` is retried once automatically, including a job that ended without a result (the daemon restarted while it ran, or a linked computer sent nothing within 7 hours); a `fail` never is.
 
 ## Meetings
 
