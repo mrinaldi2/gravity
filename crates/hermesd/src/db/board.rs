@@ -360,6 +360,9 @@ pub(super) fn columns_in(
     Ok(rows)
 }
 
+/// A project's role rows. A row whose role this build doesn't know (written
+/// by a newer daemon, read after a rollback) is skipped with a warning, so
+/// it can't fail every guard and role check that reads the project's roles.
 pub(super) fn roles_in(conn: &Connection, project_id: &str) -> rusqlite::Result<Vec<ProjectRole>> {
     let rows = conn
         .prepare(
@@ -367,13 +370,25 @@ pub(super) fn roles_in(conn: &Connection, project_id: &str) -> rusqlite::Result<
              WHERE project_id = ?1 ORDER BY role, bot_id",
         )?
         .query_map(params![project_id], |r| {
-            Ok(ProjectRole {
+            let text: String = r.get(1)?;
+            let bot_id: String = r.get(2)?;
+            let Some(role) = Role::from_text(&text) else {
+                tracing::warn!(
+                    project_id,
+                    bot_id,
+                    role = text,
+                    "skipping a project role this build doesn't know"
+                );
+                return Ok(None);
+            };
+            Ok(Some(ProjectRole {
                 project_id: r.get(0)?,
-                role: from_text(r.get(1)?)?,
-                bot_id: r.get(2)?,
+                role,
+                bot_id,
                 machine: r.get(3)?,
-            })
+            }))
         })?
+        .filter_map(Result::transpose)
         .collect::<Result<_, _>>()?;
     Ok(rows)
 }

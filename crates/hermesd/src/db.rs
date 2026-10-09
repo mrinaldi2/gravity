@@ -87,6 +87,8 @@ mod releases;
 #[cfg(test)]
 mod releases_tests;
 mod revisions;
+#[cfg(test)]
+mod roles_migration_tests;
 mod routines;
 mod runs;
 mod runs_state;
