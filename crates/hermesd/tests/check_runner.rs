@@ -95,9 +95,10 @@ fn open_jobs(r: &Repo) -> usize {
     r.pair.d.app.db.board_read(|t| t.open_jobs_on(&at)).unwrap()
 }
 
-/// The check, once `done` holds for it.
+/// The check, once `done` holds for it. Patient: the first start of a
+/// freshly built runner can be slow while the OS scans it.
 async fn until(r: &Repo, sha: &str, name: &str, done: impl Fn(&CheckRun) -> bool) -> CheckRun {
-    for _ in 0..600 {
+    for _ in 0..1800 {
         let run = check(r, sha, name);
         if done(&run) {
             return run;

@@ -108,10 +108,13 @@ async fn a_windows_check_runs_on_the_linked_windows_computer() {
         .project_workers(&b.mac_app, 10)
         .unwrap()
         .is_empty());
-    wait_until("the PC's result reaches the Mac", || {
-        run().result.is_final()
-    })
-    .await;
+    // A clone and a first start of the runner: longer than wait_until's.
+    for _ in 0..1800 {
+        if run().result.is_final() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
     let done = run();
     assert_eq!(done.result, CheckResult::Pass, "{done:?}");
     assert_eq!(done.ran_on.as_deref(), Some("win"));
