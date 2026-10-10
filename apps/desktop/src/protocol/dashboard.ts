@@ -109,7 +109,9 @@ export interface AttentionRowJson {
     | "owner_question"
     | "pr_review"
     | "pr_merge_stuck"
-    | "main_moved_outside";
+    | "main_moved_outside"
+    | "cleanup_held"
+    | "disk_low";
   readonly id: string;
   /** One line, set by the daemon. */
   readonly title: string;
@@ -123,6 +125,25 @@ export interface AttentionRowJson {
   readonly action_id?: string;
   /** The pull request a review, a stuck merge or a move outside the gate is about. */
   readonly pr_number?: number;
+  /** The held or failed cleanup job (`cleanup_resolve`). */
+  readonly cleanup_job_id?: string;
+  /** The computer low on disk (`cleanup_now`, `disk_report`). */
+  readonly machine?: string;
+  /** A held or failed cleanup, in fields the app words (UX-055). */
+  readonly cleanup?: CleanupFields;
+}
+
+/** `AttentionRow.cleanup` as proto3 JSON (absent fields are their zero). */
+export interface CleanupFields {
+  readonly state?: string;
+  readonly machine?: string;
+  readonly bot?: { readonly bot_id?: string; readonly name?: string };
+  readonly pr_number?: number;
+  readonly uncommitted?: number;
+  readonly unpushed?: number;
+  readonly salvaged?: boolean;
+  readonly reason?: string;
+  readonly since?: string;
 }
 
 /** A row, and off the board's home the computer to act on it (H-112). */

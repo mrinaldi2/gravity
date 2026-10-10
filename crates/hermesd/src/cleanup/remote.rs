@@ -59,7 +59,7 @@ pub async fn ask(
     let (a, pr_id) = (app.clone(), pr_id.to_string());
     let built = tokio::task::spawn_blocking(move || {
         let pr = super::pr_of(&a, &pr_id).ok_or_else(|| Outcome::Failed("no such PR".into()))?;
-        match super::verify_merge(&a, &pr) {
+        match super::ready(&a, &pr) {
             Ok(url) => super::batch_for(&a, &pr, &url, &jobs)
                 .map(|b| (b, jobs))
                 .map_err(|e| Outcome::Failed(format!("{e:#}"))),
@@ -143,6 +143,11 @@ pub fn serve_request(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow:
 /// Runs `batch` once main here holds its merged commit; until then every
 /// job gets that outcome and nothing is touched.
 fn checked(app: &AppState, b: &Batch) -> Answer {
+    // A closed PR has no merged commit: rule 4 keeps its commits (on a
+    // remote ref, or salvaged and the tree held).
+    if b.closed {
+        return batch::run(app, b);
+    }
     match super::merged::main_holds(app, &b.project_id, &b.url, b.pr_number, &b.merged_sha) {
         Ok(_) => batch::run(app, b),
         Err(outcome) => {

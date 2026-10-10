@@ -229,6 +229,16 @@ async fn the_owners_acts_from_a_linked_computer_are_refused() {
     let (code, message) = error(call(&mut app, w::rerun(&b.win_app, &head, "rust")).await);
     assert_eq!(code, "forbidden");
     assert!(message.contains("Approve on"), "{message}");
+    // A cleanup's Remove anyway or Keep: on the Mac or a phone (H-275).
+    let out = app
+        .request(json!({"type": "cleanup_resolve", "project_id": b.win_app,
+                        "job_id": "any", "action": "remove"}))
+        .await;
+    assert_eq!(out["type"], "error", "{out}");
+    assert!(
+        out["message"].as_str().unwrap().starts_with("Do it on "),
+        "{out}"
+    );
     let read = app
         .request(json!({"type": "review_settings_get", "project_id": b.win_app}))
         .await;
@@ -240,6 +250,11 @@ async fn the_owners_acts_from_a_linked_computer_are_refused() {
                         "request": {"number": 1, "sha": head, "verdict": "approved"}});
     let refused = b.p.win.app.peers.request(&b.p.win_peer_id, forged).await;
     assert!(format!("{refused:?}").contains("Approve on"), "{refused:?}");
+    let forged = json!({"type": "pr_owner", "project_id": b.win_app,
+                        "kind": "cleanup_resolve", "via": "ticket",
+                        "request": {"job_id": "any", "action": "remove"}});
+    let refused = b.p.win.app.peers.request(&b.p.win_peer_id, forged).await;
+    assert!(format!("{refused:?}").contains("forbidden"), "{refused:?}");
     let pr = on_mac(&b, 1);
     let mac = &b.p.mac.app.db;
     let reviews = mac.board_read(|t| t.reviews(&pr.id)).unwrap();

@@ -32,3 +32,46 @@ CREATE TABLE IF NOT EXISTS cleanup_job (
 );
 CREATE INDEX IF NOT EXISTS idx_cleanup_job_state ON cleanup_job(state, machine);
 "#;
+
+/// Retention, the daily sweep and what the owner sees (H-275; H-261
+/// §15.4–15.6). Named rather than numbered (ARCH-R1); safe to run again.
+///
+/// - `cleanup_resolution`: the owner's word on a held or failed job, from a
+///   paired device or the app's ticket on the board's home: `remove` (a
+///   salvaged dirty tree goes anyway) or `keep` (it stays, and Needs you
+///   stops asking).
+/// - `pr_branch_cleanup`: a PR's remote branch, deleted or kept (`note` says
+///   why): a merged PR's by its own merge run; a closed, unmerged PR's by
+///   DevOps' next merge run once 14 days have passed and its tip is
+///   unchanged.
+/// - `disk_report`: each computer's disk as it last reported it (JSON:
+///   `machine`, `free_bytes`, `total_bytes`, `uses`).
+/// - `cleanup_sweep`: when each computer last ran its daily sweep.
+///
+/// A tree the sweep finds outside any PR is a `cleanup_job` with no `pr_id`.
+pub(super) const MIGRATION_CLEANUP_RETENTION: &str = r#"
+CREATE TABLE IF NOT EXISTS cleanup_resolution (
+    job_id TEXT PRIMARY KEY,
+    action TEXT NOT NULL CHECK(action IN ('remove', 'keep')),
+    by     TEXT NOT NULL,
+    at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pr_branch_cleanup (
+    pr_id TEXT PRIMARY KEY,
+    state TEXT NOT NULL CHECK(state IN ('deleted', 'kept')),
+    note  TEXT NOT NULL DEFAULT '',
+    at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS disk_report (
+    machine TEXT PRIMARY KEY,
+    report  TEXT NOT NULL,
+    at      TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS cleanup_sweep (
+    machine TEXT PRIMARY KEY,
+    at      TEXT NOT NULL
+);
+"#;

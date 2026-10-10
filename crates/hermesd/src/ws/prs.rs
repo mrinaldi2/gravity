@@ -20,6 +20,7 @@ pub(super) const KINDS: &[&str] = &[
     "pr_merge_undo",
     "pr_comment_resolve",
     "release_leave_out",
+    "cleanup_resolve",
 ];
 
 /// The ones that are the owner's own acts: device or ticket only.
@@ -31,6 +32,7 @@ pub(super) const OWNER_ONLY: &[&str] = &[
     "pr_merge_undo",
     "pr_comment_resolve",
     "release_leave_out",
+    "cleanup_resolve",
 ];
 
 impl Conn {
@@ -65,6 +67,14 @@ impl Conn {
             Some(OwnerProof::Ticket) => Some("ticket"),
             _ => None,
         };
+        // A cleanup's owner word is given on the board's home only (ruling
+        // 6df14f7a), forwarded or not.
+        if kind == "cleanup_resolve" {
+            let name = crate::peer::board::home_name(&self.app, home);
+            return Err(crate::decisions::forbidden(format!(
+                "Do it on {name} or your phone."
+            )));
+        }
         if kind != "review_settings_get" {
             // Owner acts aren't taken from a linked computer yet (H-285
             // must-fix): the owner approves on the home or a phone.

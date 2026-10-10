@@ -13,13 +13,18 @@
 //! and tells the author what went and how much it freed.
 
 pub mod batch;
+pub mod closed;
 pub mod discover;
+pub mod disk;
 pub mod merged;
 pub mod model;
+pub mod owner;
 pub mod remote;
 pub mod remove;
 pub mod run;
 pub mod scope;
+pub mod sweep;
+pub mod sweep_remote;
 pub mod unsaved;
 
 use std::collections::{BTreeMap, HashSet};
@@ -33,7 +38,7 @@ use crate::app::AppState;
 use crate::board::release::machines;
 use crate::prs::model::Pr;
 use batch::{Batch, Discovered, Work};
-pub use merged::verify_merge;
+pub use merged::{ready, verify_merge};
 use model::{human_bytes, Job, JobState, Kind, NewJob, Outcome};
 
 /// How often the home looks for jobs due.
@@ -48,6 +53,11 @@ pub const RESEND_AFTER: chrono::Duration = chrono::Duration::minutes(15);
 /// Queues the cleanup of a merged PR: its reported worktrees, and a
 /// discovery on every computer the project is on. The number queued.
 pub fn enqueue(app: &AppState, pr: &Pr) -> anyhow::Result<usize> {
+    enqueue_until(app, pr, None)
+}
+
+/// [`enqueue`], with the jobs due only from `due` on (a closed PR's 7 days).
+pub fn enqueue_until(app: &AppState, pr: &Pr, due: Option<DateTime<Utc>>) -> anyhow::Result<usize> {
     let peers: Vec<String> = app
         .db
         .project_links(&pr.project_id)?
@@ -87,6 +97,9 @@ pub fn enqueue(app: &AppState, pr: &Pr) -> anyhow::Result<usize> {
         let mut added = 0;
         for job in &jobs {
             added += usize::from(t.add_cleanup_job(job)?.is_some());
+        }
+        if let Some(due) = due {
+            t.defer_cleanup_jobs(&pr.id, due)?;
         }
         Ok(added)
     })
@@ -205,6 +218,7 @@ pub fn batch_for(app: &AppState, pr: &Pr, url: &str, jobs: &[Job]) -> anyhow::Re
         branch: pr.branch.clone(),
         url: url.to_string(),
         merged_sha: pr.merged_sha.clone().unwrap_or_default(),
+        closed: pr.state == crate::prs::model::PrState::Closed,
         jobs: work,
         known,
     })
@@ -219,7 +233,7 @@ fn run_here(app: &AppState, pr_id: &str, jobs: Vec<Job>, now: DateTime<Utc>) {
     let Some(pr) = pr_of(app, pr_id) else {
         return;
     };
-    let url = match verify_merge(app, &pr) {
+    let url = match ready(app, &pr) {
         Ok(url) => url,
         Err(outcome) => {
             for job in &jobs {
@@ -326,19 +340,22 @@ fn tell_author(app: &AppState, job: &Job) {
     };
     let path = &job.path_or_ref;
     let on = &job.machine;
+    let what = match pr.state {
+        crate::prs::model::PrState::Closed => format!("PR #{} was closed", pr.number),
+        _ => format!("PR #{} merged", pr.number),
+    };
     let body = match job.state {
         JobState::Done => format!(
-            "PR #{} merged; your worktree {path} on {on} was removed (freed {}).",
-            pr.number,
+            "{what}; your worktree {path} on {on} was removed (freed {}).",
             human_bytes(job.bytes_freed)
         ),
         JobState::Held => format!(
-            "PR #{} merged; your worktree {path} on {on} was kept: {}. Nothing was deleted.",
-            pr.number, job.reason
+            "{what}; your worktree {path} on {on} was kept: {}. Nothing was deleted.",
+            job.reason
         ),
         JobState::Failed => format!(
-            "PR #{} merged; removing your worktree {path} on {on} failed: {}. Nothing was deleted.",
-            pr.number, job.reason
+            "{what}; removing your worktree {path} on {on} failed: {}. Nothing was deleted.",
+            job.reason
         ),
         JobState::Queued => return,
     };

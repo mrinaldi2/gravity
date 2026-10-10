@@ -87,6 +87,17 @@ fn clone_owner<'a>(bots: &'a [BotHere], main: &Path) -> Option<&'a BotHere> {
 /// Every linked worktree on `branch` of `url` under this computer's allowed
 /// roots, once each, with the bot whose folder it is in.
 pub fn on_branch(app: &AppState, url: &str, branch: &str, bots: &[BotHere]) -> Vec<Found> {
+    worktrees(app, url, bots)
+        .into_iter()
+        .filter(|(_, on)| on == branch)
+        .map(|(found, _)| found)
+        .collect()
+}
+
+/// Every linked worktree of `url` under this computer's allowed roots, once
+/// each, with its branch and the bot whose folder it is in (the daily
+/// sweep, §15.5). Main clones themselves are never in it.
+pub fn worktrees(app: &AppState, url: &str, bots: &[BotHere]) -> Vec<(Found, String)> {
     let mut places: Vec<PathBuf> = app
         .cfg
         .trusted_paths
@@ -108,7 +119,7 @@ pub fn on_branch(app: &AppState, url: &str, branch: &str, bots: &[BotHere]) -> V
         let main_real = crate::safe_git::canonical(&main).unwrap_or(main.clone());
         for (path, on) in linked(&main) {
             let real = crate::safe_git::canonical(&path).unwrap_or(path.clone());
-            if on != branch || real == main_real || seen.contains(&real) {
+            if real == main_real || seen.contains(&real) {
                 continue;
             }
             seen.push(real);
@@ -122,11 +133,14 @@ pub fn on_branch(app: &AppState, url: &str, branch: &str, bots: &[BotHere]) -> V
                         .is_ok()
                 })
             });
-            out.push(Found {
-                path,
-                main_clone: main.clone(),
-                bot: bot.cloned(),
-            });
+            out.push((
+                Found {
+                    path,
+                    main_clone: main.clone(),
+                    bot: bot.cloned(),
+                },
+                on,
+            ));
         }
     }
     out

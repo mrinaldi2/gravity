@@ -13,6 +13,7 @@ use bus::contract::pbjson_types::Timestamp;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
+mod cleanup;
 mod legacy;
 mod prs;
 mod rows;
@@ -33,11 +34,15 @@ pub(crate) fn weight(kind: AttentionKind) -> u32 {
         | AttentionKind::MainMovedOutside
         | AttentionKind::OwnerAction
         | AttentionKind::PermissionPrompt => 3,
-        AttentionKind::P0Item | AttentionKind::ServingOff | AttentionKind::PrMergeStuck => 2,
+        AttentionKind::P0Item
+        | AttentionKind::ServingOff
+        | AttentionKind::PrMergeStuck
+        | AttentionKind::DiskLow => 2,
         AttentionKind::RelayedRulings
         | AttentionKind::BotWaiting
         | AttentionKind::OffBoard
-        | AttentionKind::OwnerQuestion => 1,
+        | AttentionKind::OwnerQuestion
+        | AttentionKind::CleanupHeld => 1,
         // A decision's weight is its priority's (`decision_weight`).
         AttentionKind::Decision => 1,
         AttentionKind::Unspecified => 0,

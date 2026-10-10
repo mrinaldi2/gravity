@@ -1089,6 +1089,24 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **Rollback:** take the name out of `pr_flow_projects`; the section is gone at the next start.
 - **The prompt test** fails on any `pr_…`/`check_…` name in the section that isn't a PR tool the daemon serves.
 
+**Cleanup, the sweep and disk (CL-2, H-275; H-261 §15.4–15.6).**
+- **Closed PRs:** `pr_close` queues the PR's cleanup jobs, due 7 days after it closed. They run like a merged PR's: a clean, pushed tree goes, unsaved work is salvaged and the tree held. Rule 1 for a closed PR is that no PR is open on its branch again. Opening a PR on the branch within the window deletes those queued jobs and marks the old branch `kept` ("opened again as PR #n").
+- **Closed branches:** the `hermes/pr_merge` gate answers `stale_branches` (closed PRs of the same repository closed 14+ days ago, no live PR on the branch). `hermesd pr merge` deletes each one under a lease on the head it closed at, and sends the results as `stale_branches` in `hermes/pr_merged`. The daemon records only due PRs (`pr_branch_cleanup`). A merged PR's own branch outcome is recorded there too.
+- **Daily sweep:** each computer checks hourly and sweeps once a day. It covers the projects that have PRs. Each linked worktree of the project's repositories in the allowed roots is a candidate if its branch has no live PR and it is merged into `origin/main` (and untouched for a day) or idle for 14 days. Candidates go through the same rules (`run::attempt`). A tree in use is skipped until the next day. Orphans are only reported, and `<repo>-rel-*` trees are never touched. A linked computer asks the board's home with the peer request `cleanup_sweep_plan {project_id}` (live branches, trees already held, bots with a live PR), then sends the peer event `cleanup_swept {project_id, found[]}`. The home keeps every row as a `cleanup_job` with no `pr_id`. Salvage older than 30 days is pruned.
+- **`cleanup_resolve {project_id, job_id, action: remove|keep}`** (approve; device or ticket on the board's home only). A linked computer answers `forbidden` with "Do it on <home> or your phone.", and the home refuses it inside `pr_owner`.
+  - `keep` records the owner's word.
+  - `remove` works only on a tree whose work was salvaged. It saves the tree's work again, refuses if any file can't be saved, then runs `git worktree remove --force` under rules 2 and 3. A tree on a linked computer is removed by that computer: the home sends the peer request `cleanup_force`, and the computer answers with the event `cleanup_forced`.
+  - That computer refuses unless nothing in the tree changed for 3 days (the newest mtime in it, links not followed), so a forged home can't take a tree in use (ARCH S1). The job stays held with why, and keeps its salvage note so the owner can ask again.
+  - It answers `{type: "cleanup_item", cleanup_item}`.
+- **`disk_report {machine?, refresh?}`** (read) → `{type: "disk_report", disk_report: {machine, free_bytes, total_bytes, uses[{bot, workspace_bytes, worktree_bytes, cache_bytes, reclaimable_bytes}], as_of}}`.
+  - Each daemon takes its own report hourly and keeps it.
+  - A linked computer's report is asked with the peer request `disk_report_get`.
+- **`cleanup_now {machine?}`** (control) runs the sweep plus the §15.2 cache trims and answers `{type: "cleanup_done", trees, freed_bytes, disk_report}`. On a linked computer it is the peer request `cleanup_now`, accepted only from a board home of a project linked there. It does only what the daily sweep and the cache rules already allow, so it needs no owner proof.
+- **Needs you:**
+  - `CLEANUP_HELD` (14), target `cleanup_job_id`: a job held 3+ days or failed, with no owner word yet. The board's home builds it. Its `cleanup` (`CleanupRow`: `state`, `machine`, `bot`, `pr_number`, `uncommitted`, `unpushed`, `salvaged`, `reason`, `since`) is what clients word the row from (UX-055); `title` is a plain-words fallback with no path. Offer Remove anyway only when `salvaged`.
+  - `DISK_LOW` (15), target `machine`: this computer's last report is under 20 GB free. Each computer builds its own.
+- **On the PR:** the `pr_get` JSON keeps `cleanup` (the jobs) and adds `cleanup_summary {state, freed_bytes, items, branch_deleted}`, which maps to `PullRequest.cleanup`. Every job change pushes `cleanup_updated {project_id, number}` with `pr_updated`.
+
 **PRs from linked computers (PR-9, H-285; §1, §4.3, §12.9).**
 - **Bots:**
   - `pr_open`, `pr_push`, `pr_review`, `pr_comment`, `pr_comment_resolve`, `pr_flag` (lead), `pr_get` and `pr_list` run on the home as the bot's stand-in, through `board_call`. Every record (author, pusher, reviewer, comment author) names that stand-in.

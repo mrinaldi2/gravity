@@ -126,6 +126,8 @@ pub fn open(app: &Arc<AppState>, bot: &bus::Bot, req: &Open<'_>) -> anyhow::Resu
         if let Some(tree) = &tree {
             t.add_pr_worktree(&pr.id, tree)?;
         }
+        // Opened again within a closed PR's window: its cleanup is off.
+        t.cancel_closed_cleanup(project, &repo.name, branch, pr.number)?;
         let actor = bot_actor(bot);
         t.add_item_link(&item.id, LinkKind::Branch, branch, None, &actor)?;
         t.add_item_link(
@@ -263,6 +265,9 @@ pub fn close(
         Ok((t.pr(project, number)?.unwrap_or(pr), moved))
     })?;
     publish_moves(app, &mut feed, project, &moved);
+    drop(feed);
+    // Its worktrees go in 7 days, its branch in 14 (§15.4).
+    crate::cleanup::closed::after_close(app, &pr);
     Ok(pr)
 }
 

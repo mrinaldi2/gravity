@@ -112,6 +112,8 @@ enum AttentionKind {
   PR_REVIEW = 11;                           // a PR waits for the owner's review (H-269)
   PR_MERGE_STUCK = 12;                      // DevOps hasn't run a PR's merge in 30 min (H-284)
   MAIN_MOVED_OUTSIDE = 13;                  // main reached a PR's head with no merge gate pass (H-284)
+  CLEANUP_HELD = 14;                        // a cleanup held 3 days, or failed: Remove anyway or Keep (H-275)
+  DISK_LOW = 15;                            // a computer is under 20 GB free: Clean up (H-275)
 }
 
 message AttentionRow {
@@ -130,10 +132,26 @@ message AttentionRow {
     BotRef bot = 14;                        // bot_waiting, off_board, owner_question in a thread
     string item_id = 15;                    // p0_item, owner_question on a card
     uint32 pr_number = 16;                  // pr_review: the PR, in the project's numbering
+    string cleanup_job_id = 17;             // cleanup_held: the job (cleanup_resolve)
+    string machine = 18;                    // disk_low: the computer (cleanup_now, disk_report)
   }
   uint32 relayed_count = 20;                // relayed_rulings only
   string priority = 21;                     // decision only: P0..P3
   string question_comment_id = 22;          // owner_question on a card: the comment that asked (H-211)
+  CleanupRow cleanup = 23;                  // cleanup_held: what the app words the row from (UX-055)
+}
+
+// A held or failed cleanup, in fields: the app composes the words (UX-055).
+message CleanupRow {
+  string state = 1;                         // held | failed
+  string machine = 2;                       // the computer the tree is on
+  BotRef bot = 3;                           // whose tree; unset when in no bot's folder
+  uint32 pr_number = 4;                     // 0 = found by the daily sweep, no PR
+  uint32 uncommitted = 5;                   // changed or untracked files
+  uint32 unpushed = 6;                      // commits on no remote
+  bool salvaged = 7;                        // its changes are saved: Remove anyway can work
+  string reason = 8;                        // why it is kept or failed, when not unsaved work
+  google.protobuf.Timestamp since = 9;      // held or failed since
 }
 
 message AttentionRows {

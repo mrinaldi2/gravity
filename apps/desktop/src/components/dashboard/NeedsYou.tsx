@@ -67,6 +67,9 @@ const ORDER: Readonly<Record<Shown["kind"], number>> = {
   pr_review: 1,
   pr_merge_stuck: 2,
   main_moved_outside: 0,
+  // Under 20 GB free stops builds for every bot; a held cleanup can wait.
+  disk_low: 2,
+  cleanup_held: 6,
   routines_without_card: 7,
   // Sorted by the kind it carries (`orderOf`); this is the fallback.
   elsewhere: 5,
@@ -352,7 +355,9 @@ export default function NeedsYou(props: NeedsYouProps): ReactElement {
   return (
     <section className="dash-widget dash-wide" aria-labelledby="dash-needs-you">
       {/* At zero the empty sentence says it; no "· 0" badge (UX-010). */}
-      <h2 id="dash-needs-you">Needs you{count > 0 ? ` · ${count}` : ""}</h2>
+      <h2 id="dash-needs-you" tabIndex={-1}>
+        Needs you{count > 0 ? ` · ${count}` : ""}
+      </h2>
       {props.note ? (
         <p className="dash-note">
           <strong>{props.note}</strong>

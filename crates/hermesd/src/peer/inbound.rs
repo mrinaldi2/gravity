@@ -49,6 +49,12 @@ pub(super) fn handle(app: &Arc<AppState>, peer_id: &str, frame: &Value) -> anyho
         "create_bot" => super::remote_bots::serve_create(app, &peer, frame),
         crate::prs::check_remote::RUN => crate::prs::check_remote::serve_run(app, &peer, frame),
         crate::cleanup::remote::REQUEST => crate::cleanup::remote::serve_request(app, &peer, frame),
+        crate::cleanup::sweep_remote::PLAN => {
+            crate::cleanup::sweep_remote::serve_plan(app, &peer, frame)
+        }
+        crate::cleanup::sweep_remote::NOW => crate::cleanup::sweep_remote::serve_now(app, &peer),
+        crate::cleanup::owner::FORCE => crate::cleanup::owner::serve_force(app, &peer, frame),
+        crate::cleanup::disk::GET => crate::cleanup::disk::serve_get(app, &peer, frame),
         "update_bot" => super::remote_bots::serve_update(app, &peer, frame),
         "delete_bot" => super::remote_bots::serve_delete(app, &peer, frame),
         "message" => {
@@ -93,6 +99,10 @@ pub(super) fn event(app: &Arc<AppState>, peer_id: &str, frame: &Value) {
         crate::cleanup::remote::RESULT => {
             crate::cleanup::remote::receive_result(app, peer_id, frame)
         }
+        crate::cleanup::sweep_remote::SWEPT => {
+            crate::cleanup::sweep_remote::receive_swept(app, peer_id, frame)
+        }
+        crate::cleanup::owner::FORCED => crate::cleanup::owner::receive_forced(app, peer_id, frame),
         "owner_action_update" => super::owner_actions::receive_update(app, peer_id, frame),
         "owner_action_output" => super::owner_actions::receive_output(app, peer_id, frame),
         "project_attention_changed" => crate::overview::receive_changed(app, peer_id),

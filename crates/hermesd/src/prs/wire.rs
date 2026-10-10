@@ -255,7 +255,32 @@ pub fn pull_request(app: &dyn Names, v: &Value) -> p::PullRequest {
         merge_at: stamp(&merge, "merge_at"),
         closed_at: stamp(v, "closed_at"),
         repo: text(v, "repo"),
+        cleanup: v
+            .get("cleanup_summary")
+            .filter(|c| c.is_object())
+            .map(cleanup),
         ..Default::default()
+    }
+}
+
+/// A PR's cleanup (H-275, §15.6).
+fn cleanup(c: &Value) -> p::Cleanup {
+    let state =
+        |s: &str| named("CLEANUP_STATE", s, p::CleanupState::from_str_name).map_or(0, |s| s as i32);
+    p::Cleanup {
+        state: state(&text(c, "state")),
+        freed_bytes: c["freed_bytes"].as_u64().unwrap_or(0),
+        items: each(c, "items", |i| p::CleanupItem {
+            job_id: text(i, "job_id"),
+            machine: text(i, "machine"),
+            kind: p::CleanupKind::Worktree as i32,
+            state: state(&text(i, "state")),
+            path: text(i, "path"),
+            reason: text(i, "reason"),
+            freed_bytes: i["freed_bytes"].as_u64().unwrap_or(0),
+            salvaged: flag(i, "salvaged"),
+        }),
+        branch_deleted: flag(c, "branch_deleted"),
     }
 }
 

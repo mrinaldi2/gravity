@@ -179,6 +179,17 @@ pub fn serve(
             )?;
             json!({ "type": "check", "check": run.to_json() })
         }
+        // A held or failed cleanup: Remove anyway or Keep (H-275, §15.6).
+        "cleanup_resolve" => {
+            let item = crate::cleanup::owner::resolve(
+                app,
+                project,
+                field(req, "job_id")?,
+                field(req, "action")?,
+                &need(proof)?,
+            )?;
+            json!({ "type": "cleanup_item", "cleanup_item": item })
+        }
         other => anyhow::bail!("unknown PR request {other}"),
     })
 }

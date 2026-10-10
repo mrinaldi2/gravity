@@ -9,6 +9,29 @@ use crate::app::AppState;
 use crate::board::release::git_cache;
 use crate::prs::model::{Pr, PrState};
 
+/// Rule 1 for any PR: a merged one as [`verify_merge`]; a closed one only
+/// while no PR is open on its branch again (its commits are then kept by
+/// rule 4: on a remote ref, or salvaged and the tree held). The URL, or the
+/// outcome every job gets.
+pub fn ready(app: &AppState, pr: &Pr) -> Result<String, Outcome> {
+    if pr.state != PrState::Closed {
+        return verify_merge(app, pr);
+    }
+    let live = app
+        .db
+        .board_read(|t| t.live_pr_on_branch(&pr.project_id, &pr.repo, &pr.branch))
+        .map_err(|e| Outcome::Busy(format!("couldn't read the board: {e:#}")))?;
+    if let Some(number) = live {
+        return Err(Outcome::Held(format!(
+            "{} has PR #{number} open again",
+            pr.branch
+        )));
+    }
+    crate::prs::repo::of_project(app, &pr.project_id, Some(&pr.repo))
+        .map(|r| r.url)
+        .map_err(|e| Outcome::Held(format!("{e:#}")))
+}
+
 /// The PR merged and main holds its merged commit. The repository's URL,
 /// or the outcome every job gets: busy (retried) when the fetch failed,
 /// held when it isn't merged.
