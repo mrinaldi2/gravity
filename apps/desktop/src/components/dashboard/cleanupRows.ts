@@ -34,7 +34,7 @@ export function cleanupRow(r: AttentionRowJson, a: CleanupRowActions): RowViewPr
       const machine = r.machine ?? "";
       const busy = a.cleaningUp === machine;
       return {
-        glyph: "◔",
+        glyph: "⚠",
         tone: "bad",
         title: r.title,
         meta: busy
