@@ -101,6 +101,11 @@ fn tip(origin: &Path, reference: &str) -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+fn card_of(r: &Repo, number: u32) -> String {
+    let pr = r.pair.d.app.db.board_read(|t| t.pr(&r.project, number));
+    pr.unwrap().unwrap().item_id
+}
+
 fn pr_state(r: &Repo, number: u32) -> String {
     let pr = r.pair.d.app.db.board_read(|t| t.pr(&r.project, number));
     pr.unwrap().unwrap().state.as_str().to_string()
@@ -152,8 +157,7 @@ async fn devops_with_the_extra_fast_forwards_main_to_the_head() {
         "the branch is deleted"
     );
     assert_eq!(done["moved"], true, "{done}");
-    let card = r.pair.d.app.db.board_read(|t| t.pr(&r.project, 1));
-    let item = card.unwrap().unwrap().item_id;
+    let item = card_of(&r, 1);
     assert_eq!(r.column(&item), "verify");
     assert_eq!(pr_state(&r, 1), "merged");
     assert!(r
@@ -223,15 +227,7 @@ async fn a_card_moves_to_verify_when_all_its_prs_merged() {
     let mut r = setup().await;
     devops(&r, true);
     let (_, head1) = opened(&mut r).await;
-    let item = r
-        .pair
-        .d
-        .app
-        .db
-        .board_read(|t| t.pr(&r.project, 1))
-        .unwrap()
-        .unwrap()
-        .item_id;
+    let item = card_of(&r, 1);
     let version = r.pair.d.app.db.get_item(&item).unwrap().unwrap().version;
     let raw = r.bots[2]
         .call_raw(
@@ -305,7 +301,7 @@ fn handed(r: &Repo) -> u32 {
     prs.iter().find(|p| p.id == row.pr_id).unwrap().number
 }
 
-async fn stuck_rows(r: &Repo) -> Vec<Value> {
+async fn rows_of(r: &Repo, kind: &str) -> Vec<Value> {
     let mut app = WsClient::connect(&r.pair.d).await;
     let rows = app
         .request(json!({"type": "attention_rows", "project_id": r.project}))
@@ -315,7 +311,7 @@ async fn stuck_rows(r: &Repo) -> Vec<Value> {
         .cloned()
         .unwrap_or_default()
         .into_iter()
-        .filter(|row| row["kind"] == "PR_MERGE_STUCK")
+        .filter(|row| row["kind"] == kind)
         .collect()
 }
 
@@ -334,13 +330,13 @@ async fn a_merge_left_for_30_minutes_goes_to_devops_again() {
     let first = app.db.open_tasks_for(&r.pair.ids[DEVOPS]).unwrap();
     assert_eq!(first.len(), 1);
     queue::step(&app, now + Duration::minutes(20)).unwrap();
-    assert!(stuck_rows(&r).await.is_empty(), "not yet");
+    assert!(rows_of(&r, "PR_MERGE_STUCK").await.is_empty(), "not yet");
 
     queue::step(&app, now + Duration::minutes(31)).unwrap();
     let again = app.db.open_tasks_for(&r.pair.ids[DEVOPS]).unwrap();
     assert_eq!(again.len(), 1, "one open task: the new one");
     assert_ne!(again[0].id, first[0].id);
-    let rows = stuck_rows(&r).await;
+    let rows = rows_of(&r, "PR_MERGE_STUCK").await;
     assert_eq!(rows.len(), 1, "{rows:?}");
     assert!(rows[0]["title"]
         .as_str()
@@ -349,5 +345,47 @@ async fn a_merge_left_for_30_minutes_goes_to_devops_again() {
 
     // The new task is the one that merges; the row goes.
     merge(&r, 1, &checkout(&r, &r.origin, "s"));
-    assert!(stuck_rows(&r).await.is_empty());
+    assert!(rows_of(&r, "PR_MERGE_STUCK").await.is_empty());
+}
+
+/// ARCH M1: `pr_merged` records a merge only against a recent gate pass for
+/// that head. Main pushed to the head another way is never recorded: the
+/// card stays, and the owner sees "main moved outside the merge gate".
+#[tokio::test]
+async fn a_merge_without_a_gate_pass_is_never_recorded() {
+    let mut r = setup().await;
+    devops(&r, true);
+    let (tree, head) = opened(&mut r).await;
+    approve(&mut r, &head).await;
+    owner_approve(&r, 1, &head).await;
+    hand(&r, Utc::now());
+    let merged = |r: &Repo| {
+        ask(
+            r,
+            DEVOPS,
+            "hermes/pr_merged",
+            json!({"number": 1, "sha": head, "branch": {"deleted": false, "note": "kept"}}),
+        )
+    };
+    // Main pushed to the head around the gate (the guard is advisory).
+    git(&tree, &["push", "-q", "origin", "HEAD:main"]);
+    let why = refused(merged(&r));
+    assert!(why.contains("outside the gate"), "{why}");
+    assert_eq!(pr_state(&r, 1), "merging", "nothing recorded");
+    let item = card_of(&r, 1);
+    assert_eq!(r.column(&item), "review", "the card stays");
+    let rows = rows_of(&r, "MAIN_MOVED_OUTSIDE").await;
+    assert_eq!(rows.len(), 1, "{rows:?}");
+
+    // A pass too old to vouch for this push counts as none.
+    ask(&r, DEVOPS, "hermes/pr_merge", json!({"number": 1})).unwrap();
+    let app = r.pair.d.app.clone();
+    let pr = app.db.board_read(|t| t.pr(&r.project, 1)).unwrap().unwrap();
+    let main = tip(&r.origin, "refs/heads/main").unwrap();
+    let old = Utc::now() - Duration::minutes(20);
+    app.db
+        .board_tx(|t| t.record_merge_check(&pr.id, &head, &main, old))
+        .unwrap();
+    assert!(refused(merged(&r)).contains("outside the gate"));
+    assert_eq!(pr_state(&r, 1), "merging");
 }

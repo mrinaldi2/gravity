@@ -17,6 +17,7 @@
 use std::sync::Arc;
 
 use bus::{PermissionExtra, TaskState};
+use chrono::Utc;
 use serde_json::{json, Value};
 
 use crate::actor::Actor;
@@ -169,6 +170,9 @@ fn check(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
             format!("PR #{} isn't mergeable: {}", pr.number, why.join("; ")),
         );
     }
+    // The pass `pr_merged` needs (ARCH M1): this head, onto this main.
+    app.db
+        .board_tx(|t| t.record_merge_check(&pr.id, &pr.head_sha, &main, Utc::now()))?;
     Ok(json!({
         "number": pr.number,
         "head_sha": pr.head_sha,
@@ -198,6 +202,40 @@ fn refuse(app: &Arc<AppState>, pr: &Pr, why: String) -> anyhow::Result<Value> {
     Err(conflict(why))
 }
 
+/// How long a gate pass stays good for the push that follows it.
+pub const CHECK_FRESH: chrono::Duration = chrono::Duration::minutes(15);
+
+/// Main is at `sha`: it got there through a recent gate pass for this head,
+/// from the main that pass saw (ARCH M1 on H-284). Otherwise main moved
+/// outside the gate: nothing is recorded, the card stays, and the owner
+/// sees it.
+fn passed(app: &Arc<AppState>, cache: &std::path::Path, pr: &Pr, sha: &str) -> anyhow::Result<()> {
+    let now = Utc::now();
+    let check = app.db.board_read(|t| t.merge_check(&pr.id))?;
+    let ok = match &check {
+        Some((head, main, at)) => {
+            head == sha
+                && now - *at <= CHECK_FRESH
+                && git_cache::contains(cache, sha, main).unwrap_or(false)
+        }
+        None => false,
+    };
+    if ok {
+        return Ok(());
+    }
+    app.db.board_tx(|t| t.mark_main_moved(pr, sha, now))?;
+    tracing::warn!(
+        pr = pr.number,
+        sha,
+        "main reached a PR's head without a merge gate pass; nothing recorded"
+    );
+    Err(conflict(format!(
+        "main reached {sha} without a passed `hermesd pr merge` check for PR #{}: main moved \
+         outside the gate, so nothing is recorded and the owner is told",
+        pr.number
+    )))
+}
+
 /// After the push: main is at the head as the daemon fetches it.
 fn merged(
     app: &Arc<AppState>,
@@ -222,6 +260,7 @@ fn merged(
             main.as_deref().unwrap_or("nothing")
         )));
     }
+    passed(app, &cache, pr, sha)?;
     let actor = Actor::Bot {
         id: &bot.id,
         project_id: &bot.project_id,

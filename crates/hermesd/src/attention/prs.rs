@@ -67,3 +67,30 @@ pub(super) fn stuck_merges(app: &AppState, b: &mut Builder<'_>) -> anyhow::Resul
     }
     Ok(())
 }
+
+/// Main reached a PR's head with no `hermesd pr merge` pass for it (ARCH M1
+/// on H-284): nothing was recorded; the owner decides what to do.
+pub(super) fn mains_moved(app: &AppState, b: &mut Builder<'_>) -> anyhow::Result<()> {
+    let moved = app.db.board_read(|t| t.mains_moved(b.project_id))?;
+    for (pr_id, sha, at) in moved {
+        let pr = app.db.board_read(|t| {
+            Ok(t.prs(b.project_id, &[PrState::Open, PrState::Merging])?
+                .into_iter()
+                .find(|p| p.id == pr_id))
+        })?;
+        let Some(pr) = pr else { continue };
+        let part = Part {
+            kind: AttentionKind::MainMovedOutside,
+            target_id: format!("pr-{}", pr.number),
+            title: format!(
+                "Main moved to PR #{}'s head {} outside the merge gate; nothing was recorded",
+                pr.number,
+                &sha[..sha.len().min(7)]
+            ),
+            created_at: at,
+            target: Some(Target::PrNumber(pr.number)),
+        };
+        b.push(part, weight(AttentionKind::MainMovedOutside), None);
+    }
+    Ok(())
+}

@@ -35,6 +35,11 @@ CREATE TABLE IF NOT EXISTS review_withdrawn (
 /// - `pr_merge_stuck`: a `handed` merge DevOps hasn't run within 30 min:
 ///   when it was first handed, how often it was handed again. Shown to the
 ///   owner until the PR merges or leaves the queue.
+/// - `pr_merge_check`: the last `hermesd pr merge` gate pass for a PR: the
+///   head it passed and main as it was then (ARCH M1). `pr_merged` records
+///   a merge only against a recent pass for that head.
+/// - `pr_main_moved`: main reached a PR's head with no gate pass for it:
+///   nothing is recorded, and the owner sees it.
 pub(super) const MIGRATION_PR_MERGE: &str = r#"
 DROP INDEX IF EXISTS idx_pr_one_open_per_card;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pr_one_open_per_card_repo
@@ -45,6 +50,20 @@ CREATE TABLE IF NOT EXISTS pr_merge_stuck (
     project_id TEXT NOT NULL,
     since      TEXT NOT NULL,
     retasks    INTEGER NOT NULL DEFAULT 0,
+    at         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pr_merge_check (
+    pr_id      TEXT PRIMARY KEY REFERENCES pr(id) ON DELETE CASCADE,
+    head       TEXT NOT NULL,
+    main       TEXT NOT NULL,
+    at         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pr_main_moved (
+    pr_id      TEXT PRIMARY KEY REFERENCES pr(id) ON DELETE CASCADE,
+    project_id TEXT NOT NULL,
+    sha        TEXT NOT NULL,
     at         TEXT NOT NULL
 );
 "#;

@@ -30,6 +30,7 @@ pub(crate) fn weight(kind: AttentionKind) -> u32 {
     match kind {
         AttentionKind::ReleaseAwaiting
         | AttentionKind::PrReview
+        | AttentionKind::MainMovedOutside
         | AttentionKind::OwnerAction
         | AttentionKind::PermissionPrompt => 3,
         AttentionKind::P0Item | AttentionKind::ServingOff | AttentionKind::PrMergeStuck => 2,

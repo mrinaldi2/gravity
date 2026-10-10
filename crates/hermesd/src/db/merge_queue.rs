@@ -165,6 +165,63 @@ impl BoardTx<'_> {
         )?;
         Ok(())
     }
+
+    /// A gate pass (ARCH M1 on H-284): `head` may merge onto `main`.
+    pub fn record_merge_check(
+        &self,
+        pr_id: &str,
+        head: &str,
+        main: &str,
+        at: DateTime<Utc>,
+    ) -> anyhow::Result<()> {
+        self.conn.execute(
+            "INSERT INTO pr_merge_check(pr_id, head, main, at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(pr_id) DO UPDATE SET head = ?2, main = ?3, at = ?4",
+            params![pr_id, head, main, ts(at)],
+        )?;
+        Ok(())
+    }
+
+    /// The last gate pass for the PR: head, main, when.
+    pub fn merge_check(
+        &self,
+        pr_id: &str,
+    ) -> anyhow::Result<Option<(String, String, DateTime<Utc>)>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT head, main, at FROM pr_merge_check WHERE pr_id = ?1",
+                params![pr_id],
+                |r| Ok((r.get(0)?, r.get(1)?, parse_ts(&r.get::<_, String>(2)?))),
+            )
+            .optional()?)
+    }
+
+    /// Main reached the PR's head with no gate pass for it.
+    pub fn mark_main_moved(&self, pr: &Pr, sha: &str, at: DateTime<Utc>) -> anyhow::Result<()> {
+        self.conn.execute(
+            "INSERT INTO pr_main_moved(pr_id, project_id, sha, at) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(pr_id) DO UPDATE SET sha = ?3, at = ?4",
+            params![pr.id, pr.project_id, sha, ts(at)],
+        )?;
+        Ok(())
+    }
+
+    /// The project's PRs main reached outside the gate: (pr id, sha, when).
+    pub fn mains_moved(
+        &self,
+        project_id: &str,
+    ) -> anyhow::Result<Vec<(String, String, DateTime<Utc>)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT pr_id, sha, at FROM pr_main_moved WHERE project_id = ?1 ORDER BY at",
+        )?;
+        let rows = stmt
+            .query_map(params![project_id], |r| {
+                Ok((r.get(0)?, r.get(1)?, parse_ts(&r.get::<_, String>(2)?)))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
 }
 
 /// A handed merge DevOps didn't run in time (H-284 S2).
