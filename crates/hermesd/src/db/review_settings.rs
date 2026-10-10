@@ -75,15 +75,14 @@ impl BoardTx<'_> {
 impl BoardTx<'_> {
     pub fn set_pr_shape(&self, pr_id: &str, shape: &Shape) -> anyhow::Result<()> {
         self.conn.execute(
-            "INSERT INTO pr_shape(pr_id, areas, security, policy) VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(pr_id) DO UPDATE SET areas = excluded.areas, security = excluded.security,
-                policy = excluded.policy",
-            params![
-                pr_id,
-                serde_json::to_string(&shape.areas)?,
-                shape.security,
-                shape.policy
-            ],
+            "INSERT INTO pr_shape(pr_id, areas, security) VALUES (?1, ?2, ?3)
+             ON CONFLICT(pr_id) DO UPDATE SET areas = excluded.areas, security = excluded.security",
+            params![pr_id, serde_json::to_string(&shape.areas)?, shape.security],
+        )?;
+        self.conn.execute(
+            "INSERT INTO pr_shape_policy(pr_id, policy) VALUES (?1, ?2)
+             ON CONFLICT(pr_id) DO UPDATE SET policy = excluded.policy",
+            params![pr_id, shape.policy],
         )?;
         self.note_pr_id(pr_id)
     }
@@ -95,7 +94,8 @@ impl BoardTx<'_> {
         let row: Option<(String, bool, bool)> = self
             .conn
             .query_row(
-                "SELECT areas, security, policy FROM pr_shape WHERE pr_id = ?1",
+                "SELECT s.areas, s.security, COALESCE(p.policy, 0) FROM pr_shape s
+                 LEFT JOIN pr_shape_policy p ON p.pr_id = s.pr_id WHERE s.pr_id = ?1",
                 params![pr_id],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )

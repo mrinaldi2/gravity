@@ -33,7 +33,12 @@ CREATE TABLE IF NOT EXISTS pr_shape (
 "#;
 
 /// Whether a PR's head touches the policy files (H-313): the owner reviews
-/// it whatever the setting. Rows from before read 0 until the next head or
-/// the merge-time recompute rewrites them.
-pub(super) const MIGRATION_PR_SHAPE_POLICY: &str =
-    "ALTER TABLE pr_shape ADD COLUMN policy INTEGER NOT NULL DEFAULT 0;";
+/// it whatever the setting. Written with `pr_shape`; a PR with no row here
+/// reads as not, until its next head or the merge-time recompute. Safe to
+/// run again.
+pub(super) const MIGRATION_PR_SHAPE_POLICY: &str = r#"
+CREATE TABLE IF NOT EXISTS pr_shape_policy (
+    pr_id   TEXT PRIMARY KEY REFERENCES pr(id) ON DELETE CASCADE,
+    policy  INTEGER NOT NULL
+);
+"#;
