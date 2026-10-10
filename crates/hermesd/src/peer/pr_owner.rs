@@ -1,21 +1,20 @@
-//! The owner's PR acts from a linked computer (H-285; H-261 §4.3, §12.9).
-//! The owner reviews, comments, resolves, flags, undoes a merge, leaves a
-//! PR out or re-runs a check in the app on imac or win-pc. That daemon
-//! forwards it here, to the board's home, as
-//! `pr_owner {project_id, kind, request, via}`, where `via` is how the owner
-//! proved it there: a paired device or the app's ticket. The home records
-//! it with that provenance (`device@peer:<id>`), as release rulings carry
-//! theirs.
+//! The owner's PR requests from a linked computer (H-285; H-261 §4.3,
+//! §12.9), as `pr_owner {project_id, kind, request, via}` to the board's
+//! home, `via` being how the owner proved it there (device or ticket).
 //!
-//! What can't come this way: an owner-token connection there sends no
-//! `via` (refused there and here), and a bot never reaches this request,
-//! since its tools go through `board_call` as itself.
+//! Only the read (`review_settings_get`) is served. Every owner act
+//! (verdicts, comments, resolves, flags, Undo, Leave out, settings, check
+//! re-runs) is refused while `owner_trust::TRUST_FORWARDED_OWNER_ACTS` is
+//! off: a bot holding the link's token could send one claiming
+//! `via: ticket` (Architect, H-285 must-fix). The `via` plumbing stays for
+//! signed approvals.
 
 use std::sync::Arc;
 
 use bus::{new_id, Peer};
 use serde_json::Value;
 
+use super::owner_trust::{approve_elsewhere, TRUST_FORWARDED_OWNER_ACTS};
 use super::{board_home, board_ids, refuse};
 use crate::app::AppState;
 use crate::db::{OwnerProof, OwnerVia};
@@ -46,6 +45,12 @@ pub(super) fn serve(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow::
                 "not an owner request a linked computer forwards",
             )
         })?;
+    if kind != "review_settings_get" && !TRUST_FORWARDED_OWNER_ACTS {
+        let home = app
+            .db
+            .board_read(crate::board::release::machines::this_computer)?;
+        return Err(refuse("forbidden", approve_elsewhere(&home)));
+    }
     let proof = match frame
         .get("via")
         .and_then(Value::as_str)

@@ -2,9 +2,8 @@
 //! board and its PRs are on the Mac. A bot on the PC opens, pushes, reviews
 //! and comments through `board_call`, each record naming that bot's
 //! stand-in, with its worktree checked on the PC and recorded as the PC's.
-//! The owner's review, resolve and re-run from the PC's app reach the Mac
-//! with how the owner proved it there; the PC's owner token and a bot
-//! relaying for the owner are refused. (A check run on the PC, AC3, is
+//! The owner's acts from the PC's app are refused (H-285 must-fix: a peer
+//! token is a file bots can read): the owner approves on the Mac or a phone. (A check run on the PC, AC3, is
 //! H-283's `check_runner_peer`.)
 
 mod common;
@@ -176,10 +175,13 @@ async fn a_linked_bot_works_on_its_pr_from_its_own_computer() {
     );
 }
 
-/// AC2: the owner's acts from the PC's app reach the Mac with how the owner
-/// proved it there; the PC's owner token and a bot relaying are refused.
+/// AC2, as the H-285 must-fix sets it: the owner's acts aren't taken from
+/// a linked computer. The PC's app is told to approve on the Mac or a
+/// phone, and a forged `pr_owner` (a bot holding the link's token claiming
+/// the ticket) is refused on the Mac with nothing recorded. Reads still
+/// work.
 #[tokio::test]
-async fn the_owners_acts_from_a_linked_computer_carry_its_proof() {
+async fn the_owners_acts_from_a_linked_computer_are_refused() {
     let mut b = board().await;
     let dir = tempfile::tempdir().unwrap();
     let (_, head) = ready(&b, dir.path());
@@ -195,15 +197,6 @@ async fn the_owners_acts_from_a_linked_computer_carry_its_proof() {
         )
         .await;
     let comment_id = comment["comment"]["id"].as_str().unwrap().to_string();
-
-    let review = json!({"type": "pr_review_submit", "project_id": b.win_app, "number": 1,
-                        "sha": head, "verdict": "approved"});
-    let mut token = WsClient::connect_owner_token(&b.p.win).await;
-    assert_eq!(
-        token.request(review.clone()).await["type"],
-        "error",
-        "the owner token"
-    );
     let raw = b
         .tester
         .call_raw(
@@ -216,53 +209,47 @@ async fn the_owners_acts_from_a_linked_computer_carry_its_proof() {
         "a bot can't review as the owner: {raw}"
     );
 
+    // The PC's app, even with its ticket: approve on the Mac or a phone.
     let mut app = WsClient::connect(&b.p.win).await;
-    let out = app.request(review).await;
-    assert_eq!(out["type"], "pr", "{out}");
-    let pr = on_mac(&b, 1);
-    let reviews = b.p.mac.app.db.board_read(|t| t.reviews(&pr.id)).unwrap();
-    let owner = reviews
-        .iter()
-        .find(|r| r.role == "owner")
-        .expect("recorded");
-    let proof = format!("ticket@peer:{}", b.p.mac_peer_id);
-    assert_eq!(
-        owner.provenance.as_deref(),
-        Some(proof.as_str()),
-        "{owner:?}"
-    );
-
-    let resolved = app
-        .request(
-            json!({"type": "pr_comment_resolve", "project_id": b.win_app,
-                        "number": 1, "comment_id": comment_id}),
-        )
-        .await;
-    assert_eq!(resolved["comment"]["resolved"], true, "{resolved}");
-
-    // The Mac takes the owner's act only with the PC's word on its proof: a
-    // forwarded request without it is refused there too.
-    let bare = json!({"type": "pr_owner", "project_id": b.win_app,
-                      "kind": "pr_review_submit",
-                      "request": {"number": 1, "sha": head, "verdict": "changes_requested",
-                                  "summary": "No.", "findings": [{"severity": "must",
-                                  "text": "No."}]}});
-    let refused = b.p.win.app.peers.request(&b.p.win_peer_id, bare).await;
-    let why = format!("{refused:?}");
-    assert!(
-        why.contains("only the owner's app or a paired device"),
-        "{why}"
-    );
-    let reviews = b.p.mac.app.db.board_read(|t| t.reviews(&pr.id)).unwrap();
-    assert_eq!(
-        reviews.iter().filter(|r| r.role == "owner").count(),
-        1,
-        "nothing new"
-    );
-
-    // The re-run goes to the Mac: its answer, not "re-run it there".
+    for act in [
+        json!({"type": "pr_review_submit", "project_id": b.win_app, "number": 1,
+               "sha": head, "verdict": "approved"}),
+        json!({"type": "pr_comment_resolve", "project_id": b.win_app, "number": 1,
+               "comment_id": comment_id}),
+        json!({"type": "review_settings_set", "project_id": b.win_app,
+               "owner_review": "none"}),
+    ] {
+        let out = app.request(act.clone()).await;
+        assert_eq!(out["type"], "error", "{act}: {out}");
+        assert!(
+            out["message"].as_str().unwrap().contains("Approve on"),
+            "{out}"
+        );
+    }
     let (code, message) = error(call(&mut app, w::rerun(&b.win_app, &head, "rust")).await);
-    assert_eq!(code, "not_found", "the Mac answered: {message}");
-    let (code, _) = error(call(&mut token, w::rerun(&b.win_app, &head, "rust")).await);
-    assert_eq!(code, "forbidden", "not on the owner token");
+    assert_eq!(code, "forbidden");
+    assert!(message.contains("Approve on"), "{message}");
+    let read = app
+        .request(json!({"type": "review_settings_get", "project_id": b.win_app}))
+        .await;
+    assert_eq!(read["type"], "review_settings", "reads still go: {read}");
+
+    // A forged act straight over the link, claiming the ticket.
+    let forged = json!({"type": "pr_owner", "project_id": b.win_app,
+                        "kind": "pr_review_submit", "via": "ticket",
+                        "request": {"number": 1, "sha": head, "verdict": "approved"}});
+    let refused = b.p.win.app.peers.request(&b.p.win_peer_id, forged).await;
+    assert!(format!("{refused:?}").contains("Approve on"), "{refused:?}");
+    let pr = on_mac(&b, 1);
+    let mac = &b.p.mac.app.db;
+    let reviews = mac.board_read(|t| t.reviews(&pr.id)).unwrap();
+    assert!(
+        reviews.iter().all(|r| r.role != "owner"),
+        "nothing recorded"
+    );
+    let comments = mac.board_read(|t| t.comments(&pr.id)).unwrap();
+    assert!(
+        comments.iter().all(|c| c.resolved_by.is_none()),
+        "nothing resolved"
+    );
 }

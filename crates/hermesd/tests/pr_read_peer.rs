@@ -1,7 +1,7 @@
 //! PRs from a linked computer (H-273; H-261 §12.9, B9): the board and its
 //! PRs are on the Mac. The PC's tester opens a PR through `board_call`; the
 //! PC's app reads it through its own daemon in its own project, and gets the
-//! Mac's pushes there. The owner's re-run is forwarded to the Mac (H-285).
+//! Mac's pushes there. The owner re-runs checks on the Mac (H-285 must-fix).
 
 mod common;
 
@@ -83,9 +83,11 @@ async fn a_linked_computer_reads_prs_and_gets_their_pushes() {
     )
     .await;
 
-    // The owner's re-run goes to the board's home (H-285): its answer.
+    // The owner re-runs a check on the board's home or a phone, not here
+    // (H-285 must-fix).
     let (code, message) = error(call(&mut pc, w::rerun(&b.win_app, &head, "rust")).await);
-    assert_eq!(code, "not_found", "{message}");
+    assert_eq!(code, "forbidden", "{message}");
+    assert!(message.contains("Approve on"), "{message}");
 
     // While the Mac is away, the PC says so.
     let mac_peer_id = b.p.mac_peer_id.clone();
