@@ -20,6 +20,7 @@ pub mod merge;
 pub mod mergeable;
 pub mod model;
 pub mod owner;
+pub mod owner_requests;
 pub mod queue;
 pub mod read;
 pub mod repo;

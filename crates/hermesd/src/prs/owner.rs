@@ -15,7 +15,7 @@ use crate::app::AppState;
 use crate::board::model::ColumnCategory;
 use crate::board::release::{daemon_move, publish_moves};
 use crate::db::reviews::NewReview;
-use crate::db::OwnerProof;
+use crate::db::{OwnerProof, OwnerVia};
 use crate::decisions::{conflict, invalid, not_found};
 use crate::prs::model::Pr;
 use crate::prs::review_model::{Finding, Review, Verdict};
@@ -97,8 +97,15 @@ pub fn provenance(proof: &OwnerProof) -> anyhow::Result<String> {
     match proof {
         OwnerProof::Device { device_id } => Ok(format!("device:{device_id}")),
         OwnerProof::Ticket => Ok("ticket".to_string()),
+        // Forwarded by the linked computer the owner proved it on (H-285):
+        // only a device or the app's ticket there counts.
+        OwnerProof::Peer {
+            peer_id,
+            origin_via: via @ (OwnerVia::Device | OwnerVia::Ticket),
+            ..
+        } => Ok(format!("{}@peer:{peer_id}", via.as_str())),
         OwnerProof::Peer { .. } => Err(invalid(
-            "review it on the board's own computer; a relayed review isn't recorded",
+            "review it from the owner's app or a paired device; a relayed review isn't recorded",
         )),
     }
 }

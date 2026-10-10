@@ -58,12 +58,40 @@ pub fn verify(
     branch: &str,
     reported: &str,
 ) -> anyhow::Result<PrWorktree> {
-    let path = crate::safe_git::canonical(Path::new(reported)).map_err(|_| {
-        anyhow::anyhow!(
-            "worktree {reported} doesn't exist on {machine}; a worktree on another computer \
-                 is checked by that computer's daemon once H-285 lands"
-        )
-    })?;
+    let (tree, origin, _) = inspect(app, bot, machine, Some(branch), reported)?;
+    same_repo(reported, &origin, repo_url)?;
+    Ok(tree)
+}
+
+/// The worktree's origin must be the PR's repository.
+pub fn same_repo(reported: &str, origin: &str, repo_url: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        super::repo::same(origin, repo_url),
+        "{reported} is a checkout of {}, not of the PR's repository {}",
+        if origin.is_empty() {
+            "no remote".to_string()
+        } else {
+            super::repo::name_of(origin)
+        },
+        super::repo::name_of(repo_url)
+    );
+    Ok(())
+}
+
+/// What this computer can check of a worktree: it exists here, `bot` may
+/// work in it, it is a git worktree (on `branch`, when named). Returns it,
+/// its origin and its branch, which the PR's computer compares with the
+/// PR's (H-285: a bot on a linked computer reports a worktree there,
+/// checked there).
+pub fn inspect(
+    app: &AppState,
+    bot: &bus::Bot,
+    machine: &str,
+    branch: Option<&str>,
+    reported: &str,
+) -> anyhow::Result<(PrWorktree, String, String)> {
+    let path = crate::safe_git::canonical(Path::new(reported))
+        .map_err(|_| anyhow::anyhow!("worktree {reported} doesn't exist on {machine}"))?;
     anyhow::ensure!(
         allowed(app, bot, &path),
         "worktree {reported} isn't in your workspace or one of your <repo>-wt-{} folders",
@@ -75,35 +103,30 @@ pub fn verify(
     )
     .ok_or_else(|| anyhow::anyhow!("{reported} isn't a git worktree"))?;
     let origin = git(&path, &["config", "--get", "remote.origin.url"]).unwrap_or_default();
-    anyhow::ensure!(
-        super::repo::same(&origin, repo_url),
-        "{reported} is a checkout of {}, not of the PR's repository {}",
-        if origin.is_empty() {
-            "no remote".to_string()
-        } else {
-            super::repo::name_of(&origin)
-        },
-        super::repo::name_of(repo_url)
-    );
     let head = git(&path, &["symbolic-ref", "--quiet", "--short", "HEAD"]).unwrap_or_default();
-    anyhow::ensure!(
-        head == branch,
-        "{reported} is on {}, not on the PR's branch {branch}",
-        if head.is_empty() {
-            "a detached HEAD"
-        } else {
-            head.as_str()
-        }
-    );
+    if let Some(branch) = branch {
+        on_branch(reported, &head, branch)?;
+    }
     let common = PathBuf::from(common);
     let main_clone = match common.file_name().and_then(|n| n.to_str()) {
         Some(".git") => common.parent().map(Path::to_path_buf).unwrap_or(common),
         _ => common,
     };
-    Ok(PrWorktree {
+    let tree = PrWorktree {
         machine: machine.to_string(),
         bot_id: bot.id.clone(),
         path: path.display().to_string(),
         main_clone: main_clone.display().to_string(),
-    })
+    };
+    Ok((tree, origin, head))
+}
+
+/// The worktree must be on the PR's branch.
+pub fn on_branch(reported: &str, head: &str, branch: &str) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        head == branch,
+        "{reported} is on {}, not on the PR's branch {branch}",
+        if head.is_empty() { "a detached HEAD" } else { head }
+    );
+    Ok(())
 }

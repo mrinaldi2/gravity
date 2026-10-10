@@ -21,6 +21,8 @@ pub mod mirror;
 pub mod owner_actions;
 #[cfg(test)]
 mod panic_tests;
+mod pr_owner;
+pub mod pr_worktree;
 mod pr_relay;
 mod receive;
 pub mod remote_bots;

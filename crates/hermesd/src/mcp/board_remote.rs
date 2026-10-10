@@ -42,7 +42,13 @@ pub(super) async fn intercept(
     if name == "install_quiesce" {
         return Some(quiesce_here(app, &bot, &links, args).await);
     }
-    if let Some(mut result) = forward(app, &bot, &links, name, args).await {
+    // A PR's worktree is on this computer: checked here (H-285).
+    let (args, worktree) = match crate::peer::pr_worktree::checked_here(app, &bot, name, args) {
+        Ok(checked) => checked,
+        Err(e) => return Some(Err(e)),
+    };
+    let args = &args;
+    if let Some(mut result) = forward(app, &bot, &links, name, args, worktree.as_ref()).await {
         // How to run it here, with this computer's own binary.
         if let (Ok(answer), "install_release") = (&mut result, name) {
             super::releases::with_command(answer);
@@ -66,12 +72,16 @@ async fn forward(
     links: &[bus::ProjectLink],
     name: &str,
     args: &Value,
+    worktree: Option<&Value>,
 ) -> Option<anyhow::Result<Value>> {
     for link in links {
-        let frame = json!({
+        let mut frame = json!({
             "type": "board_call", "project_id": link.project_id,
             "bot_id": bot.id, "tool": name, "args": args,
         });
+        if let Some(worktree) = worktree {
+            frame["worktree"] = worktree.clone();
+        }
         match app.peers.request(&link.peer_id, frame).await {
             Ok(mut result) => {
                 crate::peer::board::ids_from_home(app, link, &mut result);
@@ -110,7 +120,7 @@ async fn quiesce_here(
     } else {
         crate::quiesce::tool::may_pause(app, bot)?;
         let gate = json!({ "release_id": ask.release_id });
-        forward(app, bot, links, "install_release", &gate)
+        forward(app, bot, links, "install_release", &gate, None)
             .await
             .unwrap_or_else(|| {
                 Err(anyhow::anyhow!(
