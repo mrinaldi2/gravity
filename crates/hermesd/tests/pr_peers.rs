@@ -202,11 +202,16 @@ async fn the_owners_acts_from_a_linked_computer_carry_its_proof() {
 
     // The Mac takes the owner's act only with the PC's word on its proof: a
     // forwarded request without it is refused there too.
-    let bare = json!({"type": "pr_owner", "project_id": b.win_app, "kind": "pr_flag",
-                      "request": {"number": 1, "flagged": true}});
+    let bare = json!({"type": "pr_owner", "project_id": b.win_app,
+                      "kind": "pr_review_submit",
+                      "request": {"number": 1, "sha": head, "verdict": "changes_requested",
+                                  "summary": "No.", "findings": [{"severity": "must",
+                                  "text": "No."}]}});
     let refused = b.p.win.app.peers.request(&b.p.win_peer_id, bare).await;
-    assert!(refused.is_err(), "no proof, no owner act: {refused:?}");
-    assert!(!on_mac(&b, 1).owner_flagged);
+    let why = format!("{refused:?}");
+    assert!(why.contains("only the owner's app or a paired device"), "{why}");
+    let reviews = b.p.mac.app.db.board_read(|t| t.reviews(&pr.id)).unwrap();
+    assert_eq!(reviews.iter().filter(|r| r.role == "owner").count(), 1, "nothing new");
 
     // The re-run goes to the Mac: its answer, not "re-run it there".
     let (code, message) = error(call(&mut app, w::rerun(&b.win_app, &head, "rust")).await);
