@@ -2,8 +2,9 @@
 //! (H-295). Git for Windows sets `core.autocrlf=true` in its system config,
 //! which SafeGit doesn't read; without it, every file checked out with CRLF
 //! reads as changed, and cleanup would hold every merged worktree. The
-//! daemon reads `core.autocrlf` and `core.eol` from the system config it
-//! trusts (never a repository's), keeps only values git documents, and
+//! daemon reads `core.autocrlf` and `core.eol` from the system config, and
+//! else from the user's own `~/.gitconfig` (`%USERPROFILE%\.gitconfig`;
+//! H-295 S2), never a repository's; it keeps only values git documents, and
 //! gives git a daemon-written file holding just those as its global config
 //! (`GIT_CONFIG_GLOBAL`). System config stays off (`GIT_CONFIG_NOSYSTEM`):
 //! Apple's git, for one, reads a gitconfig of its own whenever system
@@ -52,9 +53,26 @@ pub(super) fn render(read: impl Fn(&str) -> Option<String>) -> String {
     text
 }
 
-/// One key from the system config, read outside any repository with
-/// nothing inherited but `PATH`.
-fn system_value(key: &str, cwd: &Path, home: &Path) -> Option<String> {
+/// The settings to carry over: each key's system value, else the user's
+/// global one (the system wins when both set it), as config-file text.
+pub(super) fn carried(
+    system: impl Fn(&str) -> Option<String>,
+    global: impl Fn(&str) -> Option<String>,
+) -> String {
+    render(|key| system(key).or_else(|| global(key)))
+}
+
+/// The user's own global config file, `~/.gitconfig`.
+fn user_gitconfig() -> Option<PathBuf> {
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })?;
+    let home = PathBuf::from(home);
+    home.is_absolute().then(|| home.join(".gitconfig"))
+}
+
+/// One key from the system config (`file` none) or from `file` alone, its
+/// includes not followed, read outside any repository with nothing
+/// inherited but `PATH`.
+fn config_value(key: &str, file: Option<&Path>, cwd: &Path, home: &Path) -> Option<String> {
     let mut cmd = Command::new("git");
     cmd.env_clear().current_dir(cwd);
     if let Some(path) = std::env::var_os("PATH") {
@@ -70,10 +88,12 @@ fn system_value(key: &str, cwd: &Path, home: &Path) -> Option<String> {
         .env("USERPROFILE", home)
         .env("XDG_CONFIG_HOME", home)
         .stdin(Stdio::null());
-    let out = cmd
-        .args(["config", "--system", "--get", key])
-        .output()
-        .ok()?;
+    cmd.arg("config");
+    match file {
+        Some(file) => cmd.arg("--no-includes").arg("--file").arg(file),
+        None => cmd.arg("--system"),
+    };
+    let out = cmd.args(["--get", key]).output().ok()?;
     out.status
         .success()
         .then(|| String::from_utf8_lossy(&out.stdout).into_owned())
@@ -92,7 +112,11 @@ pub(super) fn config_file(run: &Path, home: &Path) -> anyhow::Result<PathBuf> {
     if let Some(file) = FILE.get() {
         return Ok(file.clone());
     }
-    let text = render(|key| system_value(key, run, home));
+    let global = user_gitconfig();
+    let text = carried(
+        |key| config_value(key, None, run, home),
+        |key| config_value(key, Some(global.as_deref()?), run, home),
+    );
     let file = write(run, &text)?;
     Ok(FILE.get_or_init(|| file).clone())
 }
@@ -103,7 +127,7 @@ mod tests {
 
     use super::super::tests::plain;
     use super::super::{run_dir, SafeGit};
-    use super::{render, write};
+    use super::{carried, config_value, render, write};
 
     #[test]
     fn only_documented_values_are_carried_over() {
@@ -179,6 +203,31 @@ mod tests {
         assert_eq!(changed(&repo, ""), "file.txt");
         let system = render(|key| (key == "core.autocrlf").then(|| "true".into()));
         assert_eq!(changed(&repo, &system), "");
+    }
+
+    /// H-295 S2: only the user's global config sets autocrlf; it is carried
+    /// over, its other settings aren't, and a system value would win.
+    #[test]
+    fn the_users_global_autocrlf_is_carried_when_the_system_sets_none() {
+        let (dir, repo) = crlf_checkout();
+        let global = dir.path().join("gitconfig");
+        std::fs::write(
+            &global,
+            "[core]\n\tautocrlf = true\n\tfsmonitor = /planted\n[include]\n\tpath = /x\n",
+        )
+        .unwrap();
+        let run = dir.path();
+        let from_global = |key: &str| config_value(key, Some(&global), run, run);
+        let text = carried(|_| None, from_global);
+        assert_eq!(text, "[core]\n\tautocrlf = true\n");
+        assert_eq!(changed(&repo, ""), "file.txt", "control");
+        assert_eq!(changed(&repo, &text), "");
+        let system = |key: &str| (key == "core.autocrlf").then(|| "input".to_string());
+        assert_eq!(
+            carried(system, from_global),
+            "[core]\n\tautocrlf = input\n",
+            "the system's value wins"
+        );
     }
 
     /// On Windows, with this computer's real system config: a checkout made

@@ -1,8 +1,10 @@
 //! Cleanup on a linked computer (H-261 §15.2): the board's home sends a
 //! `cleanup_request` with that computer's jobs for one merged PR; its daemon
 //! runs them exactly as the home runs its own ([`super::batch::run`]) and
-//! sends a `cleanup_result` back. Rule 1 is the home's, checked before it
-//! asks. A computer that is offline isn't asked; once it is back online the
+//! sends a `cleanup_result` back. Only the project's board home may ask
+//! (ARCH-R63: board facts come from the home), and rule 1 is checked twice:
+//! by the home before it asks, and here, against this computer's own fetch
+//! of main, before anything is deleted. A computer that is offline isn't asked; once it is back online the
 //! next pass asks it, so it runs its jobs when it reconnects. One that was
 //! asked and didn't answer is asked again after 15 minutes: every step
 //! re-checks what is on disk, so a second run is safe.
@@ -14,7 +16,7 @@ use bus::Peer;
 use chrono::{DateTime, Utc};
 use serde_json::{json, Value};
 
-use super::batch::{self, Batch, Discovered};
+use super::batch::{self, Answer, Batch, Discovered};
 use super::model::{Job, Outcome};
 use crate::app::AppState;
 use crate::peer::refuse;
@@ -87,8 +89,10 @@ pub async fn ask(
 }
 
 /// A linked board home asks this computer to run its cleanup jobs: the
-/// project must be linked here and the repository one it has. The jobs run
-/// after the answer; what they did is sent back when they end.
+/// project must be linked here, the sender must be the peer whose board this
+/// computer mirrors for it, and the repository one it has. The jobs run
+/// after the answer, once this computer has seen main hold the merged
+/// commit itself; what they did is sent back when they end.
 pub fn serve_request(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow::Result<Value> {
     let field = |k: &str| frame.get(k).and_then(Value::as_str).unwrap_or_default();
     let home_project = field("project_id").to_string();
@@ -96,6 +100,12 @@ pub fn serve_request(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow:
         .db
         .project_link_by_remote(&peer.id, &home_project)?
         .ok_or_else(|| refuse("not_linked", "that project is not linked with one here"))?;
+    if app.board_mirror.home_peer(&link.project_id).as_deref() != Some(peer.id.as_str()) {
+        return Err(refuse(
+            "forbidden",
+            format!("{} isn't this project's board home", peer.name),
+        ));
+    }
     let asked = field("url");
     let own = app.db.project_repo(&link.project_id)?.map(|r| r.url);
     let url = own
@@ -113,7 +123,7 @@ pub fn serve_request(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow:
     tokio::spawn(async move {
         let a = app.clone();
         let b = batch.clone();
-        let Ok(answer) = tokio::task::spawn_blocking(move || batch::run(&a, &b)).await else {
+        let Ok(answer) = tokio::task::spawn_blocking(move || checked(&a, &b)).await else {
             return;
         };
         let frame = answer.to_frame(&home_project, &batch.pr_id);
@@ -128,6 +138,28 @@ pub fn serve_request(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow:
         app.peers.notify(&peer_id, frame);
     });
     Ok(json!({}))
+}
+
+/// Runs `batch` once main here holds its merged commit; until then every
+/// job gets that outcome and nothing is touched.
+fn checked(app: &AppState, b: &Batch) -> Answer {
+    match super::merged::main_holds(app, &b.project_id, &b.url, b.pr_number, &b.merged_sha) {
+        Ok(_) => batch::run(app, b),
+        Err(outcome) => {
+            let outcome = match outcome {
+                Outcome::Held(why) => Outcome::Held(format!("checked on this computer: {why}")),
+                other => other,
+            };
+            Answer {
+                results: b
+                    .jobs
+                    .iter()
+                    .map(|w| (w.id.clone(), outcome.clone()))
+                    .collect(),
+                discovered: Vec::new(),
+            }
+        }
+    }
 }
 
 /// What a linked computer did with its jobs; only that computer's own jobs

@@ -74,6 +74,16 @@ fn linked(main: &Path) -> Vec<(PathBuf, String)> {
     found
 }
 
+/// The bot whose workspace holds the main clone at `main` (resolved).
+fn clone_owner<'a>(bots: &'a [BotHere], main: &Path) -> Option<&'a BotHere> {
+    bots.iter().find(|b| {
+        b.workspace
+            .as_deref()
+            .and_then(|w| crate::safe_git::canonical(w).ok())
+            .is_some_and(|w| main.starts_with(&w) && main != w)
+    })
+}
+
 /// Every linked worktree on `branch` of `url` under this computer's allowed
 /// roots, once each, with the bot whose folder it is in.
 pub fn on_branch(app: &AppState, url: &str, branch: &str, bots: &[BotHere]) -> Vec<Found> {
@@ -102,18 +112,20 @@ pub fn on_branch(app: &AppState, url: &str, branch: &str, bots: &[BotHere]) -> V
                 continue;
             }
             seen.push(real);
-            let bot = bots
-                .iter()
-                .find(|b| {
+            // A clone in a bot's workspace is that bot's: whatever it
+            // registers is judged by that bot's roots, so a tree it points
+            // into another bot's folder is held, never removed (ARCH S2).
+            let bot = clone_owner(bots, &main_real).or_else(|| {
+                bots.iter().find(|b| {
                     Roots::of(app, b.workspace.as_deref(), &b.name)
                         .check(&path)
                         .is_ok()
                 })
-                .cloned();
+            });
             out.push(Found {
                 path,
                 main_clone: main.clone(),
-                bot,
+                bot: bot.cloned(),
             });
         }
     }

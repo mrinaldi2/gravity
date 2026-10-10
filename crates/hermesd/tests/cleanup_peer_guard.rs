@@ -1,24 +1,22 @@
-//! Cleanup after merge across linked computers, CL-1 (H-274; H-261 §15.2):
-//! the board's home asks the computer holding a worktree to remove it with a
-//! `cleanup_request`; that computer's daemon runs every rule itself and the
-//! result reaches the home. A computer that isn't online isn't asked: its
-//! jobs wait for it. The hands-on run on win-pc is Tester Win's.
+//! What a linked computer trusts in a `cleanup_request`, CL-1 (H-274, ARCH
+//! M1): only the project's board home may ask, and the computer checks
+//! itself that main holds the merged commit before it deletes anything.
 
 mod common;
 
 use std::path::PathBuf;
 use std::time::Duration;
 
-use chrono::Utc;
 use common::peer_board::board;
 use common::prs::{commit, head};
 use common::repo::{git, remote};
-use hermesd::cleanup::model::{JobState, Kind, NewJob};
+use hermesd::cleanup::model::{JobState, Kind};
+use hermesd::cleanup::remote::serve_request;
 use hermesd::db::prs::NewPr;
 use hermesd::prs::model::PrWorktree;
 
 #[tokio::test]
-async fn the_computer_holding_a_worktree_removes_it_and_an_offline_one_waits() {
+async fn only_the_home_may_ask_and_an_unmerged_commit_is_held_here() {
     let b = board().await;
     let (mac, win) = (&b.p.mac, &b.p.win);
     let dir = tempfile::tempdir().unwrap();
@@ -32,7 +30,7 @@ async fn the_computer_holding_a_worktree_removes_it_and_an_offline_one_waits() {
         d.app.db.set_project_repo(project, Some(&repo)).unwrap();
     }
 
-    // The PC's tester works in a worktree of its clone, in its workspace.
+    // The PC's tester has a worktree on a branch that never reached main.
     let tester = win.app.db.get_bot(&b.tester_id).unwrap().unwrap();
     let ws = PathBuf::from(&tester.workspace_path);
     std::fs::create_dir_all(ws.join("scratch")).unwrap();
@@ -41,17 +39,13 @@ async fn the_computer_holding_a_worktree_removes_it_and_an_offline_one_waits() {
     let main = ws.join("repo");
     let tree = ws.join("scratch").join("wt-a");
     let shown = tree.display().to_string();
-    git(&main, &["worktree", "add", "-q", "-b", "H-1-peer", &shown]);
+    git(&main, &["worktree", "add", "-q", "-b", "H-1-live", &shown]);
     commit(&tree, "a.txt", "one\n");
-    git(&tree, &["push", "-q", "origin", "H-1-peer"]);
-    std::fs::create_dir_all(tree.join("node_modules/x")).unwrap();
-    std::fs::write(tree.join("node_modules/x/index.js"), vec![b'x'; 200_000]).unwrap();
-    std::fs::write(main.join(".git/info/exclude"), "node_modules/\n").unwrap();
-
-    // The Mac records the PR, its worktree on the PC, and the merge.
+    git(&tree, &["push", "-q", "origin", "H-1-live"]);
     let sha = head(&tree);
     let base = git(&origin, &["rev-parse", "main"]).trim().to_string();
-    git(&tree, &["push", "-q", "origin", "HEAD:main"]);
+
+    // A home that wrongly believes the PR merged as that commit.
     let pc = mac.app.db.get_peer(&b.p.mac_peer_id).unwrap().unwrap().name;
     let db = &mac.app.db;
     let pr = db
@@ -60,12 +54,12 @@ async fn the_computer_holding_a_worktree_removes_it_and_an_offline_one_waits() {
                 project_id: &b.mac_app,
                 repo: &url,
                 item_id: &b.item,
-                branch: "H-1-peer",
+                branch: "H-1-live",
                 base_sha: &base,
                 head_sha: &sha,
                 patch_id: "p",
                 author: &b.stand_in,
-                title: "Peer",
+                title: "Live",
                 change_note: "",
             })?;
             t.add_pr_worktree(
@@ -82,20 +76,27 @@ async fn the_computer_holding_a_worktree_removes_it_and_an_offline_one_waits() {
         })
         .unwrap();
     hermesd::cleanup::enqueue(&mac.app, &pr).unwrap();
-    // A computer this project is on that isn't connected.
-    let away = NewJob {
-        project_id: b.mac_app.clone(),
-        pr_id: pr.id.clone(),
-        machine: "imac".into(),
-        kind: Kind::Discover,
-        path_or_ref: "H-1-peer".into(),
-        main_clone: None,
-        bot_id: None,
-    };
-    db.board_tx(|t| t.add_cleanup_job(&away)).unwrap();
-
-    hermesd::cleanup::step(&mac.app, Utc::now()).await;
     let jobs = || db.board_read(|t| t.cleanup_jobs_of_pr(&pr.id)).unwrap();
+    let on_pc: Vec<_> = jobs().into_iter().filter(|j| j.machine == pc).collect();
+    let frame = hermesd::cleanup::batch_for(&mac.app, &pr, &url, &on_pc)
+        .unwrap()
+        .to_frame(&b.mac_app);
+    let home = win.app.db.get_peer(&b.p.win_peer_id).unwrap().unwrap();
+
+    // A linked peer that isn't the board's home is refused.
+    let mirrored = win.app.board_mirror.get(&b.win_app).unwrap();
+    win.app
+        .board_mirror
+        .set(&b.win_app, "another-peer", mirrored.snapshot.clone());
+    let refused = serve_request(&win.app, &home, &frame);
+    win.app
+        .board_mirror
+        .set(&b.win_app, &mirrored.peer_id, mirrored.snapshot);
+    let error = refused.expect_err("a peer that isn't the home is refused");
+    assert!(format!("{error:#}").contains("board home"), "{error:#}");
+
+    // The home is served, but the PC sees main lacks the commit: held.
+    serve_request(&win.app, &home, &frame).expect("the home may ask");
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     while jobs()
         .iter()
@@ -104,15 +105,14 @@ async fn the_computer_holding_a_worktree_removes_it_and_an_offline_one_waits() {
         assert!(tokio::time::Instant::now() < deadline, "{:?}", jobs());
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-
     let on_pc: Vec<_> = jobs().into_iter().filter(|j| j.machine == pc).collect();
-    let removed = on_pc.iter().find(|j| j.kind == Kind::Worktree).unwrap();
-    assert_eq!(removed.state, JobState::Done, "{on_pc:?}");
-    assert!(removed.bytes_freed >= 200_000, "{removed:?}");
-    assert!(on_pc.iter().all(|j| j.state == JobState::Done), "{on_pc:?}");
-    assert!(!tree.exists(), "the PC removed its worktree");
-    assert!(!git(&main, &["worktree", "list"]).contains("wt-a"));
-    let waiting = jobs().into_iter().find(|j| j.machine == "imac").unwrap();
-    assert_eq!(waiting.state, JobState::Queued, "{waiting:?}");
-    assert!(waiting.sent_at.is_none(), "an offline computer isn't asked");
+    let held = on_pc.iter().find(|j| j.kind == Kind::Worktree).unwrap();
+    assert_eq!(held.state, JobState::Held, "{on_pc:?}");
+    assert!(
+        held.reason.contains("checked on this computer")
+            && held.reason.contains("main doesn't hold"),
+        "{held:?}"
+    );
+    assert!(tree.join("a.txt").exists(), "nothing was deleted");
+    assert!(git(&main, &["worktree", "list"]).contains("wt-a"));
 }

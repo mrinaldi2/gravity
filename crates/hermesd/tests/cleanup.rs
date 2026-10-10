@@ -8,12 +8,15 @@
 mod common;
 
 use chrono::Utc;
-use common::cleanup::{
-    job_at, jobs, linked, listed, main_clone, merge, merged, notes, open, step, workspace,
-};
-use common::prs::{error, setup};
+use common::cleanup::{job_at, jobs, linked, listed, main_clone, merged, notes, step, workspace};
+#[cfg(unix)]
+use common::cleanup::{merge, open};
+#[cfg(unix)]
+use common::prs::error;
+use common::prs::setup;
 use common::repo::git;
 use hermesd::cleanup::model::JobState;
+#[cfg(unix)]
 use hermesd::prs::model::PrWorktree;
 use serde_json::json;
 

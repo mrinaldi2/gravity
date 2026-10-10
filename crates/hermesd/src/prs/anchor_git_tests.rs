@@ -44,6 +44,10 @@ fn hunks_run_no_planted_diff_driver_or_textconv() {
     let driver = root.join("driver");
     script(&driver, &marker);
     let driver = driver.display().to_string();
+    // Git for Windows runs diff drivers through sh, which would eat the
+    // backslashes; with '/' the plant really runs under plain git.
+    #[cfg(windows)]
+    let driver = driver.replace('\\', "/");
     plain(&cache, &["config", "diff.external", &driver]);
     plain(&cache, &["config", "diff.planted.textconv", &driver]);
     std::fs::create_dir_all(cache.join("info")).unwrap();

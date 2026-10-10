@@ -87,15 +87,30 @@ pub fn find(tree: &Path, merged: &str) -> anyhow::Result<Unsaved> {
     })
 }
 
+/// An untracked file bigger than this isn't copied (ARCH S1 on H-274)…
+pub const FILE_CAP: u64 = 100_000_000;
+/// …nor any once the copy would pass this in all…
+pub const TOTAL_CAP: u64 = 1_000_000_000;
+/// …or leave the disk with less than this free.
+pub const FREE_FLOOR: u64 = 5_000_000_000;
+
+/// Where a salvage went, and the untracked files it left in the tree.
+#[derive(Debug)]
+pub struct Salvaged {
+    pub dir: PathBuf,
+    /// "path (size, why)": kept in the tree, which is held, never copied.
+    pub skipped: Vec<String>,
+}
+
 /// Saves what `unsaved` names into `dir`: a bundle of the unpushed commits,
 /// a patch of the tracked changes, and a copy of the untracked files by
-/// their bytes (links skipped, never followed). Returns `dir`.
+/// their bytes (links skipped, never followed) within the caps.
 pub fn salvage(
     tree: &Path,
     merged: &str,
     unsaved: &Unsaved,
     dir: &Path,
-) -> anyhow::Result<PathBuf> {
+) -> anyhow::Result<Salvaged> {
     std::fs::create_dir_all(dir)?;
     if unsaved.unpushed > 0 {
         let bundle = dir.join("commits.bundle");
@@ -126,33 +141,98 @@ pub fn salvage(
         );
         std::fs::write(dir.join("uncommitted.patch"), &out.stdout)?;
     }
+    let mut sized = Vec::new();
     for rel in &unsaved.untracked {
-        copy_untracked(tree, rel, &dir.join("untracked"))?;
+        if let Some(bytes) = copyable(tree, rel)? {
+            sized.push((rel.clone(), bytes));
+        }
     }
-    Ok(dir.to_path_buf())
+    let free = crate::migrate_home::disk::free_bytes(dir);
+    let (copy, skipped) = plan_copy(sized, free);
+    for rel in &copy {
+        let to = dir.join("untracked").join(rel);
+        if let Some(parent) = to.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::copy(tree.join(rel), &to)?;
+    }
+    Ok(Salvaged {
+        dir: dir.to_path_buf(),
+        skipped,
+    })
 }
 
-/// One untracked file copied by its bytes, unless it or a folder above it
-/// is a link.
-fn copy_untracked(tree: &Path, rel: &str, into: &Path) -> anyhow::Result<()> {
+/// The untracked files to copy, in order, and those left out with why:
+/// each within [`FILE_CAP`], all within [`TOTAL_CAP`], and the disk kept
+/// above [`FREE_FLOOR`] (an unknown free space counts as none to spare).
+pub fn plan_copy(sized: Vec<(String, u64)>, free: Option<u64>) -> (Vec<String>, Vec<String>) {
+    let room = free.map_or(0, |f| f.saturating_sub(FREE_FLOOR));
+    let (mut copy, mut skipped, mut total) = (Vec::new(), Vec::new(), 0u64);
+    for (rel, bytes) in sized {
+        let size = super::model::human_bytes(bytes);
+        let why = if bytes > FILE_CAP {
+            Some("over the 100 MB cap")
+        } else if total + bytes > TOTAL_CAP {
+            Some("past the 1 GB salvage cap")
+        } else if total + bytes > room {
+            Some("not enough free disk")
+        } else {
+            None
+        };
+        match why {
+            Some(why) => skipped.push(format!("{rel} ({size}, {why})")),
+            None => {
+                total += bytes;
+                copy.push(rel);
+            }
+        }
+    }
+    (copy, skipped)
+}
+
+/// An untracked file's size, unless it or a folder above it is a link or it
+/// isn't a plain file (then it isn't copied at all).
+fn copyable(tree: &Path, rel: &str) -> anyhow::Result<Option<u64>> {
     let rel = Path::new(rel);
     if !rel.components().all(|c| matches!(c, Component::Normal(_))) {
-        return Ok(());
+        return Ok(None);
     }
     let mut at = tree.to_path_buf();
     for part in rel.components() {
         at.push(part);
         if super::scope::is_link(&std::fs::symlink_metadata(&at)?) {
-            return Ok(());
+            return Ok(None);
         }
     }
-    if !std::fs::symlink_metadata(&at)?.is_file() {
-        return Ok(());
+    let meta = std::fs::symlink_metadata(&at)?;
+    Ok(meta.is_file().then_some(meta.len()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_salvage_copy_keeps_to_its_caps() {
+        let mb = 1_000_000;
+        let plenty = Some(100_000 * mb);
+        let sized = |list: &[(&str, u64)]| list.iter().map(|(p, b)| (p.to_string(), *b)).collect();
+        let (copy, skipped) = plan_copy(sized(&[("a", mb), ("big", 150 * mb), ("b", mb)]), plenty);
+        assert_eq!(copy, ["a", "b"]);
+        assert_eq!(skipped.len(), 1);
+        assert!(skipped[0].starts_with("big (") && skipped[0].contains("100 MB cap"));
+
+        let many: Vec<(String, u64)> = (0..12).map(|i| (format!("f{i}"), 90 * mb)).collect();
+        let (copy, skipped) = plan_copy(many, plenty);
+        assert_eq!(copy.len(), 11, "11 x 90 MB fit in 1 GB");
+        assert!(skipped[0].contains("1 GB salvage cap"), "{skipped:?}");
+
+        let (copy, skipped) = plan_copy(sized(&[("a", mb)]), Some(FREE_FLOOR + mb / 2));
+        assert!(
+            copy.is_empty() && skipped[0].contains("free disk"),
+            "{skipped:?}"
+        );
+        let (copy, _) = plan_copy(sized(&[("a", mb)]), None);
+        assert!(copy.is_empty(), "an unknown free space spares nothing");
     }
-    let to = into.join(rel);
-    if let Some(parent) = to.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::copy(&at, &to)?;
-    Ok(())
 }

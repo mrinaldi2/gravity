@@ -14,6 +14,7 @@
 
 pub mod batch;
 pub mod discover;
+pub mod merged;
 pub mod model;
 pub mod remote;
 pub mod remove;
@@ -29,9 +30,10 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::app::AppState;
-use crate::board::release::{git_cache, machines};
-use crate::prs::model::{Pr, PrState};
+use crate::board::release::machines;
+use crate::prs::model::Pr;
 use batch::{Batch, Discovered, Work};
+pub use merged::verify_merge;
 use model::{human_bytes, Job, JobState, Kind, NewJob, Outcome};
 
 /// How often the home looks for jobs due.
@@ -161,35 +163,6 @@ fn claim(jobs: Vec<Job>) -> Vec<Job> {
     jobs.into_iter()
         .filter(|j| set.insert(j.id.clone()))
         .collect()
-}
-
-/// Rule 1: the PR merged and main holds its merged commit, in a fresh fetch
-/// of the daemon's cache. The repository's URL, or the outcome every job
-/// gets: busy (retried) when the fetch failed, held when it isn't merged.
-pub fn verify_merge(app: &AppState, pr: &Pr) -> Result<String, Outcome> {
-    let sha = match (&pr.state, &pr.merged_sha) {
-        (PrState::Merged, Some(sha)) => sha.clone(),
-        _ => {
-            return Err(Outcome::Held(format!(
-                "PR #{} isn't merged ({})",
-                pr.number,
-                pr.state.as_str()
-            )))
-        }
-    };
-    let repo = crate::prs::repo::of_project(app, &pr.project_id, Some(&pr.repo))
-        .map_err(|e| Outcome::Held(format!("{e:#}")))?;
-    let cache = repo
-        .fetch(app)
-        .map_err(|e| Outcome::Busy(format!("couldn't fetch {} to check main: {e:#}", repo.name)))?;
-    let main = git_cache::resolve(&cache, "refs/heads/main").unwrap_or_default();
-    match git_cache::contains(&cache, &main, &sha) {
-        Ok(true) => Ok(repo.url),
-        _ => Err(Outcome::Held(format!(
-            "main doesn't hold PR #{}'s merged commit {sha}",
-            pr.number
-        ))),
-    }
 }
 
 /// The batch for `jobs` of `pr` on one computer, as the home builds it.

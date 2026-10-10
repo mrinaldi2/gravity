@@ -116,12 +116,19 @@ pub fn attempt(app: &AppState, target: &Target, merge: &Merge<'_>) -> Outcome {
         let into = merge.salvage.join(name);
         return Outcome::Held(
             match unsaved::salvage(tree, merge.merged_sha, &found, &into) {
-                Ok(dir) => format!(
-                    "{} in {} (salvaged to {}); commit or discard there, or the owner removes it",
-                    found.describe(),
-                    tree.display(),
-                    dir.display()
-                ),
+                Ok(saved) => {
+                    let left = match saved.skipped.as_slice() {
+                        [] => String::new(),
+                        list => format!("; not copied, still in the tree: {}", list.join(", ")),
+                    };
+                    format!(
+                        "{} in {} (salvaged to {}{left}); commit or discard there, or the owner \
+                         removes it",
+                        found.describe(),
+                        tree.display(),
+                        saved.dir.display()
+                    )
+                }
                 Err(error) => format!(
                     "{} in {}; saving it failed ({error:#}), so nothing was touched",
                     found.describe(),
