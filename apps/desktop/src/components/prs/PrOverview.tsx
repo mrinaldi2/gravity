@@ -2,7 +2,7 @@
 // for, each reviewer's verdict bound to a commit, the findings, the change
 // note, its checks at the head, and the cleanup once merged.
 
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type { Finding, PullRequest, Review } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import { PrState, Severity } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import CardLink from "../cards/CardLink";
@@ -25,8 +25,39 @@ import {
 
 const MERGE_RULE = "Merges to main when every review is in and checks pass.";
 
+/** The project's Owner review setting, on the Waiting for line (decision 8). */
+export interface SettingNote {
+  readonly line: string;
+  /** Opens Settings › Owner review. */
+  readonly onChange: (() => void) | null;
+}
+
+function Setting({ note }: { readonly note: SettingNote | null }): ReactElement | null {
+  if (note === null) {
+    return null;
+  }
+  return (
+    <div className="pr-setting-line pr-dim">
+      {note.line}
+      {note.onChange === null ? null : (
+        <>
+          {" · "}
+          <button type="button" className="pr-link" onClick={note.onChange}>
+            Change
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 /** The top line: what the PR waits for, or that it merged (decision 4). */
-function MergeLine({ pr, now }: { readonly pr: PullRequest; readonly now: number }): ReactElement {
+function MergeLine(props: {
+  readonly pr: PullRequest;
+  readonly now: number;
+  readonly setting: SettingNote | null;
+}): ReactElement {
+  const { pr, now } = props;
   const done = stateLine(pr, now);
   if (done !== null) {
     const tone = pr.state === PrState.MERGED ? "ok" : "dim";
@@ -54,6 +85,7 @@ function MergeLine({ pr, now }: { readonly pr: PullRequest; readonly now: number
           ))}
         </ul>
       ) : null}
+      <Setting note={props.setting} />
     </div>
   );
 }
@@ -102,6 +134,7 @@ function ReviewRow(props: {
   readonly pr: PullRequest;
   readonly role: string;
   readonly now: number;
+  readonly action: ReactNode;
 }): ReactElement {
   const { pr, role } = props;
   const review = reviewOf(pr, role);
@@ -112,7 +145,11 @@ function ReviewRow(props: {
         <StateText state={reviewState(pr, role, review)} />
         <div className="pr-dim">{reviewMeta(pr, role, review)}</div>
       </div>
-      <span className="pr-dim">{review === undefined ? "" : age(review.at, props.now)}</span>
+      {role === OWNER_ROLE && props.action ? (
+        props.action
+      ) : (
+        <span className="pr-dim">{review === undefined ? "" : age(review.at, props.now)}</span>
+      )}
     </li>
   );
 }
@@ -196,19 +233,22 @@ function CleanupBox({ pr }: { readonly pr: PullRequest }): ReactElement | null {
 export default function PrOverview(props: {
   readonly pr: PullRequest;
   readonly now: number;
+  /** "Review…" or "Re-check…" on your row; none when you can't act. */
+  readonly ownerAction?: ReactNode;
+  readonly setting?: SettingNote | null;
 }): ReactElement {
   const { pr, now } = props;
   return (
     <div className="pr-overview">
       <div className="pr-col">
-        <MergeLine pr={pr} now={now} />
+        <MergeLine pr={pr} now={now} setting={props.setting ?? null} />
         <section className="pr-box" aria-label="Reviews">
           <h4>
             Reviews · at <span className="pr-sha">{sha7(pr.headSha)}</span>
           </h4>
           <ul className="pr-plain">
             {reviewRoles(pr).map((role) => (
-              <ReviewRow key={role} pr={pr} role={role} now={now} />
+              <ReviewRow key={role} pr={pr} role={role} now={now} action={props.ownerAction} />
             ))}
           </ul>
         </section>

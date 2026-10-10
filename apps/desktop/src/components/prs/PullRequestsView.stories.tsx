@@ -1,31 +1,13 @@
 import type { Story } from "@ladle/react";
-import { useEffect, useRef, useState } from "react";
-import type { ReactElement, RefObject } from "react";
+import { useRef, useState } from "react";
+import type { ReactElement } from "react";
 import { CARD_BOTS, CARD_PROJECT } from "../../test/cardFixtures";
 import { mergedPr, PR_NOW, prDaemon, prList, waitingPr } from "../../test/prFixtures";
+import { useClickOnce } from "../../test/storyClick";
 import { CardLinksProvider } from "../cards/CardLinks";
 import PullRequestsView from "./PullRequestsView";
 
 const noop = (): void => {};
-
-/** Clicks the button whose text starts with `label` once it shows. */
-function useClickOnce(box: RefObject<HTMLElement | null>, label: string | undefined): void {
-  useEffect(() => {
-    if (label === undefined) {
-      return undefined;
-    }
-    const timer = setInterval(() => {
-      const button = [...(box.current?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
-        (b) => b.textContent?.startsWith(label) === true,
-      );
-      if (button !== undefined) {
-        button.click();
-        clearInterval(timer);
-      }
-    }, 10);
-    return () => clearInterval(timer);
-  }, [box, label]);
-}
 
 function Frame(props: {
   readonly light?: boolean;

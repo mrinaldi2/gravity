@@ -1,16 +1,18 @@
-// A PR's files and unified diff (UX-051 "files"), read-only. "Since <sha>"
-// shows only what changed after an approval, so a re-check reads the delta
-// (UX-051 decisions 3 and 11; `pr_diff` with `from_sha`).
+// A PR's files and unified diff (UX-051 "files"). "Since <sha>" shows only
+// what changed after an approval, so a re-check reads the delta (UX-051
+// decisions 3 and 11; `pr_diff` with `from_sha`). Line comments sit under
+// their lines; the owner can start a thread, reply and resolve (H-282).
 
 import { useState } from "react";
 import type { ReactElement } from "react";
 import type { DiffFile, PullRequest } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import { FileStatus, Verdict } from "../../protocol/gen/hermes/pr/v1/pr_pb";
-import type { PrApi } from "../../protocol/prs";
-import type { DiffFileText } from "./diffParse";
 import { parseDiff } from "./diffParse";
+import type { DiffComments } from "./FileDiff";
+import FileDiff from "./FileDiff";
 import { roleLabel, sha7 } from "./prText";
 import { usePrDiff } from "./usePullRequests";
+import type { PrClient } from "./usePrOwner";
 
 /** The commits a re-check can start from: each older approval's, with who gave it. */
 function deltaBases(pr: PullRequest): { readonly sha: string; readonly by: string }[] {
@@ -64,40 +66,26 @@ function FileButton(props: {
   );
 }
 
-const SIGNS = { add: "+", del: "−", ctx: " ", hunk: "", note: "" } as const;
-
-function FileDiff(props: { readonly file: DiffFileText; readonly range: string }): ReactElement {
-  return (
-    <section className="pr-diff" aria-label={`Diff of ${props.file.path}`}>
-      <div className="pr-diff-head">
-        {props.file.path} · <span className="pr-sha">{props.range}</span>
-      </div>
-      {props.file.lines.map((line, index) => (
-        // Lines have no identity of their own; their place in the file is it.
-        // oxlint-disable-next-line react/no-array-index-key
-        <div key={index} className={`pr-diff-line pr-diff-${line.kind}`}>
-          <span className="pr-diff-number">{line.number ?? ""}</span>
-          <span className="pr-diff-sign">{SIGNS[line.kind]}</span>
-          <span className="pr-diff-text">{line.text}</span>
-        </div>
-      ))}
-    </section>
-  );
-}
-
 export default function PrFiles(props: {
-  readonly client: PrApi;
+  readonly client: PrClient;
   readonly pr: PullRequest;
   readonly connected: boolean;
+  /** The commit the diff starts from; null = from main. */
+  readonly from: string | null;
+  readonly onFrom: (from: string | null) => void;
+  /** Your approval this delta starts from, when it's a re-check. */
+  readonly recheck: string | null;
+  readonly onReview: ((event: { readonly currentTarget: HTMLElement }) => void) | null;
+  readonly comments: Omit<DiffComments, "oldSide">;
 }): ReactElement {
-  const { pr } = props;
-  const [from, setFrom] = useState<string | null>(null);
+  const { pr, from } = props;
   const [picked, setPicked] = useState<string | null>(null);
   const { data, error } = usePrDiff(props.client, pr, from, props.connected);
   const bases = deltaBases(pr);
   const texts = data === null ? [] : parseDiff(data.diff);
   const shown = picked === null ? texts : texts.filter((t) => t.path === picked);
   const range = data === null ? "" : `${sha7(data.fromSha)} → ${sha7(data.toSha)}`;
+  const comments: DiffComments = { ...props.comments, oldSide: from === null };
   return (
     <div className="pr-files">
       <div className="pr-file-side">
@@ -107,7 +95,7 @@ export default function PrFiles(props: {
             <select
               value={from ?? ""}
               onChange={(event) => {
-                setFrom(event.target.value === "" ? null : event.target.value);
+                props.onFrom(event.target.value === "" ? null : event.target.value);
                 setPicked(null);
               }}
             >
@@ -136,13 +124,27 @@ export default function PrFiles(props: {
         )}
       </div>
       <div className="pr-diff-pane">
+        {props.recheck !== null && from === props.recheck ? (
+          <div className="pr-banner pr-banner-recheck" role="status">
+            <span>
+              <b>⟳ Only what changed since you approved </b>
+              <span className="pr-sha">{sha7(props.recheck)}</span>
+              {data === null ? "" : ` · ${data.files.length} files`}
+            </span>
+            {props.onReview === null ? null : (
+              <button type="button" className="btn btn-small btn-primary" onClick={props.onReview}>
+                Review…
+              </button>
+            )}
+          </div>
+        ) : null}
         {data?.truncated ? (
           <p className="pr-banner pr-banner-warn">
             ⚠ The diff is cut at 2 MB. Open the branch in a terminal for the rest.
           </p>
         ) : null}
         {shown.map((file) => (
-          <FileDiff key={file.path} file={file} range={range} />
+          <FileDiff key={file.path} file={file} range={range} comments={comments} />
         ))}
       </div>
     </div>

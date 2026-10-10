@@ -63,6 +63,10 @@ const ORDER: Readonly<Record<Shown["kind"], number>> = {
   // terminal's permission prompt included (H-172).
   bot_waiting: 1,
   off_board: 6,
+  // Your review comes after the bots' and is ranked like a release ruling (§4.3).
+  pr_review: 1,
+  pr_merge_stuck: 2,
+  main_moved_outside: 0,
   routines_without_card: 7,
   // Sorted by the kind it carries (`orderOf`); this is the fallback.
   elsewhere: 5,

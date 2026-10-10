@@ -56,6 +56,12 @@ export type Selection =
       readonly projectId: string;
       readonly tab?: ProjectTab;
       readonly item?: string;
+      /** Pull requests: open this PR (Needs you's Review…, H-277). */
+      readonly pr?: number;
+      /** With `pr`: open its delta since your approval (a Re-check row). */
+      readonly recheck?: boolean;
+      /** Settings: focus this section ("Change" on a PR's Owner review line). */
+      readonly section?: "owner_review";
     }
   /**
    * The Control center. `decisionId` opens straight onto one record, which is

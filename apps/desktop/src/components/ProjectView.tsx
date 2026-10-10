@@ -6,6 +6,7 @@ import { fmtTimestamp } from "../util";
 import ConfirmDialog from "./overlay/ConfirmDialog";
 import ProjectPermissionsForm from "./ProjectPermissionsForm";
 import ProjectRepoForm from "./ProjectRepoForm";
+import OwnerReviewSettings from "./prs/OwnerReviewSettings";
 import WorkersPanel from "./WorkersPanel";
 
 interface ProjectViewProps {
@@ -19,6 +20,10 @@ interface ProjectViewProps {
   readonly onSetRepo: (projectId: string, repo: ProjectRepo | null) => Promise<void>;
   readonly onDelete: (projectId: string) => Promise<void>;
   readonly onToast: (level: NotifyLevel, title: string, body: string) => void;
+  /** The service serves pull requests: show Owner review (H-277). */
+  readonly ownerReview?: boolean;
+  /** Opened from a PR's "Change": focus Owner review. */
+  readonly focusOwnerReview?: boolean;
 }
 
 /** How deleting this project is described before it happens. */
@@ -145,6 +150,15 @@ export default function ProjectView(props: ProjectViewProps): ReactElement {
         connected={connected}
         onToast={onToast}
       />
+
+      {props.ownerReview ? (
+        <OwnerReviewSettings
+          client={client}
+          projectId={project.id}
+          connected={connected}
+          focus={props.focusOwnerReview}
+        />
+      ) : null}
 
       {canControl ? (
         <div className="panel">

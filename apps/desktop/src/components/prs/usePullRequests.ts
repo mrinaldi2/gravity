@@ -8,12 +8,22 @@ import { useLatestRef } from "../../app/useLatestRef";
 import { errText } from "../../util";
 import type { PrApi } from "../../protocol/prs";
 import { prCall, pushProject } from "../../protocol/prs";
-import type { PrDiff, PrPush, PullRequest } from "../../protocol/gen/hermes/pr/v1/pr_pb";
+import type {
+  PrComments,
+  PrDiff,
+  PrPush,
+  PullRequest,
+} from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import { PrState } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 
 export interface Loaded<T> {
   readonly data: T | null;
   readonly error: string | null;
+}
+
+/** A live read that can also be asked to read again, after the owner's own write. */
+export interface Reloadable<T> extends Loaded<T> {
+  readonly reload: () => void;
 }
 
 interface Source<T> {
@@ -30,7 +40,7 @@ function follow<T>(
   source: MutableRefObject<Source<T>>,
   onData: (data: T) => void,
   onError: (error: unknown) => void,
-): () => void {
+): { readonly stop: () => void; readonly read: () => void } {
   let live = true;
   let busy = false;
   let again = false;
@@ -60,9 +70,12 @@ function follow<T>(
     }
   });
   read();
-  return () => {
-    live = false;
-    off();
+  return {
+    stop: () => {
+      live = false;
+      off();
+    },
+    read,
   };
 }
 
@@ -76,27 +89,34 @@ function useLiveRead<T>(
   connected: boolean,
   load: () => Promise<T>,
   matches: (push: PrPush) => boolean,
-): Loaded<T> {
+): Reloadable<T> {
   const [state, setState] = useState<Loaded<T> & { readonly key: string | null }>({
     data: null,
     error: null,
     key: null,
   });
   const source = useLatestRef<Source<T>>({ load, matches });
+  const again = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (key === null || !connected) {
       return undefined;
     }
-    return follow(
+    const following = follow(
       api,
       source,
       (data) => setState({ data, error: null, key }),
       (error) => setState((was) => ({ ...was, error: errText(error), key })),
     );
+    again.current = following.read;
+    return () => {
+      again.current = () => {};
+      following.stop();
+    };
   }, [api, source, key, connected]);
 
-  return state.key === key ? state : { data: null, error: null };
+  const [reload] = useState(() => () => again.current());
+  return state.key === key ? { ...state, reload } : { data: null, error: null, reload };
 }
 
 const EVERY_STATE = [PrState.OPEN, PrState.MERGING, PrState.MERGED, PrState.CLOSED];
@@ -125,7 +145,7 @@ export function usePr(
   projectId: string,
   number: number | null,
   connected: boolean,
-): Loaded<PullRequest> {
+): Reloadable<PullRequest> {
   const head = useRef("");
   const loaded = useLiveRead(
     api,
@@ -181,5 +201,32 @@ export function usePrDiff(
         "prDiff",
       ),
     () => false,
+  );
+}
+
+/** A PR's line comments, anchored to its head; read again when the PR changes. */
+export function usePrComments(
+  api: PrApi,
+  pr: PullRequest | null,
+  connected: boolean,
+): Reloadable<PrComments> {
+  const key = pr === null ? null : `${pr.projectId}#${pr.number}@${pr.headSha}`;
+  return useLiveRead(
+    api,
+    key,
+    connected,
+    () =>
+      prCall(
+        api,
+        {
+          case: "prComments",
+          value: { projectId: pr?.projectId ?? "", number: pr?.number ?? 0, sha: pr?.headSha },
+        },
+        "prComments",
+      ),
+    (push) =>
+      push.push.case === "prUpdated" &&
+      push.push.value.projectId === pr?.projectId &&
+      push.push.value.number === pr.number,
   );
 }
