@@ -38,8 +38,11 @@ async fn a_card_stacked_on_one_in_verify_goes_to_ready() {
     let lead = &mut r.bots[0];
     lead.call("release_plan", json!({"name": "0.18.0", "items": [a, b]}))
         .await;
-    lead.call("item_link", json!({"id": a, "kind": "item:blocks", "ref": b}))
-        .await;
+    lead.call(
+        "item_link",
+        json!({"id": a, "kind": "item:blocks", "ref": b}),
+    )
+    .await;
     lead.call(
         "item_link",
         json!({"id": b, "kind": "artifact", "ref": "spec.md", "label": "spec"}),
@@ -57,7 +60,10 @@ async fn a_card_stacked_on_one_in_verify_goes_to_ready() {
         .unwrap();
     let raw = r.bots[0].call_raw("item_move", ready(version(&b))).await;
     let why = error_text(&raw);
-    assert!(why.contains("dor.blocked_by") || why.contains("blocks it"), "{why}");
+    assert!(
+        why.contains("dor.blocked_by") || why.contains("blocks it"),
+        "{why}"
+    );
 
     // A reviewed and in Verify, its release not shipped: B goes to Ready.
     db.move_item(&a, version(&a), &to("verify"), &Actor::User)
