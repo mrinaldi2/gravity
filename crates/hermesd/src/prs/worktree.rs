@@ -7,45 +7,13 @@ use std::path::{Path, PathBuf};
 
 use crate::app::AppState;
 use crate::bot_permissions::guard::slug;
+use crate::cleanup::scope::Roots;
 use crate::prs::model::PrWorktree;
 use crate::safe_git::SafeGit;
 
 /// git in `dir`, through the daemon's hardened runner (H-289).
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
     SafeGit::local(dir).ok()?.args(args).run().ok()
-}
-
-fn expand(app: &AppState, path: &str) -> PathBuf {
-    match path.strip_prefix("~/") {
-        Some(rest) => app.cfg.user_home.join(rest),
-        None => PathBuf::from(path),
-    }
-}
-
-/// Whether `path` (resolved) is inside a folder `bot` may work in: its own
-/// workspace (a worker's clones are there), or one of its
-/// `<repo>-wt-<slug>[-…]` worktrees in the trusted paths.
-fn allowed(app: &AppState, bot: &bus::Bot, path: &Path) -> bool {
-    if crate::safe_git::canonical(Path::new(&bot.workspace_path)).is_ok_and(|w| path.starts_with(w))
-    {
-        return true;
-    }
-    let own = slug(&bot.name);
-    app.cfg.trusted_paths.iter().any(|root| {
-        let Ok(root) = crate::safe_git::canonical(&expand(app, root)) else {
-            return false;
-        };
-        let Ok(rest) = path.strip_prefix(&root) else {
-            return false;
-        };
-        let Some(top) = rest.components().next() else {
-            return false;
-        };
-        let name = top.as_os_str().to_string_lossy();
-        name.split_once("-wt-").is_some_and(|(_, tail)| {
-            !own.is_empty() && (tail == own || tail.starts_with(&format!("{own}-")))
-        })
-    })
 }
 
 /// The worktree at `reported`, verified, or why it isn't one `bot` may
@@ -92,11 +60,17 @@ pub fn inspect(
 ) -> anyhow::Result<(PrWorktree, String, String)> {
     let path = crate::safe_git::canonical(Path::new(reported))
         .map_err(|_| anyhow::anyhow!("worktree {reported} doesn't exist on {machine}"))?;
-    anyhow::ensure!(
-        allowed(app, bot, &path),
-        "worktree {reported} isn't in your workspace or one of your <repo>-wt-{} folders",
-        slug(&bot.name)
-    );
+    // Spelled as reported, so a link or junction on the way is seen (§15.3
+    // rule 2, at report time); cleanup checks the same again before it
+    // deletes anything.
+    let roots = Roots::of(app, Some(Path::new(&bot.workspace_path)), &bot.name);
+    if let Err(why) = roots.check(Path::new(reported)) {
+        anyhow::bail!(
+            "worktree {reported} isn't in your workspace or one of your <repo>-wt-{} folders, \
+             spelled without a link: {why}",
+            slug(&bot.name)
+        );
+    }
     let common = git(
         &path,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],

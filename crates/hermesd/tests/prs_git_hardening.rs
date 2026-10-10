@@ -1,6 +1,7 @@
 //! H-289 AC2: a worktree whose repository config names an fsmonitor command
 //! and a hooks folder is verified for a PR without the daemon's git running
-//! either; the marker they would write never appears.
+//! either; the marker they would write never appears. H-295 adds a clean
+//! filter for every file, with the index made racy so git re-hashes them.
 
 mod common;
 
@@ -21,6 +22,19 @@ fn script(path: &Path, marker: &Path) {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
     }
+}
+
+/// Racy git: an index dated no later than any file in it, so git can't
+/// trust their stat and re-hashes them, through their filter. (Not the
+/// epoch itself: git reads a zero time as no time.)
+fn racy(tree: &Path) {
+    let index = std::fs::File::options()
+        .write(true)
+        .open(tree.join(".git/index"))
+        .unwrap();
+    index
+        .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(86_400))
+        .unwrap();
 }
 
 #[tokio::test]
@@ -53,6 +67,24 @@ async fn verifying_a_planted_worktree_runs_nothing_from_its_config() {
             &tools.join("hooks").display().to_string(),
         ],
     );
+    let filter = tools
+        .join("filter")
+        .display()
+        .to_string()
+        .replace('\\', "/");
+    std::fs::write(
+        &filter,
+        format!("#!/bin/sh\necho ran >> '{}'\ncat\n", marker.display()),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&filter, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    git(&tree, &["config", "filter.evil.clean", &filter]);
+    git(&tree, &["config", "filter.evil.required", "true"]);
+    std::fs::write(tree.join(".git/info/attributes"), "* filter=evil\n").unwrap();
     // The planting works: plain git runs it.
     git(&tree, &["status", "--porcelain"]);
     assert!(
@@ -60,6 +92,11 @@ async fn verifying_a_planted_worktree_runs_nothing_from_its_config() {
         "the planted fsmonitor runs under plain git"
     );
     std::fs::remove_file(&marker).unwrap();
+    racy(&tree);
+    git(&tree, &["diff-index", "--name-only", "HEAD", "--"]);
+    assert!(marker.exists(), "the planted filter runs under plain git");
+    std::fs::remove_file(&marker).unwrap();
+    racy(&tree);
 
     let opened = r.bots[1]
         .call(

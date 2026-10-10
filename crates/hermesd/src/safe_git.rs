@@ -10,14 +10,25 @@
 //!
 //! - the environment is cleared, then only `PATH` is kept; `HOME`,
 //!   `USERPROFILE` and `XDG_CONFIG_HOME` name an empty folder under the
-//!   daemon's `<home>/run/` (bots may not write there), and
-//!   `GIT_CONFIG_NOSYSTEM=1` and `GIT_CONFIG_GLOBAL` (the null device) leave
-//!   the repository's own config the only file git reads;
+//!   daemon's `<home>/run/` (bots may not write there),
+//!   `GIT_CONFIG_NOSYSTEM=1`, and `GIT_CONFIG_GLOBAL` is a daemon-written
+//!   file holding only this computer's line-ending settings (see
+//!   `safe_git_line_endings.rs`), so the repository's own config is the
+//!   only file git reads that a bot can write;
 //! - command-line config, which wins over every file: `core.fsmonitor=false`,
 //!   `core.hooksPath` a path under the null device (it can't hold files), no
 //!   credential helper, no attributes file, and no transport at all unless
 //!   the caller asks for the daemon's own fetch ([`SafeGit::fetching`]),
 //!   which allows https and local paths only;
+//! - every filter driver the repository's config names (includes followed)
+//!   gets an empty `clean`, `smudge` and `process` and `required=false` on
+//!   the command line (H-295), so no filter runs even when git re-hashes a
+//!   file whose stat it can't trust (racy git), checks a file out, or starts
+//!   another git (which inherits command-line config). A driver needs a
+//!   command in config to run, so the config's names are every runnable
+//!   one; `.gitattributes` only picks which files use it. A run in one
+//!   repository that reaches another tree (`worktree remove`) adds that
+//!   tree's drivers with [`SafeGit::without_filters_of`];
 //! - callers pass plumbing commands with fixed arguments; a diff passes
 //!   `--no-ext-diff --no-textconv`. A new call site adds a test whose repo
 //!   config sets the program-running options git documents for that command.
@@ -168,6 +179,12 @@ impl SafeGit {
     }
 
     fn base(dir: &Path) -> anyhow::Result<Self> {
+        Self::unfiltered(dir)?.without_filters_of(dir)
+    }
+
+    /// The hardened git with no filter emptied yet: only for reading which
+    /// drivers a config names.
+    fn unfiltered(dir: &Path) -> anyhow::Result<Self> {
         let home = empty_home()?;
         let mut cmd = Command::new("git");
         cmd.env_clear().current_dir(plain_path(dir));
@@ -185,7 +202,10 @@ impl SafeGit {
             .env("USERPROFILE", &home)
             .env("XDG_CONFIG_HOME", &home)
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", null_device())
+            .env(
+                "GIT_CONFIG_GLOBAL",
+                line_endings::config_file(&run_dir()?, &home)?,
+            )
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_OPTIONAL_LOCKS", "0")
             .stdin(Stdio::null());
@@ -203,8 +223,32 @@ impl SafeGit {
         Ok(git)
     }
 
+    /// Empties every filter driver named in `tree`'s config (its worktree
+    /// config included), so no clean, smudge or process filter runs here or
+    /// in a git this one starts. [`SafeGit::local`] and
+    /// [`SafeGit::fetching`] already do this for their own folder. Call it
+    /// before [`SafeGit::args`].
+    pub fn without_filters_of(mut self, tree: &Path) -> anyhow::Result<Self> {
+        debug_assert!(self.args.is_empty(), "-c must come before the command");
+        for driver in filter_drivers(tree)? {
+            for key in ["clean", "smudge", "process"] {
+                self.config(&format!("filter.{driver}.{key}="));
+            }
+            self.config(&format!("filter.{driver}.required=false"));
+        }
+        Ok(self)
+    }
+
     fn config(&mut self, kv: &str) {
         self.cmd.args(["-c", kv]);
+    }
+
+    /// Adds one `-c key=value` override. Call it before [`SafeGit::args`]:
+    /// git reads options only before the command.
+    pub fn configured(mut self, kv: &str) -> Self {
+        debug_assert!(self.args.is_empty(), "-c must come before the command");
+        self.config(kv);
+        self
     }
 
     /// Adds arguments after the git options.
@@ -251,6 +295,32 @@ impl SafeGit {
     }
 }
 
+/// The filter drivers `tree`'s config names. A tree with no config of its
+/// own (not a repository, or nothing set) names none. A name with `=` in
+/// it can't be overridden with `-c` (git splits there), so it is refused.
+fn filter_drivers(tree: &Path) -> anyhow::Result<Vec<String>> {
+    let out = SafeGit::unfiltered(tree)?
+        .args(&["config", "--name-only", "--get-regexp", r"^filter\."])
+        .output();
+    let named = match out {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).into_owned(),
+        // Exit 1 is "no such key"; no repository, or no folder, leaves the
+        // real run nothing to filter either.
+        _ => return Ok(Vec::new()),
+    };
+    let mut drivers: Vec<String> = named
+        .lines()
+        .filter_map(|l| l.strip_prefix("filter.")?.rsplit_once('.'))
+        .map(|(driver, _)| driver.to_string())
+        .collect();
+    drivers.sort_unstable();
+    drivers.dedup();
+    if let Some(bad) = drivers.iter().find(|d| d.contains('=')) {
+        anyhow::bail!("filter driver {bad:?} can't be emptied; the daemon won't run git here");
+    }
+    Ok(drivers)
+}
+
 /// Writes `token` to a new owner-only file under [`run_dir`].
 fn write_token(token: &str) -> anyhow::Result<PathBuf> {
     let file = run_dir()?.join(format!(
@@ -292,6 +362,13 @@ fn github_token() -> Option<String> {
 #[cfg(test)]
 #[path = "safe_git_tests.rs"]
 pub(crate) mod tests;
+
+#[path = "safe_git_line_endings.rs"]
+mod line_endings;
+
+#[cfg(test)]
+#[path = "safe_git_filter_tests.rs"]
+mod filter_tests;
 
 #[cfg(test)]
 #[path = "safe_git_callers_tests.rs"]

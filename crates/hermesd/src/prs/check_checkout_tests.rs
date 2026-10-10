@@ -70,8 +70,11 @@ fn a_checkout_is_fresh_at_the_exact_sha_and_runs_nothing() {
 
     let dest = prepare(&job, &url, &first).unwrap();
     assert_eq!(git(&dest, &["rev-parse", "HEAD"]), first);
+    // The daemon's git checks text out with CRLF on Windows.
     assert_eq!(
-        std::fs::read_to_string(dest.join("a.txt")).unwrap(),
+        std::fs::read_to_string(dest.join("a.txt"))
+            .unwrap()
+            .replace("\r\n", "\n"),
         "one\n"
     );
     assert!(!dest.join("stale").exists(), "fresh, not reused");

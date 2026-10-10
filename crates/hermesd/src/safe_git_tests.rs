@@ -142,15 +142,20 @@ fn a_local_run_reaches_no_remote_and_inherits_no_git_env() {
         .run()
         .unwrap();
     assert!(fetched.contains("refs/heads/main"));
-    // No global or system file: the repository's own config and ours only.
+    // No system file, and as global file only the daemon's line endings:
+    // the repository's own config and ours.
     let origins = SafeGit::local(&repo)
         .unwrap()
         .args(&["config", "--list", "--show-origin"])
         .run()
         .unwrap();
     for line in origins.lines() {
+        // Windows shows the path quoted, each `\` doubled.
+        let shown = line.replace(r"\\", "/").replace('\\', "/");
         assert!(
-            line.starts_with("file:.git/config") || line.starts_with("command line:"),
+            line.starts_with("file:.git/config")
+                || line.starts_with("command line:")
+                || shown.contains("/run/git/line-endings-"),
             "{line}"
         );
     }

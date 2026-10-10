@@ -152,5 +152,6 @@ fn shown(app: &Arc<AppState>, pr: &Pr, exact: bool) -> anyhow::Result<Value> {
         });
     }
     out["checks"] = checks.iter().map(check_model::CheckRun::to_json).collect();
+    out["cleanup"] = crate::cleanup::jobs_json(app, &pr.id);
     Ok(out)
 }

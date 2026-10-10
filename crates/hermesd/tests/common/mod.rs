@@ -18,6 +18,7 @@ use serde_json::{json, Value};
 use tokio_tungstenite::tungstenite::Message as WsMsg;
 
 pub mod board;
+pub mod cleanup;
 pub mod cuts;
 pub mod deployed_via;
 pub mod devtools;

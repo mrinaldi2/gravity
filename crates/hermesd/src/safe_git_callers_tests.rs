@@ -8,6 +8,10 @@ use std::path::{Path, PathBuf};
 const DIRECT_GIT: &[(&str, &str)] = &[
     ("safe_git.rs", "the helper itself"),
     (
+        "safe_git_line_endings.rs",
+        "the helper reading core.autocrlf/core.eol from the system config, outside any repository",
+    ),
+    (
         "board/release/git.rs",
         "the `hermesd release` CLI, run by DevOps in its own terminal and checkout",
     ),
@@ -62,7 +66,13 @@ const OTHER_PROGRAMS: &[(&str, &str)] = &[
 ];
 
 /// The modules where bots control the repository git runs in.
-const BOT_PATHS: &[&str] = &["prs/", "worktree.rs", "board/release/git_cache.rs"];
+const BOT_PATHS: &[&str] = &[
+    "prs/",
+    "worktree.rs",
+    "board/release/git_cache.rs",
+    "cleanup.rs",
+    "cleanup/",
+];
 
 /// How a bot-path module would reach a [`DIRECT_GIT`] file's own git
 /// wrappers, and the one item there that runs nothing.
