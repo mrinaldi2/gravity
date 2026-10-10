@@ -7,7 +7,9 @@
 use serde_json::{json, Value};
 
 use super::Conn;
-use crate::db::OwnerProof;
+use crate::board::policy::base;
+use crate::prs::owner::{self, Mode, Settings};
+use crate::prs::review_model::{Finding, Verdict};
 
 /// The owner's PR requests this module serves.
 pub(super) const KINDS: &[&str] = &[
@@ -32,55 +34,156 @@ pub(super) const OWNER_ONLY: &[&str] = &[
     "release_leave_out",
 ];
 
+fn number(req: &Value) -> anyhow::Result<u32> {
+    req.get("number")
+        .and_then(Value::as_u64)
+        .and_then(|n| u32::try_from(n).ok())
+        .ok_or_else(|| anyhow::anyhow!("'number' is required"))
+}
+
 impl Conn {
     pub(super) fn pr_request(&self, kind: &str, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let project = Self::str_field(req, "project_id")?;
-        // The board is on a linked computer: the request goes there, with
-        // how the owner proved it here (H-285).
-        if let Some(home) = self.app.board_mirror.home_peer(project) {
-            return self.forward_owner(kind, req_id, project, &home, req);
-        }
-        let proof = self.owner_proof();
-        let mut reply =
-            crate::prs::owner_requests::serve(&self.app, project, kind, req, proof.as_ref())?;
+        let reply = match kind {
+            "review_settings_get" => self.review_settings(project)?,
+            "review_settings_set" => {
+                let mode = req
+                    .get("owner_review")
+                    .and_then(Value::as_str)
+                    .and_then(Mode::parse)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("owner_review is all, areas, flagged or none")
+                    })?;
+                let areas: Vec<String> = req
+                    .get("owner_review_areas")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|a| a.as_str().map(str::to_string))
+                    .collect();
+                let proof = self.proof()?;
+                let by = owner::provenance(&proof)?;
+                self.app
+                    .db
+                    .set_review_settings(project, &Settings { mode, areas }, &by)?;
+                self.review_settings(project)?
+            }
+            "pr_review_submit" => {
+                let verdict = req
+                    .get("verdict")
+                    .and_then(Value::as_str)
+                    .and_then(Verdict::parse)
+                    .ok_or_else(|| anyhow::anyhow!("verdict is approved or changes_requested"))?;
+                let findings: Vec<Finding> =
+                    serde_json::from_value(req.get("findings").cloned().unwrap_or(json!([])))?;
+                let review = owner::submit(
+                    &self.app,
+                    project,
+                    owner::OwnerVerdict {
+                        number: number(req)?,
+                        sha: Self::str_field(req, "sha")?,
+                        verdict,
+                        summary: req
+                            .get("summary")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default(),
+                        findings,
+                    },
+                    &self.proof()?,
+                )?;
+                let pr = self.pr(project, number(req)?)?;
+                json!({ "type": "pr", "pr": crate::prs::detail(&self.app, &pr)?, "review": review.to_json(&pr) })
+            }
+            "pr_comment_add" => {
+                let proof = self.proof()?;
+                let comment = crate::prs::comments::add_owner(
+                    &self.app,
+                    project,
+                    number(req)?,
+                    req,
+                    &owner::provenance(&proof)?,
+                )?;
+                json!({ "type": "comment", "comment": comment })
+            }
+            "pr_flag" => {
+                let flagged = req.get("flagged").and_then(Value::as_bool).unwrap_or(true);
+                let reason = req
+                    .get("reason")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                self.proof()?;
+                let pr = owner::flag(
+                    &self.app,
+                    project,
+                    number(req)?,
+                    flagged,
+                    reason,
+                    owner::Flagger::Owner,
+                )?;
+                json!({ "type": "pr", "pr": crate::prs::detail(&self.app, &pr)? })
+            }
+            "pr_comment_resolve" => {
+                let by = format!("owner:{}", owner::provenance(&self.proof()?)?);
+                let id = Self::str_field(req, "comment_id")?;
+                let c =
+                    crate::prs::comments::resolve(&self.app, project, number(req)?, id, &by, true)?;
+                let pr = self.pr(project, number(req)?)?;
+                json!({ "type": "comment", "comment": crate::prs::comments::shown(&self.app, &pr, &c, &pr.head_sha)? })
+            }
+            "pr_merge_undo" => {
+                let pr = crate::prs::queue::undo(&self.app, project, number(req)?, &self.proof()?)?;
+                json!({ "type": "pr", "pr": crate::prs::detail(&self.app, &pr)? })
+            }
+            "release_leave_out" => {
+                let release = Self::str_field(req, "release_id")?;
+                let numbers: Vec<u32> = req
+                    .get("prs")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|n| n.as_u64().and_then(|n| u32::try_from(n).ok()))
+                    .collect();
+                let out = crate::board::release::leave_out::request(
+                    &self.app,
+                    project,
+                    release,
+                    &numbers,
+                    &self.proof()?,
+                )?;
+                json!({ "type": "leave_out", "result": out })
+            }
+            other => anyhow::bail!("unknown PR request {other}"),
+        };
+        let mut reply = reply;
         reply["req_id"] = req_id.clone();
         self.send(reply);
         Ok(())
     }
 
-    /// The owner's request for a board kept on `home`: forwarded as
-    /// `pr_owner` with `via` (device or ticket), answered once the home has,
-    /// in this computer's ids. Without such proof only the setting is read.
-    fn forward_owner(
-        &self,
-        kind: &str,
-        req_id: &Value,
-        project: &str,
-        home: &str,
-        req: &Value,
-    ) -> anyhow::Result<()> {
-        let via = match self.owner_proof() {
-            Some(OwnerProof::Device { .. }) => Some("device"),
-            Some(OwnerProof::Ticket) => Some("ticket"),
-            _ => None,
-        };
-        if via.is_none() && kind != "review_settings_get" {
-            return Err(crate::decisions::forbidden(
-                "only the owner's app or a paired device does this",
-            ));
-        }
-        let frame = json!({
-            "type": "pr_owner", "project_id": project, "kind": kind,
-            "request": req, "via": via,
-        });
-        let (app, home, project) = (self.app.clone(), home.to_string(), project.to_string());
-        self.answer_later(req_id, async move {
-            let mut reply = app.peers.request(&home, frame).await?;
-            if let Some(link) = app.db.project_link(&project, &home)? {
-                crate::peer::board::ids_from_home(&app, &link, &mut reply);
-            }
-            Ok(reply)
-        });
-        Ok(())
+    fn proof(&self) -> anyhow::Result<crate::db::OwnerProof> {
+        self.owner_proof().ok_or_else(|| {
+            crate::decisions::forbidden("only the owner's app or a paired device does this")
+        })
+    }
+
+    fn pr(&self, project: &str, number: u32) -> anyhow::Result<crate::prs::model::Pr> {
+        self.app
+            .db
+            .board_read(|t| t.pr(project, number))?
+            .ok_or_else(|| crate::decisions::not_found(format!("no PR #{number}")))
+    }
+
+    /// The setting, with the area names the project's main has to pick from.
+    fn review_settings(&self, project: &str) -> anyhow::Result<Value> {
+        let settings = self.app.db.review_settings(project)?;
+        let areas: Vec<String> = base::load(&self.app, project, "refs/heads/main")
+            .ok()
+            .and_then(|b| b.reviewers.ok())
+            .map(|r| r.areas.into_iter().map(|a| a.name).collect())
+            .unwrap_or_default();
+        Ok(json!({
+            "type": "review_settings",
+            "review_settings": owner::settings_json(project, &settings, &areas),
+        }))
     }
 }

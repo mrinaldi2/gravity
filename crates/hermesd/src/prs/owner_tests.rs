@@ -78,25 +78,16 @@ fn areas_flagged_and_none_behave_and_security_always_needs_the_owner() {
     assert!(!required(&none, &security, &pr(true)), "none is none");
 }
 
-/// The owner's act from a linked computer is recorded with how the owner
-/// proved it there (H-285, replacing H-269's refusal): a device or the
-/// app's ticket on that computer. One relayed on from a relay stays refused.
+/// A review or setting relayed by a linked computer is never recorded as the
+/// owner's (H-269 should): it has no device or ticket here.
 #[test]
-fn a_peer_owner_act_carries_its_computers_proof() {
-    let peer = |via| crate::db::OwnerProof::Peer {
+fn a_peer_relayed_owner_act_is_refused() {
+    let peer = crate::db::OwnerProof::Peer {
         peer_id: "d-imac".into(),
         origin_message_id: "m".into(),
-        origin_via: via,
+        origin_via: crate::db::OwnerVia::Device,
     };
-    assert_eq!(
-        provenance(&peer(crate::db::OwnerVia::Device)).unwrap(),
-        "device@peer:d-imac"
-    );
-    assert_eq!(
-        provenance(&peer(crate::db::OwnerVia::Ticket)).unwrap(),
-        "ticket@peer:d-imac"
-    );
-    assert!(provenance(&peer(crate::db::OwnerVia::Peer)).is_err());
+    assert!(provenance(&peer).is_err());
     assert_eq!(
         provenance(&crate::db::OwnerProof::Ticket).unwrap(),
         "ticket"

@@ -74,10 +74,6 @@ impl BoardTx<'_> {
             "DELETE FROM pr_merge_stuck WHERE pr_id = ?1",
             params![pr_id],
         )?;
-        self.conn.execute(
-            "DELETE FROM pr_merge_check WHERE pr_id = ?1",
-            params![pr_id],
-        )?;
         self.note_queue_of(pr_id)
     }
 
