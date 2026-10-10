@@ -62,6 +62,16 @@ pub fn archive_bot(
     app.secrets.remove_bot_token(&bot.id)?;
 
     app.db.archive_bot(&bot.id, &actor.as_stored())?;
+    // Its board roles went with it: watchers and linked computers refetch.
+    if app.db.board_settings(&bot.project_id)?.is_some() {
+        app.board.writer().publish(crate::board::feed::Change {
+            project_id: &bot.project_id,
+            kind: crate::board::feed::ChangeKind::SettingsChanged,
+            item_id: "",
+            card: None,
+            from_column: None,
+        });
+    }
     app.db.record_revision(
         &bot.id,
         actor,

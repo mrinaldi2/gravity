@@ -290,23 +290,35 @@ pub(crate) fn builds(answer: &Value) -> Vec<Build> {
             version: text(b, "version").unwrap_or_default(),
             artifact: text(b, "artifact"),
             url: text(b, "url"),
-            install_url: text(b, "install_url"),
+            // An older home leaves it out for a desktop build: its url is
+            // where it installs from.
+            install_url: text(b, "install_url").or_else(|| text(b, "url")),
             sha256: text(b, "sha256").unwrap_or_default().to_ascii_lowercase(),
         })
         .collect()
 }
 
-/// The builds this computer installs: the desktop app where there is one
-/// (it carries the daemon), else the daemon alone; never the phone's.
+/// The builds this computer installs: its own desktop app where there is
+/// one (it carries the daemon), else the daemon alone; never the phone's,
+/// nor the other system's app. Builds are published as `desktop-mac` and
+/// `desktop-win` (`serve::platform_for`); a plain `desktop` is from before.
 pub(crate) fn for_this_computer(builds: &[Build], macos: bool, windows: bool) -> Vec<&Build> {
     let of = |platform: &str| -> Vec<&Build> {
         builds.iter().filter(|b| b.platform == platform).collect()
     };
-    let desktop = of("desktop");
-    if (macos || windows) && !desktop.is_empty() {
-        desktop
-    } else {
+    let own = match (macos, windows) {
+        (true, _) => Some("desktop-mac"),
+        (_, true) => Some("desktop-win"),
+        _ => None,
+    };
+    let desktop: Vec<&Build> = builds
+        .iter()
+        .filter(|b| own.is_some_and(|own| b.platform == own || b.platform == "desktop"))
+        .collect();
+    if desktop.is_empty() {
         of("daemon")
+    } else {
+        desktop
     }
 }
 

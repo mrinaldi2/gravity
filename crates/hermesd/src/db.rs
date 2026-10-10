@@ -24,6 +24,7 @@ pub use peer_grants::{GrantEnd, GrantRuling, PeerGrant};
 pub use quiesce::{NewQuiesce, Quiesce};
 pub use release_cut::{LeaveOut, NewCut};
 pub use release_life::NewReleaseTest;
+pub use release_machines::{Runs, TesterMachine};
 pub use release_work::OnCard;
 pub use releases::NewRelease;
 pub use routines::RoutineLimits;
