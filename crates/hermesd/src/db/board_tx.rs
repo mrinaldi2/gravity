@@ -5,7 +5,11 @@
 //! on `BoardTx` are the repository; the `Db` methods of the same names run one
 //! of them in a transaction of its own, unguarded.
 
+use std::cell::RefCell;
+
 use rusqlite::{Connection, TransactionBehavior};
+
+use crate::prs::feed::PrChange;
 
 use crate::board::model::{Item, ItemComment, ItemLink, LinkKind};
 
@@ -13,6 +17,17 @@ use super::{Actor, Db, ItemEdit, MoveTo, NewItem, Write};
 
 pub struct BoardTx<'a> {
     pub(super) conn: &'a Connection,
+    /// PR changes this transaction made, published once it commits (H-273).
+    pub(super) changes: RefCell<Vec<PrChange>>,
+}
+
+impl<'a> BoardTx<'a> {
+    pub(super) fn new(conn: &'a Connection) -> Self {
+        Self {
+            conn,
+            changes: RefCell::default(),
+        }
+    }
 }
 
 impl Db {
@@ -24,8 +39,13 @@ impl Db {
     ) -> anyhow::Result<T> {
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let out = work(&BoardTx { conn: &tx })?;
+        let board = BoardTx::new(&tx);
+        let out = work(&board)?;
+        let changes = board.changes.take();
+        drop(board);
         tx.commit()?;
+        drop(conn);
+        self.pr_feed.publish(changes);
         Ok(out)
     }
 
@@ -36,7 +56,7 @@ impl Db {
     ) -> anyhow::Result<T> {
         let mut conn = self.lock();
         let tx = conn.transaction()?;
-        work(&BoardTx { conn: &tx })
+        work(&BoardTx::new(&tx))
     }
 }
 

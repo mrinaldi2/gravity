@@ -176,6 +176,7 @@ async fn serve(
         device_id,
         bin: bin_tx,
         watch: board::Watch::default(),
+        pr_watch: super::prs_binary::PrWatch::default(),
         terminal_cards,
         owner,
         kind: String::new(),

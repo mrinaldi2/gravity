@@ -13,7 +13,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-use super::binary::{self, Frame};
+use super::binary;
 use super::Conn;
 use crate::actor::Actor;
 use crate::board::feed::{card_after_commit, BoardChange, BoardFeed, Change, ChangeKind};
@@ -78,33 +78,10 @@ pub(crate) fn home_snapshot(
 }
 
 /// The response, or none when the handler sent it itself (as `board_watch` does).
-type Reply = Result<Option<Response>, Refusal>;
+pub(super) type Reply = Result<Option<Response>, Refusal>;
 
 impl Conn {
-    /// Answer one binary frame.
-    pub(super) fn binary_frame(&mut self, frame: Frame) {
-        let reply = match frame {
-            Frame::Refused(error) => error,
-            Frame::Board(req_id, request) => match self.board(req_id, request) {
-                Ok(Some(response)) => binary::response(
-                    req_id,
-                    c::BoardResponse {
-                        response: Some(response),
-                    },
-                ),
-                Ok(None) => return,
-                Err(r) => binary::error(req_id, r.code, r.message),
-            },
-            Frame::Home(req_id, request) => match self.home(req_id, request) {
-                Ok(Some(response)) => binary::home_response(req_id, response),
-                Ok(None) => return,
-                Err(r) => binary::error(req_id, r.code, r.message),
-            },
-        };
-        let _ = self.bin.send(reply);
-    }
-
-    fn board(&mut self, req_id: u64, request: c::BoardRequest) -> Reply {
+    pub(super) fn board(&mut self, req_id: u64, request: c::BoardRequest) -> Reply {
         let Some(request) = request.request else {
             return Err(refuse("invalid_request", "empty board request"));
         };

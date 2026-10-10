@@ -74,9 +74,8 @@ pub mod pr {
     /// Bumped only on a breaking change to this surface.
     pub const VERSION: u32 = 1;
 
-    /// The `hello_ok.capabilities` this surface goes with. Not advertised
-    /// (nor `pr` in [`super::CONTRACTS`]) until the daemon serves the
-    /// requests (H-273), so a client never shows a panel it can't fill.
+    /// The `hello_ok.capabilities` this surface goes with, advertised since
+    /// the daemon serves its reads and pushes (H-273).
     pub const CAPABILITIES: &[&str] = &["pull_requests", "checks"];
 }
 
@@ -86,7 +85,11 @@ pub mod wire {
 }
 
 /// Every contract surface this build speaks, with its version.
-pub const CONTRACTS: &[(&str, u32)] = &[("board", board::VERSION), ("home", home::VERSION)];
+pub const CONTRACTS: &[(&str, u32)] = &[
+    ("board", board::VERSION),
+    ("home", home::VERSION),
+    ("pr", pr::VERSION),
+];
 
 /// Binary encodings this build accepts, advertised in `hello_ok.encodings`.
 pub const ENCODINGS: &[&str] = &["proto"];
@@ -107,5 +110,6 @@ mod tests {
     fn versions_list_every_surface() {
         assert_eq!(versions().get("board"), Some(&board::VERSION));
         assert_eq!(versions().get("home"), Some(&home::VERSION));
+        assert_eq!(versions().get("pr"), Some(&pr::VERSION));
     }
 }

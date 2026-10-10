@@ -18,7 +18,7 @@ use crate::board::feed::{BoardChange, ChangeKind};
 
 /// The project of this daemon that `frame.project_id`, the peer's own, is
 /// linked to, with a board whose home is here.
-fn home_link(app: &AppState, peer: &Peer, frame: &Value) -> anyhow::Result<ProjectLink> {
+pub(super) fn home_link(app: &AppState, peer: &Peer, frame: &Value) -> anyhow::Result<ProjectLink> {
     let remote = frame
         .get("project_id")
         .and_then(Value::as_str)

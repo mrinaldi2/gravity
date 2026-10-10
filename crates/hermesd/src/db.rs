@@ -79,6 +79,7 @@ mod owner_threads_tests;
 mod peer_grants;
 mod peers;
 mod permissions;
+mod pr_changes;
 mod project_links;
 mod project_repos;
 mod projects;
@@ -123,6 +124,8 @@ mod workers_tests;
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
+    /// PR changes, published after the transaction that made them (H-273).
+    pub pr_feed: crate::prs::feed::PrFeed,
 }
 
 fn ts(t: DateTime<Utc>) -> String {
@@ -154,6 +157,7 @@ impl Db {
         conn.pragma_update(None, "busy_timeout", 5_000)?;
         let db = Self {
             conn: Arc::new(Mutex::new(conn)),
+            pr_feed: crate::prs::feed::PrFeed::default(),
         };
         db.migrate()?;
         db.backfill_dir_names()?;

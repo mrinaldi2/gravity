@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, OptionalExtension, Row};
 
 use super::board_tx::BoardTx;
+use super::pr_changes::PrPart;
 use super::{parse_ts, ts};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,6 +82,7 @@ impl BoardTx<'_> {
                 ts(now())
             ],
         )?;
+        self.note_pr_id(c.pr_id)?;
         self.comment(&id)?
             .ok_or_else(|| anyhow::anyhow!("comment {id} vanished"))
     }
@@ -114,6 +116,6 @@ impl BoardTx<'_> {
              WHERE id = ?1 AND resolved_at IS NULL",
             params![id, by, ts(now())],
         )?;
-        Ok(())
+        self.note_pr_of(PrPart::Comment, id)
     }
 }
