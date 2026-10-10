@@ -26,6 +26,7 @@ pub(crate) mod meetings;
 mod owner_actions;
 mod owner_threads;
 mod prs;
+#[cfg(test)]
 pub(crate) use prs::tool_names as pr_tool_names;
 mod releases;
 mod remote;

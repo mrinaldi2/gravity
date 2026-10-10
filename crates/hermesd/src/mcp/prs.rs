@@ -109,6 +109,7 @@ pub(super) const PR_TOOLS: &[BoardTool] = &[
 
 /// The PR tools' names, for the prompt test that holds the prompt to them
 /// (H-286).
+#[cfg(test)]
 pub(crate) fn tool_names() -> impl Iterator<Item = &'static str> {
     PR_TOOLS.iter().map(|t| t.name)
 }
