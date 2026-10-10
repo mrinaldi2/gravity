@@ -58,12 +58,12 @@ describe("review chips, on the H-265 fixtures", () => {
 
   it("names an older approval, a change request and a missing review", () => {
     expect(texts(pr("pr_open"))).toEqual([
-      "○ You",
+      "○ You after reviewers",
       "⟳ Architect approved an older commit",
       "✓ UX",
       "✕ CE asked for changes",
     ]);
-    expect(reviewChips(pr("pr_open")).map((c) => c.tone)).toEqual(["off", "wait", "ok", "bad"]);
+    expect(reviewChips(pr("pr_open")).map((c) => c.tone)).toEqual(["dim", "warn", "ok", "bad"]);
     expect(isReviewed(pr("pr_open"))).toBe(false);
   });
 
@@ -137,7 +137,7 @@ describe("Leave out", () => {
       "0.18.0 is cut again at 9a1b2c3, just before #42. The pull request stays on main and ships in a later release; H-247 stays in Verify. Its builds and tests start over, and you rule on the new build.",
     );
     expect(leaveOutBody(r, ref(r, 40), leaveOutPlan(r, [40]))).toContain(
-      "DevOps opens an undo pull request, which goes through the merge queue with its checks. When it merges, 0.18.0 is cut again without it and H-203 goes back to Doing.",
+      "#40 merged before other pull requests that 0.18.0 keeps, so it's undone on main: DevOps opens an undo pull request, which goes through the merge queue with its checks. When it merges, 0.18.0 is cut again without it and H-203 goes back to Doing.",
     );
     expect(leaveOutBody(r, ref(r, 40), { mode: "either" })).toContain("If #40 merged after");
     expect(leaveOutDone(r, ref(r, 42), { mode: "recut", commit: ref(r, 40).merged_sha })).toBe(

@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { PrRef, Release } from "../../protocol/releases";
 import CardLink from "../cards/CardLink";
+import { Chip } from "../prs/PrList";
+import { sha7 } from "../prs/prText";
 import { plural } from "./labels";
 import { Dialog } from "./ReleaseDialogs";
 import type { PrRecords } from "./releaseMain";
@@ -95,13 +97,13 @@ function PrRow(props: {
           {title}
         </div>
         <div className="release-meta">
-          merged · <span className="mono">{pr.merged_sha.slice(0, 7)}</span>
+          merged · <span className="mono">{sha7(pr.merged_sha)}</span>
         </div>
         {record ? (
           <ul className="release-chips" aria-label={`Reviews of #${pr.number}`}>
             {reviewChips(record).map((c) => (
-              <li key={c.text} className={`release-chip release-tone-${c.tone}`}>
-                {c.text}
+              <li key={c.text}>
+                <Chip text={c.text} tone={c.tone} />
               </li>
             ))}
           </ul>

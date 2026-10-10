@@ -15,6 +15,7 @@ import { previousName } from "./releaseMain";
 import TestedOn from "./TestedOn";
 import type { WaitingActions } from "./WaitingForYou";
 import { anyInProgress, useLiveProgress } from "./useLiveProgress";
+import { usePrRecords } from "./usePrRecords";
 import { useProjectReleases, useReleaseActions } from "./useReleases";
 
 export interface ReleasesViewProps {
@@ -28,6 +29,8 @@ export interface ReleasesViewProps {
   readonly onOpenDecision?: (decisionId: string) => void;
   /** Opens Needs you. */
   readonly onOpenNeedsYou?: () => void;
+  /** Opens a pull request in the Pull requests tab (H-278); none, PR numbers are plain text. */
+  readonly onOpenPr?: (num: number) => void;
 }
 
 /** Item titles from the board, which a package only names by id. */
@@ -101,6 +104,7 @@ export default function ReleasesView(props: ReleasesViewProps): ReactElement {
   const current = releases.filter(isCurrent);
   const history = releases.filter((r) => !isCurrent(r));
   const shown = releases.find((r) => r.id === selected) ?? current[0] ?? history[0];
+  const records = usePrRecords(client, project.id, shown, connected);
   const row = (r: Release): ReactElement => {
     const label = statusLabel(r.status);
     return (
@@ -177,6 +181,8 @@ export default function ReleasesView(props: ReleasesViewProps): ReactElement {
           client={client}
           waiting={waiting}
           previous={previousName(shown, releases)}
+          records={records}
+          onOpenPr={props.onOpenPr}
         />
       ) : null}
     </div>

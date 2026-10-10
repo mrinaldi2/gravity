@@ -47,6 +47,12 @@ describe("a release cut from main (H-278)", () => {
     expect(
       screen.getByText("tag desktop-v0.18.0 on main at 9a1b2c3 · DevOps tags it once you approve"),
     ).toBeInTheDocument();
+    // The tag line leads, and the packager's line doesn't repeat the version (UX-054 nit 2).
+    const packaged = screen.getByText("Packaged by DevOps");
+    expect(
+      screen.getByText(/^tag desktop-v0\.18\.0/u).compareDocumentPosition(packaged) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(
       within(section()).getByRole("heading", {
         name: "What's in it · 3 pull requests since 0.17.5 · all reviewed",

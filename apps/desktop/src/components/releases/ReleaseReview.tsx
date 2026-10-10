@@ -160,18 +160,28 @@ function PackageFacts({
 }): ReactElement {
   const planned = release.status === "planned";
   const targets = targetsLine(release);
+  const replaces = release.supersedes ? " · replaces an earlier package" : "";
+  const who = botName(release.created_by) ?? "a bot";
+  // Cut from main, the tag line leads and already names the version (UX-054 nit 2).
+  if (isFromMain(release) && !planned) {
+    return (
+      <>
+        <p className="release-meta">{tagLine(release)}</p>
+        <p className="release-meta">
+          Packaged by {who}
+          {replaces}
+        </p>
+        {targets ? <p className="release-meta">{targets}</p> : null}
+      </>
+    );
+  }
   return (
     <>
       <p className="release-meta">
-        {planned ? "Planned" : "Packaged"} by {botName(release.created_by) ?? "a bot"} ·{" "}
-        <span className="mono">{release.name}</span>
-        {release.supersedes ? " · replaces an earlier package" : ""}
+        {planned ? "Planned" : "Packaged"} by {who} · <span className="mono">{release.name}</span>
+        {replaces}
       </p>
-      {planned ? null : (
-        <p className="release-meta">
-          {isFromMain(release) ? tagLine(release) : sourceLine(release, version)}
-        </p>
-      )}
+      {planned ? null : <p className="release-meta">{sourceLine(release, version)}</p>}
       {targets ? <p className="release-meta">{targets}</p> : null}
     </>
   );

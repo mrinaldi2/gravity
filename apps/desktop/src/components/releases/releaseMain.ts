@@ -4,38 +4,18 @@
 // `hermes.pr.v1` messages, so the screen, the stories and the tests share them.
 
 import type { PullRequest, Review } from "../../protocol/gen/hermes/pr/v1/pr_pb";
-import { Verdict } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import type { PrRef, Release } from "../../protocol/releases";
+import type { Tone } from "../prs/prText";
+import { OWNER_ROLE, reviewChip, sha7 } from "../prs/prText";
 import { plural, releaseTitle } from "./labels";
 
 /** The PRs' own records by number, where the service sends them (`pr_get`). */
 export type PrRecords = ReadonlyMap<number, PullRequest>;
 
-/** A chip's tone, as the release tones: ok (green), wait (amber), bad (red), off (dim). */
-type ChipTone = "ok" | "wait" | "bad" | "off";
-
+/** A review chip, as the Pull requests tab draws it (H-276). */
 export interface Chip {
   readonly text: string;
-  readonly tone: ChipTone;
-}
-
-const OWNER = "owner";
-
-const ROLES: Readonly<Record<string, string>> = {
-  architect: "Architect",
-  ux: "UX",
-  ce: "CE",
-  devops: "DevOps",
-  qa: "QA",
-  owner: "You",
-};
-
-function roleName(role: string): string {
-  return ROLES[role] ?? role.charAt(0).toUpperCase() + role.slice(1);
-}
-
-function short(sha: string): string {
-  return sha.slice(0, 7);
+  readonly tone: Tone;
 }
 
 /** Cut from main: the service sent the commit it was cut at. */
@@ -55,7 +35,7 @@ export function itemsEditable(release: Release): boolean {
 /** "tag desktop-v0.18.0 on main at 9a1b2c3", and whether it is tagged yet. */
 export function tagLine(release: Release): string {
   const name = release.tag || release.tag_name || `desktop-v${releaseTitle(release)}`;
-  const at = `tag ${name} on main at ${short(release.commit ?? "")}`;
+  const at = `tag ${name} on main at ${sha7(release.commit ?? "")}`;
   return release.tag ? at : `${at} · DevOps tags it once you approve`;
 }
 
@@ -66,7 +46,7 @@ export function previousName(release: Release, all: readonly Release[]): string 
     return null;
   }
   const before = all.find((r) => r.id !== release.id && r.commit === from);
-  return before ? releaseTitle(before) : short(from);
+  return before ? releaseTitle(before) : sha7(from);
 }
 
 /** Every PR the release lists, planned first. */
@@ -88,29 +68,16 @@ function chipRoles(pr: PullRequest): readonly string[] {
   const waived = new Set(pr.waivers.map((w) => w.role));
   const reviewed = [...latest(pr).keys()];
   const roles = [
-    ...(pr.ownerReviewRequired || reviewed.includes(OWNER) ? [OWNER] : []),
-    ...pr.requiredRoles.filter((r) => r !== OWNER && !waived.has(r)),
-    ...reviewed.filter((r) => r !== OWNER),
+    ...(pr.ownerReviewRequired || reviewed.includes(OWNER_ROLE) ? [OWNER_ROLE] : []),
+    ...pr.requiredRoles.filter((r) => r !== OWNER_ROLE && !waived.has(r)),
+    ...reviewed.filter((r) => r !== OWNER_ROLE),
   ];
   return [...new Set(roles)];
 }
 
-/** One chip per role: "✓ Architect", "⟳ CE approved an older commit", "✕ …", "○ QA". */
+/** One chip per role, in the PR tab's words: "✓ Architect", "⟳ CE approved an older commit", "○ QA". */
 export function reviewChips(pr: PullRequest): readonly Chip[] {
-  const reviews = latest(pr);
-  return chipRoles(pr).map((role) => {
-    const who = roleName(role);
-    const review = reviews.get(role);
-    if (review?.verdict === Verdict.APPROVED) {
-      return review.stale
-        ? { text: `⟳ ${who} approved an older commit`, tone: "wait" }
-        : { text: `✓ ${who}`, tone: "ok" };
-    }
-    if (review?.verdict === Verdict.CHANGES_REQUESTED) {
-      return { text: `✕ ${who} asked for changes`, tone: "bad" };
-    }
-    return { text: `○ ${who}`, tone: "off" };
-  });
+  return chipRoles(pr).map((role) => reviewChip(pr, role));
 }
 
 /** Every role it needed approved it, at its own change. */
@@ -186,9 +153,9 @@ export function leaveOutBody(release: Release, pr: PrRef, plan: LeaveOutPlan): s
   const again = "Its builds and tests start over, and you rule on the new build.";
   switch (plan.mode) {
     case "recut":
-      return `${version} is cut again at ${short(plan.commit)}, just before #${pr.number}. The pull request stays on main and ships in a later release; ${pr.item_id} stays in Verify. ${again}`;
+      return `${version} is cut again at ${sha7(plan.commit)}, just before #${pr.number}. The pull request stays on main and ships in a later release; ${pr.item_id} stays in Verify. ${again}`;
     case "revert":
-      return `#${pr.number} merged before pull requests ${version} keeps, so it is undone on main: DevOps opens an undo pull request, which goes through the merge queue with its checks. When it merges, ${version} is cut again without it and ${pr.item_id} goes back to Doing. ${again}`;
+      return `#${pr.number} merged before other pull requests that ${version} keeps, so it's undone on main: DevOps opens an undo pull request, which goes through the merge queue with its checks. When it merges, ${version} is cut again without it and ${pr.item_id} goes back to Doing. ${again}`;
     default:
       return `If #${pr.number} merged after everything ${version} keeps, ${version} is cut again just before it. Otherwise DevOps undoes it on main with a pull request through the merge queue, and ${pr.item_id} goes back to Doing. ${again}`;
   }
@@ -201,6 +168,6 @@ export function leaveOutDone(
   result: { readonly mode: string; readonly commit?: string },
 ): string {
   return result.mode === "recut"
-    ? `${releaseTitle(release)} is cut again at ${short(result.commit ?? "")} without #${pr.number}`
+    ? `${releaseTitle(release)} is cut again at ${sha7(result.commit ?? "")} without #${pr.number}`
     : `DevOps is opening an undo pull request for #${pr.number}; it goes through the merge queue`;
 }

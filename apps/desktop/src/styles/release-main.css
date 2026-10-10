@@ -66,12 +66,3 @@
   padding: 0;
   list-style: none;
 }
-
-.release-chip {
-  padding: 1px 8px;
-  font-size: 11.5px;
-  line-height: 18px;
-  white-space: nowrap;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
