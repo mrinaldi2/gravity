@@ -195,7 +195,7 @@ pub fn remove_tree(dir: &Path) -> anyhow::Result<()> {
 /// Gives the owner write access to everything in `dir`, so it can be
 /// deleted. Links are skipped, never followed: what they point to may be
 /// outside the tree.
-fn make_writable(dir: &Path) {
+pub(crate) fn make_writable(dir: &Path) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };

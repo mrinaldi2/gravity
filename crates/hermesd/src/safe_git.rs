@@ -207,6 +207,14 @@ impl SafeGit {
         self.cmd.args(["-c", kv]);
     }
 
+    /// Adds one `-c key=value` override. Call it before [`SafeGit::args`]:
+    /// git reads options only before the command.
+    pub fn configured(mut self, kv: &str) -> Self {
+        debug_assert!(self.args.is_empty(), "-c must come before the command");
+        self.config(kv);
+        self
+    }
+
     /// Adds arguments after the git options.
     pub fn args<S: AsRef<str>>(mut self, args: &[S]) -> Self {
         for a in args {

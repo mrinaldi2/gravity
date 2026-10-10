@@ -128,5 +128,6 @@ pub fn detail(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
     out["pushes"] = pushes.iter().map(model::PrPush::to_json).collect();
     out["worktrees"] = worktrees.iter().map(model::PrWorktree::to_json).collect();
     out["checks"] = checks.iter().map(check_model::CheckRun::to_json).collect();
+    out["cleanup"] = crate::cleanup::jobs_json(app, &pr.id);
     Ok(out)
 }

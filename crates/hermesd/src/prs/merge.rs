@@ -310,6 +310,14 @@ fn merged(
         Ok((waiting, moved))
     })?;
     publish_moves(app, &mut feed, &pr.project_id, &moved);
+    // Cleanup after merge (CL-1): the PR's worktrees, on every computer.
+    match app.db.board_read(|t| t.pr_by_id(&pr.id)) {
+        Ok(Some(merged)) => match crate::cleanup::enqueue(app, &merged) {
+            Ok(_) => crate::cleanup::kick(app),
+            Err(error) => tracing::warn!(pr = pr.number, %error, "cleanup not queued"),
+        },
+        _ => tracing::warn!(pr = pr.number, "cleanup not queued: the PR can't be read"),
+    }
     if let Some(task) = task {
         app.db.try_close_task(&task, TaskState::Done)?;
     }

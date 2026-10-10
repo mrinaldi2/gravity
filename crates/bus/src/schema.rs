@@ -13,6 +13,7 @@ mod base;
 mod board;
 mod board_links;
 mod checks;
+mod cleanup;
 mod decisions;
 mod grants;
 mod history;
@@ -38,6 +39,7 @@ use board_links::{
     MIGRATION_GUARDRAILS_2, MIGRATION_TASK_CARDS, MIGRATION_TASK_RELEASE,
 };
 use checks::{MIGRATION_CHECKS, MIGRATION_CHECK_JOBS};
+use cleanup::MIGRATION_CLEANUP;
 use decisions::{MIGRATION_12, MIGRATION_COMMENT_SYSTEM_AUTHOR};
 use grants::MIGRATION_PEER_GRANTS;
 use history::{
@@ -126,6 +128,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_MERGE_QUEUE,
     MIGRATION_PERMISSION_EXTRAS_PR_MERGE,
     MIGRATION_PR_MERGE,
+    MIGRATION_CLEANUP,
 ];
 
 #[cfg(test)]

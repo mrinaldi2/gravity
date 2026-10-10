@@ -83,6 +83,28 @@ impl BoardTx<'_> {
             .optional()?)
     }
 
+    pub fn pr_by_id(&self, id: &str) -> anyhow::Result<Option<Pr>> {
+        Ok(self
+            .conn
+            .query_row(
+                &format!("SELECT {COLUMNS} FROM pr WHERE id = ?1"),
+                params![id],
+                pr_row,
+            )
+            .optional()?)
+    }
+
+    /// Whether `author` has an open or merging PR other than `except`.
+    pub fn has_other_live_pr(&self, author: &str, except: &str) -> anyhow::Result<bool> {
+        let n: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM pr WHERE author = ?1 AND id != ?2
+             AND state IN ('open', 'merging')",
+            params![author, except],
+            |r| r.get(0),
+        )?;
+        Ok(n > 0)
+    }
+
     /// The card's open or merging PR in `repo`, if it has one: a card has
     /// at most one per repo (H-261 §6.5).
     pub fn live_pr_of(&self, item_id: &str, repo: &str) -> anyhow::Result<Option<Pr>> {

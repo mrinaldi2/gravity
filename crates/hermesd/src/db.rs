@@ -53,6 +53,7 @@ pub mod check_jobs;
 mod checks;
 #[cfg(test)]
 mod checks_tests;
+mod cleanup;
 pub mod comments;
 mod conversations;
 pub mod dashboard;
