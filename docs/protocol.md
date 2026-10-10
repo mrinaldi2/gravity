@@ -1078,6 +1078,17 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **Pushes:** a connection's first PR request for a project starts that project's `PrPush`es (`req_id` 0): `pr_updated {project_id, number}`, `check_updated {project_id, sha, name}` and `merge_queue_changed {project_id}`. They're sent when the board transaction behind them commits, so every change to a PR, its pushes, reviews, comments, checks, flag or merge queue sends one. A check change also sends `pr_updated` for each live PR whose head it counts on.
 - **Linked computers (B9):** PRs live on the board's home. A computer that mirrors the board forwards the reads to the home as the peer request `pr_read {project_id, request}` and answers in its own project id. The home relays each change as the peer event `pr_event {project_id, push}`, which is published there in the linked project. While the home can't be reached, a read answers `unavailable`. A linked bot's PR tools go through `board_call` like every board tool.
 
+**Bots' prompts for PRs (PR-10, H-286).**
+- **The flag:** a project in the daemon config's `pr_flow_projects` (names, matched without case) has cut over to pull requests (H-279). Its bots' prompts carry a "Code goes through pull requests" section after "Work is on the board", from each bot's next start.
+- **What the section says:**
+  - `pr_open` with the worktree; `pr_push` after every push;
+  - `pr_get` and `pr_comments` for what blocks a merge; `pr_close` to abandon;
+  - no review of your own PR; no manual move to Review or Verify;
+  - merges only through DevOps' `hermesd pr merge`;
+  - owner acts only on the board's home or the owner's phone (rulings 6df14f7a, 1cb9b4df).
+- **Rollback:** take the name out of `pr_flow_projects`; the section is gone at the next start.
+- **The prompt test** fails on any `pr_…`/`check_…` name in the section that isn't a PR tool the daemon serves.
+
 **PRs from linked computers (PR-9, H-285; §1, §4.3, §12.9).**
 - **Bots:**
   - `pr_open`, `pr_push`, `pr_review`, `pr_comment`, `pr_comment_resolve`, `pr_flag` (lead), `pr_get` and `pr_list` run on the home as the bot's stand-in, through `board_call`. Every record (author, pusher, reviewer, comment author) names that stand-in.

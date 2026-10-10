@@ -100,6 +100,10 @@ pub struct Config {
     /// How many tasks a bot may hold open per card and in all (H-125). Per
     /// computer: not synced to linked machines (ARCH-R59 c).
     pub tasks: TaskLimitsConfig,
+    /// Projects, by name, whose code goes through pull requests (H-286,
+    /// cut-over H-279): their bots' prompts carry the PR section from their
+    /// next start. Empty until cut-over; taking a name out rolls it back.
+    pub pr_flow_projects: Vec<String>,
     /// How long, in seconds, a permission prompt waits for an answer from the
     /// app before it is denied. Capped below the hook's own timeout.
     pub permission_timeout_seconds: u64,
@@ -250,6 +254,7 @@ impl Default for Config {
             max_bots_per_project: 12,
             max_workers_per_project: bus::DEFAULT_MAX_WORKERS_PER_PROJECT,
             tasks: TaskLimitsConfig::default(),
+            pr_flow_projects: Vec::new(),
             permission_timeout_seconds: 600,
             resume_after_restart: true,
             delivery: DeliveryConfig::default(),
@@ -305,6 +310,13 @@ fn dirs_home() -> PathBuf {
 }
 
 impl Config {
+    /// Whether `project` has cut over to pull requests (H-286).
+    pub fn pr_flow(&self, project: &str) -> bool {
+        self.pr_flow_projects
+            .iter()
+            .any(|p| p.eq_ignore_ascii_case(project))
+    }
+
     pub fn load(path: Option<&Path>) -> anyhow::Result<Self> {
         let path = match path {
             Some(p) => p.to_path_buf(),

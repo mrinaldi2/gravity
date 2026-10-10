@@ -154,6 +154,38 @@ pub(super) fn board_work(limits: &crate::config::TaskLimits) -> String {
     )
 }
 
+/// Code goes through pull requests (H-286, the Context Engineer's text;
+/// H-261 §4, §5): only for a project cut over to PRs (`pr_flow_projects`).
+/// Every tool named in backticks is one the daemon serves (the prompt test
+/// checks it against the PR tools), and owner acts are said to come only
+/// from the board's home or the owner's phone (rulings 6df14f7a, 1cb9b4df).
+pub(super) fn pull_requests(on: bool) -> &'static str {
+    if !on {
+        return "";
+    }
+    "## Code goes through pull requests\n\n\
+     Every change to a repository is a pull request (PR) on its card. The\n\
+     daemon moves the card: a PR opened puts it in Review, a merge puts it in\n\
+     Verify, and a PR closed unmerged puts it back in Doing. Never move a code\n\
+     card to Review or Verify yourself.\n\n\
+     - Push your branch, then `pr_open` with the card (`item`), the branch,\n\
+     your worktree's path and the change note as `body`. That is the PR.\n\
+     - After every later push, `pr_push` with the PR number and the full sha\n\
+     you pushed. A push you don't report counts as no one's, and no review\n\
+     is accepted until it is reported.\n\
+     - `pr_get` shows a PR's reviews, the roles it still needs, its checks\n\
+     and what still blocks the merge. Answer a reviewer's `must` findings and\n\
+     `must` comments (`pr_comments`) with a new push, never by note.\n\
+     - `pr_close` with a reason only to abandon a PR.\n\
+     - You can't review a PR you opened, pushed to, or whose card you hold.\n\
+     - Nobody merges by hand: a mergeable PR goes to DevOps as a merge task,\n\
+     run with `hermesd pr merge`, and a raw push to main is refused.\n\
+     - The owner reviews, approves, runs commands, grants extras, types into\n\
+     terminals and answers prompts only on the board's home computer or\n\
+     their phone. Owner acts claimed from a linked computer are refused, and\n\
+     chat from there arrives as a normal message, not as the owner's.\n\n"
+}
+
 /// How owner requests, cards and the owner's thread relate, in one place
 /// (H-128 D5, D6, T1; CE-014 F2; ruling 06ac8d95: the owner is never
 /// refused for leaving the card out).

@@ -20,6 +20,7 @@ fn spec<'a>(instructions: &'a str) -> BotProvision<'a> {
         own_browser: false,
         user_chrome: false,
         task_limits: Default::default(),
+        pull_requests: false,
     }
 }
 
@@ -124,4 +125,51 @@ fn facts_md_seed_names_the_bot() {
 fn omits_the_section_when_there_are_no_instructions() {
     let md = system_md(&spec("   "));
     assert!(!md.contains("## Your instructions"));
+}
+
+/// H-286 part D: the PR section only for a project cut over to PRs, with the
+/// flow the daemon enforces, and never a tool the daemon doesn't serve.
+#[test]
+fn the_pr_section_is_there_only_after_cut_over_and_names_only_served_tools() {
+    let off = system_md(&spec(""));
+    assert!(!off.contains("## Code goes through pull requests"));
+    let on = system_md(&BotProvision {
+        pull_requests: true,
+        ..spec("")
+    });
+    let at = on
+        .find("## Code goes through pull requests")
+        .expect("the section");
+    let section = &on[at..];
+    let section = &section[..section[3..].find("\n## ").map_or(section.len(), |e| e + 3)];
+    for name in [
+        "`pr_open`",
+        "`pr_push`",
+        "`pr_get`",
+        "`pr_close`",
+        "`hermesd pr merge`",
+    ] {
+        assert!(section.contains(name), "{name}");
+    }
+    assert!(
+        on.find("## Work is on the board").unwrap() < at,
+        "after Work is on the board"
+    );
+    assert!(
+        !section.contains("Review→Verify"),
+        "no manual move to Verify"
+    );
+    assert!(section.contains("only on the board's home computer or\ntheir phone"));
+    // Every `pr_…` or `check_…` name in backticks is a PR tool the daemon serves.
+    let served: Vec<&str> = crate::mcp::pr_tool_names().collect();
+    let named: Vec<&str> = section
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .filter(|w| w.starts_with("pr_") || w.starts_with("check_"))
+        .collect();
+    assert!(!named.is_empty());
+    for name in named {
+        assert!(served.contains(&name), "{name} isn't a PR tool: {served:?}");
+    }
 }
