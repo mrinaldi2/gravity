@@ -70,7 +70,7 @@ export default function FileDiff(props: {
                 {open && key !== null ? (
                   <button
                     type="button"
-                    className="pr-diff-add"
+                    className="pr-diff-comment"
                     aria-label={`Comment on line ${line.number ?? ""}`}
                     onClick={() => setComposing(key)}
                   >

@@ -165,7 +165,7 @@
   border-style: dashed;
 }
 
-.pr-diff-add {
+.pr-diff-comment {
   width: 16px;
   margin-right: 4px;
   padding: 0;
@@ -179,8 +179,8 @@
   cursor: pointer;
 }
 
-.pr-diff-line:hover .pr-diff-add,
-.pr-diff-add:focus-visible {
+.pr-diff-line:hover .pr-diff-comment,
+.pr-diff-comment:focus-visible {
   opacity: 1;
   background: var(--bg-active);
 }
@@ -190,4 +190,8 @@
   flex-wrap: wrap;
   gap: 4px 14px;
   margin: 2px 0 6px 24px;
+}
+
+.pr-outdated .pr-thread {
+  margin: 0;
 }
