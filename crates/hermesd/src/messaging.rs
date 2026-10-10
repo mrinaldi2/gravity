@@ -73,20 +73,17 @@ pub fn send_dm_then<T>(
     let conv = db
         .dm_conversation(dm.bot_id)?
         .context("bot has no DM conversation")?;
-    let msg = db.insert_message(
+    // The proof and the peer's id commit with the message (H-312).
+    let msg = db.insert_message_with(
         &conv.id,
         dm.sender,
         dm.kind,
         dm.body,
         dm.ref_message_id,
         dm.decision_id,
+        dm.owner,
+        dm.from_peer,
     )?;
-    if let Some(proof) = dm.owner {
-        db.record_owner_message(&msg.id, proof)?;
-    }
-    if let Some((peer_id, remote_id)) = dm.from_peer {
-        db.map_peer_message(peer_id, remote_id, &msg.id)?;
-    }
     let done = before_queue(&msg)?;
     events.push(Push::MessageNew {
         message: Message {
