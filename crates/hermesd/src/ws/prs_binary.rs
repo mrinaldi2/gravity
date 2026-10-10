@@ -10,7 +10,8 @@
 //! Off the board's home (B9) the reads go to the home as `pr_read` and come
 //! back in this computer's project; its pushes arrive through the home's
 //! relay. Writes stay on the home: a bot's go through `board_call` as for
-//! every board tool, and the owner re-runs a check from the home.
+//! every board tool, and the owner's re-run is forwarded there as
+//! `pr_owner` with how the owner proved it here (H-285).
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -95,12 +96,8 @@ impl Conn {
         }
         self.watch_prs(&project);
         if let Some(home) = self.app.board_mirror.home_peer(&project) {
-            if matches!(request, Request::CheckRerun(_)) {
-                let name = home_name(&self.app, &home);
-                return Err(refuse(
-                    "no_board",
-                    format!("The board is kept on {name}. Re-run the check from there."),
-                ));
+            if let Request::CheckRerun(r) = request {
+                return self.forward_rerun(req_id, project, home, r);
             }
             self.forward_pr_read(req_id, project, home, request);
             return Ok(());
@@ -147,6 +144,59 @@ impl Conn {
             &Asker::Owner,
         )?;
         Ok(wire::check(self.app.as_ref(), &run.to_json()))
+    }
+
+    /// The owner's re-run for a board kept on `home` (H-285): forwarded as
+    /// `pr_owner` with how the owner proved it here.
+    fn forward_rerun(
+        &self,
+        req_id: u64,
+        project: String,
+        home: String,
+        r: p::CheckRerunRequest,
+    ) -> Result<(), Refusal> {
+        let via = match self.owner_proof() {
+            Some(crate::db::OwnerProof::Device { .. }) => "device",
+            Some(crate::db::OwnerProof::Ticket) => "ticket",
+            _ => {
+                return Err(refuse(
+                    "forbidden",
+                    "only the owner's app or a paired device re-runs a check",
+                ))
+            }
+        };
+        let app = self.app.clone();
+        self.spawn_frame(req_id, "check_rerun", async move {
+            let frame = json!({
+                "type": "pr_owner", "project_id": project, "kind": "check_rerun",
+                "request": { "sha": r.sha, "name": r.name }, "via": via,
+            });
+            match app.peers.request(&home, frame).await {
+                Ok(value) => {
+                    let mut check = value["check"].clone();
+                    check["project_id"] = json!(project);
+                    binary::pr_response(
+                        req_id,
+                        p::PrResponse {
+                            response: Some(p::pr_response::Response::Check(wire::check(
+                                app.as_ref(),
+                                &check,
+                            ))),
+                        },
+                    )
+                }
+                Err(PeerError::Offline) => binary::error(
+                    req_id,
+                    "unavailable",
+                    format!("{} can't be reached right now", home_name(&app, &home)),
+                ),
+                Err(e) => {
+                    let r = refusal(&anyhow::Error::from(e));
+                    binary::error(req_id, r.code, r.message)
+                }
+            }
+        });
+        Ok(())
     }
 
     /// Sends a read to the board's home, answering `req_id` in this

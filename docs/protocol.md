@@ -1069,7 +1069,19 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **`check_rerun {project_id, sha, name}`** (binary, `control`): the owner's re-run, from the app's ticket or a paired device only. The owner token is refused. It answers with the check, queued. Bots use the MCP tool, where the lead and the PR's author may.
 - **Other arms** (`pr_review_submit`, `pr_comment_add`, `pr_flag`, `pr_merge_undo`, `review_settings_*`, `pr_comment_resolve`) are JSON requests on this daemon. A binary one is answered `unsupported`.
 - **Pushes:** a connection's first PR request for a project starts that project's `PrPush`es (`req_id` 0): `pr_updated {project_id, number}`, `check_updated {project_id, sha, name}` and `merge_queue_changed {project_id}`. They're sent when the board transaction behind them commits, so every change to a PR, its pushes, reviews, comments, checks, flag or merge queue sends one. A check change also sends `pr_updated` for each live PR whose head it counts on.
-- **Linked computers (B9):** PRs live on the board's home. A computer that mirrors the board forwards the reads to the home as the peer request `pr_read {project_id, request}` and answers in its own project id. The home relays each change as the peer event `pr_event {project_id, push}`, which is published there in the linked project. While the home can't be reached, a read answers `unavailable`. `check_rerun` there answers `no_board`: re-run it on the home. A linked bot's PR tools go through `board_call` like every board tool.
+- **Linked computers (B9):** PRs live on the board's home. A computer that mirrors the board forwards the reads to the home as the peer request `pr_read {project_id, request}` and answers in its own project id. The home relays each change as the peer event `pr_event {project_id, push}`, which is published there in the linked project. While the home can't be reached, a read answers `unavailable`. A linked bot's PR tools go through `board_call` like every board tool.
+
+**PRs from linked computers (PR-9, H-285; §1, §4.3, §12.9).**
+- **Bots:**
+  - `pr_open`, `pr_push`, `pr_review`, `pr_comment`, `pr_comment_resolve`, `pr_flag` (lead), `pr_get` and `pr_list` run on the home as the bot's stand-in, through `board_call`. Every record (author, pusher, reviewer, comment author) names that stand-in.
+  - **A worktree** passed to `pr_open` or `pr_push` is checked on the bot's own computer (`worktree::inspect`): it exists there, it's in a folder that bot may work in, and it's a git worktree. The path is then taken out of the call's args and sent beside the `board_call` frame as `worktree {path, main_clone, origin, branch}`.
+  - **The home** checks that worktree's origin and branch against the PR's repository and branch. It records the worktree under the linked computer's name (the home's name for that peer), for the stand-in.
+- **The owner, in a linked computer's app:**
+  - **Forwarded requests:** `review_settings_get`/`_set`, `pr_review_submit`, `pr_comment_add`, `pr_comment_resolve`, `pr_flag`, `pr_merge_undo`, `release_leave_out`, and the binary `check_rerun`.
+  - **The frame:** they go to the home as the peer request `pr_owner {project_id, kind, request, via}`, where `via` is how the owner proved it there (`device` or `ticket`).
+  - **On the home:** it serves them like its own app's (`prs::owner_requests`), recorded with provenance `<via>@peer:<peer id>`. The answer comes back in the linked computer's ids.
+  - **Refused:** an owner-token connection there is refused before anything is sent. A frame without `via` is refused on the home ("only the owner's app or a paired device does this"). A bot can't act as the owner: it has no such request, and its tools run as itself.
+- **Checks on a linked computer** are H-283's peer `check_run`/`check_result`, accepted on the home and bound to the job's sha.
 
 **Bots' PR tools (PR-1, H-266).** Every bot on a project with a board gets these; the checks below decide who may act. All of them run on the board's home computer (`pr`, `pr_push`, `pr_worktree`, migration `PR_CORE`).
 - **`pr_open {item, branch, worktree?, title?, body?, repo?}`:**
