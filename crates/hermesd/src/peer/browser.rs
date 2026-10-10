@@ -288,7 +288,7 @@ async fn feed(
 /// proved it is the owner sends it (`ws::owner_auth`), so the frame says so.
 pub fn input(app: &AppState, stand_in: &Bot, tab_id: &str, event: &Value) -> anyhow::Result<()> {
     if !crate::peer::owner_trust::trusted(app) {
-        let home = crate::peer::term::machine_of(app, stand_in);
+        let home = crate::peer::owner_trust::home_of(app, stand_in);
         anyhow::bail!(crate::peer::owner_trust::do_elsewhere(&home));
     }
     if let (Some(peer), Some(remote)) = (&stand_in.peer_id, &stand_in.remote_bot_id) {

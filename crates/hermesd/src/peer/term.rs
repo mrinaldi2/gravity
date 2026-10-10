@@ -363,14 +363,14 @@ pub(super) async fn link_up(app: Arc<AppState>, peer_id: String) {
     }
 }
 
-/// Typing from a client here, for the real terminal on the peer. Not sent:
-/// the bot's computer takes no typing from a linked one (H-303), so the
-/// owner is told to type there or on a phone. Behind the switch kept for
-/// signed approvals, only a client that proved it is the owner types
-/// (`ws::owner_auth`), so the frame says so.
+/// Typing from a client here, for the real terminal on the peer. Refused
+/// (H-303): the owner types there or on a phone. Behind the switch kept for
+/// signed approvals, only a proven owner types (`ws::owner_auth`).
 pub fn input(app: &AppState, stand_in: &Bot, data: &str) -> anyhow::Result<()> {
     if !super::owner_trust::trusted(app) {
-        anyhow::bail!(super::owner_trust::do_elsewhere(&machine_of(app, stand_in)));
+        anyhow::bail!(super::owner_trust::do_elsewhere(
+            &super::owner_trust::home_of(app, stand_in)
+        ));
     }
     if let (Some(peer), Some(remote)) = (&stand_in.peer_id, &stand_in.remote_bot_id) {
         app.peers.notify(
@@ -379,15 +379,6 @@ pub fn input(app: &AppState, stand_in: &Bot, data: &str) -> anyhow::Result<()> {
         );
     }
     Ok(())
-}
-
-/// The name of the computer a linked bot runs on.
-pub(crate) fn machine_of(app: &AppState, stand_in: &Bot) -> String {
-    stand_in
-        .peer_id
-        .as_deref()
-        .and_then(|id| app.db.get_peer(id).ok().flatten())
-        .map_or_else(|| "its computer".to_string(), |p| p.name)
 }
 
 /// A client's terminal size, for the real terminal on the peer. `verified`

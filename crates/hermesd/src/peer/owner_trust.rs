@@ -29,3 +29,12 @@ pub fn approve_elsewhere(home: &str) -> String {
 pub fn do_elsewhere(home: &str) -> String {
     format!("Do it on {home} or your phone: a linked computer can't type into or drive a bot there yet.")
 }
+
+/// The name of the computer a linked bot runs on.
+pub fn home_of(app: &crate::app::AppState, stand_in: &bus::Bot) -> String {
+    stand_in
+        .peer_id
+        .as_deref()
+        .and_then(|id| app.db.get_peer(id).ok().flatten())
+        .map_or_else(|| "its computer".to_string(), |p| p.name)
+}
