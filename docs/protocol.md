@@ -1209,7 +1209,7 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
     - The daemon opens that branch as the owner's PR (author `owner:<device or ticket>`): no bot review, no owner review, checks required, the normal queue and `hermesd pr merge`.
     - **When it merges:** the left-out PRs get `reverted_by`, the release is cut again at the new main, and their cards go back to Doing ("left out of <version>").
   - **Re-adding** a left-out change later is a new PR that reverts the revert.
-- The `release_main` extra pre-approves `release land`, `release tag` and `release leave-out`, run as given.
+- The `release_main` extra pre-approves `release land`, `release tag` and `release leave-out`, run as given. It **no longer lifts the main denies** (CE S1 on H-284): no bot, DevOps included, pushes or merges to main itself. Main moves only through `hermesd pr merge` and `release land`, which push from their own process.
 - **Process rule (not code):** DevOps proposes at most one release a day.
 
 **Checks (PR-5a, H-270).**
