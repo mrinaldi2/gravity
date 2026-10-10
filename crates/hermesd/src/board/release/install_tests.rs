@@ -31,7 +31,7 @@ fn the_build_waits_in_a_fresh_private_stage() {
     let source = dir.path().join("TheHermes.zip");
     std::fs::write(&source, b"the build").expect("write");
     let build = Build {
-        platform: "desktop".into(),
+        platform: "desktop-mac".into(),
         version: "0.16.3".into(),
         artifact: Some(source.display().to_string()),
         url: None,
@@ -116,33 +116,84 @@ fn codesign_holds_a_binary_to_its_requirement() {
 }
 
 fn answer() -> Value {
+    // The platforms `publish` gives them (`serve::platform_for`).
     json!({
         "release_id": "r1", "machine": "mac",
         "builds": [
-            {"platform": "desktop", "version": "0.16.2", "artifact": "/h/releases/r1/desktop/TheHermes.zip",
-             "url": "https://mac.ts.net/releases/r1/desktop/TheHermes.zip", "sha256": "AB12"},
+            {"platform": "desktop-mac", "version": "0.16.2", "artifact": "/h/releases/r1/desktop-mac/TheHermes.zip",
+             "url": "https://mac.ts.net/releases/r1/desktop-mac/TheHermes.zip", "sha256": "AB12"},
+            {"platform": "desktop-win", "version": "0.16.2", "artifact": "/h/releases/r1/desktop-win/setup.exe",
+             "url": "https://mac.ts.net/releases/r1/desktop-win/setup.exe",
+             "install_url": "https://mac.ts.net/releases/r1/desktop-win/setup.exe", "sha256": "9f9f"},
             {"platform": "daemon", "version": "0.16.2", "artifact": "", "url": null, "sha256": "cd34"},
             {"platform": "ios", "version": "0.16.2", "install_url": "itms-services://x", "sha256": "ef56"},
         ],
     })
 }
 
+fn platforms(all: &[Build], macos: bool, windows: bool) -> Vec<String> {
+    for_this_computer(all, macos, windows)
+        .into_iter()
+        .map(|b| b.platform.clone())
+        .collect()
+}
+
 #[test]
 fn the_desktop_app_installs_where_there_is_one_and_the_daemon_elsewhere() {
     let all = builds(&answer());
     assert_eq!(all[0].sha256, "ab12", "compared in lower case");
-    assert_eq!(all[1].artifact, None, "an empty artifact is none");
-    let platforms = |macos, windows| -> Vec<String> {
-        for_this_computer(&all, macos, windows)
-            .into_iter()
-            .map(|b| b.platform.clone())
-            .collect()
-    };
-    assert_eq!(platforms(true, false), ["desktop"]);
-    assert_eq!(platforms(false, true), ["desktop"]);
-    assert_eq!(platforms(false, false), ["daemon"], "Linux has no app");
+    assert_eq!(all[2].artifact, None, "an empty artifact is none");
+    assert_eq!(platforms(&all, true, false), ["desktop-mac"]);
+    assert_eq!(platforms(&all, false, true), ["desktop-win"]);
+    assert_eq!(
+        platforms(&all, false, false),
+        ["daemon"],
+        "Linux has no app"
+    );
     let phone_only = builds(&json!({"builds": [{"platform": "ios", "sha256": "x"}]}));
     assert!(for_this_computer(&phone_only, true, false).is_empty());
+}
+
+#[test]
+fn each_computer_finds_its_own_published_desktop_build() {
+    // H-253: only "desktop" matched, so a published release never installed.
+    let mac_only = builds(&json!({"builds": [
+        {"platform": "desktop-mac", "version": "0.18.0", "url": "https://h/r/desktop-mac/a.zip", "sha256": "1"},
+        {"platform": "daemon", "version": "0.18.0", "sha256": "2"},
+    ]}));
+    assert_eq!(platforms(&mac_only, true, false), ["desktop-mac"]);
+    assert_eq!(
+        platforms(&mac_only, false, true),
+        ["daemon"],
+        "never the Mac's app on Windows"
+    );
+    let win_only = builds(&json!({"builds": [
+        {"platform": "desktop-win", "version": "0.18.0", "url": "https://h/r/desktop-win/s.exe", "sha256": "3"},
+    ]}));
+    assert_eq!(platforms(&win_only, false, true), ["desktop-win"]);
+    assert!(
+        for_this_computer(&win_only, true, false).is_empty(),
+        "never the Windows setup on a Mac"
+    );
+    let legacy = builds(&json!({"builds": [{"platform": "desktop", "sha256": "4"}]}));
+    assert_eq!(platforms(&legacy, true, false), ["desktop"]);
+    assert_eq!(platforms(&legacy, false, true), ["desktop"]);
+}
+
+#[test]
+fn a_build_without_an_install_url_installs_from_its_url() {
+    let all = builds(&answer());
+    assert_eq!(
+        all[0].install_url.as_deref(),
+        Some("https://mac.ts.net/releases/r1/desktop-mac/TheHermes.zip"),
+        "no install_url: the url"
+    );
+    assert_eq!(
+        all[1].install_url.as_deref(),
+        Some("https://mac.ts.net/releases/r1/desktop-win/setup.exe")
+    );
+    assert_eq!(all[2].install_url, None, "neither");
+    assert_eq!(all[3].install_url.as_deref(), Some("itms-services://x"));
 }
 
 #[test]

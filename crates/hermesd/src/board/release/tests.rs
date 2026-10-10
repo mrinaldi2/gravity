@@ -179,7 +179,7 @@ fn the_ios_repair_leaves_every_other_package_alone() {
     let mut unsubmitted = ios.clone();
     unsubmitted.status = ReleaseStatus::Built;
     for (what, r) in [
-        ("desktop", desktop),
+        ("desktop-mac", desktop),
         ("owner's list", owners),
         ("already the iPhone", done),
         ("deploying", deploying),
