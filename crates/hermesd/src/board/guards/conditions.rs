@@ -235,10 +235,14 @@ fn definition_of_ready(item: &Item, ctx: &Context, out: &mut Vec<Unmet>) {
             Some("Split it into S or M items."),
         ));
     }
-    for blocker in ctx.blockers.iter().filter(|b| b.category != Cat::Done) {
+    // A blocker counts as cleared once its work is reviewed and in Verify:
+    // features reach Done only when their release ships, so waiting for Done
+    // would deadlock cards stacked in one release (H-287).
+    let cleared = |c: Cat| matches!(c, Cat::Verify | Cat::Approval | Cat::Deploying | Cat::Done);
+    for blocker in ctx.blockers.iter().filter(|b| !cleared(b.category)) {
         out.push(unmet(
             "dor.blocked_by",
-            format!("{} blocks it and isn't done.", blocker.id),
+            format!("{} blocks it and isn't in Verify yet.", blocker.id),
             None,
         ));
     }

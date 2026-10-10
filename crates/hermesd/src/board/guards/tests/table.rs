@@ -17,7 +17,7 @@ struct Row {
 
 const ROWS: &[Row] = &[
     Row {
-        rule: "Inbox → Ready: DoR filled, size ≠ L, blockers done",
+        rule: "Inbox → Ready: DoR filled, size ≠ L, blockers in Verify or later",
         from: Cat::Inbox,
         to: Cat::Ready,
         ok: |c| {
@@ -51,6 +51,31 @@ const ROWS: &[Row] = &[
             "dor.size",
             "dor.blocked_by",
         ],
+    },
+    Row {
+        rule: "Inbox → Ready: a blocker in Verify or later no longer blocks (H-287)",
+        from: Cat::Inbox,
+        to: Cat::Ready,
+        ok: |c| {
+            c.who = bot("lead", LEAD);
+            c.ctx.ready = ["acceptance_criteria".to_string()].to_vec();
+            for (n, category) in [Cat::Verify, Cat::Approval, Cat::Deploying, Cat::Done]
+                .into_iter()
+                .enumerate()
+            {
+                c.ctx.blockers.push(Blocker {
+                    id: format!("H-{n}"),
+                    category,
+                });
+            }
+        },
+        bad: |c| {
+            c.ctx.blockers.push(Blocker {
+                id: "H-9".into(),
+                category: Cat::Review,
+            })
+        },
+        expect: &["dor.blocked_by"],
     },
     Row {
         rule: "Ready → Inbox: lead or owner un-refines, with a reason",
