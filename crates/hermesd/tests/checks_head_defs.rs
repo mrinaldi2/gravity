@@ -109,7 +109,7 @@ async fn the_pr_that_fixes_a_never_passing_check_runs_its_own_definition() {
     assert_eq!(said.result, CheckResult::Pass);
     assert_eq!(
         said.note.as_deref(),
-        Some("this PR's checks.toml runs its own definition of unit"),
+        Some("this PR's checks.toml: unit runs its own definition"),
         "{said:?}"
     );
     assert!(

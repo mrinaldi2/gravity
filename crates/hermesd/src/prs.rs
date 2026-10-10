@@ -4,6 +4,7 @@
 
 pub mod anchor;
 pub mod check_checkout;
+mod check_defs;
 pub mod check_jobs;
 pub mod check_log;
 pub mod check_model;
