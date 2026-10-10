@@ -140,7 +140,9 @@ pub fn spawn_workers(app: &Arc<AppState>) {
     crate::prs::watch::spawn(app.clone());
     crate::cleanup::spawn(app.clone());
     crate::cleanup::sweep::spawn(app.clone());
-    crate::prs::queue::spawn(app.clone());
+    if !app.cfg.merge_queue_by_hand {
+        crate::prs::queue::spawn(app.clone());
+    }
     crate::machine_tools::spawn(app.clone());
     crate::prs::check_jobs::on_boot(app);
     crate::prs::check_jobs::spawn(app.clone());

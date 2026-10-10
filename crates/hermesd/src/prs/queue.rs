@@ -28,7 +28,8 @@ pub const WINDOW: chrono::Duration = chrono::Duration::seconds(10);
 /// A handed merge DevOps hasn't run by then goes to DevOps again, and the
 /// owner sees it (H-284, Architect S2 on H-271).
 pub const STUCK_AFTER: chrono::Duration = chrono::Duration::minutes(30);
-const EVERY: Duration = Duration::from_secs(2);
+/// How often the daemon's ticker moves every project's queue.
+pub const EVERY: Duration = Duration::from_secs(2);
 
 pub fn spawn(app: Arc<AppState>) {
     tokio::spawn(async move {

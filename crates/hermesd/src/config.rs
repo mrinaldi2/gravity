@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 mod overridden;
 mod task_limits;
+#[cfg(any(test, feature = "test-support"))]
+mod test_support;
 
 pub use overridden::{home_notice, home_override_var};
 pub use task_limits::{TaskLimits, TaskLimitsConfig};
@@ -62,6 +64,12 @@ pub struct Config {
     /// [`Config::free_disk_for_tests`].
     #[serde(skip)]
     pub(crate) disk_free_for_tests: Option<u64>,
+    /// The merge queue moves only when a test steps it, on the test's own
+    /// clock: the daemon's 2 s ticker, on the real clock, would race it
+    /// (H-308). Never read from a config file; see
+    /// [`Config::merge_queue_by_hand_for_tests`].
+    #[serde(skip)]
+    pub(crate) merge_queue_by_hand: bool,
     /// `pty` (each bot's saved CLI) or `double` (deterministic test runtime).
     pub runtime: RuntimeKind,
     pub claude_bin: String,
@@ -248,6 +256,7 @@ impl Default for Config {
             scratch: false,
             trust_forwarded_owner_acts: false,
             disk_free_for_tests: None,
+            merge_queue_by_hand: false,
             runtime: RuntimeKind::Pty,
             claude_bin: "claude".to_string(),
             claude_args: Vec::new(),
@@ -323,20 +332,6 @@ impl Config {
         self.pr_flow_projects
             .iter()
             .any(|p| p.eq_ignore_ascii_case(project))
-    }
-
-    /// Takes the owner acts a linked computer forwards: for tests of that
-    /// path only (H-301, H-303). A release build has no way to set it.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn trust_forwarded_owner_acts_for_tests(&mut self) {
-        self.trust_forwarded_owner_acts = true;
-    }
-
-    /// The free disk space the disk report, the cache trims and salvage see
-    /// in this daemon, whatever the real disk has (H-275).
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn free_disk_for_tests(&mut self, bytes: u64) {
-        self.disk_free_for_tests = Some(bytes);
     }
 
     pub fn load(path: Option<&Path>) -> anyhow::Result<Self> {
