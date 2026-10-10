@@ -61,7 +61,8 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
     for row in &stale {
         println!(
             "closed PR #{}'s branch {}: {}",
-            row["number"], row["branch"].as_str().unwrap_or_default(),
+            row["number"],
+            row["branch"].as_str().unwrap_or_default(),
             row["note"].as_str().unwrap_or_default()
         );
     }
@@ -230,7 +231,13 @@ fn remote_tip(url: &str, branch: &str) -> anyhow::Result<Option<String>> {
 
 /// Deletes the remote branch only while it is still at the merged commit.
 fn drop_branch(checkout: &Path, plan: &Plan) -> (bool, String) {
-    drop_at(checkout, &plan.repo_url, &plan.branch, &plan.head, "the merge")
+    drop_at(
+        checkout,
+        &plan.repo_url,
+        &plan.branch,
+        &plan.head,
+        "the merge",
+    )
 }
 
 /// Each closed PR's branch past its 14 days, deleted only while its tip is

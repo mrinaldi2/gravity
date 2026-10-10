@@ -25,6 +25,7 @@ pub(crate) use board::{home_snapshot, peer_read};
 mod board_import;
 mod browser;
 mod chat;
+mod cleanup;
 mod commands;
 mod conversations;
 mod dashboard;

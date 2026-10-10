@@ -172,6 +172,25 @@ pub fn worktree(
     main_clone: &Path,
     recheck: &dyn Fn() -> Result<(), String>,
 ) -> Result<u64, Outcome> {
+    remove_tree(tree, main_clone, recheck, false)
+}
+
+/// [`worktree`] with `--force`: only for the owner's Remove anyway, once
+/// every unsaved change was saved again (`run::remove_anyway`).
+pub fn worktree_forced(
+    tree: &Path,
+    main_clone: &Path,
+    recheck: &dyn Fn() -> Result<(), String>,
+) -> Result<u64, Outcome> {
+    remove_tree(tree, main_clone, recheck, true)
+}
+
+fn remove_tree(
+    tree: &Path,
+    main_clone: &Path,
+    recheck: &dyn Fn() -> Result<(), String>,
+    force: bool,
+) -> Result<u64, Outcome> {
     let bytes = size_of(tree);
     for name in BUILD_OUTPUT {
         let out = tree.join(name);
@@ -194,7 +213,14 @@ pub fn worktree(
     // filters reach it through git's own command-line config.
     let removed = SafeGit::local(main_clone)
         .and_then(|g| g.without_filters_of(tree))
-        .and_then(|g| g.args(&["worktree", "remove", &shown]).run());
+        .and_then(|g| {
+            let mut args = vec!["worktree", "remove"];
+            if force {
+                args.push("--force");
+            }
+            args.push(&shown);
+            g.args(&args).run()
+        });
     if let Err(error) = removed {
         let text = format!("{error:#}");
         if text.contains("modified or untracked") || text.contains("is locked") {

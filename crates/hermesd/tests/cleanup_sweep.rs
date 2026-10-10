@@ -77,8 +77,14 @@ async fn the_daily_sweep_removes_stale_clean_trees_and_holds_the_rest() {
     assert!(job(&r, &idle).is_none());
     assert!(orphan.exists(), "an orphan is only reported");
     assert!(job(&r, &orphan).unwrap().reason.contains("reported only"));
-    assert!(release.exists() && job(&r, &release).is_none(), "release trees are never swept");
-    assert!(live.exists() && job(&r, &live).is_none(), "a live PR's branch is never swept");
+    assert!(
+        release.exists() && job(&r, &release).is_none(),
+        "release trees are never swept"
+    );
+    assert!(
+        live.exists() && job(&r, &live).is_none(),
+        "a live PR's branch is never swept"
+    );
     assert!(main.join(".git").is_dir(), "the main clone stays");
 
     // A second sweep leaves the held tree for the owner and tells nobody again.
@@ -92,7 +98,9 @@ async fn the_daily_sweep_removes_stale_clean_trees_and_holds_the_rest() {
     assert_eq!(about_dirty(&r), 1, "told once: {:?}", notes(&r, DEV));
 
     // Fourteen days on, the idle tree goes too; the live PR's still stays.
-    run_now(&app, now + Duration::days(15), false).await.unwrap();
+    run_now(&app, now + Duration::days(15), false)
+        .await
+        .unwrap();
     assert!(!idle.exists(), "idle for 14 days: removed");
     assert!(job(&r, &idle).unwrap().reason.is_empty());
     assert!(live.exists());

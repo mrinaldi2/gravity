@@ -9,7 +9,8 @@ use super::board_tx::BoardTx;
 use super::{parse_ts, ts};
 use crate::cleanup::model::{Job, JobState, Kind, NewJob};
 
-pub(super) const COLUMNS: &str = "id, project_id, pr_id, machine, kind, path_or_ref, main_clone, bot_id,
+pub(super) const COLUMNS: &str =
+    "id, project_id, pr_id, machine, kind, path_or_ref, main_clone, bot_id,
     state, reason, bytes_freed, attempts, busy_since, next_at, sent_at, at";
 
 pub(super) fn job_row(r: &Row<'_>) -> rusqlite::Result<Job> {
@@ -60,6 +61,9 @@ impl BoardTx<'_> {
                 ts(now())
             ],
         )?;
+        if added == 1 {
+            self.note_cleanup(&id)?;
+        }
         Ok((added == 1).then_some(id))
     }
 
@@ -119,7 +123,7 @@ impl BoardTx<'_> {
              WHERE id = ?1 AND state = 'queued'",
             params![id, reason, ts(busy_since), ts(next_at), ts(now())],
         )?;
-        Ok(())
+        self.note_cleanup(id)
     }
 
     /// The job's last word: done, held or failed. False when it already had
@@ -137,6 +141,9 @@ impl BoardTx<'_> {
              WHERE id = ?1 AND state = 'queued'",
             params![id, state.as_str(), reason, bytes as i64, ts(now())],
         )?;
+        if changed == 1 {
+            self.note_cleanup(id)?;
+        }
         Ok(changed == 1)
     }
 }

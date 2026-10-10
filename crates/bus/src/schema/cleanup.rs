@@ -40,12 +40,14 @@ CREATE INDEX IF NOT EXISTS idx_cleanup_job_state ON cleanup_job(state, machine);
 ///   paired device or the app's ticket on the board's home: `remove` (a
 ///   salvaged dirty tree goes anyway) or `keep` (it stays, and Needs you
 ///   stops asking).
-/// - `pr_branch_cleanup`: a closed, unmerged PR's remote branch, deleted by
-///   DevOps' merge run once 14 days have passed and its tip is unchanged, or
-///   kept when it moved (`note` says why).
+/// - `pr_branch_cleanup`: a PR's remote branch, deleted or kept (`note` says
+///   why): a merged PR's by its own merge run; a closed, unmerged PR's by
+///   DevOps' next merge run once 14 days have passed and its tip is
+///   unchanged.
 /// - `disk_report`: each computer's disk as it last reported it (JSON:
 ///   `machine`, `free_bytes`, `total_bytes`, `uses`).
 /// - `cleanup_sweep`: when each computer last ran its daily sweep.
+///
 /// A tree the sweep finds outside any PR is a `cleanup_job` with no `pr_id`.
 pub(super) const MIGRATION_CLEANUP_RETENTION: &str = r#"
 CREATE TABLE IF NOT EXISTS cleanup_resolution (

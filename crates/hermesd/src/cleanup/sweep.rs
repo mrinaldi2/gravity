@@ -60,7 +60,11 @@ impl Plan {
     pub fn from_json(v: &Value) -> Self {
         let list = |k: &str| -> Vec<String> {
             v[k].as_array()
-                .map(|a| a.iter().filter_map(|s| s.as_str().map(str::to_string)).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|s| s.as_str().map(str::to_string))
+                        .collect()
+                })
                 .unwrap_or_default()
         };
         Self {
@@ -171,7 +175,12 @@ pub fn stale(tree: &Path, now: DateTime<Utc>) -> Option<String> {
 
 /// The project's repositories here.
 fn urls(app: &AppState, project_id: &str) -> Vec<String> {
-    let own = app.db.project_repo(project_id).ok().flatten().map(|r| r.url);
+    let own = app
+        .db
+        .project_repo(project_id)
+        .ok()
+        .flatten()
+        .map(|r| r.url);
     own.into_iter()
         .chain(app.db.extra_repos(project_id).unwrap_or_default())
         .collect()
@@ -196,8 +205,7 @@ pub fn sweep(app: &AppState, project_id: &str, plan: &Plan, now: DateTime<Utc>) 
     for url in urls(app, project_id) {
         for (found, branch) in discover::worktrees(app, &url, &bots) {
             let real = crate::safe_git::canonical(&found.path).unwrap_or(found.path.clone());
-            if plan.live.contains(&branch) || is_release_tree(&found.path) || skip.contains(&real)
-            {
+            if plan.live.contains(&branch) || is_release_tree(&found.path) || skip.contains(&real) {
                 continue;
             }
             let Some(why) = stale(&found.path, now) else {
@@ -239,7 +247,13 @@ pub fn sweep(app: &AppState, project_id: &str, plan: &Plan, now: DateTime<Utc>) 
 
 /// Keeps what a computer's sweep did, on the board's home: a row per tree,
 /// and a note to its bot (once: a held tree is skipped from then on).
-pub fn record(app: &AppState, project_id: &str, machine: &str, swept: &[Swept], now: DateTime<Utc>) {
+pub fn record(
+    app: &AppState,
+    project_id: &str,
+    machine: &str,
+    swept: &[Swept],
+    now: DateTime<Utc>,
+) {
     let bots = app.db.list_bots(Some(project_id)).unwrap_or_default();
     for s in swept {
         let bot = s
@@ -336,6 +350,13 @@ pub fn spawn(app: Arc<AppState>) {
             tick.tick().await;
             if let Err(error) = super::sweep_remote::if_due(&app, Utc::now()).await {
                 tracing::warn!(%error, "the daily worktree sweep failed");
+            }
+            // The hourly disk report (§15.6).
+            let a = app.clone();
+            match tokio::task::spawn_blocking(move || super::disk::refresh(&a)).await {
+                Ok(Err(error)) => tracing::warn!(%error, "the disk report failed"),
+                Err(error) => tracing::warn!(%error, "the disk report failed"),
+                Ok(Ok(_)) => {}
             }
         }
     });

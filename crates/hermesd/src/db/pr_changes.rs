@@ -51,6 +51,27 @@ impl BoardTx<'_> {
         }
     }
 
+    /// A cleanup job of a PR changed: its cleanup, and the PR, are news.
+    pub(super) fn note_cleanup(&self, job_id: &str) -> anyhow::Result<()> {
+        let pr: Option<(String, u32)> = self
+            .conn
+            .query_row(
+                "SELECT p.project_id, p.number FROM cleanup_job j JOIN pr p ON p.id = j.pr_id
+                 WHERE j.id = ?1",
+                params![job_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        if let Some((project_id, number)) = pr {
+            self.note(PrChange::Cleanup {
+                project_id: project_id.clone(),
+                number,
+            });
+            self.note(PrChange::Pr { project_id, number });
+        }
+        Ok(())
+    }
+
     pub(super) fn note_queue(&self, project_id: &str) {
         self.note(PrChange::Queue {
             project_id: project_id.to_string(),

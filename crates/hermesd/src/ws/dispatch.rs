@@ -13,6 +13,7 @@ use crate::contain;
 /// Requests that only read. Everything else requires `control`.
 const READ_ONLY: &[&str] = &[
     "review_settings_get",
+    "disk_report",
     "list_projects",
     "list_bots",
     "list_messages",
@@ -127,6 +128,7 @@ const APPROVE_ONLY: &[&str] = &[
     "pr_merge_undo",
     "pr_comment_resolve",
     "release_leave_out",
+    "cleanup_resolve",
 ];
 
 /// Capability required for each request type.
@@ -330,6 +332,7 @@ impl Conn {
             "set_project_lead" => self.set_project_lead(&req_id, req),
             "set_project_repo" => self.set_project_repo(&req_id, req),
             pr if super::prs::KINDS.contains(&pr) => self.pr_request(pr, &req_id, req),
+            "disk_report" | "cleanup_now" => self.cleanup_request(kind, &req_id, req),
             "set_project_extra_repos" => self.set_project_extra_repos(&req_id, req),
             "set_project_permission_profile" => self.set_project_permission_profile(&req_id, req),
             "set_bot_permission_extras" => self.set_bot_permission_extras(&req_id, req),

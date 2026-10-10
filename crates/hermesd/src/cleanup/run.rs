@@ -155,3 +155,56 @@ pub fn attempt(app: &AppState, target: &Target, merge: &Merge<'_>) -> Outcome {
         Err(outcome) => outcome,
     }
 }
+
+/// The owner's Remove anyway (§15.6) for a held tree: rules 2 and 3 as
+/// ever; whatever is unsaved is saved again into `salvage` (the work may
+/// have changed since it was held), and if any of it can't be saved the
+/// tree stays. Only then is it removed, with `--force`.
+pub fn remove_anyway(app: &AppState, target: &Target, salvage: &Path) -> Outcome {
+    let roots = Roots::of(app, target.workspace.as_deref(), &target.bot_name);
+    let tree = target.path.as_path();
+    let recheck = || roots.check(tree);
+    if let Err(why) = recheck() {
+        return Outcome::Held(why);
+    }
+    if std::fs::symlink_metadata(tree).is_err() {
+        return Outcome::Done { bytes: 0 };
+    }
+    if !std::fs::symlink_metadata(tree.join(".git")).is_ok_and(|m| m.is_file()) {
+        return Outcome::Held(format!("{} isn't a linked git worktree", tree.display()));
+    }
+    let main = match main_clone_of(tree) {
+        Ok(main) => main,
+        Err(error) => return Outcome::Held(format!("{} can't be read: {error:#}", tree.display())),
+    };
+    if let Some(who) = in_use(tree) {
+        return Outcome::Held(format!("not removed, {who}; try again once it is closed"));
+    }
+    if let Err(outcome) = remove::not_in_use(tree) {
+        return outcome;
+    }
+    let found = match unsaved::find(tree, "") {
+        Ok(found) => found,
+        Err(error) => {
+            return Outcome::Held(format!("couldn't check it for unsaved work: {error:#}"))
+        }
+    };
+    if !found.is_empty() {
+        match unsaved::salvage(tree, "", &found, salvage) {
+            Ok(saved) if saved.skipped.is_empty() => {}
+            Ok(saved) => {
+                return Outcome::Held(format!(
+                    "not removed: these files couldn't be saved first: {}",
+                    saved.skipped.join(", ")
+                ))
+            }
+            Err(error) => {
+                return Outcome::Held(format!("not removed: saving its work failed ({error:#})"))
+            }
+        }
+    }
+    match remove::worktree_forced(tree, &main, &recheck) {
+        Ok(bytes) => Outcome::Done { bytes },
+        Err(outcome) => outcome,
+    }
+}

@@ -22,6 +22,8 @@ pub enum PrChange {
     },
     /// `merge_queue_changed`.
     Queue { project_id: String },
+    /// `cleanup_updated`: a PR's cleanup moved on (H-275).
+    Cleanup { project_id: String, number: u32 },
 }
 
 impl PrChange {
@@ -29,7 +31,8 @@ impl PrChange {
         match self {
             Self::Pr { project_id, .. }
             | Self::Check { project_id, .. }
-            | Self::Queue { project_id } => project_id,
+            | Self::Queue { project_id }
+            | Self::Cleanup { project_id, .. } => project_id,
         }
     }
 
@@ -39,7 +42,8 @@ impl PrChange {
         match &mut out {
             Self::Pr { project_id: p, .. }
             | Self::Check { project_id: p, .. }
-            | Self::Queue { project_id: p } => *p = project_id.to_string(),
+            | Self::Queue { project_id: p }
+            | Self::Cleanup { project_id: p, .. } => *p = project_id.to_string(),
         }
         out
     }
@@ -59,6 +63,9 @@ impl PrChange {
             Self::Queue { project_id } => {
                 Push::MergeQueueChanged(p::MergeQueueChanged { project_id })
             }
+            Self::Cleanup { project_id, number } => {
+                Push::CleanupUpdated(p::CleanupUpdated { project_id, number })
+            }
         };
         p::PrPush { push: Some(push) }
     }
@@ -77,7 +84,10 @@ impl PrChange {
             Push::MergeQueueChanged(u) => Self::Queue {
                 project_id: u.project_id,
             },
-            Push::CleanupUpdated(_) => return None,
+            Push::CleanupUpdated(u) => Self::Cleanup {
+                project_id: u.project_id,
+                number: u.number,
+            },
         })
     }
 }

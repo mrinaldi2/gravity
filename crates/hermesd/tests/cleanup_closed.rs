@@ -72,8 +72,8 @@ async fn a_closed_prs_worktree_goes_after_seven_days() {
     assert!(!tree.exists(), "removed once the 7 days are over");
     let told = notes(&r, DEV);
     assert!(
-        told.iter().any(|n| n.contains(&format!("PR #{number} was closed"))
-            && n.contains("was removed")),
+        told.iter()
+            .any(|n| n.contains(&format!("PR #{number} was closed")) && n.contains("was removed")),
         "{told:?}"
     );
 }
@@ -121,7 +121,10 @@ async fn reopening_within_the_window_cancels_both() {
         .into_iter()
         .filter(|j| j.state.as_str() == "queued")
         .collect();
-    assert!(queued.is_empty(), "the closed PR's jobs are off: {queued:?}");
+    assert!(
+        queued.is_empty(),
+        "the closed PR's jobs are off: {queued:?}"
+    );
     step(&r, Utc::now() + Duration::days(8)).await;
     assert!(tree.exists(), "the reopened PR's tree stays");
     let db = &r.pair.d.app.db;
@@ -207,9 +210,19 @@ async fn a_merge_run_deletes_closed_branches_after_fourteen_days() {
     )
     .unwrap();
 
-    assert_eq!(tip(&r.origin, &format!("refs/heads/{old}")), None, "deleted");
-    assert!(tip(&r.origin, &format!("refs/heads/{moved}")).is_some(), "moved: kept");
-    assert!(tip(&r.origin, &format!("refs/heads/{young}")).is_some(), "3 days: kept");
+    assert_eq!(
+        tip(&r.origin, &format!("refs/heads/{old}")),
+        None,
+        "deleted"
+    );
+    assert!(
+        tip(&r.origin, &format!("refs/heads/{moved}")).is_some(),
+        "moved: kept"
+    );
+    assert!(
+        tip(&r.origin, &format!("refs/heads/{young}")).is_some(),
+        "3 days: kept"
+    );
     let db = &app.db;
     let row = |n: u32| {
         let id = pr(&r, n).id;

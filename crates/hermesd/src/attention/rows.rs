@@ -101,12 +101,14 @@ pub(crate) fn rows(
     };
     if scope.local {
         serving_off(app, &mut b);
+        super::cleanup::disk_low(app, &mut b);
     }
     if scope.home {
         awaiting_releases(&releases, &mut b, release_json)?;
         super::prs::owner_reviews(app, &mut b)?;
         super::prs::stuck_merges(app, &mut b)?;
         super::prs::mains_moved(app, &mut b)?;
+        super::cleanup::held(app, &mut b)?;
     }
     if scope.local {
         decisions(app, &releases, &mut b)?;

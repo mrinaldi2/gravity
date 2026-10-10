@@ -115,7 +115,12 @@ impl BoardTx<'_> {
         self.conn.execute(
             "INSERT OR REPLACE INTO pr_branch_cleanup(pr_id, state, note, at)
              VALUES (?1, ?2, ?3, ?4)",
-            params![pr_id, if deleted { "deleted" } else { "kept" }, note, ts(now())],
+            params![
+                pr_id,
+                if deleted { "deleted" } else { "kept" },
+                note,
+                ts(now())
+            ],
         )?;
         Ok(())
     }
@@ -138,7 +143,7 @@ impl BoardTx<'_> {
              VALUES (?1, ?2, ?3, ?4)",
             params![job_id, action, by, ts(now())],
         )?;
-        Ok(())
+        self.note_cleanup(job_id)
     }
 
     pub fn cleanup_resolution(&self, job_id: &str) -> anyhow::Result<Option<String>> {
@@ -160,7 +165,22 @@ impl BoardTx<'_> {
              WHERE id = ?1 AND state IN ('held', 'failed')",
             params![id, bytes as i64, ts(now())],
         )?;
-        Ok(())
+        self.note_cleanup(id)
+    }
+
+    /// A held or failed job's new reason after the owner's Remove anyway
+    /// couldn't finish: it stays the owner's, with what stopped it.
+    pub fn reopen_cleanup(&self, id: &str, state: JobState, reason: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "UPDATE cleanup_job SET state = ?2, reason = ?3, at = ?4
+             WHERE id = ?1 AND state IN ('held', 'failed')",
+            params![id, state.as_str(), reason, ts(now())],
+        )?;
+        self.conn.execute(
+            "DELETE FROM cleanup_resolution WHERE job_id = ?1",
+            params![id],
+        )?;
+        self.note_cleanup(id)
     }
 
     /// The project's jobs the owner should see (§15.6): held since before
@@ -291,14 +311,5 @@ impl BoardTx<'_> {
             params![machine, ts(at)],
         )?;
         Ok(())
-    }
-}
-
-/// Whether a job is the owner's to look at now, by its state alone.
-pub fn needs_owner(job: &Job, held_before: DateTime<Utc>) -> bool {
-    match job.state {
-        JobState::Failed => true,
-        JobState::Held => job.at <= held_before,
-        _ => false,
     }
 }

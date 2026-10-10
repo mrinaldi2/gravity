@@ -69,15 +69,18 @@ pub fn record_stale(app: &AppState, merged: &Pr, done: &Value) -> anyhow::Result
             continue;
         }
         let deleted = row["deleted"].as_bool() == Some(true);
-        let note = row["note"].as_str().unwrap_or(if deleted { "deleted" } else { "kept" });
-        app.db.board_tx(|t| {
-            let pr = t.pr(&merged.project_id, number)?;
-            match pr {
-                Some(pr) => t.set_branch_cleanup(&pr.id, deleted, note).map(|_| 1),
-                None => Ok(0),
-            }
-        })
-        .map(|n| kept += n)?;
+        let note = row["note"]
+            .as_str()
+            .unwrap_or(if deleted { "deleted" } else { "kept" });
+        app.db
+            .board_tx(|t| {
+                let pr = t.pr(&merged.project_id, number)?;
+                match pr {
+                    Some(pr) => t.set_branch_cleanup(&pr.id, deleted, note).map(|_| 1),
+                    None => Ok(0),
+                }
+            })
+            .map(|n| kept += n)?;
     }
     Ok(kept)
 }
