@@ -31,12 +31,21 @@ pub struct Required {
 /// M1): a PR that changes `checks.toml` to a file that parses runs the
 /// head's checks, plus a passing `checks.toml` check, so the repair can
 /// merge. It still needs architect, ce and the owner, as any policy change.
+///
+/// A base whose file parses but holds a check that can never pass would
+/// block its own fix the same way (H-311): a PR that changes `checks.toml`
+/// to a file that parses runs the head's definition of every check it
+/// changes or adds ([`with_head_defs`]); the checks it leaves as they are
+/// keep the base's.
 pub fn required(cache: &Path, base_sha: &str, head: &str) -> anyhow::Result<Required> {
     let tree = git_cache::tree_of(cache, head)
         .ok_or_else(|| anyhow::anyhow!("{head} isn't in the repository"))?;
     let changed = git_cache::changed_paths(cache, base_sha, head)?;
     let checks = match base::read(cache, base_sha)?.checks {
-        Ok(policy) => queue(&policy, &changed),
+        Ok(policy) => match repair(cache, head, &changed)? {
+            Some(theirs) => with_head_defs(&policy, &theirs, &changed),
+            None => queue(&policy, &changed),
+        },
         Err(e) => match repair(cache, head, &changed)? {
             Some(policy) => {
                 let mut checks = queue(&policy, &changed);
@@ -66,6 +75,52 @@ fn queue(policy: &Checks, changed: &[String]) -> Vec<NewCheck> {
             note: None,
         })
         .collect()
+}
+
+/// The checks of a PR that changes `checks.toml`, the head's file parsing
+/// (H-311): a check the head defines exactly as the base does keeps the
+/// base's definition; one it changes (any of name, run, needs, machine,
+/// paths, required) or adds runs the head's; one it removes doesn't run.
+/// A passing `checks.toml` row names them on the PR (it is never routed, so
+/// its note stays). Such a PR always needs architect, ce and the owner
+/// (policy change), the people who would catch it weakening its own checks.
+fn with_head_defs(base: &Checks, head: &Checks, changed: &[String]) -> Vec<NewCheck> {
+    let mut merged = Checks::default();
+    let (mut swapped, mut added, mut dropped) = (Vec::new(), Vec::new(), Vec::new());
+    for ours in &base.checks {
+        match head.checks.iter().find(|h| h.name == ours.name) {
+            Some(theirs) if theirs == ours => merged.checks.push(ours.clone()),
+            Some(theirs) => {
+                merged.checks.push(theirs.clone());
+                swapped.push(theirs.name.clone());
+            }
+            None => dropped.push(ours.name.clone()),
+        }
+    }
+    for theirs in &head.checks {
+        if !base.checks.iter().any(|b| b.name == theirs.name) {
+            merged.checks.push(theirs.clone());
+            added.push(theirs.name.clone());
+        }
+    }
+    let mut checks = queue(&merged, changed);
+    let mut said = Vec::new();
+    for (list, what) in [
+        (&swapped, "runs its own definition of"),
+        (&added, "adds"),
+        (&dropped, "removes"),
+    ] {
+        if !list.is_empty() {
+            said.push(format!("{what} {}", list.join(", ")));
+        }
+    }
+    if !said.is_empty() {
+        checks.push(policy_check(
+            CheckResult::Pass,
+            &format!("this PR's checks.toml {}", said.join("; ")),
+        ));
+    }
+    checks
 }
 
 fn policy_check(result: CheckResult, note: &str) -> NewCheck {
@@ -256,3 +311,7 @@ fn ran_on(app: &AppState, bot: &bus::Bot) -> anyhow::Result<String> {
 pub(super) fn short(sha: &str) -> &str {
     &sha[..sha.len().min(7)]
 }
+
+#[cfg(test)]
+#[path = "checks_tests.rs"]
+mod tests;

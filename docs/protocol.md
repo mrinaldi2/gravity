@@ -1282,7 +1282,8 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **Process rule (not code):** DevOps proposes at most one release a day.
 
 **Checks (PR-5a, H-270).**
-- **Which checks:** each reported head queues the required checks of the base's `.hermes/checks.toml`, filtered by the paths the PR changes. A head's own `checks.toml` changes nothing.
+- **Which checks:** each reported head queues the required checks of the base's `.hermes/checks.toml`, filtered by the paths the PR changes. A head's own `checks.toml` changes nothing, except as below.
+- **A PR that changes `checks.toml`** (H-311): when the head's file parses, each check the head defines differently from the base (name, run, needs, machine, paths or required), or adds, runs the head's definition for that PR. A check it removes doesn't run. Unchanged checks keep the base's. A passing `.hermes/checks.toml` row names them ("this PR's checks.toml runs its own definition of unit; adds lint; removes docs"). This keeps a check that can never pass from blocking its own fix. Like any policy change, the PR needs architect, ce and the owner.
 - **A broken base file:** if the base's `checks.toml` doesn't parse, a single `.hermes/checks.toml` check is recorded as `error`, so nothing counts as checked.
 - **Repairing it:** a PR that changes `checks.toml` to a file that parses gets the head's checks plus a passing `.hermes/checks.toml` check, so the repair can merge. Like any policy change, it still needs architect, ce and the owner.
 
