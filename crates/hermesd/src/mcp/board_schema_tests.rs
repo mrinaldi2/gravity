@@ -13,6 +13,7 @@ fn every_tool_has_its_message_and_every_enum_resolves() {
         BOARD_TOOLS.len()
             + super::super::releases::RELEASE_TOOLS.len()
             + super::super::meetings::MEETING_TOOLS.len()
+            + super::super::prs::PR_TOOLS.len()
     );
     assert!(!json!(all).to_string().contains("project_id"));
 }

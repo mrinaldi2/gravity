@@ -11,18 +11,23 @@ use prost_types::field_descriptor_proto::{Label, Type};
 use prost_types::{DescriptorProto, FieldDescriptorProto, FileDescriptorSet};
 use serde_json::{json, Map, Value};
 
-const PACKAGE: &str = "hermes.board.v1";
+/// The packages bots get tools from: the board, and pull requests (H-266).
+const PACKAGES: &[&str] = &["hermes.board.v1", "hermes.pr.v1"];
 
 /// Plain (implicit-presence) fields a bot may leave out, where "" means not
 /// given: they shipped plain, and `optional` would break the wire (buf breaking).
 const MAY_OMIT: &[(&str, &str)] = &[("ReleaseTest", "machine")];
 
 pub fn message_schemas(set: &FileDescriptorSet) -> Value {
-    let files: Vec<_> = set.file.iter().filter(|f| f.package() == PACKAGE).collect();
+    let files: Vec<_> = set
+        .file
+        .iter()
+        .filter(|f| PACKAGES.contains(&f.package()))
+        .collect();
     let messages: BTreeMap<String, &DescriptorProto> = files
         .iter()
-        .flat_map(|f| f.message_type.iter())
-        .map(|m| (format!(".{PACKAGE}.{}", m.name()), m))
+        .flat_map(|f| f.message_type.iter().map(move |m| (f.package(), m)))
+        .map(|(package, m)| (format!(".{package}.{}", m.name()), m))
         .collect();
     let mut out = Map::new();
     for file in &files {
@@ -58,7 +63,7 @@ pub fn message_schemas(set: &FileDescriptorSet) -> Value {
                 }
                 properties.insert(field.name().to_string(), schema);
             }
-            out.insert(
+            let previous = out.insert(
                 message.name().to_string(),
                 json!({
                     "description": comments.get(&vec![4, mi as i32]).cloned().unwrap_or_default(),
@@ -66,6 +71,8 @@ pub fn message_schemas(set: &FileDescriptorSet) -> Value {
                     "required": required,
                 }),
             );
+            // Tools name their message by its bare name, across packages.
+            assert!(previous.is_none(), "two messages named {}", message.name());
         }
     }
     Value::Object(out)
@@ -124,9 +131,10 @@ fn object_schema(
             required.push(field.name().to_string());
         }
         // Entities nest Timestamps and each other; arguments stay shallow.
-        let schema = if field.type_name().starts_with(&format!(".{PACKAGE}."))
-            && field.r#type() == Type::Message
-        {
+        let ours = PACKAGES
+            .iter()
+            .any(|p| field.type_name().starts_with(&format!(".{p}.")));
+        let schema = if ours && field.r#type() == Type::Message {
             json!({"type": "object"})
         } else {
             field_schema(field, messages)

@@ -1,0 +1,14 @@
+{
+  "reqId": "87",
+  "prResponse": {
+    "cleanup_item": {
+      "job_id": "cj-3",
+      "machine": "imac",
+      "kind": "CLEANUP_KIND_WORKTREE",
+      "state": "CLEANUP_STATE_HELD",
+      "path": "/Users/owner/Developer/gravity-wt-h203-ios",
+      "reason": "Uncommitted changes (salvaged)",
+      "salvaged": true
+    }
+  }
+}

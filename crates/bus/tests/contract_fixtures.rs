@@ -148,6 +148,7 @@ fn message_dir() -> PathBuf {
 /// then wants its fixture.
 fn arm_of(envelope: &bus::contract::wire::Envelope) -> String {
     use bus::contract::home::{home_request, home_response};
+    use bus::contract::pr::{pr_push, pr_request, pr_response};
     use bus::contract::wire::envelope::Body;
     match envelope.body.as_ref().expect("a body") {
         Body::BoardRequest(r) => format!(
@@ -225,6 +226,47 @@ fn arm_of(envelope: &bus::contract::wire::Envelope) -> String {
                 home_response::Response::OwnerThreadMarked(_) => "owner_thread_marked",
             }
         ),
+        Body::PrRequest(r) => format!(
+            "request.{}",
+            match r.request.as_ref().expect("a request") {
+                pr_request::Request::PrList(_) => "pr_list",
+                pr_request::Request::PrGet(_) => "pr_get",
+                pr_request::Request::PrDiff(_) => "pr_diff",
+                pr_request::Request::PrComments(_) => "pr_comments",
+                pr_request::Request::PrReviewSubmit(_) => "pr_review_submit",
+                pr_request::Request::PrCommentAdd(_) => "pr_comment_add",
+                pr_request::Request::PrMergeUndo(_) => "pr_merge_undo",
+                pr_request::Request::PrFlag(_) => "pr_flag",
+                pr_request::Request::ReviewSettingsGet(_) => "review_settings_get",
+                pr_request::Request::ReviewSettingsSet(_) => "review_settings_set",
+                pr_request::Request::CheckRerun(_) => "check_rerun",
+                pr_request::Request::CleanupResolve(_) => "cleanup_resolve",
+                pr_request::Request::DiskReport(_) => "disk_report",
+            }
+        ),
+        Body::PrResponse(r) => format!(
+            "response.{}",
+            match r.response.as_ref().expect("a response") {
+                pr_response::Response::PrList(_) => "pr_list",
+                pr_response::Response::Pr(_) => "pr",
+                pr_response::Response::PrDiff(_) => "pr_diff",
+                pr_response::Response::PrComments(_) => "pr_comments",
+                pr_response::Response::Comment(_) => "comment",
+                pr_response::Response::ReviewSettings(_) => "review_settings",
+                pr_response::Response::Check(_) => "check",
+                pr_response::Response::CleanupItem(_) => "cleanup_item",
+                pr_response::Response::DiskReport(_) => "disk_report",
+            }
+        ),
+        Body::PrPush(p) => format!(
+            "push.{}",
+            match p.push.as_ref().expect("a push") {
+                pr_push::Push::PrUpdated(_) => "pr_updated",
+                pr_push::Push::CheckUpdated(_) => "check_updated",
+                pr_push::Push::MergeQueueChanged(_) => "merge_queue_changed",
+                pr_push::Push::CleanupUpdated(_) => "cleanup_updated",
+            }
+        ),
         Body::Error(_) => "error".to_string(),
     }
 }
@@ -277,6 +319,32 @@ const ARMS: &[&str] = &[
     "response.owner_threads",
     "response.owner_thread",
     "response.owner_thread_marked",
+    "request.pr_list",
+    "request.pr_get",
+    "request.pr_diff",
+    "request.pr_comments",
+    "request.pr_review_submit",
+    "request.pr_comment_add",
+    "request.pr_merge_undo",
+    "request.pr_flag",
+    "request.review_settings_get",
+    "request.review_settings_set",
+    "request.check_rerun",
+    "request.cleanup_resolve",
+    "request.disk_report",
+    "response.pr_list",
+    "response.pr",
+    "response.pr_diff",
+    "response.pr_comments",
+    "response.comment",
+    "response.review_settings",
+    "response.check",
+    "response.cleanup_item",
+    "response.disk_report",
+    "push.pr_updated",
+    "push.check_updated",
+    "push.merge_queue_changed",
+    "push.cleanup_updated",
     "error",
 ];
 

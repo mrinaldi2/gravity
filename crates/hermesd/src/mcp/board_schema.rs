@@ -141,6 +141,11 @@ impl Audience {
     }
 }
 
+/// An enum's short and wire names: the board's, or the pull requests'.
+fn enum_names(enum_name: &str) -> Option<Vec<(&'static str, &'static str)>> {
+    spellings(enum_name).or_else(|| crate::prs::spellings(enum_name))
+}
+
 fn schemas() -> &'static Map<String, Value> {
     static SCHEMAS: OnceLock<Map<String, Value>> = OnceLock::new();
     SCHEMAS.get_or_init(|| {
@@ -161,7 +166,7 @@ fn public(schema: &Value) -> Value {
         return out;
     };
     if let Some(name) = obj.remove("x-enum") {
-        let names = spellings(name.as_str().unwrap_or_default())
+        let names = enum_names(name.as_str().unwrap_or_default())
             .unwrap_or_else(|| panic!("no spellings for enum {name}"));
         obj.insert(
             "enum".into(),
@@ -175,12 +180,13 @@ fn public(schema: &Value) -> Value {
     out
 }
 
-/// The board, release and meeting tools, which share the audiences.
+/// The board, release, meeting and PR tools, which share the audiences.
 pub(super) fn all_tools() -> impl Iterator<Item = &'static BoardTool> {
     BOARD_TOOLS
         .iter()
         .chain(super::releases::RELEASE_TOOLS)
         .chain(super::meetings::MEETING_TOOLS)
+        .chain(super::prs::PR_TOOLS)
 }
 
 /// The `tools/list` entries for a bot with these roles.
@@ -225,7 +231,7 @@ pub(super) fn board_tool_list(roles: &[Role]) -> Vec<Value> {
 
 /// A short or wire enum name to the wire name pbjson reads.
 fn wire_enum(enum_name: &str, field: &str, value: &Value) -> anyhow::Result<Value> {
-    let names = spellings(enum_name).unwrap_or_default();
+    let names = enum_names(enum_name).unwrap_or_default();
     let given = value.as_str().unwrap_or_default();
     names
         .iter()

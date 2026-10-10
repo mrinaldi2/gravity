@@ -1048,6 +1048,44 @@ The typed surface `hermes.home.v1` (`proto/hermes/home/v1/home.proto`, contract 
 
 Without a board, `metrics` is null. Off the board's home, the daemon asks the home (peer request `metrics_get {project_id, days}`) and answers once it has. If the home can't be reached, `metrics` is null and `note` names it.
 
+## Pull requests and checks (H-261)
+
+The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1, capabilities `pull_requests` and `checks`). It's the same shape as the projects home:
+- **Transport:** binary `PrRequest`/`PrResponse`/`PrPush` envelopes (arms 7–9), or JSON `{type, req_id, ...fields}` with the proto field names.
+- **Requests:** `pr_list`, `pr_get`, `pr_diff`, `pr_comments` and `review_settings_get` (read). `pr_flag` and `check_rerun` (control). `pr_review_submit`, `pr_comment_add`, `pr_merge_undo`, `review_settings_set` and `cleanup_resolve` (approve; the owner's device or ticket only, never the owner token or a bot). `disk_report` (read).
+- **Pushes:** `pr_updated`, `check_updated`, `merge_queue_changed` and `cleanup_updated`.
+- **Repositories:** a PR names its `repo` ("owner/name"), because a project's board can span several repositories (gravity and gravity_os). PR numbers stay per project. `pr_list` filters on `states`, a list; an empty list means open and merging.
+- **Gate on the capability:** clients show the PR tab only when `hello_ok.capabilities` has `pull_requests`.
+- **Bots' MCP tools:** `pr_open`, `pr_push`, `pr_close`, `pr_review`, `pr_comment`, `pr_get`, `pr_list` and `check_report`, defined in `proto/hermes/pr/v1/tools.proto`.
+- **Releases cut from main:** they gain `tag`, `commit`, `prs` and `also_included` (`ReleaseFromMain`) at the top level of the release payload. These are new keys, so a client reading today's release is unaffected.
+- **Fixtures:** golden fixtures are in `crates/bus/fixtures/pr/`.
+
+**Not served to clients yet.** This daemon answers a binary `PrRequest` with `unsupported`. It doesn't advertise the capabilities or `contracts.pr` until it serves the requests (H-273).
+
+**Bots' PR tools (PR-1, H-266).** Every bot on a project with a board gets these; the checks below decide who may act. All of them run on the board's home computer (`pr`, `pr_push`, `pr_worktree`, migration `PR_CORE`).
+- **`pr_open {item, branch, worktree?, title?, body?, repo?}`:**
+  - Only the card's assignee, or a bot tasked on the card, may open it. The card must be in Doing (or already in Review), with no other open PR.
+  - `repo` must be the project's repository or one the owner added. Anything else is refused with "<name> isn't one of this project's repositories", and nothing is fetched.
+    - The owner adds them with the WS request `set_project_extra_repos {project_id, urls}` (approve), from the app's ticket or a paired device only. The owner token is refused and no bot tool sets it.
+    - It answers `{type: "project", project}`, with `extra_repos`.
+  - The daemon fetches the repository into its own cache, `<home>/cache/repos`, and reads the branch's tip there: that tip is the head.
+  - It records PR #n, numbered per project. `head_patch_id` is `git patch-id --stable` of the diff from the head's merge-base with main to the head.
+  - It links the branch and `#n` on the card, and moves the card Doing → Review. A linked PR counts as the change note.
+- **`pr_push {number, sha, worktree?}`:**
+  - Accepted only when the fetched tip of the branch equals `sha`; the reporter is recorded as a pusher.
+  - A rebase onto main without conflicts keeps the patch-id; a new commit changes it.
+- **Pushes nobody reported:**
+  - The daemon notices them before `pr_get` and `pr_list`, and every 5 minutes.
+  - It sets `moved_unreported`, records the tip once with no pusher, and leaves the head alone.
+  - The next `pr_push` of that tip clears it.
+- **`worktree`:**
+  - It must be a git worktree whose `origin` is the PR's repository, on the PR's branch.
+  - It must sit inside the bot's own workspace or one of its `<repo>-wt-<slug>[-…]` folders in the trusted paths, resolved with links followed.
+  - Otherwise the call is refused and nothing is recorded.
+- **`pr_close {number, reason}`:** only the author or the lead closes a PR. It is closed unmerged, and its card goes back to Doing.
+- **`pr_get {number}` and `pr_list {states?}`:** a PR with its pushes and worktrees; empty `states` means open and merging.
+- **Off the board's home:** a call is forwarded there like any board tool, and a worktree path from another computer is refused (PR-9 handles that).
+
 ## Meetings
 
 Meetings live with the board, on its home (H-017 §1.5, H-020 §4, H-102). A **series** (`standup`, `refinement`, `demo`, `retro` or `adhoc`) owns a routine: creating or changing one upserts the routine with the facilitator as its bot, the series' cron and time zone, and a prompt telling it to run the meeting. A new facilitator gets a new routine; disabling the series disables it. Each run, the facilitator calls `meeting_start`. That opens an occurrence (`MTG-<date>-<type>`, collecting), freezes `inputs_snapshot` (the board's columns with counts, Doing, blocked and stale items, the open action items) and sends each attendee bot one note. Attendees `meeting_contribute`, the facilitator (or the lead) records `action_add`s and `meeting_close`s it as held, with outputs by section and a summary of at most ten lines, or skipped with a reason. Open action items carry over: `meeting_get` lists those of the series' earlier meetings as `carried_over`. `action_promote` (lead) turns one into a chore in the board's Inbox, linked to its meeting (link kind `meeting`), and sets the action's `item_id`. Attendees and action owners are bot ids, or `owner`.

@@ -52,6 +52,17 @@ pub(super) fn decode(frame: &[u8]) -> Frame {
             req_id,
             body: Some(Body::HomeRequest(request)),
         }) => return Frame::Home(req_id, request),
+        // The contract is in (H-265); the daemon serves it from H-273.
+        Ok(Envelope {
+            req_id,
+            body: Some(Body::PrRequest(_)),
+        }) => {
+            return Frame::Refused(error(
+                req_id,
+                "unsupported",
+                "pull requests aren't served by this daemon yet".to_string(),
+            ))
+        }
         Ok(Envelope { req_id, body: None }) => (req_id, "empty envelope".to_string()),
         Ok(Envelope {
             req_id,
@@ -60,7 +71,9 @@ pub(super) fn decode(frame: &[u8]) -> Frame {
                     Body::Error(_)
                     | Body::BoardResponse(_)
                     | Body::BoardPush(_)
-                    | Body::HomeResponse(_),
+                    | Body::HomeResponse(_)
+                    | Body::PrResponse(_)
+                    | Body::PrPush(_),
                 ),
         }) => (
             req_id,
@@ -151,6 +164,16 @@ mod tests {
         }
         .encode_to_vec();
         assert!(matches!(decode(&request), Frame::Home(11, _)));
+    }
+
+    #[test]
+    fn a_pr_request_is_unsupported_until_the_daemon_serves_it() {
+        let request = Envelope {
+            req_id: 13,
+            body: Some(Body::PrRequest(bus::contract::pr::PrRequest::default())),
+        }
+        .encode_to_vec();
+        assert_eq!(error_of(decode(&request)), (13, "unsupported".into()));
     }
 
     #[test]

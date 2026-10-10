@@ -1,0 +1,81 @@
+// What bots send about pull requests and checks as MCP tools (H-261 §9),
+// tool name in brackets. The owner's review, the Owner review setting and
+// `pr_flag` never travel through a bot (§4.3). Merging is DevOps'
+// `hermesd pr merge`, not a tool.
+syntax = "proto3";
+
+package hermes.pr.v1;
+
+import "hermes/pr/v1/pr.proto";
+
+// [pr_open] The card's assignee opens a PR for its branch; the card moves
+// Doing → Review. One open PR per card.
+message PrOpen {
+  string item = 1;                          // the card, e.g. "H-265"
+  string branch = 2;
+  optional string title = 3;                // unset = the card's title
+  optional string body = 4;                 // the change note, markdown
+  // The bot's worktree for the branch, checked by its computer (§15.1).
+  optional string worktree = 5;
+  // The repository, "owner/name"; unset = the project's repository.
+  optional string repo = 6;
+}
+
+// [pr_push] Report a push to the PR's branch. Accepted only when the
+// remote tip equals `sha`; the reporter counts as a pusher (§1.2, §4.4).
+message PushReport {
+  uint32 number = 1;
+  string sha = 2;
+  optional string worktree = 3;
+}
+
+// [pr_review] A required role's verdict on the head it names (§4.2).
+message PrReview {
+  uint32 number = 1;
+  string sha = 2;                           // must equal head_sha
+  string role = 3;                          // architect, ux, ce, devops, qa
+  Verdict verdict = 4;
+  string summary = 5;
+  // `changes_requested` needs at least one `must`.
+  repeated Finding findings = 6;
+  optional string artifact = 7;
+}
+
+// [pr_comment] A line comment on a commit of the PR.
+message PrComment {
+  uint32 number = 1;
+  string sha = 2;
+  string path = 3;
+  uint32 line = 4;
+  Side side = 5;                            // unset = new
+  string body = 6;
+  optional string reply_to = 7;
+  Severity severity = 8;                    // unset = a plain comment
+}
+
+// [pr_close] The PR's author or the lead closes it without merging; its
+// card goes back to Doing.
+message PrClose {
+  uint32 number = 1;
+  string reason = 2;
+}
+
+// [pr_get] One PR in full.
+message PrLookup {
+  uint32 number = 1;
+}
+
+// [pr_list] The project's PRs.
+message PrQuery {
+  repeated PrState states = 1;              // empty = open and merging
+}
+
+// [check_report] A check worker's result for the commit it was spawned
+// for (§7); only that worker may report it.
+message CheckReport {
+  string sha = 1;
+  string name = 2;
+  CheckResult result = 3;                   // running, pass, fail or error
+  optional string log = 4;                  // the log's path in the worker's folder
+  map<string, string> tool_versions = 5;
+}

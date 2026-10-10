@@ -24,6 +24,7 @@ mod decisions;
 pub(crate) mod meetings;
 mod owner_actions;
 mod owner_threads;
+mod prs;
 mod releases;
 mod remote;
 mod routines;

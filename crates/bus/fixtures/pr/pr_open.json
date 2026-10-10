@@ -1,0 +1,209 @@
+{
+  "id": "pr-uuid-42",
+  "project_id": "p-gravity",
+  "number": 42,
+  "item_id": "H-247",
+  "branch": "H-247-waiting-for-you",
+  "base": "main",
+  "base_sha": "f0678fc1a2b3c4d5e6f708192a3b4c5d6e7f8091",
+  "head_sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+  "state": "PR_STATE_OPEN",
+  "author": {
+    "daemon_id": "d-mac",
+    "bot_id": "b-dev",
+    "name": "Desktop Dev"
+  },
+  "title": "Waiting for you on releases",
+  "change_note": "Releases say what they wait on from the owner.",
+  "reviews": [
+    {
+      "role": "architect",
+      "reviewer": {
+        "bot": {
+          "daemon_id": "d-mac",
+          "bot_id": "b-arch",
+          "name": "Architect"
+        }
+      },
+      "sha": "8f35e95a1b2c3d4e5f60718293a4b5c6d7e8f901",
+      "verdict": "VERDICT_APPROVED",
+      "summary": "Shape is right.",
+      "findings": [
+        {
+          "severity": "SEVERITY_NIT",
+          "text": "Name the 5 s tick.",
+          "path": "crates/hermesd/src/board/release/blockers_watch.rs",
+          "line": 12
+        }
+      ],
+      "stale": true,
+      "at": "2026-10-09T10:00:00Z"
+    },
+    {
+      "role": "ux",
+      "reviewer": {
+        "bot": {
+          "daemon_id": "d-mac",
+          "bot_id": "b-ux",
+          "name": "UX Designer"
+        }
+      },
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "verdict": "VERDICT_APPROVED",
+      "summary": "Copy matches UX-049.",
+      "stale": false,
+      "at": "2026-10-09T11:00:00Z"
+    },
+    {
+      "role": "ce",
+      "reviewer": {
+        "bot": {
+          "daemon_id": "d-mac",
+          "bot_id": "b-ce",
+          "name": "Context Engineer"
+        }
+      },
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "verdict": "VERDICT_CHANGES_REQUESTED",
+      "summary": "Bots must not see owner_blockers.",
+      "findings": [
+        {
+          "severity": "SEVERITY_MUST",
+          "text": "MCP release tools return owner_blockers.",
+          "path": "crates/hermesd/src/mcp/releases.rs",
+          "line": 88
+        }
+      ],
+      "stale": false,
+      "at": "2026-10-09T11:10:00Z",
+      "artifact": "UX-050-H-247.md"
+    }
+  ],
+  "checks": [
+    {
+      "name": "rust",
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "result": "CHECK_RESULT_PASS",
+      "required": true,
+      "ran_on": "mac",
+      "runner": {
+        "daemon_id": "d-mac",
+        "bot_id": "w-check-1",
+        "name": "check-rust-1"
+      },
+      "log_url": "hermes-artifact://checks/rust-9a1b2c3.log",
+      "started_at": "2026-10-09T10:30:00Z",
+      "finished_at": "2026-10-09T10:44:00Z",
+      "tool_versions": {
+        "cargo": "1.99.0"
+      }
+    },
+    {
+      "name": "desktop",
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "result": "CHECK_RESULT_RUNNING",
+      "required": true,
+      "ran_on": "mac",
+      "runner": {
+        "daemon_id": "d-mac",
+        "bot_id": "w-check-2",
+        "name": "check-desktop-1"
+      },
+      "started_at": "2026-10-09T10:45:00Z"
+    },
+    {
+      "name": "vr",
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "result": "CHECK_RESULT_QUEUED",
+      "required": true
+    },
+    {
+      "name": "windows",
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "result": "CHECK_RESULT_FAIL",
+      "required": true,
+      "ran_on": "win-pc",
+      "runner": {
+        "daemon_id": "d-win",
+        "bot_id": "w-check-3",
+        "name": "check-windows-1"
+      },
+      "log_url": "hermes-artifact://checks/windows-9a1b2c3.log",
+      "started_at": "2026-10-09T10:31:00Z",
+      "finished_at": "2026-10-09T10:52:00Z",
+      "tool_versions": {
+        "cargo": "1.99.0"
+      }
+    },
+    {
+      "name": "docs",
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "result": "CHECK_RESULT_ERROR",
+      "required": false,
+      "ran_on": "mac",
+      "started_at": "2026-10-09T10:33:00Z",
+      "finished_at": "2026-10-09T10:33:05Z"
+    }
+  ],
+  "owner_review_required": true,
+  "owner_flagged": false,
+  "mergeable": {
+    "ok": false,
+    "blockers": [
+      {
+        "kind": "BLOCKER_KIND_REVIEW_MISSING",
+        "subject": "architect",
+        "text": "Architect approved an older commit"
+      },
+      {
+        "kind": "BLOCKER_KIND_CHANGES_REQUESTED",
+        "subject": "ce",
+        "text": "Context Engineer asked for changes"
+      },
+      {
+        "kind": "BLOCKER_KIND_UNRESOLVED_MUST",
+        "subject": "ce",
+        "text": "1 must-fix finding is open"
+      },
+      {
+        "kind": "BLOCKER_KIND_OWNER_REVIEW",
+        "subject": "owner",
+        "text": "Your review, after the reviewers"
+      },
+      {
+        "kind": "BLOCKER_KIND_CHECK_PENDING",
+        "subject": "desktop",
+        "text": "desktop is running"
+      },
+      {
+        "kind": "BLOCKER_KIND_CHECK_PENDING",
+        "subject": "vr",
+        "text": "vr is queued"
+      },
+      {
+        "kind": "BLOCKER_KIND_CHECK_FAILED",
+        "subject": "windows",
+        "text": "windows failed"
+      },
+      {
+        "kind": "BLOCKER_KIND_AC_UNTICKED",
+        "text": "2 acceptance criteria not ticked"
+      }
+    ]
+  },
+  "opened_at": "2026-10-09T09:00:00Z",
+  "required_roles": [
+    "architect",
+    "ux",
+    "ce",
+    "owner"
+  ],
+  "comment_count": 3,
+  "moved_unreported": false,
+  "item_title": "Waiting for you on releases",
+  "docs_changed": true,
+  "additions": 412,
+  "deletions": 37,
+  "files_changed": 14,
+  "repo": "mrinaldi2/gravity"
+}

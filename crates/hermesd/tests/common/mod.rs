@@ -25,6 +25,7 @@ pub mod ios_targets;
 pub mod peer_board;
 pub mod peers;
 pub mod proxy;
+pub mod prs;
 pub mod release_phone;
 pub mod releases;
 pub mod repo;

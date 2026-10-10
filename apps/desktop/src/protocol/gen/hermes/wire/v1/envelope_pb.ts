@@ -12,13 +12,15 @@ import type { BoardPush, BoardRequest, BoardResponse } from "../../board/v1/requ
 import { file_hermes_board_v1_requests } from "../../board/v1/requests_pb";
 import type { HomeRequest, HomeResponse } from "../../home/v1/home_pb";
 import { file_hermes_home_v1_home } from "../../home/v1/home_pb";
+import type { PrPush, PrRequest, PrResponse } from "../../pr/v1/pr_pb";
+import { file_hermes_pr_v1_pr } from "../../pr/v1/pr_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file hermes/wire/v1/envelope.proto.
  */
 export const file_hermes_wire_v1_envelope: GenFile = /*@__PURE__*/
-  fileDesc("Ch1oZXJtZXMvd2lyZS92MS9lbnZlbG9wZS5wcm90bxIOaGVybWVzLndpcmUudjEi2gIKCEVudmVsb3BlEg4KBnJlcV9pZBgBIAEoBBI2Cg1ib2FyZF9yZXF1ZXN0GAIgASgLMh0uaGVybWVzLmJvYXJkLnYxLkJvYXJkUmVxdWVzdEgAEjgKDmJvYXJkX3Jlc3BvbnNlGAMgASgLMh4uaGVybWVzLmJvYXJkLnYxLkJvYXJkUmVzcG9uc2VIABIwCgpib2FyZF9wdXNoGAQgASgLMhouaGVybWVzLmJvYXJkLnYxLkJvYXJkUHVzaEgAEjMKDGhvbWVfcmVxdWVzdBgFIAEoCzIbLmhlcm1lcy5ob21lLnYxLkhvbWVSZXF1ZXN0SAASNQoNaG9tZV9yZXNwb25zZRgGIAEoCzIcLmhlcm1lcy5ob21lLnYxLkhvbWVSZXNwb25zZUgAEiYKBWVycm9yGA8gASgLMhUuaGVybWVzLndpcmUudjEuRXJyb3JIAEIGCgRib2R5IiYKBUVycm9yEgwKBGNvZGUYASABKAkSDwoHbWVzc2FnZRgCIAEoCWIGcHJvdG8z", [file_hermes_board_v1_requests, file_hermes_home_v1_home]);
+  fileDesc("Ch1oZXJtZXMvd2lyZS92MS9lbnZlbG9wZS5wcm90bxIOaGVybWVzLndpcmUudjEi4wMKCEVudmVsb3BlEg4KBnJlcV9pZBgBIAEoBBI2Cg1ib2FyZF9yZXF1ZXN0GAIgASgLMh0uaGVybWVzLmJvYXJkLnYxLkJvYXJkUmVxdWVzdEgAEjgKDmJvYXJkX3Jlc3BvbnNlGAMgASgLMh4uaGVybWVzLmJvYXJkLnYxLkJvYXJkUmVzcG9uc2VIABIwCgpib2FyZF9wdXNoGAQgASgLMhouaGVybWVzLmJvYXJkLnYxLkJvYXJkUHVzaEgAEjMKDGhvbWVfcmVxdWVzdBgFIAEoCzIbLmhlcm1lcy5ob21lLnYxLkhvbWVSZXF1ZXN0SAASNQoNaG9tZV9yZXNwb25zZRgGIAEoCzIcLmhlcm1lcy5ob21lLnYxLkhvbWVSZXNwb25zZUgAEi0KCnByX3JlcXVlc3QYByABKAsyFy5oZXJtZXMucHIudjEuUHJSZXF1ZXN0SAASLwoLcHJfcmVzcG9uc2UYCCABKAsyGC5oZXJtZXMucHIudjEuUHJSZXNwb25zZUgAEicKB3ByX3B1c2gYCSABKAsyFC5oZXJtZXMucHIudjEuUHJQdXNoSAASJgoFZXJyb3IYDyABKAsyFS5oZXJtZXMud2lyZS52MS5FcnJvckgAQgYKBGJvZHkiJgoFRXJyb3ISDAoEY29kZRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJYgZwcm90bzM", [file_hermes_board_v1_requests, file_hermes_home_v1_home, file_hermes_pr_v1_pr]);
 
 /**
  * @generated from message hermes.wire.v1.Envelope
@@ -71,6 +73,26 @@ export type Envelope = Message<"hermes.wire.v1.Envelope"> & {
      */
     value: HomeResponse;
     case: "homeResponse";
+  } | {
+    /**
+     * Pull requests and checks (H-261).
+     *
+     * @generated from field: hermes.pr.v1.PrRequest pr_request = 7;
+     */
+    value: PrRequest;
+    case: "prRequest";
+  } | {
+    /**
+     * @generated from field: hermes.pr.v1.PrResponse pr_response = 8;
+     */
+    value: PrResponse;
+    case: "prResponse";
+  } | {
+    /**
+     * @generated from field: hermes.pr.v1.PrPush pr_push = 9;
+     */
+    value: PrPush;
+    case: "prPush";
   } | {
     /**
      * @generated from field: hermes.wire.v1.Error error = 15;

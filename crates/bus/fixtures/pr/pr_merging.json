@@ -1,0 +1,73 @@
+{
+  "id": "pr-uuid-46",
+  "project_id": "p-gravity",
+  "number": 46,
+  "item_id": "H-265",
+  "branch": "H-265-pr-contract",
+  "base": "main",
+  "base_sha": "f0678fc1a2b3c4d5e6f708192a3b4c5d6e7f8091",
+  "head_sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+  "state": "PR_STATE_MERGING",
+  "author": {
+    "daemon_id": "d-mac",
+    "bot_id": "b-dev",
+    "name": "Desktop Dev"
+  },
+  "title": "PR-0: hermes.pr.v1 contract",
+  "reviews": [
+    {
+      "role": "architect",
+      "reviewer": {
+        "bot": {
+          "daemon_id": "d-mac",
+          "bot_id": "b-arch",
+          "name": "Architect"
+        }
+      },
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "verdict": "VERDICT_APPROVED",
+      "summary": "OK.",
+      "at": "2026-10-09T12:00:00Z"
+    },
+    {
+      "role": "owner",
+      "reviewer": {
+        "owner": {
+          "device_id": "dev-iphone",
+          "device_name": "iPhone"
+        }
+      },
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "verdict": "VERDICT_APPROVED",
+      "at": "2026-10-09T12:05:00Z"
+    }
+  ],
+  "checks": [
+    {
+      "name": "rust",
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "result": "CHECK_RESULT_PASS",
+      "required": true,
+      "ran_on": "mac"
+    },
+    {
+      "name": "desktop",
+      "sha": "9a1b2c3d4e5f60718293a4b5c6d7e8f901234567",
+      "result": "CHECK_RESULT_PASS",
+      "required": true,
+      "ran_on": "mac"
+    }
+  ],
+  "owner_review_required": true,
+  "mergeable": {
+    "ok": true
+  },
+  "opened_at": "2026-10-09T09:30:00Z",
+  "required_roles": [
+    "architect",
+    "owner"
+  ],
+  "item_title": "PR-0: hermes.pr.v1 contract",
+  "merge_at": "2026-10-09T12:05:10Z",
+  "repo": "mrinaldi2/gravity"
+}

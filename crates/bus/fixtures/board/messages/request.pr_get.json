@@ -1,0 +1,9 @@
+{
+  "reqId": "61",
+  "prRequest": {
+    "pr_get": {
+      "project_id": "p-gravity",
+      "number": 42
+    }
+  }
+}

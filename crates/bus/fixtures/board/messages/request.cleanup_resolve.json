@@ -1,0 +1,9 @@
+{
+  "reqId": "71",
+  "prRequest": {
+    "cleanup_resolve": {
+      "job_id": "cj-3",
+      "action": "ACTION_KEEP"
+    }
+  }
+}

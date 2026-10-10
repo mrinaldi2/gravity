@@ -1,0 +1,486 @@
+// Pull requests and checks, contract version 1 (H-261 tech design §9, §15.6;
+// UX-051 field names). A PR is a card's change: reviews are bound to the
+// commit they approved, checks run per commit, and main moves only by a
+// merge of a PR that is approved with green checks.
+//
+// Requests travel in WS binary frames inside `hermes.wire.v1.Envelope`
+// (`PrRequest`/`PrResponse`/`PrPush`) and as proto3 JSON on the JSON WS,
+// `{type, req_id, ...}`, with the proto field names. Bots use the tools in
+// tools.proto over MCP; the owner's review and settings never go through a
+// bot. Capabilities `pull_requests` and `checks`.
+//
+// Fields may be added; none renamed or renumbered (ADR-001): a breaking
+// change is hermes.pr.v2.
+syntax = "proto3";
+
+package hermes.pr.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ---- values ----
+
+enum PrState {
+  PR_STATE_UNSPECIFIED = 0;
+  PR_STATE_OPEN = 1;
+  // Mergeable and inside the owner's 10 s Undo window (ruling 7629a873):
+  // nothing is pushed yet, so Undo returns it to open.
+  PR_STATE_MERGING = 2;
+  PR_STATE_MERGED = 3;
+  // Closed without merging.
+  PR_STATE_CLOSED = 4;
+}
+
+enum Verdict {
+  VERDICT_UNSPECIFIED = 0;
+  VERDICT_APPROVED = 1;
+  VERDICT_CHANGES_REQUESTED = 2;
+}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  // Blocks the merge until resolved; `changes_requested` carries at least one.
+  SEVERITY_MUST = 1;
+  SEVERITY_SHOULD = 2;
+  SEVERITY_NIT = 3;
+}
+
+enum CheckResult {
+  CHECK_RESULT_UNSPECIFIED = 0;
+  CHECK_RESULT_QUEUED = 1;
+  CHECK_RESULT_RUNNING = 2;
+  CHECK_RESULT_PASS = 3;
+  CHECK_RESULT_FAIL = 4;
+  // The check couldn't run (no computer with its tools, the runner died).
+  CHECK_RESULT_ERROR = 5;
+}
+
+// Which side of a diff a line comment is on.
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  SIDE_OLD = 1;
+  SIDE_NEW = 2;
+}
+
+// The project's Owner review setting (ruling fc46b042; default ALL).
+enum OwnerReview {
+  OWNER_REVIEW_UNSPECIFIED = 0;
+  OWNER_REVIEW_ALL = 1;
+  OWNER_REVIEW_AREAS = 2;
+  OWNER_REVIEW_FLAGGED = 3;
+  OWNER_REVIEW_NONE = 4;
+}
+
+// Why a PR can't merge yet (§5.1), one per missing thing.
+enum BlockerKind {
+  BLOCKER_KIND_UNSPECIFIED = 0;
+  // Not open (merged, closed).
+  BLOCKER_KIND_NOT_OPEN = 1;
+  // The branch moved without a reported push (§1.2).
+  BLOCKER_KIND_MOVED_UNREPORTED = 2;
+  // A required role hasn't approved the current change; `subject` = role.
+  BLOCKER_KIND_REVIEW_MISSING = 3;
+  // A role asked for changes since its approval; `subject` = role.
+  BLOCKER_KIND_CHANGES_REQUESTED = 4;
+  // A `must` finding or comment from the latest round is unresolved.
+  BLOCKER_KIND_UNRESOLVED_MUST = 5;
+  // The owner's review, after the bots' (ruling 7629a873).
+  BLOCKER_KIND_OWNER_REVIEW = 6;
+  // A required check hasn't passed yet; `subject` = check name.
+  BLOCKER_KIND_CHECK_PENDING = 7;
+  // A required check failed or couldn't run; `subject` = check name.
+  BLOCKER_KIND_CHECK_FAILED = 8;
+  // The head doesn't descend from main: update with main.
+  BLOCKER_KIND_BEHIND_MAIN = 9;
+  // Updating with main conflicts; `paths` = the files.
+  BLOCKER_KIND_CONFLICTS = 10;
+  // The card is blocked.
+  BLOCKER_KIND_CARD_BLOCKED = 11;
+  // Acceptance criteria not ticked (post-install ones excepted).
+  BLOCKER_KIND_AC_UNTICKED = 12;
+}
+
+enum CleanupState {
+  CLEANUP_STATE_UNSPECIFIED = 0;
+  CLEANUP_STATE_QUEUED = 1;
+  CLEANUP_STATE_RUNNING = 2;
+  CLEANUP_STATE_DONE = 3;
+  // Kept on purpose: in use, unsaved work (salvaged), or waiting for the owner.
+  CLEANUP_STATE_HELD = 4;
+  CLEANUP_STATE_FAILED = 5;
+}
+
+enum CleanupKind {
+  CLEANUP_KIND_UNSPECIFIED = 0;
+  CLEANUP_KIND_WORKTREE = 1;
+  CLEANUP_KIND_BUILD_OUTPUT = 2;
+  CLEANUP_KIND_BUILD_CACHE = 3;
+  CLEANUP_KIND_REMOTE_BRANCH = 4;
+  CLEANUP_KIND_CHECK_WORKTREE = 5;
+  CLEANUP_KIND_DOCS_PREVIEW = 6;
+}
+
+enum FileStatus {
+  FILE_STATUS_UNSPECIFIED = 0;
+  FILE_STATUS_ADDED = 1;
+  FILE_STATUS_MODIFIED = 2;
+  FILE_STATUS_DELETED = 3;
+  FILE_STATUS_RENAMED = 4;
+}
+
+// ---- entities ----
+
+message BotRef {
+  string daemon_id = 1;                     // the bot's own computer
+  string bot_id = 2;                        // its id there
+  string name = 3;
+}
+
+// The owner as a reviewer; shown as "You", with the device in the meta line.
+message Owner {
+  string device_id = 1;                     // empty = an owner ticket (the desktop app)
+  string device_name = 2;                   // "iPhone", "mac"
+}
+
+message Reviewer {
+  oneof who {
+    BotRef bot = 1;
+    Owner owner = 2;
+  }
+}
+
+message Finding {
+  Severity severity = 1;
+  string text = 2;
+  string path = 3;                          // empty = not about one file
+  uint32 line = 4;                          // 0 = no line
+  string resolved_in = 5;                   // the commit that resolved it; empty = open
+  string follow_up_item_id = 6;             // the card it became; empty = none
+}
+
+message Review {
+  string role = 1;                          // architect, ux, ce, devops, qa, owner
+  Reviewer reviewer = 2;
+  string sha = 3;                           // the head it reviewed
+  Verdict verdict = 4;
+  string summary = 5;
+  repeated Finding findings = 6;
+  // The PR's own change differs from the one reviewed (patch-id, §3). An
+  // approval on an older sha with the same change is not stale ("still valid").
+  bool stale = 7;
+  google.protobuf.Timestamp at = 8;
+  string artifact = 9;                      // a longer review note; empty = none
+}
+
+// The lead waived a required role on this PR (never ce or owner, §2.1).
+message RoleWaiver {
+  string role = 1;
+  BotRef by = 2;
+  string reason = 3;
+  google.protobuf.Timestamp at = 4;
+}
+
+message CheckRun {
+  string name = 1;                          // from .hermes/checks.toml
+  string sha = 2;                           // the commit it ran on
+  CheckResult result = 3;
+  string ran_on = 4;                        // the computer
+  BotRef runner = 5;                        // the worker that ran it
+  string log_url = 6;                       // the log on the board home; empty = none yet
+  bool required = 7;
+  google.protobuf.Timestamp started_at = 8;
+  google.protobuf.Timestamp finished_at = 9;
+  map<string, string> tool_versions = 10;   // "cargo" → "1.99.0"
+  // Ran on another commit with the same tree, which counts (§1.5).
+  string tree_of = 11;                      // that commit; empty = this sha
+}
+
+message Blocker {
+  BlockerKind kind = 1;
+  string text = 2;                          // one line, set by the daemon
+  string subject = 3;                       // the role or check it is about; empty = none
+  repeated string paths = 4;                // conflicts: the files
+}
+
+message Mergeable {
+  bool ok = 1;
+  repeated Blocker blockers = 2;            // empty when ok
+}
+
+message CleanupItem {
+  string job_id = 1;
+  string machine = 2;
+  CleanupKind kind = 3;
+  CleanupState state = 4;
+  string path = 5;                          // the folder, or the branch for a remote branch
+  string reason = 6;                        // why held or failed; empty otherwise
+  uint64 freed_bytes = 7;
+  bool salvaged = 8;                        // unsaved work was bundled first
+}
+
+// What was removed after the PR merged or closed (§15).
+message Cleanup {
+  CleanupState state = 1;                   // the whole: running, done, held or failed
+  uint64 freed_bytes = 2;
+  repeated CleanupItem items = 3;
+  bool branch_deleted = 4;
+}
+
+message PullRequest {
+  string id = 1;
+  string project_id = 2;
+  uint32 number = 3;                        // per project, from 1 (#42)
+  string item_id = 4;                       // the card it delivers
+  string branch = 5;
+  string base = 6;                          // "main"
+  string base_sha = 7;
+  string head_sha = 8;                      // the latest reported and verified head
+  PrState state = 9;
+  BotRef author = 10;
+  string title = 11;
+  string change_note = 12;                  // markdown, or a path in the repo
+  repeated Review reviews = 13;             // newest per reviewer and role
+  repeated CheckRun checks = 14;            // on head_sha (or its tree)
+  bool owner_review_required = 15;
+  bool owner_flagged = 16;
+  Mergeable mergeable = 17;
+  string merged_sha = 18;                   // equals head_sha (fast-forward)
+  google.protobuf.Timestamp opened_at = 19;
+  google.protobuf.Timestamp merged_at = 20;
+  repeated string required_roles = 21;      // roles from reviewers.toml, plus "owner"
+  uint32 comment_count = 22;
+  bool moved_unreported = 23;               // the branch moved without a reported push
+  // Additions (UX-051, §15.6, ruling 7629a873):
+  string item_title = 24;
+  string owner_flag_reason = 25;
+  repeated RoleWaiver waivers = 26;
+  bool docs_changed = 27;                   // it changes docs: a preview exists
+  google.protobuf.Timestamp merge_at = 28;  // merging: when the Undo window ends
+  google.protobuf.Timestamp closed_at = 29;
+  Cleanup cleanup = 30;                     // unset = nothing to clean yet
+  uint32 additions = 31;
+  uint32 deletions = 32;
+  uint32 files_changed = 33;
+  // The repository, "owner/name" (e.g. "mrinaldi2/gravity_os"): a project's
+  // board can span several; numbers stay per project.
+  string repo = 34;
+}
+
+message LineComment {
+  string id = 1;
+  string sha = 2;                           // the commit it was written on
+  string path = 3;
+  uint32 line = 4;
+  Side side = 5;
+  string body = 6;
+  Reviewer author = 7;
+  string reply_to = 8;                      // empty = starts a thread
+  bool resolved = 9;
+  bool outdated = 10;                       // its line is gone on the shown commit
+  google.protobuf.Timestamp at = 11;
+  Severity severity = 12;                   // unset = a plain comment
+}
+
+message ReviewSettings {
+  OwnerReview owner_review = 1;
+  repeated string owner_review_areas = 2;
+  repeated string areas = 3;                // area names from reviewers.toml, for the picker
+  string project_id = 4;
+}
+
+message DiffFile {
+  string path = 1;
+  string old_path = 2;                      // renamed: the old path; empty otherwise
+  FileStatus status = 3;
+  uint32 additions = 4;
+  uint32 deletions = 5;
+  bool binary = 6;
+}
+
+// A merged PR as a release lists it (§6.1).
+message PrRef {
+  uint32 number = 1;
+  string item_id = 2;
+  string merged_sha = 3;
+  string title = 4;
+  string repo = 5;                          // "owner/name"
+}
+
+// What a release cut from main adds to the release payload (§6.1, §9),
+// at the top level of the release JSON with these names. `commit` is the
+// existing `source_commit`.
+message ReleaseFromMain {
+  string tag = 1;                           // "desktop-v0.18.0"; empty = not tagged yet
+  string commit = 2;
+  repeated PrRef prs = 3;                   // planned and merged since the last release
+  repeated PrRef also_included = 4;         // merged but not planned
+}
+
+message DiskUse {
+  BotRef bot = 1;                           // unset = not attributable to a bot
+  uint64 workspace_bytes = 2;
+  uint64 worktree_bytes = 3;
+  uint64 cache_bytes = 4;
+  uint64 reclaimable_bytes = 5;             // old build output the sweep may remove
+}
+
+message DiskReport {
+  string machine = 1;
+  uint64 free_bytes = 2;
+  uint64 total_bytes = 3;
+  repeated DiskUse uses = 4;                // biggest first
+  google.protobuf.Timestamp as_of = 5;
+}
+
+// ---- requests (WS type in brackets; grant) ----
+
+message PrListRequest {                     // [pr_list] read
+  string project_id = 1;
+  repeated PrState states = 2;              // empty = open and merging
+}
+message PrGetRequest {                      // [pr_get] read
+  string project_id = 1;
+  uint32 number = 2;
+}
+message PrDiffRequest {                     // [pr_diff] read
+  string project_id = 1;
+  uint32 number = 2;
+  optional string from_sha = 3;             // unset = the merge-base with main
+  optional string to_sha = 4;               // unset = head_sha
+  optional string path = 5;                 // unset = every file
+}
+message PrCommentsRequest {                 // [pr_comments] read
+  string project_id = 1;
+  uint32 number = 2;
+  optional string sha = 3;                  // anchor to this commit; unset = head
+}
+message PrReviewSubmitRequest {             // [pr_review_submit] approve; owner device or ticket only
+  string project_id = 1;
+  uint32 number = 2;
+  string sha = 3;                           // must equal head_sha
+  Verdict verdict = 4;
+  string summary = 5;                       // required with changes_requested
+  repeated Finding findings = 6;
+}
+message PrCommentAddRequest {               // [pr_comment_add] approve; owner device or ticket only
+  string project_id = 1;
+  uint32 number = 2;
+  string sha = 3;
+  string path = 4;
+  uint32 line = 5;
+  Side side = 6;
+  string body = 7;
+  optional string reply_to = 8;
+}
+message PrMergeUndoRequest {                // [pr_merge_undo] approve; owner device or ticket only
+  string project_id = 1;
+  uint32 number = 2;
+}
+message PrFlagRequest {                     // [pr_flag] control; owner or lead
+  string project_id = 1;
+  uint32 number = 2;
+  bool flagged = 3;
+  string reason = 4;
+}
+message ReviewSettingsGetRequest {          // [review_settings_get] read
+  string project_id = 1;
+}
+message ReviewSettingsSetRequest {          // [review_settings_set] approve; owner device or ticket only
+  string project_id = 1;
+  OwnerReview owner_review = 2;
+  repeated string owner_review_areas = 3;
+}
+message CheckRerunRequest {                 // [check_rerun] control; owner, lead or author
+  string project_id = 1;
+  string sha = 2;
+  string name = 3;
+}
+message CleanupResolveRequest {             // [cleanup_resolve] approve; owner device or ticket only
+  enum Action {
+    ACTION_UNSPECIFIED = 0;
+    ACTION_REMOVE = 1;                      // remove a salvaged dirty tree anyway
+    ACTION_KEEP = 2;
+  }
+  string job_id = 1;
+  Action action = 2;
+}
+message DiskReportRequest {                 // [disk_report] read
+  string machine = 1;                       // empty = this computer
+}
+
+// ---- answers ----
+
+message PrList {
+  repeated PullRequest prs = 1;             // open first, then newest
+}
+
+message PrDiff {
+  string from_sha = 1;
+  string to_sha = 2;
+  repeated DiffFile files = 3;
+  string diff = 4;                          // unified diff, at most 2 MB
+  bool truncated = 5;                       // cut at 2 MB: open it in a terminal
+}
+
+message PrComments {
+  string sha = 1;                           // the commit they are anchored to
+  repeated LineComment comments = 2;        // threads in order, replies after their parent
+}
+
+// ---- pushes ----
+message PrUpdated { string project_id = 1; uint32 number = 2; }                    // [pr_updated]
+message CheckUpdated { string project_id = 1; string sha = 2; string name = 3; }   // [check_updated]
+message MergeQueueChanged { string project_id = 1; }                               // [merge_queue_changed]
+message CleanupUpdated { string project_id = 1; uint32 number = 2; }               // [cleanup_updated]
+
+// ---- binary transport ----
+// One request per binary frame, answered under its `req_id`.
+message PrRequest {
+  oneof request {
+    PrListRequest pr_list = 1;
+    PrGetRequest pr_get = 2;
+    PrDiffRequest pr_diff = 3;
+    PrCommentsRequest pr_comments = 4;
+    PrReviewSubmitRequest pr_review_submit = 5;
+    PrCommentAddRequest pr_comment_add = 6;
+    PrMergeUndoRequest pr_merge_undo = 7;
+    PrFlagRequest pr_flag = 8;
+    ReviewSettingsGetRequest review_settings_get = 9;
+    ReviewSettingsSetRequest review_settings_set = 10;
+    CheckRerunRequest check_rerun = 11;
+    CleanupResolveRequest cleanup_resolve = 12;
+    DiskReportRequest disk_report = 13;
+  }
+}
+
+message PrResponse {
+  oneof response {
+    // To `pr_list`.
+    PrList pr_list = 1;
+    // To `pr_get`, `pr_review_submit`, `pr_merge_undo` and `pr_flag`: the PR as it is now.
+    PullRequest pr = 2;
+    // To `pr_diff`.
+    PrDiff pr_diff = 3;
+    // To `pr_comments`.
+    PrComments pr_comments = 4;
+    // To `pr_comment_add`.
+    LineComment comment = 5;
+    // To `review_settings_get` and `review_settings_set`.
+    ReviewSettings review_settings = 6;
+    // To `check_rerun`.
+    CheckRun check = 7;
+    // To `cleanup_resolve`.
+    CleanupItem cleanup_item = 8;
+    // To `disk_report`.
+    DiskReport disk_report = 9;
+  }
+}
+
+// Pushes carry `req_id` 0.
+message PrPush {
+  oneof push {
+    PrUpdated pr_updated = 1;
+    CheckUpdated check_updated = 2;
+    MergeQueueChanged merge_queue_changed = 3;
+    CleanupUpdated cleanup_updated = 4;
+  }
+}

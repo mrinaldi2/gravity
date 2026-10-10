@@ -1,0 +1,8 @@
+{
+  "reqId": "68",
+  "prRequest": {
+    "review_settings_get": {
+      "project_id": "p-gravity"
+    }
+  }
+}

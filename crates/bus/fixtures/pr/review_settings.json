@@ -1,0 +1,18 @@
+{
+  "owner_review": "OWNER_REVIEW_AREAS",
+  "owner_review_areas": [
+    "security",
+    "release",
+    "ui"
+  ],
+  "areas": [
+    "daemon",
+    "security",
+    "ui",
+    "bot-prompts",
+    "release",
+    "docs-user",
+    "docs-dev"
+  ],
+  "project_id": "p-gravity"
+}
