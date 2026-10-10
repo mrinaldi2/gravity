@@ -56,6 +56,12 @@ pub struct Config {
     /// [`Config::trust_forwarded_owner_acts_for_tests`].
     #[serde(skip)]
     pub(crate) trust_forwarded_owner_acts: bool,
+    /// The merge queue moves only when a test steps it, on the test's own
+    /// clock: the daemon's 2 s ticker, on the real clock, would race it
+    /// (H-308). Never read from a config file; see
+    /// [`Config::merge_queue_by_hand_for_tests`].
+    #[serde(skip)]
+    pub(crate) merge_queue_by_hand: bool,
     /// `pty` (each bot's saved CLI) or `double` (deterministic test runtime).
     pub runtime: RuntimeKind,
     pub claude_bin: String,
@@ -241,6 +247,7 @@ impl Default for Config {
             negotiate_port: true,
             scratch: false,
             trust_forwarded_owner_acts: false,
+            merge_queue_by_hand: false,
             runtime: RuntimeKind::Pty,
             claude_bin: "claude".to_string(),
             claude_args: Vec::new(),
@@ -323,6 +330,13 @@ impl Config {
     #[cfg(any(test, feature = "test-support"))]
     pub fn trust_forwarded_owner_acts_for_tests(&mut self) {
         self.trust_forwarded_owner_acts = true;
+    }
+
+    /// Stops the daemon's own merge-queue ticker, so a test's
+    /// `prs::queue::step(now)` is the only clock the queue sees (H-308).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn merge_queue_by_hand_for_tests(&mut self) {
+        self.merge_queue_by_hand = true;
     }
 
     pub fn load(path: Option<&Path>) -> anyhow::Result<Self> {
