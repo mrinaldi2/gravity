@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::grants::{extras, grant, said};
+use common::grants::{comments, extras, grant, said, settled};
 use common::peers::team;
 use serde_json::json;
 
@@ -18,6 +18,14 @@ async fn a_grant_over_a_peer_link_is_refused_and_nothing_is_granted() {
     let mut t = team().await;
     let id = grant(&mut t, &["install"], |_| {}).await;
     said(&t.mac, &id, "or from your phone").await;
+    settled(&t).await;
+    assert!(
+        comments(&t.mac, &id)
+            .iter()
+            .all(|c| !c.contains("Approve on")),
+        "never sent, so never refused there: {:?}",
+        comments(&t.mac, &id)
+    );
     assert!(extras(&t).is_empty(), "nothing sent");
 
     // The same frame a bot holding the link's token could send.
