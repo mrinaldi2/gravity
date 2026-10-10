@@ -106,6 +106,13 @@ pub async fn run_there(
     approved_by: &str,
 ) -> anyhow::Result<OwnerAction> {
     let peer = peer_of(app, &a.proposal.target_machine)?;
+    // The owner's run isn't taken from another computer yet (H-301, owner
+    // ruling 6df14f7a): it is approved where it runs, or on a phone.
+    if !super::owner_trust::trusted(app) {
+        let why = super::owner_trust::approve_elsewhere(&peer.name);
+        owner_action::audit(app, &a.id, approved_by, "refused", json!({ "why": why }));
+        return Err(crate::decisions::forbidden(why));
+    }
     let frame = json!({ "type": "owner_action_run", "id": a.id, "sha256": sha256,
                         "approved_by": approved_by });
     let reply = match app.peers.request(&peer.id, frame).await {

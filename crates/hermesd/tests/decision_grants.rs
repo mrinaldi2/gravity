@@ -6,7 +6,7 @@
 mod common;
 
 use bus::PermissionExtra;
-use common::peers::{team, wait_until};
+use common::peers::{team_trusting, wait_until};
 use common::tasks::project_with_bots;
 use common::{TestDaemon, WsClient};
 use serde_json::{json, Value};
@@ -29,7 +29,7 @@ async fn shown_sha(owner: &mut WsClient, id: &str, key: &str) -> Value {
 /// A bot linked from another computer gets its extras there.
 #[tokio::test]
 async fn a_linked_bot_gets_its_grant_on_its_own_computer() {
-    let mut t = team().await;
+    let mut t = team_trusting().await;
     let raised = t
         .lead
         .call(

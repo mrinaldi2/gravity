@@ -6,8 +6,12 @@
 //! can plug in here; until then the owner acts on the home or on a phone
 //! paired with it. Bots' own work over a link is unaffected.
 
-/// Off until a forwarded owner act carries proof a bot can't forge.
-pub const TRUST_FORWARDED_OWNER_ACTS: bool = false;
+/// Off until a forwarded owner act carries proof a bot can't forge: the
+/// config field behind it is never read from a file, so only a test of the
+/// forwarded path (kept for signed approvals) turns it on.
+pub fn trusted(app: &crate::app::AppState) -> bool {
+    app.cfg.trust_forwarded_owner_acts
+}
 
 /// What the owner is told on a linked computer, `home` being the computer
 /// that holds the board.

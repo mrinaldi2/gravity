@@ -4,7 +4,7 @@
 //!
 //! Only the read (`review_settings_get`) is served. Every owner act
 //! (verdicts, comments, resolves, flags, Undo, Leave out, settings, check
-//! re-runs) is refused while `owner_trust::TRUST_FORWARDED_OWNER_ACTS` is
+//! re-runs) is refused while `owner_trust::trusted` is
 //! off: a bot holding the link's token could send one claiming
 //! `via: ticket` (Architect, H-285 must-fix). The `via` plumbing stays for
 //! signed approvals.
@@ -14,7 +14,7 @@ use std::sync::Arc;
 use bus::{new_id, Peer};
 use serde_json::Value;
 
-use super::owner_trust::{approve_elsewhere, TRUST_FORWARDED_OWNER_ACTS};
+use super::owner_trust::{approve_elsewhere, trusted};
 use super::{board_home, board_ids, refuse};
 use crate::app::AppState;
 use crate::db::{OwnerProof, OwnerVia};
@@ -45,7 +45,7 @@ pub(super) fn serve(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow::
                 "not an owner request a linked computer forwards",
             )
         })?;
-    if kind != "review_settings_get" && !TRUST_FORWARDED_OWNER_ACTS {
+    if kind != "review_settings_get" && !trusted(app) {
         let home = app
             .db
             .board_read(crate::board::release::machines::this_computer)?;

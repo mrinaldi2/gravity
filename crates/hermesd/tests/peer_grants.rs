@@ -8,7 +8,7 @@ mod common;
 
 use bus::PermissionExtra;
 use common::grants::{comments, drop_link, extras, grant, said};
-use common::peers::{team, wait_until};
+use common::peers::{team_trusting, wait_until};
 use common::WsClient;
 use serde_json::json;
 
@@ -18,7 +18,7 @@ use serde_json::json;
 /// own with where to set it.
 #[tokio::test]
 async fn the_grantable_extras_apply_and_each_other_one_says_where_to_set_it() {
-    let mut t = team().await;
+    let mut t = team_trusting().await;
     let id = grant(&mut t, &["install", "quiesce", "build_installers"], |_| {}).await;
     wait_until("the PC grants install and quiesce", || {
         extras(&t) == vec![PermissionExtra::Install, PermissionExtra::Quiesce]
@@ -34,7 +34,7 @@ async fn the_grantable_extras_apply_and_each_other_one_says_where_to_set_it() {
         &t.mac,
         &id,
         "Not granted on win: windev's build_installers can't be granted from another \
-         computer; set it on win, in the app there under windev's permissions.",
+         computer; set it on win or from your phone, in the app there under windev's permissions.",
     )
     .await;
     assert!(
@@ -51,7 +51,7 @@ async fn the_grantable_extras_apply_and_each_other_one_says_where_to_set_it() {
 /// comes back, when nobody changed the bot there meanwhile (CE-020 d).
 #[tokio::test]
 async fn a_grant_sent_while_the_pc_is_offline_applies_when_it_is_back() {
-    let mut t = team().await;
+    let mut t = team_trusting().await;
     let id = grant(&mut t, &["install"], drop_link).await;
     said(&t.mac, &id, "Waiting for win").await;
     wait_until("the PC grants it once back", || {
@@ -65,7 +65,7 @@ async fn a_grant_sent_while_the_pc_is_offline_applies_when_it_is_back() {
 /// Nothing grantable from here: nothing is sent, and the decision says so.
 #[tokio::test]
 async fn a_grant_only_its_own_computer_may_give_is_never_sent() {
-    let mut t = team().await;
+    let mut t = team_trusting().await;
     let id = grant(&mut t, &["publish"], |_| {}).await;
     said(&t.mac, &id, "Not granted on win: windev's publish").await;
     assert!(
@@ -84,7 +84,7 @@ async fn a_grant_only_its_own_computer_may_give_is_never_sent() {
 /// with a different list, can't widen what it gives here.
 #[tokio::test]
 async fn the_pc_refuses_each_extra_it_may_not_take_and_applies_the_rest() {
-    let t = team().await;
+    let t = team_trusting().await;
     let frame = json!({"type": "grant_extras", "bot_id": t.windev_id,
                        "extras": ["install", "build_installers"], "decision": "d"});
     let answer = hermesd::decisions::grants::serve_grant(&t.win.app, &t.win_peer_id, &frame)
@@ -106,7 +106,7 @@ async fn the_pc_refuses_each_extra_it_may_not_take_and_applies_the_rest() {
 /// the extras in the app on the PC (the bot's permissions), as any local bot.
 #[tokio::test]
 async fn the_pcs_owner_can_grant_build_installers_there() {
-    let t = team().await;
+    let t = team_trusting().await;
     let mut pc_owner = WsClient::connect(&t.win).await;
     let set = pc_owner
         .request(

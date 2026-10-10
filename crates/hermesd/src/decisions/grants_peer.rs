@@ -39,7 +39,7 @@ fn ruling_holds(decision: Option<&bus::Decision>, grant: &PeerGrant) -> bool {
 /// What it takes to grant what another computer can't: the owner sets it on
 /// the bot's own computer.
 fn set_it_on(there: &str, name: &str) -> String {
-    format!("set it on {there}, in the app there under {name}'s permissions")
+    format!("set it on {there} or from your phone, in the app there under {name}'s permissions")
 }
 
 /// Keeps a linked bot's grants and starts sending them; the line the
@@ -61,7 +61,7 @@ pub fn queue(
     let (sent, local_only): (Vec<String>, Vec<String>) = extras
         .iter()
         .cloned()
-        .partition(|e| super::grants::remote_grantable(e));
+        .partition(|e| super::grants::remote_grantable(app, e));
     for extra in &local_only {
         say(
             app,

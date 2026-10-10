@@ -50,6 +50,11 @@ pub struct Config {
     /// link, no routines, deliveries or workers, no bot-folder writes, no git
     /// push. Set by `--scratch` or `HERMES_SCRATCH=1`.
     pub scratch: bool,
+    /// Take the owner acts a linked computer forwards (H-285, H-301). Never
+    /// read from a config file: off in every daemon until signed approvals
+    /// exist (owner ruling 6df14f7a); only tests of that path set it.
+    #[serde(skip)]
+    pub trust_forwarded_owner_acts: bool,
     /// `pty` (each bot's saved CLI) or `double` (deterministic test runtime).
     pub runtime: RuntimeKind,
     pub claude_bin: String,
@@ -230,6 +235,7 @@ impl Default for Config {
             configured_port: 49777,
             negotiate_port: true,
             scratch: false,
+            trust_forwarded_owner_acts: false,
             runtime: RuntimeKind::Pty,
             claude_bin: "claude".to_string(),
             claude_args: Vec::new(),
