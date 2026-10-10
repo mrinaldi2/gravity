@@ -31,12 +31,28 @@ pub struct Required {
 /// M1): a PR that changes `checks.toml` to a file that parses runs the
 /// head's checks, plus a passing `checks.toml` check, so the repair can
 /// merge. It still needs architect, ce and the owner, as any policy change.
+///
+/// A base whose file parses but holds a check that can never pass would
+/// block its own fix the same way (H-311): a PR that changes `checks.toml`
+/// to a file that parses runs the head's definition of every check it
+/// changes or adds against the merge-base's file; the checks it leaves as
+/// they are keep main's ([`check_defs::with_head_defs`]).
 pub fn required(cache: &Path, base_sha: &str, head: &str) -> anyhow::Result<Required> {
     let tree = git_cache::tree_of(cache, head)
         .ok_or_else(|| anyhow::anyhow!("{head} isn't in the repository"))?;
     let changed = git_cache::changed_paths(cache, base_sha, head)?;
     let checks = match base::read(cache, base_sha)?.checks {
-        Ok(policy) => queue(&policy, &changed),
+        Ok(policy) => match repair(cache, head, &changed)? {
+            Some(theirs) => {
+                // What the PR changed is against where it left main (CE S3).
+                let fork = git_cache::merge_base(cache, base_sha, head)?;
+                let before = base::read(cache, &fork)?
+                    .checks
+                    .unwrap_or_else(|_| Checks::default());
+                super::check_defs::with_head_defs(&policy, &before, &theirs, &changed)
+            }
+            None => queue(&policy, &changed),
+        },
         Err(e) => match repair(cache, head, &changed)? {
             Some(policy) => {
                 let mut checks = queue(&policy, &changed);
@@ -52,7 +68,7 @@ pub fn required(cache: &Path, base_sha: &str, head: &str) -> anyhow::Result<Requ
     Ok(Required { tree, checks })
 }
 
-fn queue(policy: &Checks, changed: &[String]) -> Vec<NewCheck> {
+pub(super) fn queue(policy: &Checks, changed: &[String]) -> Vec<NewCheck> {
     policy
         .for_change(changed)
         .filter(|c| c.required)
@@ -68,7 +84,7 @@ fn queue(policy: &Checks, changed: &[String]) -> Vec<NewCheck> {
         .collect()
 }
 
-fn policy_check(result: CheckResult, note: &str) -> NewCheck {
+pub(super) fn policy_check(result: CheckResult, note: &str) -> NewCheck {
     NewCheck {
         name: CHECKS_PATH.to_string(),
         run: String::new(),

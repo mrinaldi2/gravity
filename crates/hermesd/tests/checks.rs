@@ -69,14 +69,15 @@ fn queued(list: &[&str]) -> Vec<(String, String)> {
 }
 
 /// AC1: exactly the required checks of base's checks.toml for the changed
-/// paths, each queued; the head's own checks.toml changes nothing.
+/// paths, each queued. A check the head's own checks.toml adds runs too,
+/// and the PR says so (H-311); every check it leaves alone is base's.
 #[tokio::test]
 async fn a_reported_head_gets_the_bases_required_checks_for_its_paths() {
     let mut r = setup().await;
     set_policy(&r, POLICY);
     let a = r.card("Search", "doing");
     let tree = branch(&r, "H-1-search", "crates/search.rs");
-    // The PR tries to add a check of its own; base's rules apply.
+    // The PR adds a check of its own: it runs as well, named on the PR.
     let sneaky = format!("{POLICY}\n[[check]]\nname = \"sneaky\"\nrun = \"true\"\n");
     write(&tree, ".hermes/checks.toml", &sneaky);
     git(&tree, &["push", "-q", "origin", "H-1-search"]);
@@ -85,7 +86,9 @@ async fn a_reported_head_gets_the_bases_required_checks_for_its_paths() {
         .call("pr_open", json!({"item": a, "branch": "H-1-search"}))
         .await["pr"]
         .clone();
-    assert_eq!(names(&pr), queued(&["rust", "windows"]), "{pr}");
+    let mut want = vec![(".hermes/checks.toml".to_string(), "pass".to_string())];
+    want.extend(queued(&["rust", "sneaky", "windows"]));
+    assert_eq!(names(&pr), want, "{pr}");
     assert!(pr["checks"]
         .as_array()
         .unwrap()
@@ -98,7 +101,9 @@ async fn a_reported_head_gets_the_bases_required_checks_for_its_paths() {
         .call("pr_push", json!({"number": 1, "sha": docs}))
         .await["pr"]
         .clone();
-    assert_eq!(names(&pushed), queued(&["docs", "rust", "windows"]));
+    let mut want = vec![(".hermes/checks.toml".to_string(), "pass".to_string())];
+    want.extend(queued(&["docs", "rust", "sneaky", "windows"]));
+    assert_eq!(names(&pushed), want);
 
     // A base whose checks.toml doesn't parse can't leave a head unchecked.
     set_policy(&r, "[[check]\nname = ");
