@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::model::Outcome;
 use super::scope::Roots;
-use super::{remove, unsaved};
+use super::{disk, remove, unsaved};
 use crate::app::AppState;
 use crate::safe_git::SafeGit;
 
@@ -118,7 +118,13 @@ pub fn attempt(app: &AppState, target: &Target, merge: &Merge<'_>) -> Outcome {
         let name = tree.file_name().unwrap_or_default();
         let into = merge.salvage.join(name);
         return Outcome::Held(
-            match unsaved::salvage(tree, merge.merged_sha, &found, &into) {
+            match unsaved::salvage(
+                tree,
+                merge.merged_sha,
+                &found,
+                &into,
+                disk::free(app, &app.cfg.home),
+            ) {
                 Ok(saved) => {
                     let left = match saved.skipped.as_slice() {
                         [] => String::new(),
@@ -144,10 +150,9 @@ pub fn attempt(app: &AppState, target: &Target, merge: &Merge<'_>) -> Outcome {
     // removal frees disk, so no disk floor holds it back.
     match remove::worktree(tree, &main, &recheck) {
         Ok(bytes) => {
-            let cache = target
-                .workspace
-                .as_deref()
-                .map_or(0, |w| remove::trim_cache(w, target.no_other_work));
+            let cache = target.workspace.as_deref().map_or(0, |w| {
+                remove::trim_cache(w, target.no_other_work, super::disk::free(app, w))
+            });
             Outcome::Done {
                 bytes: bytes + cache,
             }
@@ -190,7 +195,7 @@ pub fn remove_anyway(app: &AppState, target: &Target, salvage: &Path) -> Outcome
         }
     };
     if !found.is_empty() {
-        match unsaved::salvage(tree, "", &found, salvage) {
+        match unsaved::salvage(tree, "", &found, salvage, disk::free(app, &app.cfg.home)) {
             Ok(saved) if saved.skipped.is_empty() => {}
             Ok(saved) => {
                 return Outcome::Held(format!(

@@ -56,6 +56,12 @@ pub struct Config {
     /// [`Config::trust_forwarded_owner_acts_for_tests`].
     #[serde(skip)]
     pub(crate) trust_forwarded_owner_acts: bool,
+    /// The free disk space the cleanup reads, in place of the real disk's:
+    /// test daemons set it so no test depends on how full the computer is
+    /// (H-275). Never read from a config file; see
+    /// [`Config::free_disk_for_tests`].
+    #[serde(skip)]
+    pub(crate) disk_free_for_tests: Option<u64>,
     /// `pty` (each bot's saved CLI) or `double` (deterministic test runtime).
     pub runtime: RuntimeKind,
     pub claude_bin: String,
@@ -241,6 +247,7 @@ impl Default for Config {
             negotiate_port: true,
             scratch: false,
             trust_forwarded_owner_acts: false,
+            disk_free_for_tests: None,
             runtime: RuntimeKind::Pty,
             claude_bin: "claude".to_string(),
             claude_args: Vec::new(),
@@ -323,6 +330,13 @@ impl Config {
     #[cfg(any(test, feature = "test-support"))]
     pub fn trust_forwarded_owner_acts_for_tests(&mut self) {
         self.trust_forwarded_owner_acts = true;
+    }
+
+    /// The free disk space the disk report, the cache trims and salvage see
+    /// in this daemon, whatever the real disk has (H-275).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn free_disk_for_tests(&mut self, bytes: u64) {
+        self.disk_free_for_tests = Some(bytes);
     }
 
     pub fn load(path: Option<&Path>) -> anyhow::Result<Self> {

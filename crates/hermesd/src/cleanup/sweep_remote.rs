@@ -108,7 +108,10 @@ fn trim_caches(app: &AppState, project_id: &str, plan: &Plan) -> u64 {
     super::batch::bots_here(app, project_id)
         .into_iter()
         .filter_map(|b| Some((b.workspace?, b.name)))
-        .map(|(ws, name)| super::remove::trim_cache(&ws, !plan.busy.contains(&name)))
+        .map(|(ws, name)| {
+            let free = super::disk::free(app, &ws);
+            super::remove::trim_cache(&ws, !plan.busy.contains(&name), free)
+        })
         .sum()
 }
 

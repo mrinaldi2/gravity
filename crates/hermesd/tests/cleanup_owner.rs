@@ -8,7 +8,7 @@ mod common;
 
 use chrono::{Duration, Utc};
 use common::cleanup::{job_at, linked, merged, step};
-use common::prs::{setup, Repo};
+use common::prs::{setup, setup_with, Repo};
 use common::WsClient;
 use serde_json::{json, Value};
 
@@ -150,7 +150,10 @@ async fn the_disk_report_and_a_low_disk_row() {
         .await;
     assert_eq!(out["type"], "disk_report", "{out}");
     let report = &out["disk_report"];
-    assert!(report["free_bytes"].as_u64().unwrap() > 0, "{report}");
+    assert_eq!(
+        report["free_bytes"], 1_000_000_000_000u64,
+        "a test daemon never reads the real disk: {report}"
+    );
     assert!(report["total_bytes"].as_u64().unwrap() >= report["free_bytes"].as_u64().unwrap());
     let dev = report["uses"]
         .as_array()
@@ -197,4 +200,20 @@ async fn the_disk_report_and_a_low_disk_row() {
             "a fresh report replaced the low one"
         );
     }
+}
+
+/// AC4 with a daemon told the disk is low: its own report, taken now, is a
+/// Needs-you row offering Clean up; told it has room again, the row goes.
+#[tokio::test]
+async fn a_daemon_low_on_disk_shows_it_in_needs_you() {
+    let r = setup_with(|cfg| cfg.free_disk_for_tests(14_000_000_000)).await;
+    let mut app = WsClient::connect(&r.pair.d).await;
+    let out = app
+        .request(json!({"type": "disk_report", "refresh": true}))
+        .await;
+    assert_eq!(out["disk_report"]["free_bytes"], 14_000_000_000u64, "{out}");
+    let row = rows(&mut app, &r.project, "DISK_LOW").await;
+    assert_eq!(row.len(), 1, "{row:?}");
+    let title = row[0]["title"].as_str().unwrap();
+    assert!(title.contains("is low on disk: 14 GB free"), "{title}");
 }

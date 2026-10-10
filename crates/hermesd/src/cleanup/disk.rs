@@ -86,6 +86,14 @@ fn worktrees_of(app: &AppState, bot_name: &str) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Free bytes on the disk holding `path`: the real disk's, or what a test
+/// daemon was told (`Config::free_disk_for_tests`).
+pub fn free(app: &AppState, path: &Path) -> Option<u64> {
+    app.cfg
+        .disk_free_for_tests
+        .or_else(|| crate::migrate_home::disk::free_bytes(path))
+}
+
 /// This computer's report, taken now.
 pub fn take(app: &AppState) -> anyhow::Result<Value> {
     let here = app.db.board_read(machines::this_computer)?;
@@ -116,10 +124,12 @@ pub fn take(app: &AppState) -> anyhow::Result<Value> {
     };
     uses.sort_by_key(|u| std::cmp::Reverse(total(u)));
     let home = &app.cfg.home;
+    let free_now = free(app, home).unwrap_or(0);
     Ok(json!({
         "machine": here,
-        "free_bytes": crate::migrate_home::disk::free_bytes(home).unwrap_or(0),
-        "total_bytes": total_bytes(home).unwrap_or(0),
+        "free_bytes": free_now,
+        // Never less than what's free (a test daemon's free is made up).
+        "total_bytes": total_bytes(home).unwrap_or(0).max(free_now),
         "uses": uses,
         "as_of": Utc::now(),
     }))

@@ -253,8 +253,9 @@ pub fn trims_cache(no_other_work: bool, free_bytes: Option<u64>, cache_bytes: u6
 }
 
 /// Trims the bot's shared Cargo target beside `workspace` when
-/// [`trims_cache`] says so: the bytes freed.
-pub fn trim_cache(workspace: &Path, no_other_work: bool) -> u64 {
+/// [`trims_cache`] says so, `free` being the disk's free bytes: the bytes
+/// freed.
+pub fn trim_cache(workspace: &Path, no_other_work: bool, free: Option<u64>) -> u64 {
     if !workspace.is_absolute() {
         return 0;
     }
@@ -266,7 +267,6 @@ pub fn trim_cache(workspace: &Path, no_other_work: bool) -> u64 {
         return 0;
     }
     let bytes = size_of(&cache);
-    let free = crate::migrate_home::disk::free_bytes(workspace);
     if !trims_cache(no_other_work, free, bytes) {
         return 0;
     }

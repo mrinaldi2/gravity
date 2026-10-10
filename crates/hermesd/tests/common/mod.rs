@@ -85,6 +85,10 @@ pub async fn spawn_daemon_on(
     cfg.checks.runner = Some(env!("CARGO_BIN_EXE_hermesd").into());
     // A shared computer's free disk is no test's business; AC2 sets its own.
     cfg.checks.disk_floor_gb = 0;
+    // Nor is it the cleanup's: every test daemon sees 1 TB free, so no Needs
+    // you row or cache trim follows the real disk (H-275). A test of a low
+    // disk injects its own report.
+    cfg.free_disk_for_tests(1_000_000_000_000);
     tweak(&mut cfg);
 
     // SafeGit's home is the process's, and the first daemon names it: name

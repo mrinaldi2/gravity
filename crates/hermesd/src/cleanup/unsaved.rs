@@ -104,12 +104,14 @@ pub struct Salvaged {
 
 /// Saves what `unsaved` names into `dir`: a bundle of the unpushed commits,
 /// a patch of the tracked changes, and a copy of the untracked files by
-/// their bytes (links skipped, never followed) within the caps.
+/// their bytes (links skipped, never followed) within the caps, `free`
+/// being the free bytes where it goes.
 pub fn salvage(
     tree: &Path,
     merged: &str,
     unsaved: &Unsaved,
     dir: &Path,
+    free: Option<u64>,
 ) -> anyhow::Result<Salvaged> {
     std::fs::create_dir_all(dir)?;
     if unsaved.unpushed > 0 {
@@ -147,7 +149,6 @@ pub fn salvage(
             sized.push((rel.clone(), bytes));
         }
     }
-    let free = crate::migrate_home::disk::free_bytes(dir);
     let (copy, skipped) = plan_copy(sized, free);
     for rel in &copy {
         let to = dir.join("untracked").join(rel);

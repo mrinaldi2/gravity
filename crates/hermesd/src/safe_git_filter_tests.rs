@@ -174,7 +174,7 @@ fn planted_filters_never_run_in_unsaved_work_salvage_or_removal() {
     std::fs::write(wt.join("file.txt"), "changed\n").unwrap();
     let found = unsaved::find(&wt, "").unwrap();
     assert_eq!(found.changed, vec!["file.txt".to_string()]);
-    unsaved::salvage(&wt, "", &found, &dir.path().join("salvage")).unwrap();
+    unsaved::salvage(&wt, "", &found, &dir.path().join("salvage"), None).unwrap();
     not_run(&marker, "unsaved work and salvage");
 
     std::fs::write(wt.join("file.txt"), checked_out).unwrap();
