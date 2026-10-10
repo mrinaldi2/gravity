@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
+import { primaryTabs } from "../../app/selection";
 import type { ProjectTab } from "../../app/selection";
 import type { Project } from "../../protocol/entities";
 import type { ProjectRow } from "../../protocol/gen/hermes/home/v1/home_pb";
@@ -11,6 +12,8 @@ interface ProjectWindowProps {
   readonly botCount: number;
   readonly tab: ProjectTab;
   readonly onSelectTab: (tab: ProjectTab) => void;
+  /** Whether the service serves pull requests: the Pull requests tab shows only then. */
+  readonly prs?: boolean;
   /** The project's overview row, for what needs the owner and its release. */
   readonly row?: ProjectRow | null;
   /** Back to the projects home; the crumb is hidden without it. */
@@ -65,7 +68,8 @@ function Pills(props: {
  */
 export default function ProjectWindow(props: ProjectWindowProps): ReactElement {
   const { project, botCount, tab, onSelectTab, row } = props;
-  useProjectKeys(onSelectTab);
+  const tabs = primaryTabs(props.prs ?? false);
+  useProjectKeys(tabs, onSelectTab);
 
   return (
     <div className="project-window">
@@ -84,7 +88,7 @@ export default function ProjectWindow(props: ProjectWindowProps): ReactElement {
           </span>
           {row === undefined || row === null ? null : <Pills row={row} onSelectTab={onSelectTab} />}
         </div>
-        <ProjectTabs active={tab} onSelect={onSelectTab} />
+        <ProjectTabs tabs={tabs} active={tab} onSelect={onSelectTab} />
       </header>
       <div
         id={PROJECT_PANEL_ID}

@@ -1,5 +1,6 @@
 // A project's window (UX-024, H-133 U2): Overview (Needs you, From the team
-// and the dashboard), Board, Team, Releases and Meetings, with Conversations
+// and the dashboard), Board, Pull requests (when the service serves them,
+// H-276), Team, Releases and Meetings, with Conversations
 // and Settings under More. The project's overview row and the owner's threads
 // are read once here and shared by the header, Overview and Team.
 
@@ -22,6 +23,8 @@ import MeetingsView from "../meetings/MeetingsView";
 import { useMeeting } from "../meetings/useMeetings";
 import type { MeetingSummary } from "../../protocol/meetings";
 import ProjectView from "../ProjectView";
+import { PULL_REQUESTS } from "../../protocol/prs";
+import PullRequestsView from "../prs/PullRequestsView";
 import ReleasesView from "../releases/ReleasesView";
 import TeamView from "../team/TeamView";
 import ProjectWindow from "./ProjectWindow";
@@ -165,6 +168,12 @@ function TabView({ ctx }: { readonly ctx: TabContext }): ReactElement {
           openItem={daemon.selection.kind === "project" ? daemon.selection.item : undefined}
         />
       );
+    case "prs":
+      return client.capabilities.includes(PULL_REQUESTS) ? (
+        <PullRequestsView client={client} project={project} connected={connected} now={ctx.now} />
+      ) : (
+        <NeedsNewer what="Pull requests" />
+      );
     case "team":
       return <Team ctx={ctx} />;
     case "releases":
@@ -222,6 +231,7 @@ export default function ProjectPane(props: ProjectPaneProps): ReactElement {
       project={project}
       botCount={bots.length}
       tab={tab}
+      prs={client.capabilities.includes(PULL_REQUESTS)}
       row={row}
       onHome={() => select({ kind: "home" })}
       onSelectTab={onSelectTab}

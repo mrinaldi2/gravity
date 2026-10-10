@@ -1,0 +1,287 @@
+/* One pull request (H-276, UX-051): its header, overview, checks, files and
+   unified diff. Tones and chips are in prs.css. */
+
+.pr-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.pr-detail-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.pr-detail-title h3 {
+  margin: 2px 0 0;
+  font-size: 17px;
+  color: var(--text-strong);
+}
+
+.pr-crumb {
+  padding: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.pr-crumb:hover {
+  color: var(--text);
+}
+
+.pr-byline {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.pr-sections {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pr-section {
+  padding: 6px 12px;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.pr-section-on {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+}
+
+.pr-sections-sum {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.pr-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.pr-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pr-box {
+  padding: 12px 14px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.pr-box h4 {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.pr-banner {
+  padding: 10px 14px;
+  line-height: 1.5;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}
+
+.pr-banner b {
+  color: var(--text-strong);
+}
+
+.pr-banner-ok {
+  border-left-color: var(--green);
+  color: var(--green);
+}
+
+.pr-banner-warn {
+  border-left-color: var(--amber);
+}
+
+.pr-banner-more {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--text-dim);
+}
+
+.pr-review {
+  display: grid;
+  grid-template-columns: 80px 1fr auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.pr-review-role {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.pr-review-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pr-finding {
+  display: flex;
+  gap: 8px;
+}
+
+.pr-note {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.pr-check {
+  display: grid;
+  grid-template-columns: 112px 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.pr-earlier summary {
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.pr-earlier .pr-plain {
+  margin: 6px 0 4px 14px;
+}
+
+/* Files and diff */
+.pr-files {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.pr-file-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pr-delta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.pr-file {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 12px;
+  text-align: left;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.pr-file:hover {
+  background: var(--bg-hover);
+}
+
+.pr-file-on {
+  background: var(--bg-active);
+  color: var(--text-strong);
+}
+
+.pr-file-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.pr-file-counts {
+  flex: none;
+  font-family: var(--mono);
+}
+
+.pr-diff-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pr-diff {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.pr-diff-head {
+  padding: 8px 12px;
+  font-family: var(--font);
+  color: var(--text-strong);
+  border-bottom: 1px solid var(--border);
+}
+
+.pr-diff-line {
+  display: grid;
+  grid-template-columns: 48px 16px 1fr;
+  line-height: 19px;
+  white-space: pre;
+}
+
+.pr-diff-number {
+  padding-right: 8px;
+  text-align: right;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+.pr-diff-add {
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+}
+
+.pr-diff-del {
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+}
+
+.pr-diff-hunk,
+.pr-diff-note {
+  color: var(--text-dim);
+  background: var(--bg-hover);
+}
+
+.pr-filter:focus-visible,
+.pr-row-open:focus-visible,
+.pr-crumb:focus-visible,
+.pr-section:focus-visible,
+.pr-file:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pr-cleanup-items {
+  margin-top: 8px;
+}

@@ -1,12 +1,12 @@
 // The board surface: protobuf `Envelope`s in WS binary frames (ADR-001 §1,
-// B4). Requests go out under the client's `req_id`, the response comes back
-// under the same id, and pushes carry `req_id` 0.
+// B4), sent through the socket's `BinaryChannel` (channel.ts).
 
-import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { BoardEvent, BoardResponse } from "./gen/hermes/board/v1/requests_pb";
-import { BoardRequestSchema } from "./gen/hermes/board/v1/requests_pb";
-import { EnvelopeSchema } from "./gen/hermes/wire/v1/envelope_pb";
+import type {
+  BoardEvent,
+  BoardRequestSchema,
+  BoardResponse,
+} from "./gen/hermes/board/v1/requests_pb";
 import { DaemonError } from "./connection";
 
 /** The encoding a daemon must list in `hello_ok.encodings` to serve the board. */
@@ -52,112 +52,4 @@ export async function boardCall<K extends keyof BoardReplies>(
     return reply.value;
   }
   throw new DaemonError("protocol_error", `expected ${expect} reply, got ${reply.case ?? "none"}`);
-}
-
-function encodeBoardRequest(reqId: bigint, call: BoardCall): Uint8Array {
-  return toBinary(
-    EnvelopeSchema,
-    create(EnvelopeSchema, {
-      reqId,
-      body: { case: "boardRequest", value: create(BoardRequestSchema, { request: call }) },
-    }),
-  );
-}
-
-/** A decoded server frame on the board surface. */
-type BoardFrame =
-  | { readonly kind: "response"; readonly reqId: bigint; readonly response: BoardReply }
-  | {
-      readonly kind: "error";
-      readonly reqId: bigint;
-      readonly code: string;
-      readonly message: string;
-    }
-  | { readonly kind: "event"; readonly event: BoardEvent };
-
-/** Decodes one binary frame; null for garbage or arms a client never receives. */
-function decodeBoardFrame(bytes: Uint8Array): BoardFrame | null {
-  let envelope;
-  try {
-    envelope = fromBinary(EnvelopeSchema, bytes);
-  } catch {
-    return null;
-  }
-  const { reqId, body } = envelope;
-  switch (body.case) {
-    case "boardResponse":
-      return { kind: "response", reqId, response: body.value.response };
-    case "error":
-      return { kind: "error", reqId, code: body.value.code, message: body.value.message };
-    case "boardPush":
-      return body.value.push.case === "boardEvent"
-        ? { kind: "event", event: body.value.push.value }
-        : null;
-    default:
-      return null;
-  }
-}
-
-interface PendingBoard {
-  readonly resolve: (reply: BoardReply) => void;
-  readonly reject: (error: Error) => void;
-}
-
-/** The board's binary frames on a socket: requests in flight and push subscribers. */
-export class BoardChannel {
-  private readonly pending = new Map<bigint, PendingBoard>();
-  private readonly handlers = new Set<(event: BoardEvent) => void>();
-
-  send(ws: WebSocket, reqId: bigint, call: BoardCall): Promise<BoardReply> {
-    return new Promise<BoardReply>((resolve, reject) => {
-      this.pending.set(reqId, { resolve, reject });
-      try {
-        ws.send(encodeBoardRequest(reqId, call));
-      } catch (error) {
-        this.pending.delete(reqId);
-        reject(
-          error instanceof Error ? error : new DaemonError("disconnected", "failed to send frame"),
-        );
-      }
-    });
-  }
-
-  on(handler: (event: BoardEvent) => void): () => void {
-    this.handlers.add(handler);
-    return () => {
-      this.handlers.delete(handler);
-    };
-  }
-
-  receive(bytes: Uint8Array): void {
-    const frame = decodeBoardFrame(bytes);
-    if (frame === null) {
-      return;
-    }
-    if (frame.kind === "event") {
-      for (const handler of this.handlers) {
-        handler(frame.event);
-      }
-      return;
-    }
-    const pending = this.pending.get(frame.reqId);
-    if (pending === undefined) {
-      return;
-    }
-    this.pending.delete(frame.reqId);
-    if (frame.kind === "error") {
-      pending.reject(new DaemonError(frame.code, frame.message));
-    } else {
-      pending.resolve(frame.response);
-    }
-  }
-
-  /** Rejects every request in flight, e.g. when the socket closes. */
-  failAll(error: Error): void {
-    const entries = [...this.pending.values()];
-    this.pending.clear();
-    for (const entry of entries) {
-      entry.reject(error);
-    }
-  }
 }
