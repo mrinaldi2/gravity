@@ -209,7 +209,12 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             columnName={(key) => columns.get(key) ?? key}
             onBoard={openBoard}
           />
-          <DiskWidget client={client} connected={connected} />
+          <DiskWidget
+            client={client}
+            connected={connected}
+            onCleanUp={cleanupRowActions(cleanup, connected).onCleanUp}
+            cleaningUp={cleanup.cleaningUp}
+          />
         </div>
       </div>
       <CleanupChoice cleanup={cleanup} />

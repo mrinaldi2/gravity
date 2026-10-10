@@ -1085,13 +1085,14 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **`cleanup_resolve {project_id, job_id, action: remove|keep}`** (approve; device or ticket on the board's home only). A linked computer answers `forbidden` with "Do it on <home> or your phone.", and the home refuses it inside `pr_owner`.
   - `keep` records the owner's word.
   - `remove` works only on a tree whose work was salvaged. It saves the tree's work again, refuses if any file can't be saved, then runs `git worktree remove --force` under rules 2 and 3. A tree on a linked computer is removed by that computer: the home sends the peer request `cleanup_force`, and the computer answers with the event `cleanup_forced`.
+  - That computer refuses unless nothing in the tree changed for 3 days (the newest mtime in it, links not followed), so a forged home can't take a tree in use (ARCH S1). The job stays held with why, and keeps its salvage note so the owner can ask again.
   - It answers `{type: "cleanup_item", cleanup_item}`.
 - **`disk_report {machine?, refresh?}`** (read) → `{type: "disk_report", disk_report: {machine, free_bytes, total_bytes, uses[{bot, workspace_bytes, worktree_bytes, cache_bytes, reclaimable_bytes}], as_of}}`.
   - Each daemon takes its own report hourly and keeps it.
   - A linked computer's report is asked with the peer request `disk_report_get`.
 - **`cleanup_now {machine?}`** (control) runs the sweep plus the §15.2 cache trims and answers `{type: "cleanup_done", trees, freed_bytes, disk_report}`. On a linked computer it is the peer request `cleanup_now`, accepted only from a board home of a project linked there. It does only what the daily sweep and the cache rules already allow, so it needs no owner proof.
 - **Needs you:**
-  - `CLEANUP_HELD` (14), target `cleanup_job_id`: a job held 3+ days or failed, with no owner word yet. The board's home builds it.
+  - `CLEANUP_HELD` (14), target `cleanup_job_id`: a job held 3+ days or failed, with no owner word yet. The board's home builds it. Its `cleanup` (`CleanupRow`: `state`, `machine`, `bot`, `pr_number`, `uncommitted`, `unpushed`, `salvaged`, `reason`, `since`) is what clients word the row from (UX-055); `title` is a plain-words fallback with no path. Offer Remove anyway only when `salvaged`.
   - `DISK_LOW` (15), target `machine`: this computer's last report is under 20 GB free. Each computer builds its own.
 - **On the PR:** the `pr_get` JSON keeps `cleanup` (the jobs) and adds `cleanup_summary {state, freed_bytes, items, branch_deleted}`, which maps to `PullRequest.cleanup`. Every job change pushes `cleanup_updated {project_id, number}` with `pr_updated`.
 

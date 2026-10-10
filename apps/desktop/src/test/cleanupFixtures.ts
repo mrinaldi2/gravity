@@ -3,12 +3,37 @@
 import type { DiskReport } from "../protocol/cleanup";
 import type { AttentionRowJson } from "../protocol/dashboard";
 
+/** Held 3 days on imac, its one change salvaged. */
 export const HELD_ROW: AttentionRowJson = {
   kind: "cleanup_held",
   id: "cleanup_held:mac:job-1",
-  title:
-    "Cleanup held on imac: gravity-wt-desktopdev-a: 1 uncommitted path(s) (salvaged to salvage/p1/42/gravity-wt-desktopdev-a)",
+  title: "Desktop Dev's worktree on imac is kept: 1 uncommitted file",
   cleanup_job_id: "job-1",
+  cleanup: {
+    state: "held",
+    machine: "imac",
+    bot: { bot_id: "b1", name: "Desktop Dev" },
+    pr_number: 42,
+    uncommitted: 1,
+    salvaged: true,
+    since: new Date(Date.now() - 3 * 86_400_000 - 60_000).toISOString(),
+  },
+};
+
+/** Failed on win-pc: nothing was saved, so only Keep it is offered. */
+export const FAILED_ROW: AttentionRowJson = {
+  kind: "cleanup_held",
+  id: "cleanup_held:mac:job-2",
+  title: "Couldn't remove iOS Dev's worktree on win-pc: the folder is in use",
+  cleanup_job_id: "job-2",
+  cleanup: {
+    state: "failed",
+    machine: "win-pc",
+    bot: { bot_id: "b2", name: "iOS Dev" },
+    salvaged: false,
+    reason: "the folder is in use",
+    since: new Date(Date.now() - 86_400_000).toISOString(),
+  },
 };
 
 export const LOW_ROW: AttentionRowJson = {

@@ -3,7 +3,7 @@ import { useState } from "react";
 import type { ReactElement } from "react";
 import type { ProjectTab } from "../../app/selection";
 import type { AddToast } from "../../app/useToasts";
-import { DISK_REPORT, HELD_ROW, LOW_ROW } from "../../test/cleanupFixtures";
+import { DISK_REPORT, FAILED_ROW, HELD_ROW, LOW_ROW } from "../../test/cleanupFixtures";
 import { DASH_BOTS, dashboard } from "../../test/dashboardFixtures";
 import { FakeDaemon } from "../../test/fakeDaemon";
 import { project } from "../../test/fixtures";
@@ -22,7 +22,7 @@ function Frame({ light }: { readonly light?: boolean }): ReactElement {
       .onRequest("dashboard_get", () => ({
         type: "dashboard",
         req_id: "1",
-        dashboard: { ...data, needs_you: [LOW_ROW, ...data.needs_you, HELD_ROW] },
+        dashboard: { ...data, needs_you: [LOW_ROW, ...data.needs_you, HELD_ROW, FAILED_ROW] },
       }))
       .onRequest("metrics_get", () => ({
         type: "metrics",

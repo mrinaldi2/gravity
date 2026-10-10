@@ -355,7 +355,9 @@ export default function NeedsYou(props: NeedsYouProps): ReactElement {
   return (
     <section className="dash-widget dash-wide" aria-labelledby="dash-needs-you">
       {/* At zero the empty sentence says it; no "· 0" badge (UX-010). */}
-      <h2 id="dash-needs-you">Needs you{count > 0 ? ` · ${count}` : ""}</h2>
+      <h2 id="dash-needs-you" tabIndex={-1}>
+        Needs you{count > 0 ? ` · ${count}` : ""}
+      </h2>
       {props.note ? (
         <p className="dash-note">
           <strong>{props.note}</strong>

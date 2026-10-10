@@ -1,9 +1,34 @@
 /* The dashboard's Disk widget (H-275): free space, then each bot's share. */
 
 .dash-disk-free {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
   margin: 0 0 8px;
   font-size: 13px;
   color: var(--text);
+}
+
+.dash-disk-asof {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.dash-disk-low {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.dash-disk-clean {
+  margin-left: auto;
+}
+
+/* Needs you takes focus after a row is answered (UX-055): no ring, UX-013. */
+#dash-needs-you:focus {
+  outline: none;
 }
 
 .dash-disk-uses {
@@ -31,4 +56,8 @@
 .dash-disk-more {
   color: var(--text-dim);
   white-space: nowrap;
+}
+
+.dash-disk-asof + .dash-more {
+  margin-left: 8px;
 }

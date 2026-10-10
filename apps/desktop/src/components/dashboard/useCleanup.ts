@@ -1,6 +1,8 @@
-// The owner's hand on cleanups from the dashboard (H-275): the held-cleanup
-// choice and Clean up. Each reply is followed by a fresh read; a refusal is a
-// toast, in the daemon's words ("Do it on mac or your phone.").
+// The owner's hand on cleanups from the dashboard (H-275, UX-055): the
+// held-cleanup choice and Clean up. Each reply is followed by a fresh read.
+// A refusal shows inside the choice, in the daemon's words ("Do it on mac or
+// your phone."). Focus goes back to Decide… after Cancel, and to the next
+// Needs you row (or its heading) once the row is answered.
 
 import { createElement, useCallback, useState } from "react";
 import type { ReactElement } from "react";
@@ -12,16 +14,51 @@ import { errText } from "../../util";
 import CleanupDialog from "./CleanupDialog";
 import type { CleanupRowActions } from "./cleanupRows";
 
+interface Deciding {
+  readonly row: AttentionRowJson;
+  readonly opener: HTMLElement | null;
+}
+
 export interface CleanupState {
   /** The held cleanup the owner is choosing for. */
-  readonly deciding: AttentionRowJson | null;
+  readonly deciding: Deciding | null;
   readonly busy: boolean;
+  readonly error: string | null;
   /** The computer a Clean up is running on. */
   readonly cleaningUp: string | null;
-  readonly decide: (row: AttentionRowJson) => void;
+  readonly decide: (row: AttentionRowJson, opener: HTMLElement | null) => void;
   readonly cancel: () => void;
   readonly resolve: (action: "remove" | "keep") => Promise<void>;
   readonly cleanUp: (machine: string) => Promise<void>;
+}
+
+/** Where focus goes once the answered row is gone: the next row's button, else the heading. */
+function afterRow(opener: HTMLElement | null): () => void {
+  const next = opener?.closest("li")?.nextElementSibling?.querySelector("button") ?? null;
+  const heading = opener?.closest("section")?.querySelector<HTMLElement>("h2") ?? null;
+  return () => {
+    if (next?.isConnected) {
+      next.focus();
+    } else {
+      heading?.focus();
+    }
+  };
+}
+
+function toastFor(
+  addToast: AddToast,
+  action: "remove" | "keep",
+  state: string,
+  machine: string,
+  freed: number,
+): void {
+  if (action === "keep") {
+    addToast("info", "Kept", "The worktree stays; you won't be asked about it again.");
+  } else if (state === "done") {
+    addToast("info", "Removed", `Freed ${sizeText(freed)}. Its changes are in the salvage folder.`);
+  } else {
+    addToast("info", "Removing…", `${machine} is removing it. The row goes once it's done.`);
+  }
 }
 
 export function useCleanup(
@@ -30,16 +67,25 @@ export function useCleanup(
   addToast: AddToast,
   refresh: () => Promise<void>,
 ): CleanupState {
-  const [deciding, setDeciding] = useState<AttentionRowJson | null>(null);
+  const [deciding, setDeciding] = useState<Deciding | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [cleaningUp, setCleaningUp] = useState<string | null>(null);
-  const cancel = useCallback(() => setDeciding(null), []);
+  const decide = useCallback((row: AttentionRowJson, opener: HTMLElement | null) => {
+    setError(null);
+    setDeciding({ row, opener });
+  }, []);
+  const cancel = useCallback(() => {
+    deciding?.opener?.focus();
+    setDeciding(null);
+  }, [deciding]);
   const resolve = useCallback(
     async (action: "remove" | "keep"): Promise<void> => {
-      const job = deciding?.cleanup_job_id;
-      if (job === undefined) {
+      const job = deciding?.row.cleanup_job_id;
+      if (deciding === null || job === undefined) {
         return;
       }
+      const focusNext = afterRow(deciding.opener);
       setBusy(true);
       try {
         const reply = await client.request(
@@ -47,23 +93,20 @@ export function useCleanup(
           "cleanup_item",
         );
         const item = reply.cleanup_item;
-        if (action === "keep") {
-          addToast("info", "Kept", "The worktree stays; you won't be asked about it again.");
-        } else if (item.state === "done") {
-          addToast(
-            "info",
-            "Removed",
-            `Freed ${sizeText(item.freed_bytes)}. Its changes are in the salvage folder.`,
-          );
-        } else {
-          addToast("info", "Removing…", `${item.machine} removes it; the row goes once it has.`);
-        }
+        toastFor(addToast, action, item.state, item.machine, item.freed_bytes);
         setDeciding(null);
+        setBusy(false);
+        await refresh();
+        focusNext();
       } catch (failure) {
-        addToast("error", "Couldn't do that", errText(failure));
+        setError(errText(failure));
+        addToast(
+          "error",
+          action === "keep" ? "Couldn't keep the worktree" : "Couldn't remove the worktree",
+          errText(failure),
+        );
+        setBusy(false);
       }
-      setBusy(false);
-      await refresh();
     },
     [client, projectId, deciding, addToast, refresh],
   );
@@ -86,7 +129,7 @@ export function useCleanup(
     },
     [client, addToast, refresh],
   );
-  return { deciding, busy, cleaningUp, decide: setDeciding, cancel, resolve, cleanUp };
+  return { deciding, busy, error, cleaningUp, decide, cancel, resolve, cleanUp };
 }
 
 /** The Needs-you row actions: none while the connection is down. */
@@ -108,8 +151,9 @@ export function CleanupChoice(props: { readonly cleanup: CleanupState }): ReactE
     return null;
   }
   return createElement(CleanupDialog, {
-    title: c.deciding.title,
+    row: c.deciding.row,
     busy: c.busy,
+    error: c.error,
     onRemove: () => void c.resolve("remove"),
     onKeep: () => void c.resolve("keep"),
     onCancel: c.cancel,
