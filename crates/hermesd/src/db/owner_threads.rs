@@ -10,8 +10,12 @@ use rusqlite::{params, OptionalExtension, Row};
 use super::{parse_ts, ts, Db};
 
 /// A message the owner wrote. The daemon's own notices are stored as user
-/// messages too, under another name, and aren't the owner's.
-const FROM_OWNER: &str = "(m.sender_kind = 'user' AND m.sender_name = 'user')";
+/// messages too, under another name, and aren't the owner's; nor is the
+/// owner's chat a linked computer sent without proof here (H-306,
+/// `messaging::unverified_from`).
+const FROM_OWNER: &str = "(m.sender_kind = 'user' AND m.sender_name = 'user'
+     AND (m.id IN (SELECT message_id FROM owner_message)
+          OR m.id NOT IN (SELECT message_id FROM peer_message)))";
 
 /// A message of the thread: the owner's, or the bot's own to the owner.
 const IN_THREAD: &str = "((m.sender_kind = 'user' AND m.sender_name = 'user')

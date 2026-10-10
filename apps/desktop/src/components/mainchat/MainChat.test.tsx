@@ -13,12 +13,12 @@ import { useMainChat } from "./useMainChat";
 
 const BOTS = [fx.bot({ id: "b1", name: "Team Lead" }), fx.bot({ id: "b2", name: "Desktop Dev" })];
 
-function daemon(): FakeDaemon {
+function daemon(unverified = false): FakeDaemon {
   const fake = new FakeDaemon()
     .onRequest("owner_thread_get", () => ({
       type: "owner_thread",
       req_id: "1",
-      owner_thread: ownerThreadJson(),
+      owner_thread: ownerThreadJson({ unverified }),
     }))
     .onRequest("owner_thread_read", () => ({
       type: "owner_thread_marked",
@@ -110,6 +110,18 @@ describe("MainChat", () => {
         up_to_num: 12,
       });
     });
+  });
+
+  it("shows the owner's chat from a linked computer as from there, unverified (H-306)", async () => {
+    render(<Harness client={daemon(true)} start="b2" />);
+    const text = await screen.findByText("Yes, restart them too.");
+    const bubble = text.closest(".mc-bubble");
+    expect(bubble).toHaveClass("mc-bubble-unverified");
+    expect(bubble).not.toHaveClass("mc-bubble-me");
+    expect(bubble).toHaveTextContent("From MacBook, unverified");
+    expect(bubble).not.toHaveTextContent("You");
+    // It answers nothing: the question before it is still open.
+    expect(screen.getByText(/^Asks you/)).toBeInTheDocument();
   });
 
   it("answers a report with it quoted, then sends to the bot picked", async () => {

@@ -135,6 +135,12 @@ pub struct Message {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decision_id: Option<Id>,
     pub created_at: DateTime<Utc>,
+    /// Set only on what clients are sent: the owner's chat a linked computer
+    /// sent without proof this computer takes, as that computer's name
+    /// (H-303, H-306). Clients show it as from there, unverified, never as
+    /// the owner's own. Not stored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unverified_from: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

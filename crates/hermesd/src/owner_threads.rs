@@ -181,18 +181,36 @@ pub fn dismiss(app: &AppState, row_id: &str) -> anyhow::Result<AttentionDismisse
 /// The thread entry of a bot that runs here.
 pub fn entry(app: &AppState, bot: &bus::Bot) -> anyhow::Result<OwnerThread> {
     let asked = asked_nums(app, &bot.id)?;
+    let last = match app.db.owner_thread_last(&bot.id)? {
+        Some(m) => {
+            let (from_owner, unverified_from) = author(app, &m)?;
+            Some(MessageBrief {
+                num: m.num,
+                from_owner,
+                text: cut(&m.body, BRIEF_MAX),
+                at: Some(timestamp(m.created_at)),
+                asks: asked.iter().any(|(num, _)| *num == m.num),
+                unverified_from,
+            })
+        }
+        None => None,
+    };
     Ok(OwnerThread {
         bot: Some(bot_ref(app, bot)),
         project_id: bot.project_id.clone(),
-        last: app.db.owner_thread_last(&bot.id)?.map(|m| MessageBrief {
-            num: m.num,
-            from_owner: m.sender.kind == SenderKind::User,
-            text: cut(&m.body, BRIEF_MAX),
-            at: Some(timestamp(m.created_at)),
-            asks: asked.iter().any(|(num, _)| *num == m.num),
-        }),
+        last,
         unread: app.db.owner_unread(&bot.id)?,
         open_question: !open_questions(app, None, Some(&bot.id))?.is_empty(),
+    })
+}
+
+/// Whether the owner wrote `m`, and the linked computer it came from when
+/// it is the owner's chat sent from there without proof (H-306): never the
+/// owner's own then.
+fn author(app: &AppState, m: &Message) -> anyhow::Result<(bool, String)> {
+    Ok(match crate::messaging::unverified_from(&app.db, m)? {
+        Some(computer) => (false, computer),
+        None => (m.sender.kind == SenderKind::User, String::new()),
     })
 }
 
@@ -220,24 +238,27 @@ pub fn page(
     let limit = limit.unwrap_or(PAGE_DEFAULT).clamp(1, PAGE_MAX);
     let (messages, has_more) = app.db.owner_thread_page(&bot.id, before_num, limit)?;
     let asked = asked_nums(app, &bot.id)?;
+    let messages = messages
+        .into_iter()
+        .map(|m| {
+            let question = asked.iter().find(|(num, _)| *num == m.num);
+            let (from_owner, unverified_from) = author(app, &m)?;
+            Ok(ThreadMessage {
+                num: m.num,
+                id: m.id,
+                from_owner,
+                text: m.body,
+                at: Some(timestamp(m.created_at)),
+                asks: question.is_some(),
+                open: question.is_some_and(|(_, open)| *open),
+                unverified_from,
+            })
+        })
+        .collect::<anyhow::Result<_>>()?;
     Ok(OwnerThreadPage {
         bot: Some(bot_ref(app, bot)),
         project_id: bot.project_id.clone(),
-        messages: messages
-            .into_iter()
-            .map(|m| {
-                let question = asked.iter().find(|(num, _)| *num == m.num);
-                ThreadMessage {
-                    num: m.num,
-                    id: m.id,
-                    from_owner: m.sender.kind == SenderKind::User,
-                    text: m.body,
-                    at: Some(timestamp(m.created_at)),
-                    asks: question.is_some(),
-                    open: question.is_some_and(|(_, open)| *open),
-                }
-            })
-            .collect(),
+        messages,
         last_read_num: app.db.owner_last_read(&bot.id)?,
         has_more,
     })

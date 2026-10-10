@@ -202,6 +202,7 @@ impl Db {
             ref_message_id: None,
             decision_id: None,
             created_at,
+            unverified_from: None,
         };
         tx.execute(
             "INSERT INTO message(id, num, conversation_id, sender_kind, sender_bot_id,

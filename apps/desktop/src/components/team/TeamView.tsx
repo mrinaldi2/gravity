@@ -6,6 +6,7 @@
 import type { ReactElement } from "react";
 import type { Bot, BotActivity, BotState } from "../../protocol/entities";
 import type { OwnerThread, ProjectRow } from "../../protocol/gen/hermes/home/v1/home_pb";
+import { fromTheBot } from "../../protocol/home";
 import BotAvatar from "../BotAvatar";
 import { BOT_STATE_LABEL } from "../bot/botStates";
 import { clock } from "../home/homeText";
@@ -137,7 +138,7 @@ function LastWord(props: {
   readonly now: number;
 }): ReactElement | null {
   const last = props.thread?.last;
-  if (last !== undefined && !last.fromOwner) {
+  if (last !== undefined && fromTheBot(last)) {
     const asked = last.asks && props.thread?.openQuestion === true;
     return (
       <blockquote className="home-quote">

@@ -113,8 +113,21 @@ export function ownerThreadsJson(): JsonValue {
   };
 }
 
+/**
+ * The owner's chat from a linked computer, unverified (H-306): it leaves the
+ * question before it open.
+ */
+const UNVERIFIED_CHAT = {
+  num: "13",
+  id: "m13",
+  from_owner: false,
+  unverified_from: "MacBook",
+  text: "Yes, restart them too.",
+  at: "2026-10-06T10:30:00Z",
+};
+
 /** Desktop Dev's thread with the owner, oldest first. */
-export function ownerThreadJson(): JsonValue {
+export function ownerThreadJson(opts: { readonly unverified?: boolean } = {}): JsonValue {
   return {
     bot: { daemon_id: "mac", bot_id: "b2", name: "Desktop Dev" },
     project_id: "p1",
@@ -136,6 +149,7 @@ export function ownerThreadJson(): JsonValue {
         asks: true,
         open: true,
       },
+      ...(opts.unverified === true ? [UNVERIFIED_CHAT] : []),
     ],
     last_read_num: "11",
   };

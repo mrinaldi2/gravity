@@ -204,6 +204,7 @@ message MessageBrief {
   string text = 3;                          // at most 200 characters
   google.protobuf.Timestamp at = 4;
   bool asks = 5;
+  string unverified_from = 6;               // see ThreadMessage
 }
 
 // ---- pushes ----
@@ -292,6 +293,9 @@ message ThreadMessage {
   google.protobuf.Timestamp at = 5;
   bool asks = 6;                            // the bot asked the owner here
   bool open = 7;                            // that question is still open
+  // The owner's chat a linked computer sent without proof this computer
+  // takes (H-303, H-306): that computer's name, and `from_owner` is false.
+  string unverified_from = 8;
 }
 
 // [owner_thread_marked] read state after `owner_thread_read`.

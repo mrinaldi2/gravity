@@ -1,6 +1,11 @@
 //! hermesd: always-on daemon that owns product state, durable delivery,
 //! the scheduler, runtime adapters, and the control plane.
 
+// The test-only switches (H-303) never reach an optimised build: only the
+// crate's own dev-dependency turns the feature on, for debug test builds.
+#[cfg(all(feature = "test-support", not(debug_assertions)))]
+compile_error!("the `test-support` feature is for tests only: never build it with --release");
+
 pub mod activity;
 pub mod actor;
 pub mod app;

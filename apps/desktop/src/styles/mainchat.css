@@ -162,6 +162,10 @@
   background: var(--bg-active);
 }
 
+.mc-bubble-unverified {
+  border: 1px dashed var(--border);
+}
+
 .mc-bubble-src {
   font-size: 10.5px;
   color: var(--text-dim);
