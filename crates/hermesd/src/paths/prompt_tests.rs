@@ -137,17 +137,28 @@ fn the_pr_section_is_there_only_after_cut_over_and_names_only_served_tools() {
         pull_requests: true,
         ..spec("")
     });
-    let at = on.find("## Code goes through pull requests").expect("the section");
+    let at = on
+        .find("## Code goes through pull requests")
+        .expect("the section");
     let section = &on[at..];
     let section = &section[..section[3..].find("\n## ").map_or(section.len(), |e| e + 3)];
-    for name in ["`pr_open`", "`pr_push`", "`pr_get`", "`pr_close`", "`hermesd pr merge`"] {
+    for name in [
+        "`pr_open`",
+        "`pr_push`",
+        "`pr_get`",
+        "`pr_close`",
+        "`hermesd pr merge`",
+    ] {
         assert!(section.contains(name), "{name}");
     }
     assert!(
         on.find("## Work is on the board").unwrap() < at,
         "after Work is on the board"
     );
-    assert!(!section.contains("Review→Verify"), "no manual move to Verify");
+    assert!(
+        !section.contains("Review→Verify"),
+        "no manual move to Verify"
+    );
     assert!(section.contains("only on the board's home computer or\ntheir phone"));
     // Every `pr_…` or `check_…` name in backticks is a PR tool the daemon serves.
     let served: Vec<&str> = crate::mcp::pr_tool_names().collect();
