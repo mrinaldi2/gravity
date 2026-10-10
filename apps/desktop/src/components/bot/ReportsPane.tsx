@@ -6,6 +6,7 @@ import type { ReactElement } from "react";
 import type { DaemonApi } from "../../protocol/api";
 import type { Bot } from "../../protocol/entities";
 import type { ThreadMessage } from "../../protocol/gen/hermes/home/v1/home_pb";
+import { fromTheBot } from "../../protocol/home";
 import { clock } from "../home/homeText";
 import { useOwnerThread } from "../home/useOwnerThreads";
 import { useProjectRow } from "../home/useProjectsOverview";
@@ -75,7 +76,7 @@ export default function ReportsPane(props: ReportsPaneProps): ReactElement {
   const clockNow = useNow();
   const now = props.now ?? clockNow;
   const doing = row?.doing.filter((d) => d.assigneeBotId === bot.id) ?? [];
-  const fromBot = (page?.messages ?? []).filter((m) => !m.fromOwner);
+  const fromBot = (page?.messages ?? []).filter(fromTheBot);
   const open = fromBot.filter((m) => m.asks && m.open);
   // Messages are oldest first. The latest report is the newest one that isn't
   // an open question: those are listed under "Asked you" alone (UX-027).

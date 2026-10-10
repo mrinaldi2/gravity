@@ -169,6 +169,8 @@ export interface BusMessage {
   readonly body: string;
   readonly ref_message_id?: string | null;
   readonly created_at: string;
+  /** The owner's chat a linked computer sent unverified: that computer (H-306). */
+  readonly unverified_from?: string | null;
 }
 
 export type DeliveryState = "queued" | "leased" | "delivered" | "acknowledged" | "failed";

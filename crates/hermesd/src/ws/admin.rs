@@ -39,6 +39,7 @@ impl Conn {
     pub(super) fn search(&self, req_id: &Value, req: &Value) -> anyhow::Result<()> {
         let query = Self::str_field(req, "query")?;
         let results = self.app.db.search_messages(query, 50)?;
+        let results = crate::messaging::for_clients(&self.app.db, results)?;
         self.send(json!({ "type": "search_results", "req_id": req_id, "search_results": results }));
         Ok(())
     }

@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { Bot, Project } from "../../protocol/entities";
 import type { OwnerThread, ThreadMessage } from "../../protocol/gen/hermes/home/v1/home_pb";
+import { unverifiedLabel } from "../../protocol/home";
 import { sendOnCmdEnter } from "../../util";
 import BotAvatar from "../BotAvatar";
 import LinkedText from "../cards/LinkedText";
@@ -51,16 +52,28 @@ export function ThreadRow(props: {
   );
 }
 
-/** One message: the owner's on the right, the bot's on the left. */
+/**
+ * One message: the owner's on the right, the bot's on the left. The owner's
+ * chat a linked computer sent unverified is never shown as theirs (H-306).
+ */
 export function Bubble(props: {
   readonly message: ThreadMessage;
   readonly now: number;
 }): ReactElement {
   const { message, now } = props;
   const mine = message.fromOwner;
-  const label = message.asks && message.open ? "Asks you" : mine ? "You" : "";
+  const unverified = message.unverifiedFrom !== "";
+  const label =
+    message.asks && message.open
+      ? "Asks you"
+      : mine
+        ? "You"
+        : unverified
+          ? unverifiedLabel(message.unverifiedFrom)
+          : "";
+  const kind = mine ? " mc-bubble-me" : unverified ? " mc-bubble-unverified" : "";
   return (
-    <div className={`mc-bubble${mine ? " mc-bubble-me" : ""}`}>
+    <div className={`mc-bubble${kind}`}>
       <span className="mc-bubble-src">
         {label}
         {message.at === undefined ? "" : `${label ? " · " : ""}${clock(message.at, now)}`}

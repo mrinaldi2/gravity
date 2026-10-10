@@ -6,6 +6,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import type { ReactElement } from "react";
 import type { Bot } from "../../protocol/entities";
+import { fromTheBot } from "../../protocol/home";
 import type {
   OwnerThread,
   ProjectRow,
@@ -91,7 +92,7 @@ function reports(props: FromTheTeamProps, lead: Bot | undefined): Report[] {
   }
   for (const thread of props.threads) {
     const last = thread.last;
-    if (last === undefined || last.fromOwner) {
+    if (last === undefined || !fromTheBot(last)) {
       continue;
     }
     const bot = bots.find((b) => b.id === thread.bot?.botId);

@@ -76,7 +76,10 @@ pub fn send_dm(db: &Db, events: &Events, dm: Dm<'_>) -> anyhow::Result<Message> 
         db.map_peer_message(peer_id, remote_id, &msg.id)?;
     }
     events.push(Push::MessageNew {
-        message: msg.clone(),
+        message: Message {
+            unverified_from: unverified_from(db, &msg)?,
+            ..msg.clone()
+        },
     });
     let key = format!("{}:{}", msg.id, dm.bot_id);
     let delivery = db.enqueue_delivery(&msg.id, dm.bot_id, &key)?;
@@ -97,6 +100,13 @@ pub fn user_sender() -> Sender {
 /// proof this computer takes (H-303, owner ruling 1cb9b4df): as
 /// `unverified @ <computer>`, never as the owner. None for anything else.
 pub fn unverified_owner_name(db: &Db, msg: &Message) -> anyhow::Result<Option<String>> {
+    Ok(unverified_from(db, msg)?.map(|computer| format!("unverified @ {computer}")))
+}
+
+/// The linked computer the owner's chat came from when this computer holds
+/// no proof the owner sent it (H-303, H-306): the rule both bots and
+/// clients are shown it by. None for anything else.
+pub fn unverified_from(db: &Db, msg: &Message) -> anyhow::Result<Option<String>> {
     if msg.sender.kind != SenderKind::User
         || msg.sender.name == DAEMON_SENDER_NAME
         || db.owner_message_via(&msg.id)?.is_some()
@@ -106,10 +116,19 @@ pub fn unverified_owner_name(db: &Db, msg: &Message) -> anyhow::Result<Option<St
     let Some(peer_id) = db.peer_of_message(&msg.id)? else {
         return Ok(None);
     };
-    let computer = db
-        .get_peer(&peer_id)?
-        .map_or_else(|| "a linked computer".to_string(), |p| p.name);
-    Ok(Some(format!("unverified @ {computer}")))
+    Ok(Some(db.get_peer(&peer_id)?.map_or_else(
+        || "a linked computer".to_string(),
+        |p| p.name,
+    )))
+}
+
+/// Messages as clients are sent them: each unverified owner chat names the
+/// computer it came from (H-306).
+pub fn for_clients(db: &Db, mut messages: Vec<Message>) -> anyhow::Result<Vec<Message>> {
+    for msg in &mut messages {
+        msg.unverified_from = unverified_from(db, msg)?;
+    }
+    Ok(messages)
 }
 
 /// The stored sender name of the daemon's own notices. The owner reads them

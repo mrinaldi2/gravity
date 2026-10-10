@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import type { BusMessage } from "../../protocol/entities";
+import { unverifiedLabel } from "../../protocol/home";
 import { fmtTimestamp } from "../../util";
 
 const SNIPPET_LENGTH = 160;
@@ -35,7 +36,11 @@ export default function SearchResultRow({
       }}
     >
       <span className="search-result-meta">
-        <span className="msg-sender">{message.sender.name}</span>
+        <span className="msg-sender">
+          {message.unverified_from == null
+            ? message.sender.name
+            : unverifiedLabel(message.unverified_from)}
+        </span>
         <span className={`kind-badge kind-${message.kind}`}>{message.kind}</span>
         <span className="msg-time">{fmtTimestamp(message.created_at)}</span>
         <span className="search-result-conv">{conversationTitle}</span>

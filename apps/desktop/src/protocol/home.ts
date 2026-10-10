@@ -54,6 +54,22 @@ export type HomePush =
 
 const LENIENT = { ignoreUnknownFields: true } as const;
 
+/**
+ * A thread message the bot wrote: not the owner's, nor the owner's chat a
+ * linked computer sent unverified (H-306).
+ */
+export function fromTheBot(message: {
+  readonly fromOwner: boolean;
+  readonly unverifiedFrom: string;
+}): boolean {
+  return !message.fromOwner && message.unverifiedFrom === "";
+}
+
+/** How a thread shows the owner's chat a linked computer sent unverified. */
+export function unverifiedLabel(computer: string): string {
+  return `From ${computer}, unverified`;
+}
+
 export function decodeOverview(json: JsonValue): ProjectsOverview {
   return fromJson(ProjectsOverviewSchema, json, LENIENT);
 }

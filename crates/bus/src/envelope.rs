@@ -106,6 +106,7 @@ mod tests {
             ref_message_id: None,
             decision_id: None,
             created_at: now(),
+            unverified_from: None,
         }
     }
 

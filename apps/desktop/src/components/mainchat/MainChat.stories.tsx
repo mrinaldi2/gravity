@@ -11,7 +11,11 @@ import { useMainChat } from "./useMainChat";
 const noop = (): void => {};
 const lead = (): string => "b1";
 
-function Panel(props: { readonly quote?: string; readonly fresh?: boolean }): ReactElement {
+function Panel(props: {
+  readonly quote?: string;
+  readonly fresh?: boolean;
+  readonly unverified?: boolean;
+}): ReactElement {
   const chat = useMainChat(lead);
   const { openOn, startNew } = chat;
   useEffect(() => {
@@ -23,7 +27,7 @@ function Panel(props: { readonly quote?: string; readonly fresh?: boolean }): Re
   const client = new FakeDaemon().onRequest("owner_thread_get", () => ({
     type: "owner_thread",
     req_id: "1",
-    owner_thread: ownerThreadJson(),
+    owner_thread: ownerThreadJson({ unverified: props.unverified === true }),
   }));
   client.capabilities = [...client.capabilities, "owner_threads"];
   return (
@@ -49,6 +53,9 @@ export const Thread: Story = () => <Panel />;
 
 /** Answering a report: it is quoted above the message. */
 export const Replying: Story = () => <Panel quote="Should Resume now also restart the services?" />;
+
+/** The owner's chat from a linked computer: from there, unverified (H-306). */
+export const Unverified: Story = () => <Panel unverified />;
 
 /** "＋ New message": nobody picked yet, the To picker waiting (H-157). */
 export const NewMessage: Story = () => <Panel fresh />;

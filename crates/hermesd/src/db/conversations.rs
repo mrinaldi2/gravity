@@ -73,6 +73,7 @@ impl Db {
             ref_message_id: r.get(8)?,
             decision_id: r.get(9)?,
             created_at: parse_ts(&r.get::<_, String>(10)?),
+            unverified_from: None,
         })
     }
 
@@ -102,6 +103,7 @@ impl Db {
             ref_message_id: ref_message_id.map(|s| s.to_string()),
             decision_id: decision_id.map(|s| s.to_string()),
             created_at: now(),
+            unverified_from: None,
         };
         conn.execute(
             "INSERT INTO message(id, num, conversation_id, sender_kind, sender_bot_id, sender_name, kind, body, ref_message_id, decision_id, created_at)

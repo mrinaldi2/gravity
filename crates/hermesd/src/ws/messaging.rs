@@ -60,6 +60,7 @@ impl Conn {
         let before = req.get("before_num").and_then(|v| v.as_i64());
         let limit = req.get("limit").and_then(|v| v.as_i64()).unwrap_or(100);
         let messages = self.app.db.list_messages(conversation_id, before, limit)?;
+        let messages = messaging::for_clients(&self.app.db, messages)?;
         self.send(json!({ "type": "messages", "req_id": req_id, "messages": messages }));
         Ok(())
     }
