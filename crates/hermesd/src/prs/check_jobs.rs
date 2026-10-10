@@ -44,6 +44,9 @@ pub struct ChecksConfig {
     /// How often queued checks are routed when nothing nudges sooner, in
     /// seconds; 0 routes them only when asked (tests).
     pub dispatch_interval_secs: u64,
+    /// The longest a check may run before its whole tree is stopped and it
+    /// is an `error`, in seconds.
+    pub timeout_secs: u64,
     /// The `hermesd` that runs a check (`hermesd check run`); this
     /// daemon's own binary when unset.
     pub runner: Option<PathBuf>,
@@ -56,6 +59,7 @@ impl Default for ChecksConfig {
             disk_floor_gb: 20,
             probe_interval_secs: 3600,
             dispatch_interval_secs: 30,
+            timeout_secs: check_exec::DEADLINE.as_secs(),
             runner: None,
         }
     }
@@ -88,6 +92,25 @@ pub fn spawn(app: Arc<AppState>) {
             let _ = tokio::time::timeout(every, wake().notified()).await;
         }
     });
+}
+
+/// At boot (H-291): nothing runs here yet, so every job still open on this
+/// computer was cut short by the stop. Each is an `error`, retried once,
+/// and any checkout a stop left behind goes.
+pub fn on_boot(app: &AppState) {
+    if let Ok(jobs) = std::fs::read_dir(app.cfg.home.join("run").join("checks")) {
+        for job in jobs.flatten() {
+            if let Err(error) = check_checkout::remove(&job.path()) {
+                tracing::warn!(job = %job.path().display(), %error, "old check checkout not removed");
+            }
+        }
+    }
+    for project in home_projects(app).unwrap_or_default() {
+        if let Err(error) = super::check_rerun::reconcile(app, &project) {
+            tracing::warn!(project, %error, "check jobs not reconciled at boot");
+        }
+    }
+    nudge();
 }
 
 /// The projects whose board lives on this computer.

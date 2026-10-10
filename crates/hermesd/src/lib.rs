@@ -16,6 +16,7 @@ pub mod bus_auth;
 pub mod channel;
 pub mod chat;
 pub mod check_exec;
+pub mod check_tree;
 pub mod config;
 pub mod contain;
 pub mod db;
