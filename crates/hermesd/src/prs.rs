@@ -1,10 +1,21 @@
 //! Pull requests (H-261): a card's change, reviewed and merged in the app.
-//! PR-1 keeps the record, its verified head and its card's moves; reviews,
-//! checks and merges come with their own slices.
+//! PR-1 keeps the record, its verified head and its card's moves; PR-5a the
+//! checks each head must pass. Reviews and merges come with their own slices.
 
+pub mod check_checkout;
+pub mod check_jobs;
+pub mod check_log;
+pub mod check_model;
+pub mod check_remote;
+pub mod check_rerun;
+pub mod check_route;
+pub mod checks;
 pub mod flow;
+pub mod follow_up;
 pub mod model;
 pub mod repo;
+pub mod review;
+pub mod review_model;
 pub mod watch;
 pub mod worktree;
 
@@ -26,6 +37,21 @@ pub fn spellings(enum_name: &str) -> Option<Vec<(&'static str, &'static str)>> {
                 .map(|s| (s.as_str(), wire(*s).as_str_name()))
                 .collect(),
         ),
+        "CheckResult" => Some(
+            check_model::CheckResult::ALL
+                .iter()
+                .map(|r| (r.as_str(), r.wire().as_str_name()))
+                .collect(),
+        ),
+        "Verdict" => Some(vec![
+            ("approved", "VERDICT_APPROVED"),
+            ("changes_requested", "VERDICT_CHANGES_REQUESTED"),
+        ]),
+        "Severity" => Some(vec![
+            ("must", "SEVERITY_MUST"),
+            ("should", "SEVERITY_SHOULD"),
+            ("nit", "SEVERITY_NIT"),
+        ]),
         _ => None,
     }
 }
@@ -66,13 +92,23 @@ pub fn look(app: &AppState, project: &str) {
     }
 }
 
-/// One PR in full: the record, its pushes and its worktrees.
+/// One PR in full: the record, its reviews (each with `stale`), the roles
+/// it needs, its pushes, its worktrees and its head's checks as they count.
 pub fn detail(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
-    let (pushes, worktrees) = app
-        .db
-        .board_read(|t| Ok((t.pr_pushes(&pr.id)?, t.pr_worktrees(&pr.id)?)))?;
+    let (pushes, worktrees, checks, reviews, needs) = app.db.board_read(|t| {
+        Ok((
+            t.pr_pushes(&pr.id)?,
+            t.pr_worktrees(&pr.id)?,
+            t.checks_on(&pr.project_id, &pr.head_sha)?,
+            t.reviews(&pr.id)?,
+            t.pr_needs(&pr.id)?,
+        ))
+    })?;
     let mut out = pr.to_json();
+    out["reviews"] = reviews.iter().map(|r| r.to_json(pr)).collect();
+    out["required_roles"] = serde_json::json!(needs);
     out["pushes"] = pushes.iter().map(model::PrPush::to_json).collect();
     out["worktrees"] = worktrees.iter().map(model::PrWorktree::to_json).collect();
+    out["checks"] = checks.iter().map(check_model::CheckRun::to_json).collect();
     Ok(out)
 }

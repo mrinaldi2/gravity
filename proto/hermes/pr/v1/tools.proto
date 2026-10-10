@@ -60,6 +60,14 @@ message PrClose {
   string reason = 2;
 }
 
+// [pr_follow_up] File a `should` or `nit` finding of a review as an Inbox
+// card related to the PR's card: the reviewer, the PR's author or the lead.
+message PrFollowUp {
+  uint32 number = 1;
+  string review_id = 2;
+  uint32 finding = 3;                       // its index in the review's findings
+}
+
 // [pr_get] One PR in full.
 message PrLookup {
   uint32 number = 1;

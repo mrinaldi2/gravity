@@ -49,6 +49,10 @@ mod board_tx;
 mod bot_runtime;
 mod bots;
 mod card_questions;
+pub mod check_jobs;
+mod checks;
+#[cfg(test)]
+mod checks_tests;
 mod conversations;
 pub mod dashboard;
 mod decision_threads;
@@ -86,7 +90,10 @@ mod release_work;
 mod releases;
 #[cfg(test)]
 mod releases_tests;
+pub mod reviews;
 mod revisions;
+#[cfg(test)]
+mod roles_migration_tests;
 mod routines;
 mod runs;
 mod runs_state;

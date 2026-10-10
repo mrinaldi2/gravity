@@ -2,7 +2,7 @@
 //! the wire contract (`contract`), defaults and ranking here; storage in
 //! `db::board*`. The move guards (`guards`) and the move engine that WS, MCP
 //! and the peer link call (`moves`), and the pushes they publish (`feed`). Release packages and the deploy gate
-//! (`release`).
+//! (`release`). The repo's review and check policy (`policy`).
 
 pub mod contract;
 pub mod defaults;
@@ -15,6 +15,7 @@ pub mod metrics;
 pub mod mirror;
 pub mod model;
 pub mod moves;
+pub mod policy;
 pub mod rank;
 pub mod release;
 pub mod team;

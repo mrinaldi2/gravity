@@ -137,6 +137,9 @@ pub fn spawn_workers(app: &Arc<AppState>) {
     crate::overview::spawn(app.clone());
     crate::board::release::blockers_watch::spawn(app.clone());
     crate::prs::watch::spawn(app.clone());
+    crate::machine_tools::spawn(app.clone());
+    crate::prs::check_jobs::on_boot(app);
+    crate::prs::check_jobs::spawn(app.clone());
     crate::peer::spawn_dialers(app);
 
     let worker = DeliveryWorker {
@@ -303,6 +306,8 @@ pub async fn serve(
         Stop::Signal
     };
     let _ = stop_tx.send(());
+    // H-291: no check outlives its daemon; each tree ends before its checkout.
+    crate::check_tree::stop_all(&app.cfg.home);
 
     for h in handles {
         let _ = h.await;

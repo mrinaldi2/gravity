@@ -12,6 +12,7 @@
 mod base;
 mod board;
 mod board_links;
+mod checks;
 mod decisions;
 mod grants;
 mod history;
@@ -24,6 +25,8 @@ mod permissions;
 mod prs;
 mod quiesce;
 mod releases;
+mod reviews;
+mod roles;
 mod workers;
 
 use base::MIGRATION_1;
@@ -32,6 +35,7 @@ use board_links::{
     MIGRATION_AC_POST_INSTALL, MIGRATION_BOARD_LINKS, MIGRATION_BOARD_WORKFLOW,
     MIGRATION_GUARDRAILS_2, MIGRATION_TASK_CARDS, MIGRATION_TASK_RELEASE,
 };
+use checks::{MIGRATION_CHECKS, MIGRATION_CHECK_JOBS};
 use decisions::{MIGRATION_12, MIGRATION_COMMENT_SYSTEM_AUTHOR};
 use grants::MIGRATION_PEER_GRANTS;
 use history::{
@@ -56,6 +60,8 @@ use releases::{
     MIGRATION_RELEASE_EVENTS, MIGRATION_RELEASE_MACHINES, MIGRATION_RELEASE_PLANS,
     MIGRATION_RELEASE_WORK_ITEM,
 };
+use reviews::MIGRATION_REVIEWS;
+use roles::MIGRATION_ROLES;
 use workers::{MIGRATION_18, MIGRATION_19};
 
 pub const MIGRATIONS: &[&str] = &[
@@ -107,7 +113,11 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_CARD_QUESTIONS,
     MIGRATION_DEPLOY_SUPERSEDED,
     MIGRATION_RELEASE_WORK_ITEM,
+    MIGRATION_ROLES,
     MIGRATION_PR_CORE,
+    MIGRATION_REVIEWS,
+    MIGRATION_CHECKS,
+    MIGRATION_CHECK_JOBS,
 ];
 
 #[cfg(test)]

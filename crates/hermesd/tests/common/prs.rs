@@ -24,12 +24,21 @@ pub struct Repo {
 }
 
 pub async fn setup() -> Repo {
+    setup_with(|_| {}).await
+}
+
+/// [`setup`] with the daemon's config tweaked first.
+pub async fn setup_with(tweak: impl FnOnce(&mut hermesd::config::Config)) -> Repo {
     let remote_dir = tempfile::tempdir().expect("tempdir");
     let dev_dir = tempfile::tempdir().expect("tempdir");
     let origin = remote(remote_dir.path());
     let dev = hermesd::safe_git::canonical(dev_dir.path()).expect("dev");
     let trusted = dev.display().to_string();
-    let d = super::spawn_daemon_with(|cfg| cfg.trusted_paths = vec![trusted]).await;
+    let d = super::spawn_daemon_with(|cfg| {
+        cfg.trusted_paths = vec![trusted];
+        tweak(cfg);
+    })
+    .await;
     let (pair, bots) = project_with_bots_on(d, &["Team Lead", "Desktop Dev", "Architect"]).await;
     let db = &pair.d.app.db;
     let project = db.get_bot(&pair.ids[0]).unwrap().unwrap().project_id;
@@ -165,4 +174,90 @@ pub fn patch_id(r: &Repo, number: u32) -> String {
         .unwrap()
         .unwrap()
         .head_patch_id
+}
+
+// ---- reviews (H-268) ----
+
+pub fn give(r: &Repo, bot: usize, role: Role) {
+    r.pair
+        .d
+        .app
+        .db
+        .set_project_role(&ProjectRole {
+            project_id: r.project.clone(),
+            role,
+            bot_id: r.pair.ids[bot].clone(),
+            machine: None,
+        })
+        .unwrap();
+}
+
+/// A PR on card "Search": Architect holds reviewer.arch; returns the
+/// worktree and the head the PR opened at.
+pub async fn opened(r: &mut Repo) -> (std::path::PathBuf, String) {
+    give(r, 2, Role::ReviewerArch);
+    let item = r.card("Search", "doing");
+    let tree = r.worktree("a", "H-1-search");
+    let pr = r.bots[1]
+        .call("pr_open", json!({"item": item, "branch": "H-1-search"}))
+        .await["pr"]
+        .clone();
+    (tree, pr["head_sha"].as_str().unwrap().to_string())
+}
+
+pub async fn approve(r: &mut Repo, sha: &str) -> Value {
+    r.bots[2]
+        .call(
+            "pr_review",
+            json!({"number": 1, "sha": sha, "role": "architect", "verdict": "approved",
+                   "summary": "Looks right."}),
+        )
+        .await
+}
+
+pub async fn pr(r: &mut Repo) -> Value {
+    r.bots[0].call("pr_get", json!({"number": 1})).await["pr"].clone()
+}
+
+pub async fn report(r: &mut Repo, tree: &Path) -> String {
+    let sha = git(tree, &["rev-parse", "HEAD"]).trim().to_string();
+    r.bots[1]
+        .call("pr_push", json!({"number": 1, "sha": sha}))
+        .await;
+    sha
+}
+
+/// Main moves on with a commit touching `file`.
+pub fn move_main(r: &Repo, name: &str, file: &str, text: &str) {
+    let other = r.dev.join(format!("main-mover-{name}"));
+    clone(&r.origin, &other, "unused");
+    git(&other, &["checkout", "-q", "main"]);
+    commit(&other, file, text);
+    git(&other, &["push", "-q", "origin", "main"]);
+}
+
+// ---- checks (H-270, H-283) ----
+
+/// Puts `text` on main as `.hermes/checks.toml`.
+pub fn set_policy(r: &Repo, text: &str) {
+    let main = r.dev.join(format!("main-{}", uuid::Uuid::new_v4()));
+    clone(&r.origin, &main, "unused");
+    git(&main, &["checkout", "-q", "main"]);
+    std::fs::create_dir_all(main.join(".hermes")).unwrap();
+    commit(&main, ".hermes/checks.toml", text);
+    git(&main, &["push", "-q", "origin", "main"]);
+}
+
+/// A branch with one commit changing `file`, pushed.
+pub fn branch(r: &Repo, branch: &str, file: &str) -> PathBuf {
+    let path = r.dev.join(branch);
+    clone(&r.origin, &path, branch);
+    write(&path, file, "one\n");
+    git(&path, &["push", "-q", "origin", branch]);
+    path
+}
+
+pub fn write(tree: &Path, file: &str, text: &str) -> String {
+    std::fs::create_dir_all(tree.join(file).parent().unwrap()).unwrap();
+    commit(tree, file, text)
 }

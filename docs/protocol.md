@@ -1086,6 +1086,48 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **`pr_get {number}` and `pr_list {states?}`:** a PR with its pushes and worktrees; empty `states` means open and merging.
 - **Off the board's home:** a call is forwarded there like any board tool, and a worktree path from another computer is refused (PR-9 handles that).
 
+**Reviews (PR-3a, H-268).** These use migration `REVIEWS`, which adds the tables `review`, `review_comment`, `pr_need` and `pr_review_task`.
+- **Required roles:**
+  - After every head, the daemon reads `.hermes/reviewers.toml` at the PR's base, from its own cache.
+  - The changed paths of `merge-base..head` give the required roles. They are listed as `required_roles` on `pr_get`.
+  - Each role is filled by a board role: `architect` → reviewer.arch, `ux` → reviewer.ux, `ce` → reviewer.ce (new, `ROLE_REVIEWER_CE`), `devops` → devops, `qa` → tester.
+- **`pr_review {number, sha, role, verdict, summary?, findings[], artifact?}`:**
+  - The bot must hold the role's board role, and `sha` must be the head.
+  - It is refused while the PR is `moved_unreported`; the pusher reports the tip first.
+  - `changes_requested` needs at least one `must` finding.
+  - The `owner` role is refused over MCP.
+  - The verdict is stored with the head's patch-id. `stale` is computed as the review's patch-id ≠ the PR's head patch-id, so an update with main keeps it and a fix-up or a conflict resolution doesn't.
+- **Who may not review it (§4.4):**
+  - the PR's author;
+  - the card's assignee;
+  - any bot that ever reported a push to it;
+  - a bot whose worker (`created_by_bot_id`) did;
+  - for architect, ux and ce, a bot with the dev role tasked on the card.
+- **Who seats reviewers:**
+  - `reviewer.ce` is the owner's to give, from a paired device or the app's ticket. The owner token and the lead are refused.
+  - The lead may give reviewer.arch and reviewer.ux to other bots, never to itself.
+- **Review tasks:**
+  - When a PR opens or its head changes, each bot role with no fresh approval and no open review task gets one task from the daemon (`from_bot_id` empty), linked to the card.
+  - It goes to the first holder §4.4 allows. A role nobody may fill gets none, and the daemon logs it.
+  - The review closes it.
+- **`pr_follow_up {number, review_id, finding}`:**
+  - The reviewer, the PR's author or the lead files a `should` or `nit` finding as an Inbox chore, labelled `follow-up`, related to the PR's card.
+  - The finding records `follow_up_item_id`, so it can't be filed twice.
+
+**Checks (PR-5a, H-270).**
+- **Which checks:** each reported head queues the required checks of the base's `.hermes/checks.toml`, filtered by the paths the PR changes. A head's own `checks.toml` changes nothing.
+- **A broken base file:** if the base's `checks.toml` doesn't parse, a single `.hermes/checks.toml` check is recorded as `error`, so nothing counts as checked.
+- **Repairing it:** a PR that changes `checks.toml` to a file that parses gets the head's checks plus a passing `.hermes/checks.toml` check, so the repair can merge. Like any policy change, it still needs architect, ce and the owner.
+
+**Running checks (PR-5b, H-283).**
+- **Tools:** each daemon probes `node`, `pnpm`, `cargo`, `xcodebuild`, `python3`, `mkdocs` and `docker` at boot and hourly (`checks.probe_interval_secs`), plus `os` and `disk_free_gb`. It keeps them in `machine_tool` under its own name and sends them to each linked computer as the peer event `machine_tools {tools}`, also when a link comes up.
+- **Routing:** the board's home routes each queued check to an online computer whose tools cover its `needs` and the program its `run` starts with, matching `machine` by name or OS (`windows`, `mac`). The least busy wins, this computer first on a tie. A check with no such computer keeps waiting, with the reason in its `note`.
+- **The runner:** no bot and no AI worker. The daemon of the chosen computer runs the check itself, as the identity `daemon:check-runner` (not a bot: no inbox, no parent, never a PR's author or pusher). It clones the repository at the exact sha into `<home>/run/checks/<job>/check` (built under `<home>/run/git`, then moved in), then starts `hermesd check run <job folder>` with a clean environment (tool paths and locale only, no tokens). That runs the job's `run` from the base's `checks.toml` in the checkout, all output to `check.log`, and exits 0 when it exited 0, 1 when it didn't, 2 when it couldn't start. The result is that exit status: `pass`, `fail` or `error`. The checkout is removed once it has run; the log is published under the project's artifacts, or, run on a linked computer, stays there as `<computer>:<path>`.
+- **Linked computers:** the home asks with the peer request `check_run {project_id, job, url, sha, run}`. The computer clones from its own URL for that repository (it refuses one the linked project doesn't have, and refuses `at_capacity` under its disk floor, so the check waits) and answers at once. When the run ends it sends the event `check_result {job, result, note, log}`; the home accepts it only from the computer the job was routed to.
+- **`check_report` (MCP):** a bot a check was dispatched to may report `running` or `error` only. A `pass` or a `fail` over MCP is refused: they come only from the exit status.
+- **Load:** at most `checks.jobs_per_machine` (default 2) open check jobs per computer, every project's. No job starts on a computer with less than `checks.disk_floor_gb` (default 20) GB free; it waits instead.
+- **Re-runs:** `check_rerun {sha, name}` (MCP) for the lead or the PR's author, and for the owner over the `hermes.pr.v1` `check_rerun` request once H-273 serves it. An `error` is retried once automatically, including a job that ended without a result (the daemon restarted while it ran, or a linked computer sent nothing within 7 hours); a `fail` never is.
+
 ## Meetings
 
 Meetings live with the board, on its home (H-017 §1.5, H-020 §4, H-102). A **series** (`standup`, `refinement`, `demo`, `retro` or `adhoc`) owns a routine: creating or changing one upserts the routine with the facilitator as its bot, the series' cron and time zone, and a prompt telling it to run the meeting. A new facilitator gets a new routine; disabling the series disables it. Each run, the facilitator calls `meeting_start`. That opens an occurrence (`MTG-<date>-<type>`, collecting), freezes `inputs_snapshot` (the board's columns with counts, Doing, blocked and stale items, the open action items) and sends each attendee bot one note. Attendees `meeting_contribute`, the facilitator (or the lead) records `action_add`s and `meeting_close`s it as held, with outputs by section and a summary of at most ten lines, or skipped with a reason. Open action items carry over: `meeting_get` lists those of the series' earlier meetings as `carried_over`. `action_promote` (lead) turns one into a chore in the board's Inbox, linked to its meeting (link kind `meeting`), and sets the action's `item_id`. Attendees and action owners are bot ids, or `owner`.
