@@ -20,8 +20,15 @@ pub struct Team {
     pub windev_id: String,
 }
 
+/// How long [`wait_until`] waits (H-312). A link comes up in ~40 ms alone,
+/// but every daemon in a test shares its one runtime thread, so under a
+/// loaded workspace run it took up to ~1 s; one failed dial adds the
+/// dialer's 2 s and then 4 s redial on top. 5 s left no room for that.
+/// A check that holds returns at once, so the bound costs nothing.
+const WAIT: Duration = Duration::from_secs(15);
+
 pub async fn wait_until(what: &str, mut check: impl FnMut() -> bool) {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let deadline = tokio::time::Instant::now() + WAIT;
     while !check() {
         assert!(tokio::time::Instant::now() < deadline, "timed out: {what}");
         tokio::time::sleep(Duration::from_millis(25)).await;
