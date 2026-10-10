@@ -27,17 +27,46 @@ fn job_on(db: &hermesd::db::Db, machine: &str, path: &Path) -> Option<Job> {
     db.board_read(|t| t.sweep_job(machine, &path)).unwrap()
 }
 
-/// Moves every file's change time in `tree` back by `days`.
-fn age_tree(tree: &Path, days: u32) {
-    let at = (chrono::Local::now() - chrono::Duration::days(days.into()))
-        .format("%Y%m%d%H%M")
-        .to_string();
-    let shown = tree.display().to_string();
-    let ok = std::process::Command::new("find")
-        .args([shown.as_str(), "-exec", "touch", "-h", "-t", &at, "{}", "+"])
-        .status()
-        .unwrap();
-    assert!(ok.success());
+/// Sets the modified time of the file or folder at `path` (not a link).
+fn set_mtime(path: &Path, at: std::time::SystemTime) {
+    let mut open = std::fs::OpenOptions::new();
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_WRITE_ATTRIBUTES; a folder opens only with BACKUP_SEMANTICS.
+        open.access_mode(0x0100).custom_flags(0x0200_0000);
+    }
+    #[cfg(not(windows))]
+    open.read(true);
+    let file = open
+        .open(path)
+        .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+    let times = std::fs::FileTimes::new().set_modified(at).set_accessed(at);
+    file.set_times(times)
+        .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+}
+
+/// Moves the change time of everything in `tree` back by `days`, links
+/// skipped and never followed (H-275; no `find`/`touch`, which Windows
+/// lacks).
+fn age_tree(tree: &Path, days: u64) {
+    let at = std::time::SystemTime::now() - Duration::from_secs(days * 86_400);
+    let mut dirs = vec![tree.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let meta = std::fs::symlink_metadata(entry.path()).unwrap();
+            if meta.file_type().is_symlink() {
+                continue;
+            }
+            if meta.is_dir() {
+                dirs.push(entry.path());
+            } else {
+                set_mtime(&entry.path(), at);
+            }
+        }
+        // A folder's time last: writing its files doesn't change it.
+        set_mtime(&dir, at);
+    }
 }
 
 #[tokio::test]
