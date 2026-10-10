@@ -38,8 +38,27 @@ pub async fn project(c: &mut WsClient, name: &str) -> String {
 /// A lead on "the Mac" and a Windows developer on "the PC", paired, with the
 /// developer linked into the lead's project.
 pub async fn team() -> Team {
-    let mac = spawn_daemon_with(|cfg| cfg.user_home = cfg.home.join("user")).await;
-    let win = spawn_daemon_with(|cfg| cfg.user_home = cfg.home.join("user")).await;
+    team_with(false).await
+}
+
+/// [`team`] whose daemons take the owner acts a linked computer forwards:
+/// the path kept for signed approvals (H-285, H-301), off in every real
+/// daemon.
+pub async fn team_trusting() -> Team {
+    team_with(true).await
+}
+
+async fn spawn_computer(trust: bool) -> TestDaemon {
+    spawn_daemon_with(|cfg| {
+        cfg.user_home = cfg.home.join("user");
+        cfg.trust_forwarded_owner_acts = trust;
+    })
+    .await
+}
+
+async fn team_with(trust: bool) -> Team {
+    let mac = spawn_computer(trust).await;
+    let win = spawn_computer(trust).await;
     let mut mac_client = WsClient::connect(&mac).await;
     let mut win_client = WsClient::connect(&win).await;
 
@@ -113,8 +132,17 @@ pub struct Paired {
 }
 
 pub async fn paired() -> Paired {
-    let mac = spawn_daemon_with(|cfg| cfg.user_home = cfg.home.join("user")).await;
-    let win = spawn_daemon_with(|cfg| cfg.user_home = cfg.home.join("user")).await;
+    paired_with(false).await
+}
+
+/// [`paired`] trusting forwarded owner acts (see [`team_trusting`]).
+pub async fn paired_trusting() -> Paired {
+    paired_with(true).await
+}
+
+async fn paired_with(trust: bool) -> Paired {
+    let mac = spawn_computer(trust).await;
+    let win = spawn_computer(trust).await;
     let mut mac_client = WsClient::connect(&mac).await;
     let mut win_client = WsClient::connect(&win).await;
     let (win_peer_id, mac_peer_id) = pair(&mac, &win, &mut mac_client, &mut win_client).await;

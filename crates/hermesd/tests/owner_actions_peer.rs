@@ -5,7 +5,7 @@
 
 mod common;
 
-use common::peers::{paired, project, wait_until, Paired};
+use common::peers::{paired_trusting, project, wait_until, Paired};
 use common::tasks::{drain_until, error_text};
 use common::*;
 use serde_json::{json, Value};
@@ -21,7 +21,7 @@ struct Setup {
 
 /// The Mac's "app" is linked with the PC's, and has a devops bot.
 async fn setup() -> Setup {
-    let mut p = paired().await;
+    let mut p = paired_trusting().await;
     let mac_app = project(&mut p.mac_client, "app").await;
     let win_app = project(&mut p.win_client, "app").await;
     let linked = p

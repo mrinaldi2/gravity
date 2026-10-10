@@ -22,8 +22,11 @@ const REMOTE_GRANTABLE: [PermissionExtra; 3] = [
 
 /// Whether another computer's ruling may grant `extra` on this one. The
 /// ruling's computer checks it too, before sending (H-163).
-pub fn remote_grantable(extra: &str) -> bool {
-    PermissionExtra::parse(extra).is_some_and(|e| REMOTE_GRANTABLE.contains(&e))
+/// None while forwarded owner acts aren't trusted (H-301, owner ruling
+/// 6df14f7a): the owner sets them on that computer or from a phone.
+pub fn remote_grantable(app: &AppState, extra: &str) -> bool {
+    crate::peer::owner_trust::trusted(app)
+        && PermissionExtra::parse(extra).is_some_and(|e| REMOTE_GRANTABLE.contains(&e))
 }
 
 /// The sha256 over the canonical JSON of an option's grants: what a view
@@ -157,6 +160,17 @@ pub fn apply(app: &Arc<AppState>, decision: &Decision) {
 /// On the computer a linked bot runs on: a peer asks to add its extras,
 /// for a ruling the owner gave there. Only bots exposed to that peer.
 pub fn serve_grant(app: &AppState, peer_id: &str, frame: &Value) -> anyhow::Result<Value> {
+    // A peer's word that the owner ruled isn't proof: a bot holding the
+    // link's token could send it (H-301). Nothing is granted from it.
+    if !crate::peer::owner_trust::trusted(app) {
+        let here = app
+            .db
+            .board_read(crate::board::release::machines::this_computer)?;
+        return Err(crate::peer::refuse(
+            "forbidden",
+            crate::peer::owner_trust::approve_elsewhere(&here),
+        ));
+    }
     let bot_id = frame["bot_id"].as_str().unwrap_or_default();
     if !app.db.is_exposed_to_peer(peer_id, bot_id)? {
         return Err(crate::peer::refuse(

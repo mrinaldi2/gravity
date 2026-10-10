@@ -156,7 +156,7 @@ impl Conn {
         r: p::CheckRerunRequest,
     ) -> Result<(), Refusal> {
         // Not taken from a linked computer yet (H-285 must-fix).
-        if !crate::peer::owner_trust::TRUST_FORWARDED_OWNER_ACTS {
+        if !crate::peer::owner_trust::trusted(&self.app) {
             let name = home_name(&self.app, &home);
             return Err(refuse(
                 "forbidden",

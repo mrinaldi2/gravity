@@ -8,7 +8,7 @@ mod common;
 use bus::PermissionExtra;
 use chrono::{Duration, Utc};
 use common::grants::{comments, desktop, drop_link, extras, grant, said, settled};
-use common::peers::{team, Team};
+use common::peers::{team_trusting, Team};
 use common::WsClient;
 use hermesd::db::GrantRuling;
 use serde_json::json;
@@ -25,7 +25,7 @@ async fn waiting_then(t: &mut Team, change: impl AsyncFnOnce(&mut Team, &str)) -
 /// PC is away: the grant is never sent.
 #[tokio::test]
 async fn a_superseded_ruling_grants_nothing_once_the_pc_is_back() {
-    let mut t = team().await;
+    let mut t = team_trusting().await;
     let id = waiting_then(&mut t, async |t, id| {
         t.lead
             .call(
@@ -44,7 +44,7 @@ async fn a_superseded_ruling_grants_nothing_once_the_pc_is_back() {
 /// (b) The owner reopens the ruling while the PC is away: the same.
 #[tokio::test]
 async fn a_reopened_ruling_grants_nothing_once_the_pc_is_back() {
-    let mut t = team().await;
+    let mut t = team_trusting().await;
     let id = waiting_then(&mut t, async |t, id| {
         let mut owner = desktop(&t.mac).await;
         let reopened = owner
@@ -63,7 +63,7 @@ async fn a_reopened_ruling_grants_nothing_once_the_pc_is_back() {
 /// above), so the row is filed here against a decision that was.
 #[tokio::test]
 async fn a_withdrawn_decision_grants_nothing() {
-    let mut t = team().await;
+    let mut t = team_trusting().await;
     let raised = t
         .lead
         .call(
@@ -109,7 +109,7 @@ async fn a_withdrawn_decision_grants_nothing() {
 /// the grant waits: the grant is refused there, not laid over the change.
 #[tokio::test]
 async fn a_change_made_on_the_pc_after_the_ruling_is_not_undone() {
-    let mut t = team().await;
+    let mut t = team_trusting().await;
     let id = waiting_then(&mut t, async |t, _| {
         let mut pc_owner = WsClient::connect(&t.win).await;
         let set = pc_owner
@@ -135,7 +135,7 @@ async fn a_change_made_on_the_pc_after_the_ruling_is_not_undone() {
 /// (d) A change on the PC from before the ruling doesn't stand in its way.
 #[tokio::test]
 async fn a_change_made_before_the_ruling_lets_it_apply() {
-    let mut t = team().await;
+    let mut t = team_trusting().await;
     let mut pc_owner = WsClient::connect(&t.win).await;
     pc_owner
         .request(
@@ -155,7 +155,7 @@ async fn a_change_made_before_the_ruling_lets_it_apply() {
 /// and the decision says to set it on the PC.
 #[tokio::test]
 async fn a_grant_waiting_a_day_expires() {
-    let mut t = team().await;
+    let mut t = team_trusting().await;
     // A settled ruling whose grants this computer filed earlier.
     let id = grant(&mut t, &["publish"], |_| {}).await;
     let stored = t.mac.app.db.get_decision(&id).unwrap().unwrap();

@@ -140,6 +140,18 @@ pub(in crate::peer) fn serve_run(
     peer: &Peer,
     frame: &Value,
 ) -> anyhow::Result<Value> {
+    // A peer's word that the owner approved isn't proof: a bot holding the
+    // link's token could send it (H-301). The owner runs it here or from a
+    // phone paired with this computer.
+    if !crate::peer::owner_trust::trusted(app) {
+        let here = app
+            .db
+            .board_read(crate::board::release::machines::this_computer)?;
+        return Err(refuse(
+            "forbidden",
+            crate::peer::owner_trust::approve_elsewhere(&here),
+        ));
+    }
     let a = offered(app, peer, frame, "a run")?;
     let sha = text(frame, "sha256")?;
     let by = format!(
