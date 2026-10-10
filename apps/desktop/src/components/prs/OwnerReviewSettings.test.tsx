@@ -17,9 +17,11 @@ describe("Settings › Owner review (AC4)", () => {
 
     await userEvent.click(screen.getByRole("radio", { name: /^Some areas/ }));
     const areas = screen.getByRole("group", { name: "Areas" });
-    expect(areas).toHaveTextContent("securityreleasesdocsdesktop");
-    await userEvent.click(screen.getByRole("checkbox", { name: "security" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: "docs" }));
+    expect(areas).toHaveTextContent(
+      "Security and permissionsReleases and installsDocsDesktop screens",
+    );
+    await userEvent.click(screen.getByRole("checkbox", { name: "Security and permissions" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Docs" }));
     await userEvent.click(save);
 
     expect(

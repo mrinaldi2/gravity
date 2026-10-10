@@ -130,8 +130,10 @@ describe("The 10 s Undo (AC2)", () => {
   it("withdraws your approval in the window", async () => {
     const client = ownerDaemon([mergingPr(7)]);
     show(client);
-    expect(await screen.findByText(/Merging #42 into main in 7 s/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByText(/Nothing is pushed until then/)).toHaveTextContent(
+      "◌ Merging #42 into main in 7 s. Nothing is pushed until then.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Undo your approval of #42" }));
     expect(sent(client, "pr_merge_undo")).toEqual([
       { type: "pr_merge_undo", project_id: "p1", number: 42 },
     ]);
@@ -140,7 +142,7 @@ describe("The 10 s Undo (AC2)", () => {
   it("says it waits for DevOps once the window is over", async () => {
     show(ownerDaemon([mergingPr(-3)]));
     expect(await screen.findByText(/Waiting for DevOps to merge #42 into main/)).toBeDefined();
-    expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Undo/ })).toBeNull();
   });
 });
 

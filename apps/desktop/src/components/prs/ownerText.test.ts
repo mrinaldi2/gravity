@@ -7,6 +7,7 @@ import { HEAD, OLDER, PR_NOW, readyForYouPr, waitingPr } from "../../test/prFixt
 import {
   approveBlocked,
   approveCopy,
+  areaLabel,
   mergeWindow,
   recheckBase,
   settingLine,
@@ -62,10 +63,33 @@ describe("ownerText", () => {
     });
     expect(areas.ownerReview).toBe(OwnerReview.AREAS);
     expect(areas.areas).toEqual(["security", "docs", "desktop"]);
-    expect(settingLine(areas)).toBe("Owner review: some areas (security, docs)");
+    expect(settingLine(areas)).toBe("Owner review: some areas (Security and permissions, Docs)");
     expect(line(OwnerReview.ALL)).toBe("Owner review: every pull request");
     expect(line(OwnerReview.UNSPECIFIED)).toBe("Owner review: every pull request");
     expect(line(OwnerReview.FLAGGED)).toBe("Owner review: only flagged");
     expect(line(OwnerReview.NONE)).toBe("Owner review: none");
+  });
+
+  it("names the areas in words, and an unknown one by its key", () => {
+    expect(
+      ["security", "releases", "docs", "desktop", "ios", "service", "billing"].map(areaLabel),
+    ).toEqual([
+      "Security and permissions",
+      "Releases and installs",
+      "Docs",
+      "Desktop screens",
+      "iPhone and iPad screens",
+      "Hermes service",
+      "billing",
+    ]);
+    const unknown = decodeReviewSettings({
+      project_id: "p1",
+      owner_review: "areas",
+      owner_review_areas: ["ios", "billing"],
+      areas: ["ios", "billing"],
+    });
+    expect(settingLine(unknown)).toBe(
+      "Owner review: some areas (iPhone and iPad screens, billing)",
+    );
   });
 });

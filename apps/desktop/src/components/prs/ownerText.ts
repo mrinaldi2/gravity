@@ -135,13 +135,28 @@ export const MODE_CHOICES: readonly {
   },
 ];
 
+/** reviewers.toml's area keys in the glossary's words (UX-051; UX-053 must-fix 1). */
+const AREA_LABELS: ReadonlyMap<string, string> = new Map([
+  ["security", "Security and permissions"],
+  ["releases", "Releases and installs"],
+  ["docs", "Docs"],
+  ["desktop", "Desktop screens"],
+  ["ios", "iPhone and iPad screens"],
+  ["service", "Hermes service"],
+]);
+
+/** An area's name: "Security and permissions" for `security`; an unknown key as it is. */
+export function areaLabel(key: string): string {
+  return AREA_LABELS.get(key) ?? key;
+}
+
 /** "Owner review: every pull request", shown on each PR's Waiting for line. */
 export function settingLine(settings: ReviewSettings): string {
   switch (modeOf(settings)) {
     case "areas":
       return settings.ownerReviewAreas.length === 0
         ? "Owner review: some areas (none picked)"
-        : `Owner review: some areas (${settings.ownerReviewAreas.join(", ")})`;
+        : `Owner review: some areas (${settings.ownerReviewAreas.map(areaLabel).join(", ")})`;
     case "flagged":
       return "Owner review: only flagged";
     case "none":

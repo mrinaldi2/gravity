@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { ReviewSettings } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import type { OwnerReviewMode } from "../../protocol/prOwner";
-import { MODE_CHOICES, modeOf } from "./ownerText";
+import { areaLabel, MODE_CHOICES, modeOf } from "./ownerText";
 import type { PrClient } from "./usePrOwner";
 import { useReviewSettings } from "./usePrOwner";
 
@@ -53,7 +53,7 @@ function AreaPicker(props: {
               checked={props.picked.includes(area)}
               onChange={() => props.onToggle(area)}
             />
-            <span>{area}</span>
+            <span>{areaLabel(area)}</span>
           </label>
         ))
       )}
