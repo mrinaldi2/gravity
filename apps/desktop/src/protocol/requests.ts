@@ -1,6 +1,7 @@
 // Client → server frames (protocol v2).
 
 import type { BrowserInputEvent } from "./agents";
+import type { CleanupRequestBody } from "./cleanup";
 import type { PermissionAnswer } from "./chat";
 import type { DashboardRequestBody } from "./dashboard";
 import type { MeetingRequestBody } from "./meetings";
@@ -33,6 +34,7 @@ export type ClientRequestBody =
   | MetricsRequestBody
   | HomeRequestBody
   | PrOwnerRequestBody
+  | CleanupRequestBody
   | {
       readonly type: "hello";
       readonly protocol_version: number;

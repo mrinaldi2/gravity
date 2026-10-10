@@ -17,6 +17,7 @@ import { botNamer, useItemTitles } from "../releases/ReleasesView";
 import { useReleaseActions } from "../releases/useReleases";
 import OwnerActionList from "../ownerActions/OwnerActionList";
 import DashboardItem from "./DashboardItem";
+import DiskWidget from "./DiskWidget";
 import FlowWidget from "./FlowWidget";
 import NeedsYou from "./NeedsYou";
 import { useConfirmRelayed } from "./useConfirmRelayed";
@@ -26,6 +27,7 @@ import { useMetrics } from "./useMetrics";
 import { useNeedsYouPrs } from "./useNeedsYouPrs";
 import { ActionItemsWidget, MeetingsWidget, offHomeOf } from "./MeetingWidgets";
 import { useActionItems } from "./useActionItems";
+import { CleanupChoice, cleanupRowActions, useCleanup } from "./useCleanup";
 import { BoardWidget, ReleasesWidget, TeamWidget } from "./Widgets";
 
 export interface DashboardViewProps {
@@ -127,6 +129,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const { reviewing, openItem, openReview, showItem, close: closeDrawer } = useDashboardDrawers();
   const metrics = useMetrics(client, project.id, connected);
   const prs = useNeedsYouPrs(client, project.id, connected, props.onOpenPr, dashboard);
+  const cleanup = useCleanup(client, project.id, props.addToast, refresh);
 
   if (dashboard === null) {
     return <Loading error={error} onRetry={() => void refresh()} />;
@@ -173,6 +176,7 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             onOpenNeedsYou={props.onOpenNeedsYou}
             prs={prs}
             onOpenPr={props.onOpenPr}
+            {...cleanupRowActions(cleanup, connected)}
           />
           {props.fromTheTeam}
           <OwnerActionList
@@ -205,8 +209,10 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             columnName={(key) => columns.get(key) ?? key}
             onBoard={openBoard}
           />
+          <DiskWidget client={client} connected={connected} />
         </div>
       </div>
+      <CleanupChoice cleanup={cleanup} />
       {reviewing ? (
         <ReviewDrawer
           key={reviewing.id}

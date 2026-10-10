@@ -18,6 +18,7 @@ import type {
   BrowserFramePush,
   BrowserTabsPush,
 } from "./agents";
+import type { CleanupReply } from "./cleanup";
 import type { DashboardReply } from "./dashboard";
 import type { HomePush, HomeReply } from "./home";
 import type { ItemCardsReply } from "./itemCards";
@@ -74,6 +75,7 @@ export type ServerReply =
   | (ReplyBase & MetricsReply)
   | (ReplyBase & HomeReply)
   | (ReplyBase & PrOwnerReply)
+  | (ReplyBase & CleanupReply)
   | (ReplyBase & {
       readonly type: "hello_ok";
       readonly protocol_version: number;

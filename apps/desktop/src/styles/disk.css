@@ -1,0 +1,34 @@
+/* The dashboard's Disk widget (H-275): free space, then each bot's share. */
+
+.dash-disk-free {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.dash-disk-uses {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dash-disk-uses li {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.dash-disk-bot {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-disk-size,
+.dash-disk-more {
+  color: var(--text-dim);
+  white-space: nowrap;
+}

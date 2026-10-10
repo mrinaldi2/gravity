@@ -67,6 +67,9 @@ const ORDER: Readonly<Record<Shown["kind"], number>> = {
   pr_review: 1,
   pr_merge_stuck: 2,
   main_moved_outside: 0,
+  // Under 20 GB free stops builds for every bot; a held cleanup can wait.
+  disk_low: 2,
+  cleanup_held: 6,
   routines_without_card: 7,
   // Sorted by the kind it carries (`orderOf`); this is the fallback.
   elsewhere: 5,
