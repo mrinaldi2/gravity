@@ -17,8 +17,82 @@ type Choice = "approve" | "changes";
 function others(pr: PullRequest): string {
   return reviewRoles(pr)
     .filter((role) => role !== OWNER_ROLE)
-    .map((role) => reviewChip(pr, role).text)
-    .join(" · ");
+    .map((role) => ` · ${reviewChip(pr, role).text}`)
+    .join("");
+}
+
+function Choices(props: {
+  readonly pr: PullRequest;
+  readonly choice: Choice;
+  readonly blocked: string | null;
+  readonly onChoice: (choice: Choice) => void;
+  /** Opening focuses Approve when it can be used (UX-050). */
+  readonly focusApprove: boolean;
+}): ReactElement {
+  const { pr, choice } = props;
+  const approve = useRef<HTMLInputElement>(null);
+  const focus = props.focusApprove;
+  useEffect(() => {
+    if (focus) {
+      approve.current?.focus();
+    }
+  }, [focus]);
+  return (
+    <fieldset className="pr-choices">
+      <legend className="visually-hidden">Your verdict</legend>
+      <label className={`pr-choice ${choice === "approve" ? "pr-choice-on" : ""}`}>
+        <input
+          ref={approve}
+          type="radio"
+          name="verdict"
+          checked={choice === "approve"}
+          disabled={props.blocked !== null}
+          onChange={() => props.onChoice("approve")}
+        />
+        <span>
+          Approve
+          <span className="pr-choice-hint">{props.blocked ?? approveCopy(pr)}</span>
+        </span>
+      </label>
+      <label className={`pr-choice ${choice === "changes" ? "pr-choice-on" : ""}`}>
+        <input
+          type="radio"
+          name="verdict"
+          checked={choice === "changes"}
+          onChange={() => props.onChoice("changes")}
+        />
+        <span>
+          Ask for changes
+          <span className="pr-choice-hint">{changesCopy(pr)}</span>
+        </span>
+      </label>
+    </fieldset>
+  );
+}
+
+/** Escape closes. */
+function useEscape(onClose: () => void): void {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+}
+
+/** What the submit sends: the verdict on exactly `sha`, with the note when there is one. */
+function verdictOf(pr: PullRequest, sha: string, choice: Choice, note: string) {
+  return {
+    type: "pr_review_submit" as const,
+    project_id: pr.projectId,
+    number: pr.number,
+    sha,
+    verdict: choice === "approve" ? ("approved" as const) : ("changes_requested" as const),
+    ...(note.trim() === "" ? {} : { summary: note.trim() }),
+  };
 }
 
 export default function ReviewDialog(props: {
@@ -33,36 +107,22 @@ export default function ReviewDialog(props: {
   const [choice, setChoice] = useState<Choice>(blocked === null ? "approve" : "changes");
   const [note, setNote] = useState("");
   const heading = useRef<HTMLHeadingElement>(null);
-  const approveRadio = useRef<HTMLInputElement>(null);
+  const [startOnApprove] = useState(blocked === null);
   const noteId = useId();
   const title = `Your review of #${pr.number}`;
 
-  // Opening focuses Approve when it can be used, else the heading (UX-050).
+  // Opening focuses Approve when it can be used (in Choices), else the heading (UX-050).
   useEffect(() => {
-    (approveRadio.current?.disabled === false ? approveRadio.current : heading.current)?.focus();
-  }, []);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    if (!startOnApprove) {
+      heading.current?.focus();
+    }
+  }, [startOnApprove]);
+  useEscape(onClose);
 
   const needsNote = choice === "changes" && note.trim() === "";
   const off = owner.busy || needsNote || (choice === "approve" && blocked !== null);
   const submit = async (): Promise<void> => {
-    const done = await owner.act({
-      type: "pr_review_submit",
-      project_id: pr.projectId,
-      number: pr.number,
-      sha,
-      verdict: choice === "approve" ? "approved" : "changes_requested",
-      ...(note.trim() === "" ? {} : { summary: note.trim() }),
-    });
-    if (done) {
+    if (await owner.act(verdictOf(pr, sha, choice, note))) {
       onClose();
     }
   };
@@ -84,37 +144,15 @@ export default function ReviewDialog(props: {
         <p className="pr-dim">
           {pr.itemId} {pr.itemTitle || pr.title} · latest commit{" "}
           <span className="pr-sha">{sha7(pr.headSha)}</span>
-          {others(pr) ? ` · ${others(pr)}` : ""}
+          {others(pr)}
         </p>
-        <fieldset className="pr-choices">
-          <legend className="visually-hidden">Your verdict</legend>
-          <label className={`pr-choice ${choice === "approve" ? "pr-choice-on" : ""}`}>
-            <input
-              ref={approveRadio}
-              type="radio"
-              name="verdict"
-              checked={choice === "approve"}
-              disabled={blocked !== null}
-              onChange={() => setChoice("approve")}
-            />
-            <span>
-              Approve
-              <span className="pr-choice-hint">{blocked ?? approveCopy(pr)}</span>
-            </span>
-          </label>
-          <label className={`pr-choice ${choice === "changes" ? "pr-choice-on" : ""}`}>
-            <input
-              type="radio"
-              name="verdict"
-              checked={choice === "changes"}
-              onChange={() => setChoice("changes")}
-            />
-            <span>
-              Ask for changes
-              <span className="pr-choice-hint">{changesCopy(pr)}</span>
-            </span>
-          </label>
-        </fieldset>
+        <Choices
+          pr={pr}
+          choice={choice}
+          blocked={blocked}
+          onChoice={setChoice}
+          focusApprove={startOnApprove}
+        />
         <label className="pr-note-field" htmlFor={noteId}>
           {choice === "changes" ? "Note (needed for changes)" : "Note (optional for Approve)"}
         </label>

@@ -66,6 +66,56 @@ function FileButton(props: {
   );
 }
 
+/** "Show: Every change, from main" or "Since c79c8b5, approved by CE". */
+function DeltaPicker(props: {
+  readonly pr: PullRequest;
+  readonly from: string | null;
+  readonly onFrom: (from: string | null) => void;
+}): ReactElement | null {
+  const bases = deltaBases(props.pr);
+  if (bases.length === 0) {
+    return null;
+  }
+  return (
+    <label className="pr-delta">
+      Show
+      <select
+        value={props.from ?? ""}
+        onChange={(event) => props.onFrom(event.target.value === "" ? null : event.target.value)}
+      >
+        <option value="">Every change, from {props.pr.base}</option>
+        {bases.map((base) => (
+          <option key={base.sha} value={base.sha}>
+            Since {sha7(base.sha)}, approved by {base.by}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** A re-check shows only what changed since you approved, with Review… to give your verdict. */
+function RecheckBanner(props: {
+  readonly base: string;
+  readonly files: number | null;
+  readonly onReview: ((event: { readonly currentTarget: HTMLElement }) => void) | null;
+}): ReactElement {
+  return (
+    <div className="pr-banner pr-banner-recheck" role="status">
+      <span>
+        <b>⟳ Only what changed since you approved </b>
+        <span className="pr-sha">{sha7(props.base)}</span>
+        {props.files === null ? "" : ` · ${props.files} files`}
+      </span>
+      {props.onReview === null ? null : (
+        <button type="button" className="btn btn-small btn-primary" onClick={props.onReview}>
+          Review…
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function PrFiles(props: {
   readonly client: PrClient;
   readonly pr: PullRequest;
@@ -81,7 +131,6 @@ export default function PrFiles(props: {
   const { pr, from } = props;
   const [picked, setPicked] = useState<string | null>(null);
   const { data, error } = usePrDiff(props.client, pr, from, props.connected);
-  const bases = deltaBases(pr);
   const texts = data === null ? [] : parseDiff(data.diff);
   const shown = picked === null ? texts : texts.filter((t) => t.path === picked);
   const range = data === null ? "" : `${sha7(data.fromSha)} → ${sha7(data.toSha)}`;
@@ -89,25 +138,14 @@ export default function PrFiles(props: {
   return (
     <div className="pr-files">
       <div className="pr-file-side">
-        {bases.length > 0 ? (
-          <label className="pr-delta">
-            Show
-            <select
-              value={from ?? ""}
-              onChange={(event) => {
-                props.onFrom(event.target.value === "" ? null : event.target.value);
-                setPicked(null);
-              }}
-            >
-              <option value="">Every change, from {pr.base}</option>
-              {bases.map((base) => (
-                <option key={base.sha} value={base.sha}>
-                  Since {sha7(base.sha)}, approved by {base.by}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
+        <DeltaPicker
+          pr={pr}
+          from={from}
+          onFrom={(next) => {
+            props.onFrom(next);
+            setPicked(null);
+          }}
+        />
         {data === null ? (
           <p className="pr-dim">{error ?? "Loading files…"}</p>
         ) : (
@@ -125,18 +163,11 @@ export default function PrFiles(props: {
       </div>
       <div className="pr-diff-pane">
         {props.recheck !== null && from === props.recheck ? (
-          <div className="pr-banner pr-banner-recheck" role="status">
-            <span>
-              <b>⟳ Only what changed since you approved </b>
-              <span className="pr-sha">{sha7(props.recheck)}</span>
-              {data === null ? "" : ` · ${data.files.length} files`}
-            </span>
-            {props.onReview === null ? null : (
-              <button type="button" className="btn btn-small btn-primary" onClick={props.onReview}>
-                Review…
-              </button>
-            )}
-          </div>
+          <RecheckBanner
+            base={props.recheck}
+            files={data?.files.length ?? null}
+            onReview={props.onReview}
+          />
         ) : null}
         {data?.truncated ? (
           <p className="pr-banner pr-banner-warn">

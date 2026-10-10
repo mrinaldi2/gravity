@@ -6,7 +6,7 @@
 
 import { useCallback } from "react";
 import type { ReactElement } from "react";
-import type { ProjectTab } from "../../app/selection";
+import type { ProjectTab, Selection } from "../../app/selection";
 import type { DaemonState } from "../../app/useDaemonState";
 import type { AddToast } from "../../app/useToasts";
 import type { DaemonApi } from "../../protocol/api";
@@ -155,14 +155,18 @@ function Settings({ ctx }: { readonly ctx: TabContext }): ReactElement {
   );
 }
 
+/** The PR a selection opens, and whether as a re-check. */
+function prOpening(at: Selection): { readonly pr?: number; readonly recheck?: boolean } {
+  return at.kind === "project" ? { pr: at.pr, recheck: at.recheck } : {};
+}
+
 /** The Pull requests tab, on the PR Needs you or a link asked for. */
 function Prs({ ctx }: { readonly ctx: TabContext }): ReactElement {
   const { client, daemon, project } = ctx;
   if (!client.capabilities.includes(PULL_REQUESTS)) {
     return <NeedsNewer what="Pull requests" />;
   }
-  const at = daemon.selection;
-  const pr = at.kind === "project" ? at.pr : undefined;
+  const { pr, recheck } = prOpening(daemon.selection);
   return (
     <PullRequestsView
       key={pr ?? "list"}
@@ -171,7 +175,7 @@ function Prs({ ctx }: { readonly ctx: TabContext }): ReactElement {
       connected={daemon.connected}
       now={ctx.now}
       initialNumber={pr}
-      recheck={at.kind === "project" && at.recheck === true}
+      recheck={recheck}
       onOpenSettings={() =>
         daemon.select({
           kind: "project",

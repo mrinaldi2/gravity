@@ -4,26 +4,25 @@
 // the Re-check of what changed since you approved.
 // Opening it moves focus to its heading (UX-013); the caller returns it on Back.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { PullRequest, ReviewSettings } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import { BlockerKind, PrState } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import CardLink from "../cards/CardLink";
 import { checksSummary, splitChecks } from "./checkText";
-import type { CommentWrite, Thread } from "./LineComments";
-import { lineKey, threadsOf } from "./LineComments";
 import MergeBar from "./MergeBar";
 import { recheckBase, settingLine } from "./ownerText";
 import { Chip } from "./PrList";
 import PrChecks from "./PrChecks";
 import PrFiles from "./PrFiles";
+import type { SettingNote } from "./PrOverview";
 import PrOverview from "./PrOverview";
 import type { Tone } from "./prText";
 import { age, branchMarker, sha7, waitsForYou } from "./prText";
 import ReviewDialog from "./ReviewDialog";
-import { usePrComments } from "./usePullRequests";
+import type { PrReview } from "./usePrReview";
+import { usePrReview } from "./usePrReview";
 import type { PrClient } from "./usePrOwner";
-import { useOwnerAct } from "./usePrOwner";
 
 type Section = "overview" | "files" | "checks";
 
@@ -48,6 +47,33 @@ function headPill(pr: PullRequest): { readonly text: string; readonly tone: Tone
   return null;
 }
 
+function Header(props: {
+  readonly pr: PullRequest;
+  readonly projectName: string;
+  readonly onBack: () => void;
+}): ReactElement {
+  const { pr } = props;
+  const pill = headPill(pr);
+  // Opening a PR moves focus to its heading (UX-013).
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
+  return (
+    <header className="pr-detail-head">
+      <div className="pr-detail-title">
+        <button type="button" className="pr-crumb" onClick={props.onBack}>
+          {props.projectName} › Pull requests ›
+        </button>
+        <h3 tabIndex={-1} ref={heading}>
+          #{pr.number} · {pr.itemId ? <CardLink id={pr.itemId} /> : null} {pr.itemTitle || pr.title}
+        </h3>
+      </div>
+      {pill === null ? null : <Chip text={pill.text} tone={pill.tone} />}
+    </header>
+  );
+}
+
 function Byline({ pr, now }: { readonly pr: PullRequest; readonly now: number }): ReactElement {
   const verb = pr.state === PrState.MERGED ? "merged" : "wants to merge";
   return (
@@ -61,23 +87,85 @@ function Byline({ pr, now }: { readonly pr: PullRequest; readonly now: number })
   );
 }
 
-/** Threads by the line they sit under on the head, and those whose line is gone. */
-function placeThreads(threads: readonly Thread[]): {
-  readonly at: ReadonlyMap<string, readonly Thread[]>;
-  readonly outdated: readonly Thread[];
-} {
-  const at = new Map<string, Thread[]>();
-  const outdated: Thread[] = [];
-  for (const thread of threads) {
-    const { root } = thread;
-    if (root.outdated) {
-      outdated.push(thread);
-      continue;
-    }
-    const key = lineKey(root.path, root.side, root.line);
-    at.set(key, [...(at.get(key) ?? []), thread]);
+function Sections(props: {
+  readonly pr: PullRequest;
+  readonly section: Section;
+  readonly onSection: (section: Section) => void;
+}): ReactElement {
+  const { pr } = props;
+  const head = splitChecks(pr).head;
+  const sections: readonly { readonly key: Section; readonly word: string }[] = [
+    { key: "overview", word: "Overview" },
+    { key: "files", word: pr.filesChanged > 0 ? `Files · ${pr.filesChanged}` : "Files" },
+    { key: "checks", word: `Checks · ${head.length}` },
+  ];
+  return (
+    <div className="pr-sections" role="tablist" aria-label="Pull request">
+      {sections.map(({ key, word }) => (
+        <button
+          key={key}
+          type="button"
+          role="tab"
+          aria-selected={key === props.section}
+          className={`pr-section ${key === props.section ? "pr-section-on" : ""}`}
+          onClick={() => props.onSection(key)}
+        >
+          {word}
+        </button>
+      ))}
+      <span className="pr-sections-sum pr-dim">{checksSummary(head).text}</span>
+    </div>
+  );
+}
+
+/** "Review…" on your row, or "Re-check…" when you approved an older change. */
+function OwnerAction(props: {
+  readonly pr: PullRequest;
+  readonly review: PrReview;
+  readonly onRecheck: (() => void) | null;
+}): ReactElement {
+  if (props.onRecheck !== null) {
+    return (
+      <button type="button" className="btn btn-small btn-primary" onClick={props.onRecheck}>
+        Re-check…
+      </button>
+    );
   }
-  return { at, outdated };
+  return (
+    <button
+      type="button"
+      className={`btn btn-small ${waitsForYou(props.pr) ? "btn-primary" : ""}`}
+      onClick={props.review.openReview}
+    >
+      Review…
+    </button>
+  );
+}
+
+/**
+ * Which section and delta show: a Re-check opens Files from your approval
+ * (decision 11). `recheck` moves there; null when you approved no older change.
+ */
+function useOpening(pr: PullRequest, asRecheck: boolean | undefined) {
+  const base = recheckBase(pr);
+  const first = asRecheck === true && base !== null;
+  const [section, setSection] = useState<Section>(first ? "files" : "overview");
+  const [from, setFrom] = useState<string | null>(first ? base : null);
+  const recheck =
+    base === null
+      ? null
+      : (): void => {
+          setFrom(base);
+          setSection("files");
+        };
+  return { section, setSection, from, setFrom, base, recheck };
+}
+
+function settingNote(
+  settings: ReviewSettings | null | undefined,
+  onChange: (() => void) | undefined,
+): SettingNote | null {
+  return settings ? { line: settingLine(settings), onChange: onChange ?? null } : null;
 }
 
 export default function PrDetail(props: {
@@ -97,121 +185,30 @@ export default function PrDetail(props: {
   readonly live?: boolean;
 }): ReactElement {
   const { pr, now, client, connected } = props;
-  const base = recheckBase(pr);
-  const recheckFirst = props.recheck === true && base !== null;
-  const [section, setSection] = useState<Section>(recheckFirst ? "files" : "overview");
-  const [from, setFrom] = useState<string | null>(recheckFirst ? base : null);
-  const [reviewing, setReviewing] = useState<string | null>(null);
-  const opener = useRef<HTMLElement | null>(null);
-  const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    heading.current?.focus();
-  }, []);
-  const comments = usePrComments(client, pr, connected);
-  const reloadComments = comments.reload;
-  const { reload } = props;
-  const after = useCallback(() => {
-    reload();
-    reloadComments();
-  }, [reload, reloadComments]);
-  const owner = useOwnerAct(client, after);
-  const canWrite =
-    connected &&
-    client.hasGrant("approve") &&
-    (pr.state === PrState.OPEN || pr.state === PrState.MERGING);
-  const placed = useMemo(
-    () => placeThreads(threadsOf(comments.data?.comments ?? [])),
-    [comments.data],
-  );
+  const { section, setSection, from, setFrom, base, recheck } = useOpening(pr, props.recheck);
+  const review = usePrReview(client, pr, connected, props.reload);
 
-  const openReview = (event: { readonly currentTarget: HTMLElement }): void => {
-    opener.current = event.currentTarget;
-    owner.clear();
-    setReviewing(pr.headSha);
-  };
-  const closeReview = useCallback((): void => {
-    setReviewing(null);
-    (opener.current?.isConnected === true ? opener.current : heading.current)?.focus();
-  }, []);
-  const recheck = (): void => {
-    setFrom(base);
-    setSection("files");
-  };
-  const onWrite = (write: CommentWrite): Promise<boolean> =>
-    owner.act(
-      write.type === "pr_comment_resolve"
-        ? { ...write, project_id: pr.projectId, number: pr.number }
-        : { ...write, project_id: pr.projectId, number: pr.number, sha: pr.headSha },
-    );
-
-  const reviewable = canWrite && pr.state === PrState.OPEN;
-  let ownerAction: ReactElement | null = null;
-  if (reviewable) {
-    ownerAction =
-      base === null ? (
-        <button
-          type="button"
-          className={`btn btn-small ${waitsForYou(pr) ? "btn-primary" : ""}`}
-          onClick={openReview}
-        >
-          Review…
-        </button>
-      ) : (
-        <button type="button" className="btn btn-small btn-primary" onClick={recheck}>
-          Re-check…
-        </button>
-      );
-  }
-  const pill = headPill(pr);
-  const head = splitChecks(pr).head;
-  const sections: readonly { readonly key: Section; readonly word: string }[] = [
-    { key: "overview", word: "Overview" },
-    { key: "files", word: pr.filesChanged > 0 ? `Files · ${pr.filesChanged}` : "Files" },
-    { key: "checks", word: `Checks · ${head.length}` },
-  ];
-  const settings = props.settings ?? null;
   return (
     <div className="pr-detail">
-      <header className="pr-detail-head">
-        <div className="pr-detail-title">
-          <button type="button" className="pr-crumb" onClick={props.onBack}>
-            {props.projectName} › Pull requests ›
-          </button>
-          <h3 tabIndex={-1} ref={heading}>
-            #{pr.number} · {pr.itemId ? <CardLink id={pr.itemId} /> : null}{" "}
-            {pr.itemTitle || pr.title}
-          </h3>
-        </div>
-        {pill === null ? null : <Chip text={pill.text} tone={pill.tone} />}
-      </header>
+      <Header pr={pr} projectName={props.projectName} onBack={props.onBack} />
       <Byline pr={pr} now={now} />
-      <MergeBar pr={pr} now={now} live={props.live ?? true} canUndo={canWrite} owner={owner} />
-      <div className="pr-sections" role="tablist" aria-label="Pull request">
-        {sections.map(({ key, word }) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={key === section}
-            className={`pr-section ${key === section ? "pr-section-on" : ""}`}
-            onClick={() => setSection(key)}
-          >
-            {word}
-          </button>
-        ))}
-        <span className="pr-sections-sum pr-dim">{checksSummary(head).text}</span>
-      </div>
+      <MergeBar
+        pr={pr}
+        now={now}
+        live={props.live ?? true}
+        canUndo={review.canWrite}
+        owner={review.owner}
+      />
+      <Sections pr={pr} section={section} onSection={setSection} />
       <div className="pr-detail-body" role="tabpanel">
         {section === "overview" ? (
           <PrOverview
             pr={pr}
             now={now}
-            ownerAction={ownerAction}
-            setting={
-              settings === null
-                ? null
-                : { line: settingLine(settings), onChange: props.onOpenSettings ?? null }
+            ownerAction={
+              review.reviewable ? <OwnerAction pr={pr} review={review} onRecheck={recheck} /> : null
             }
+            setting={settingNote(props.settings, props.onOpenSettings)}
           />
         ) : null}
         {section === "files" ? (
@@ -222,14 +219,19 @@ export default function PrDetail(props: {
             from={from}
             onFrom={setFrom}
             recheck={base}
-            onReview={reviewable ? openReview : null}
-            comments={{ ...placed, canWrite, busy: owner.busy, onWrite }}
+            onReview={review.reviewable ? review.openReview : null}
+            comments={review.comments}
           />
         ) : null}
         {section === "checks" ? <PrChecks pr={pr} /> : null}
       </div>
-      {reviewing === null ? null : (
-        <ReviewDialog pr={pr} sha={reviewing} owner={owner} onClose={closeReview} />
+      {review.reviewing === null ? null : (
+        <ReviewDialog
+          pr={pr}
+          sha={review.reviewing}
+          owner={review.owner}
+          onClose={review.closeReview}
+        />
       )}
     </div>
   );

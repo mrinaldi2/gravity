@@ -1,16 +1,11 @@
 import type { Story } from "@ladle/react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { ReactElement } from "react";
 import type { PullRequest } from "../../protocol/gen/hermes/pr/v1/pr_pb";
-import { CARD_BOTS, CARD_PROJECT } from "../../test/cardFixtures";
 import { mergingPr, ownerDaemon, recheckPr } from "../../test/ownerReviewFixtures";
-import { PR_NOW, readyForYouPr } from "../../test/prFixtures";
-import { useClickOnce } from "../../test/storyClick";
-import { CardLinksProvider } from "../cards/CardLinks";
+import { readyForYouPr } from "../../test/prFixtures";
+import { PrStoryFrame } from "../../test/prStoryFrame";
 import OwnerReviewSettings from "./OwnerReviewSettings";
-import PullRequestsView from "./PullRequestsView";
-
-const noop = (): void => {};
 
 function Frame(props: {
   readonly pr: PullRequest;
@@ -19,35 +14,8 @@ function Frame(props: {
   /** A section or button to press once it shows: "Files", "Review…". */
   readonly click?: string;
 }): ReactElement {
-  const [client] = useState(() => ownerDaemon([props.pr]));
-  const box = useRef<HTMLDivElement>(null);
-  useClickOnce(box, props.click);
-  return (
-    <CardLinksProvider
-      client={client}
-      projects={[CARD_PROJECT]}
-      bots={CARD_BOTS}
-      currentProjectId="p1"
-      onOpen={noop}
-    >
-      <div
-        ref={box}
-        className={props.light ? "theme-light" : undefined}
-        style={{ height: "100vh" }}
-      >
-        <PullRequestsView
-          client={client}
-          project={CARD_PROJECT}
-          connected
-          now={PR_NOW}
-          initialNumber={props.pr.number}
-          recheck={props.recheck}
-          onOpenSettings={noop}
-          live={false}
-        />
-      </div>
-    </CardLinksProvider>
-  );
+  const { pr, ...rest } = props;
+  return <PrStoryFrame client={() => ownerDaemon([pr])} number={pr.number} {...rest} />;
 }
 
 /** #42 waits only for you: Review… on your row, and the Owner review line. */
