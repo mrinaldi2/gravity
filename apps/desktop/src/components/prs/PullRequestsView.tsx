@@ -1,26 +1,34 @@
-// The project's Pull requests tab (H-276, UX-051): the list, and one PR in
-// full. Read-only here; Approve and Ask for changes are H-277's. Both update
-// live from `pr_updated` and `check_updated` pushes, with no reload. Back
-// returns focus to the row that opened the PR (UX-012).
+// The project's Pull requests tab (H-276, H-277, UX-051): the list, and one
+// PR in full with your review. Both update live from `pr_updated` and
+// `check_updated` pushes, with no reload. Back returns focus to the row that
+// opened the PR (UX-012).
 
 import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { Project } from "../../protocol/entities";
-import type { PrApi } from "../../protocol/prs";
+import type { ReviewSettings } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import PrDetail from "./PrDetail";
 import type { PrFilter } from "./PrList";
 import PrList, { inFilter } from "./PrList";
 import type { PullRequest } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import type { Loaded } from "./usePullRequests";
 import { usePr, usePrList } from "./usePullRequests";
+import type { PrClient } from "./usePrOwner";
+import { useReviewSettings } from "./usePrOwner";
 
 interface PullRequestsViewProps {
-  readonly client: PrApi;
+  readonly client: PrClient;
   readonly project: Project;
   readonly connected: boolean;
   readonly now: number;
-  /** Opens on this PR, for stories and links. */
+  /** Opens on this PR, from Needs you, a link or a story. */
   readonly initialNumber?: number;
+  /** Opened from a Re-check row: the PR opens on its delta since your approval. */
+  readonly recheck?: boolean;
+  /** Opens Settings › Owner review. */
+  readonly onOpenSettings?: () => void;
+  /** The Undo counts down by the second; stories pin the time instead. */
+  readonly live?: boolean;
 }
 
 function Note({ text }: { readonly text: string }): ReactElement {
@@ -46,6 +54,8 @@ function listNote(list: Loaded<PullRequest[]>, connected: boolean): string | nul
 function OpenPr(
   props: PullRequestsViewProps & {
     readonly number: number;
+    readonly settings: ReviewSettings | null;
+    readonly recheck: boolean;
     readonly onBack: () => void;
   },
 ): ReactElement {
@@ -62,6 +72,11 @@ function OpenPr(
       now={props.now}
       projectName={project.name}
       onBack={props.onBack}
+      reload={one.reload}
+      settings={props.settings}
+      onOpenSettings={props.onOpenSettings}
+      recheck={props.recheck}
+      live={props.live}
     />
   );
 }
@@ -71,6 +86,7 @@ export default function PullRequestsView(props: PullRequestsViewProps): ReactEle
   const [open, setOpen] = useState<number | null>(props.initialNumber ?? null);
   const [chosen, setChosen] = useState<PrFilter | null>(null);
   const list = usePrList(client, project.id, connected);
+  const { settings } = useReviewSettings(client, project.id, connected);
   const backTo = useRef<number | null>(null);
   useEffect(() => {
     if (open === null && backTo.current !== null) {
@@ -84,7 +100,15 @@ export default function PullRequestsView(props: PullRequestsViewProps): ReactEle
       backTo.current = open;
       setOpen(null);
     };
-    return <OpenPr {...props} number={open} onBack={back} />;
+    return (
+      <OpenPr
+        {...props}
+        number={open}
+        settings={settings}
+        recheck={props.recheck === true && open === props.initialNumber}
+        onBack={back}
+      />
+    );
   }
   const note = listNote(list, connected);
   if (note !== null || list.data === null) {

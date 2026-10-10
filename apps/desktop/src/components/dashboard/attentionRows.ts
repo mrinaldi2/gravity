@@ -5,8 +5,10 @@
 
 import type { AttentionRowJson } from "../../protocol/dashboard";
 import type { RowViewProps } from "./NeedsYou";
+import type { PrRowActions } from "./prRows";
+import { prRow } from "./prRows";
 
-export interface AttentionActions {
+export interface AttentionActions extends PrRowActions {
   readonly onOpenBot?: (botId: string) => void;
   /** Opens a message to a bot quoting what it asked. */
   readonly onReply?: (botId: string, quote: string) => void;
@@ -97,5 +99,7 @@ export function attentionRow(r: AttentionRowJson, a: AttentionActions): RowViewP
     case "owner_action":
       // Listed under "Commands for you to run", with its Run button.
       return undefined;
+    default:
+      return prRow(r, a);
   }
 }

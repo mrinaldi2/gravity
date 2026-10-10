@@ -23,6 +23,7 @@ import { useConfirmRelayed } from "./useConfirmRelayed";
 import { useDashboard } from "./useDashboard";
 import { useDashboardDrawers } from "./useDashboardDrawers";
 import { useMetrics } from "./useMetrics";
+import { useNeedsYouPrs } from "./useNeedsYouPrs";
 import { ActionItemsWidget, MeetingsWidget, offHomeOf } from "./MeetingWidgets";
 import { useActionItems } from "./useActionItems";
 import { BoardWidget, ReleasesWidget, TeamWidget } from "./Widgets";
@@ -41,6 +42,8 @@ export interface DashboardViewProps {
   readonly onReply?: (botId: string, quote: string) => void;
   /** Opens Needs you, where permission prompts are answered. */
   readonly onOpenNeedsYou?: () => void;
+  /** Opens a pull request, or its delta since your approval; absent without PRs. */
+  readonly onOpenPr?: (pr: number, recheck: boolean) => void;
   /** "From the team", shown right after Needs you on the Overview. */
   readonly fromTheTeam?: ReactNode;
 }
@@ -96,6 +99,26 @@ function ReviewDrawer(props: {
   );
 }
 
+/** Before the first read: loading, or why it failed with Try again. */
+function Loading(props: { readonly error: string | null; readonly onRetry: () => void }) {
+  return (
+    <div className="empty-pane">
+      <div className="empty-state" role="status">
+        {props.error === null ? (
+          <p>Loading the dashboard…</p>
+        ) : (
+          <>
+            <p>Couldn't load the dashboard: {props.error}</p>
+            <button type="button" className="btn" onClick={props.onRetry}>
+              Try again
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardView(props: DashboardViewProps): ReactElement {
   const { client, project, bots, connected } = props;
   const { dashboard, error, refresh } = useDashboard(client, project.id, connected);
@@ -103,24 +126,10 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
   const actionItems = useActionItems(client, project.id, props.addToast, refresh);
   const { reviewing, openItem, openReview, showItem, close: closeDrawer } = useDashboardDrawers();
   const metrics = useMetrics(client, project.id, connected);
+  const prs = useNeedsYouPrs(client, project.id, connected, props.onOpenPr, dashboard);
 
   if (dashboard === null) {
-    return (
-      <div className="empty-pane">
-        <div className="empty-state" role="status">
-          {error === null ? (
-            <p>Loading the dashboard…</p>
-          ) : (
-            <>
-              <p>Couldn't load the dashboard: {error}</p>
-              <button type="button" className="btn" onClick={() => void refresh()}>
-                Try again
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    );
+    return <Loading error={error} onRetry={() => void refresh()} />;
   }
 
   const named = botNamer(bots);
@@ -162,6 +171,8 @@ export default function DashboardView(props: DashboardViewProps): ReactElement {
             onOpenBot={props.onOpenBot}
             onReply={props.onReply}
             onOpenNeedsYou={props.onOpenNeedsYou}
+            prs={prs}
+            onOpenPr={props.onOpenPr}
           />
           {props.fromTheTeam}
           <OwnerActionList

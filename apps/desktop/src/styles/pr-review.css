@@ -1,0 +1,197 @@
+/* The owner's review (H-277, UX-051 "review", "files", "setting"): the
+   review dialog, the 10 s Undo bar, line comments in the diff and the Owner
+   review setting. Layout and tones build on prs.css and pr-detail.css. */
+
+.pr-review-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  overflow-y: auto;
+  color: var(--text);
+}
+
+.pr-review-dialog h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-strong);
+}
+
+.pr-review-dialog h2:focus {
+  outline: none;
+}
+
+.pr-review-dialog p {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.pr-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.pr-choice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-strong);
+  cursor: pointer;
+}
+
+.pr-choice-on {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.pr-choice input {
+  margin-top: 3px;
+}
+
+.pr-choice-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.pr-note-field {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.pr-note-input,
+.pr-composer textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.pr-dialog-actions,
+.pr-composer-actions,
+.pr-thread-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.pr-merge-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+}
+
+.pr-merge-bar-undo span:first-child {
+  flex: 1;
+}
+
+.pr-setting-line {
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+
+.pr-link {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.pr-link:hover {
+  text-decoration: underline;
+}
+
+.pr-banner-recheck {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  border-left-color: var(--amber);
+}
+
+/* Line comments sit under their line, indented past the line numbers. */
+.pr-thread,
+.pr-composer,
+.pr-outdated {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 12px 8px 64px;
+  padding: 8px 10px;
+  font-family: var(--font);
+  white-space: normal;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.pr-thread-resolved summary {
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.pr-comment b {
+  color: var(--text-strong);
+}
+
+.pr-comment-text {
+  margin-top: 2px;
+  white-space: pre-wrap;
+}
+
+.pr-outdated {
+  border-style: dashed;
+}
+
+.pr-diff-comment {
+  width: 16px;
+  margin-right: 4px;
+  padding: 0;
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  border-radius: 3px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.pr-diff-line:hover .pr-diff-comment,
+.pr-diff-comment:focus-visible {
+  opacity: 1;
+  background: var(--bg-active);
+}
+
+.owner-review-areas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 2px 0 6px 24px;
+}
+
+.pr-outdated .pr-thread {
+  margin: 0;
+}

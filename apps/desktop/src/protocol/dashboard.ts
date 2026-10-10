@@ -106,7 +106,10 @@ export interface AttentionRowJson {
     | "permission_prompt"
     | "bot_waiting"
     | "off_board"
-    | "owner_question";
+    | "owner_question"
+    | "pr_review"
+    | "pr_merge_stuck"
+    | "main_moved_outside";
   readonly id: string;
   /** One line, set by the daemon. */
   readonly title: string;
@@ -118,6 +121,8 @@ export interface AttentionRowJson {
   readonly item_id?: string;
   readonly request_id?: string;
   readonly action_id?: string;
+  /** The pull request a review, a stuck merge or a move outside the gate is about. */
+  readonly pr_number?: number;
 }
 
 /** A row, and off the board's home the computer to act on it (H-112). */

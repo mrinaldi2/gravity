@@ -6,7 +6,7 @@
 
 import { useCallback } from "react";
 import type { ReactElement } from "react";
-import type { ProjectTab } from "../../app/selection";
+import type { ProjectTab, Selection } from "../../app/selection";
 import type { DaemonState } from "../../app/useDaemonState";
 import type { AddToast } from "../../app/useToasts";
 import type { DaemonApi } from "../../protocol/api";
@@ -76,6 +76,8 @@ interface TabContext extends ProjectPaneProps {
   readonly summaryMeeting: MeetingSummary | null;
   readonly now: number;
   readonly onSelectTab: (tab: ProjectTab) => void;
+  /** Opens one PR, or its delta since your approval (Needs you, H-277). */
+  readonly onOpenPr: (pr: number, recheck: boolean) => void;
 }
 
 /** The Overview: the dashboard with From the team after Needs you. */
@@ -91,6 +93,7 @@ function Overview({ ctx }: { readonly ctx: TabContext }): ReactElement {
       canControl={daemon.canControl}
       addToast={ctx.addToast}
       onOpenTab={ctx.onSelectTab}
+      onOpenPr={client.capabilities.includes(PULL_REQUESTS) ? ctx.onOpenPr : undefined}
       onOpenBot={(botId) => select({ kind: "bot", botId })}
       onOpenDecision={(decisionId) => select({ kind: "control", decisionId })}
       onReply={ctx.onReply}
@@ -133,6 +136,7 @@ function Team({ ctx }: { readonly ctx: TabContext }): ReactElement {
 
 function Settings({ ctx }: { readonly ctx: TabContext }): ReactElement {
   const { client, daemon, project } = ctx;
+  const at = daemon.selection;
   return (
     <ProjectView
       client={client}
@@ -145,6 +149,41 @@ function Settings({ ctx }: { readonly ctx: TabContext }): ReactElement {
       onSetRepo={ctx.onSetProjectRepo}
       onDelete={ctx.onDeleteProject}
       onToast={ctx.addToast}
+      ownerReview={client.capabilities.includes(PULL_REQUESTS)}
+      focusOwnerReview={at.kind === "project" && at.section === "owner_review"}
+    />
+  );
+}
+
+/** The PR a selection opens, and whether as a re-check. */
+function prOpening(at: Selection): { readonly pr?: number; readonly recheck?: boolean } {
+  return at.kind === "project" ? { pr: at.pr, recheck: at.recheck } : {};
+}
+
+/** The Pull requests tab, on the PR Needs you or a link asked for. */
+function Prs({ ctx }: { readonly ctx: TabContext }): ReactElement {
+  const { client, daemon, project } = ctx;
+  if (!client.capabilities.includes(PULL_REQUESTS)) {
+    return <NeedsNewer what="Pull requests" />;
+  }
+  const { pr, recheck } = prOpening(daemon.selection);
+  return (
+    <PullRequestsView
+      key={pr ?? "list"}
+      client={client}
+      project={project}
+      connected={daemon.connected}
+      now={ctx.now}
+      initialNumber={pr}
+      recheck={recheck}
+      onOpenSettings={() =>
+        daemon.select({
+          kind: "project",
+          projectId: project.id,
+          tab: "settings",
+          section: "owner_review",
+        })
+      }
     />
   );
 }
@@ -169,11 +208,7 @@ function TabView({ ctx }: { readonly ctx: TabContext }): ReactElement {
         />
       );
     case "prs":
-      return client.capabilities.includes(PULL_REQUESTS) ? (
-        <PullRequestsView client={client} project={project} connected={connected} now={ctx.now} />
-      ) : (
-        <NeedsNewer what="Pull requests" />
-      );
+      return <Prs ctx={ctx} />;
     case "team":
       return <Team ctx={ctx} />;
     case "releases":
@@ -224,6 +259,12 @@ export default function ProjectPane(props: ProjectPaneProps): ReactElement {
     },
     [select, project.id],
   );
+  const onOpenPr = useCallback(
+    (pr: number, recheck: boolean): void => {
+      select({ kind: "project", projectId: project.id, tab: "prs", pr, recheck });
+    },
+    [select, project.id],
+  );
 
   return (
     <ProjectWindow
@@ -236,7 +277,7 @@ export default function ProjectPane(props: ProjectPaneProps): ReactElement {
       onHome={() => select({ kind: "home" })}
       onSelectTab={onSelectTab}
     >
-      <TabView ctx={{ ...props, bots, row, threads, now, onSelectTab, summaryMeeting }} />
+      <TabView ctx={{ ...props, bots, row, threads, now, onSelectTab, onOpenPr, summaryMeeting }} />
     </ProjectWindow>
   );
 }
