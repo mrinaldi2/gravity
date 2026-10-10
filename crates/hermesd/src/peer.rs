@@ -19,6 +19,7 @@ mod inbound;
 pub mod links;
 pub mod mirror;
 pub mod owner_actions;
+pub mod owner_trust;
 #[cfg(test)]
 mod panic_tests;
 mod pr_owner;

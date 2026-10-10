@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 
 use super::Conn;
 use crate::db::OwnerProof;
+use crate::peer::owner_trust::{approve_elsewhere, TRUST_FORWARDED_OWNER_ACTS};
 
 /// The owner's PR requests this module serves.
 pub(super) const KINDS: &[&str] = &[
@@ -64,10 +65,18 @@ impl Conn {
             Some(OwnerProof::Ticket) => Some("ticket"),
             _ => None,
         };
-        if via.is_none() && kind != "review_settings_get" {
-            return Err(crate::decisions::forbidden(
-                "only the owner's app or a paired device does this",
-            ));
+        if kind != "review_settings_get" {
+            // Owner acts aren't taken from a linked computer yet (H-285
+            // must-fix): the owner approves on the home or a phone.
+            if !TRUST_FORWARDED_OWNER_ACTS {
+                let name = crate::peer::board::home_name(&self.app, home);
+                return Err(crate::decisions::forbidden(approve_elsewhere(&name)));
+            }
+            if via.is_none() {
+                return Err(crate::decisions::forbidden(
+                    "only the owner's app or a paired device does this",
+                ));
+            }
         }
         let frame = json!({
             "type": "pr_owner", "project_id": project, "kind": kind,

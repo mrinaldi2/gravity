@@ -155,6 +155,14 @@ impl Conn {
         home: String,
         r: p::CheckRerunRequest,
     ) -> Result<(), Refusal> {
+        // Not taken from a linked computer yet (H-285 must-fix).
+        if !crate::peer::owner_trust::TRUST_FORWARDED_OWNER_ACTS {
+            let name = home_name(&self.app, &home);
+            return Err(refuse(
+                "forbidden",
+                crate::peer::owner_trust::approve_elsewhere(&name),
+            ));
+        }
         let via = match self.owner_proof() {
             Some(crate::db::OwnerProof::Device { .. }) => "device",
             Some(crate::db::OwnerProof::Ticket) => "ticket",
