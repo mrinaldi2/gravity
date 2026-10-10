@@ -18,6 +18,7 @@ pub use board::Conflict;
 mod board_comments;
 mod board_edit;
 mod board_import;
+mod board_listing;
 mod board_remote;
 mod board_roles;
 mod board_schema;
@@ -285,7 +286,7 @@ fn tool_call(app: &Arc<AppState>, bot_id: &str, params: &Value) -> Result<Value,
 /// The transport has no server push, so a session can't be told of a change
 /// (`notifications/tools/list_changed`); the list is fixed per session.
 fn board_tools(app: &Arc<AppState>, bot_id: &str) -> Vec<Value> {
-    let roles = caller(app, bot_id).and_then(|bot| board::listed_roles(app, &bot));
+    let roles = caller(app, bot_id).and_then(|bot| board_listing::listed_roles(app, &bot));
     board_schema::board_tool_list(&roles.unwrap_or_default())
 }
 
