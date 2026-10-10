@@ -108,6 +108,8 @@ pub(super) fn receive(
                         Some(&origin.id),
                         None,
                     )?;
+                    // Before it is queued, as `Dm::from_peer`.
+                    app.db.map_peer_message(&peer.id, &frame.id, &msg.id)?;
                     app.events.push(Push::MessageNew {
                         message: msg.clone(),
                     });
@@ -128,6 +130,7 @@ pub(super) fn receive(
                     app.db.try_close_task(&task.id, TaskState::Cancelled)?;
                     let mut dm = Dm::new(&to.id, &sender, frame.kind, &body);
                     dm.ref_message_id = ref_id.as_deref();
+                    dm.from_peer = Some((&peer.id, &frame.id));
                     messaging::send_dm(&app.db, &app.events, dm)?
                 }
                 other => anyhow::bail!("a task cannot be closed as {}", other.as_str()),
@@ -142,6 +145,7 @@ pub(super) fn receive(
             let mut dm = Dm::new(&to.id, &sender, frame.kind, &body);
             dm.ref_message_id = ref_id.as_deref();
             dm.owner = proof.as_ref();
+            dm.from_peer = Some((&peer.id, &frame.id));
             messaging::send_dm(&app.db, &app.events, dm)?
         }
     };
@@ -169,7 +173,6 @@ pub(super) fn receive(
         super::task_card::received(app, &to, linked, &task.id, spec.item_id.as_deref())?;
         task_id = Some(task.id);
     }
-    app.db.map_peer_message(&peer.id, &frame.id, &msg.id)?;
     Ok(Received {
         message_id: msg.id,
         task_id,

@@ -25,6 +25,10 @@ pub struct Dm<'a> {
     /// delivery so the delivery sees it. Only the WS chat handler and the
     /// peer receiver set it.
     pub owner: Option<&'a crate::db::OwnerProof>,
+    /// The peer it came from and that peer's id for it, recorded before it
+    /// is queued for delivery: the delivery names a linked computer's chat
+    /// by it, so the bot never sees it as the owner's (H-303).
+    pub from_peer: Option<(&'a str, &'a str)>,
 }
 
 impl<'a> Dm<'a> {
@@ -37,6 +41,7 @@ impl<'a> Dm<'a> {
             ref_message_id: None,
             decision_id: None,
             owner: None,
+            from_peer: None,
         }
     }
 
@@ -66,6 +71,9 @@ pub fn send_dm(db: &Db, events: &Events, dm: Dm<'_>) -> anyhow::Result<Message> 
     )?;
     if let Some(proof) = dm.owner {
         db.record_owner_message(&msg.id, proof)?;
+    }
+    if let Some((peer_id, remote_id)) = dm.from_peer {
+        db.map_peer_message(peer_id, remote_id, &msg.id)?;
     }
     events.push(Push::MessageNew {
         message: msg.clone(),
