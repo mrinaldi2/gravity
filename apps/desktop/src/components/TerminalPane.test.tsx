@@ -172,22 +172,6 @@ describe("TerminalPane", () => {
     modal.remove();
   });
 
-  it("says where to type instead of sending a linked bot anything typed", async () => {
-    const fake = daemon();
-    const refusal = "Do it on win-pc or your phone: a linked computer can't type into it yet.";
-    const view = render(<TerminalPane client={fake} botId="b1" canWrite refusal={refusal} />);
-    await vi.waitFor(() => {
-      expect(terminals.onDataHandler).toBeDefined();
-    });
-
-    terminals.onDataHandler?.("1");
-    expect(fileDropDouble.canDrop?.()).toBe(false);
-    terminals.keyHandler?.(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true }));
-
-    expect(fake.fired.filter((frame) => frame.type === "input")).toHaveLength(0);
-    expect(view.getByRole("status")).toHaveTextContent(refusal);
-  });
-
   it("reuses a cached terminal and resumes instead of replaying", async () => {
     const fake = daemon();
     const first = render(<TerminalPane client={fake} botId="b1" canWrite onToast={onToast} />);

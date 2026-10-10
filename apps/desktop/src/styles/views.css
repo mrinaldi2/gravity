@@ -209,16 +209,8 @@
 }
 
 /* A linked bot's terminal: where to type instead, above what it shows (H-303). */
-.terminal-wrap:has(.terminal-refusal) {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.terminal-wrap:has(.terminal-refusal) .terminal-host {
-  flex: 1;
-  min-height: 0;
-  height: auto;
+.terminal-refusal {
+  padding: 6px 8px;
 }
 
 /* The real target of a hovered OSC 8 hyperlink, whose text may claim another. */

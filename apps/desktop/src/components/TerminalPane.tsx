@@ -20,12 +20,8 @@ interface TerminalPaneProps {
   readonly botId: string;
   /** Whether typing/resizing is forwarded: bot running + `control` grant. */
   readonly canWrite: boolean;
-  /**
-   * Set when typing here isn't taken where the bot runs (a linked bot,
-   * H-303): said above the terminal, and nothing typed is sent. Watching and
-   * resizes still work.
-   */
-  readonly refusal?: string | null;
+  /** Typing isn't taken where the bot runs (a linked bot, H-303): none is sent. */
+  readonly typingRefused?: boolean;
   readonly onToast?: AddToast;
 }
 
@@ -131,27 +127,23 @@ export default function TerminalPane({
   client,
   botId,
   canWrite,
-  refusal = null,
+  typingRefused = false,
   onToast,
 }: TerminalPaneProps): ReactElement {
   const connectionGeneration = client.connectionGeneration;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canWriteRef = useRef(canWrite);
+  const refusedRef = useRef(typingRefused);
   const termRef = useRef<Terminal | null>(null);
   // Seeded with the mount-time value so only a real false→true transition
   // (bot restarted, grant arrived) forces a pty repaint below; the attach
   // flow already handles the mount itself.
   const wasWritable = useRef(canWrite);
 
-  const refusedRef = useRef(refusal !== null);
-
   useEffect(() => {
     canWriteRef.current = canWrite;
-  }, [canWrite]);
-
-  useEffect(() => {
-    refusedRef.current = refusal !== null;
-  }, [refusal]);
+    refusedRef.current = typingRefused;
+  }, [canWrite, typingRefused]);
 
   useEffect(() => {
     linkFailure.report = (body: string): void => {
@@ -400,12 +392,7 @@ export default function TerminalPane({
   }, [botId, client, canWrite]);
 
   return (
-    <div className={`terminal-wrap ${canWrite && refusal === null ? "" : "terminal-readonly"}`}>
-      {refusal === null ? null : (
-        <div className="chat-note terminal-refusal" role="status">
-          {refusal}
-        </div>
-      )}
+    <div className={`terminal-wrap ${canWrite && !typingRefused ? "" : "terminal-readonly"}`}>
       <div ref={containerRef} className="terminal-host" />
     </div>
   );
