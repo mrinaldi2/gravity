@@ -44,6 +44,9 @@ fn hunks_run_no_planted_diff_driver_or_textconv() {
     let driver = root.join("driver");
     script(&driver, &marker);
     let driver = driver.display().to_string();
+    // Git for Windows runs the driver through sh, which would strip '\'.
+    #[cfg(windows)]
+    let driver = driver.replace('\\', "/");
     plain(&cache, &["config", "diff.external", &driver]);
     plain(&cache, &["config", "diff.planted.textconv", &driver]);
     std::fs::create_dir_all(cache.join("info")).unwrap();
