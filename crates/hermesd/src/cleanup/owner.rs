@@ -22,6 +22,10 @@ use crate::decisions::{conflict, not_found};
 use crate::peer::refuse;
 use crate::prs::model::Pr;
 
+/// A held job asks the owner once it has been held this long, and a linked
+/// computer removes a tree for the home only once untouched this long.
+pub const HELD_FOR: chrono::Duration = chrono::Duration::days(3);
+
 /// The peer request that asks a computer to remove a held tree anyway.
 pub const FORCE: &str = "cleanup_force";
 /// The peer event that says how it went.
@@ -166,13 +170,35 @@ fn target_here(app: &AppState, project_id: &str, job: &Job, bot_name: Option<&st
     }
 }
 
-/// What a Remove anyway came to: done, or back to the owner with why.
+/// What a Remove anyway came to: done, or back to the owner with why. A
+/// salvaged tree keeps saying so, so the owner may ask again later.
 fn apply(app: &AppState, job: &Job, outcome: &Outcome) -> anyhow::Result<()> {
+    let note = |why: &str| -> String {
+        if !salvaged(job) {
+            return why.to_string();
+        }
+        let before = job
+            .reason
+            .split_once(EARLIER)
+            .map_or(job.reason.as_str(), |(_, b)| b);
+        format!("{why}{EARLIER}{before}")
+    };
     app.db.board_tx(|t| match outcome {
         Outcome::Done { bytes } => t.owner_removed_cleanup(&job.id, *bytes),
-        Outcome::Failed(why) => t.reopen_cleanup(&job.id, JobState::Failed, why),
-        Outcome::Held(why) | Outcome::Busy(why) => t.reopen_cleanup(&job.id, JobState::Held, why),
+        Outcome::Failed(why) => t.reopen_cleanup(&job.id, JobState::Failed, &note(why)),
+        Outcome::Held(why) | Outcome::Busy(why) => {
+            t.reopen_cleanup(&job.id, JobState::Held, &note(why))
+        }
     })
+}
+
+/// Joins a Remove anyway's refusal to the reason the tree was first held.
+const EARLIER: &str = ". Earlier: ";
+
+/// The newest part of a job's reason: a refused Remove anyway's, else the
+/// reason it was held for.
+pub fn latest_reason(reason: &str) -> &str {
+    reason.split_once(EARLIER).map_or(reason, |(now, _)| now)
 }
 
 /// Asks the job's computer to remove it anyway; it answers later.
@@ -252,8 +278,16 @@ pub fn serve_force(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow::R
     let (app, peer_id, home_project) = (app.clone(), peer.id.clone(), field("project_id"));
     tokio::spawn(async move {
         let a = app.clone();
-        let Ok(outcome) =
-            tokio::task::spawn_blocking(move || run::remove_anyway(&a, &target, &salvage)).await
+        let Ok(outcome) = tokio::task::spawn_blocking(move || {
+            // Asked from another computer: only a tree nobody has touched
+            // here for as long as the owner's row waits (ARCH S1 on H-275),
+            // so a forged home can't take one being worked on now.
+            match recently_changed(&target.path, chrono::Utc::now()) {
+                Some(why) => Outcome::Held(why),
+                None => run::remove_anyway(&a, &target, &salvage),
+            }
+        })
+        .await
         else {
             return;
         };
@@ -264,6 +298,48 @@ pub fn serve_force(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow::R
         );
     });
     Ok(json!({}))
+}
+
+/// The newest change anywhere in `tree`, links not followed.
+fn newest_change(tree: &std::path::Path) -> Option<std::time::SystemTime> {
+    let mut newest = std::fs::symlink_metadata(tree).ok()?.modified().ok();
+    let mut dirs = vec![tree.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let Ok(meta) = std::fs::symlink_metadata(entry.path()) else {
+                continue;
+            };
+            if let Ok(at) = meta.modified() {
+                newest = newest.max(Some(at));
+            }
+            if meta.is_dir() && !super::scope::is_link(&meta) {
+                dirs.push(entry.path());
+            }
+        }
+    }
+    newest
+}
+
+/// Why a tree mayn't be removed for another computer yet: something in it
+/// changed within [`HELD_FOR`]. `None` when it may (or it is gone).
+pub fn recently_changed(
+    tree: &std::path::Path,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<String> {
+    let at: chrono::DateTime<chrono::Utc> = newest_change(tree)?.into();
+    let ago = now - at;
+    (ago < HELD_FOR).then(|| {
+        let when = if ago.num_hours() >= 1 {
+            format!("{} h", ago.num_hours())
+        } else {
+            format!("{} min", ago.num_minutes().max(0))
+        };
+        format!(
+            "it was changed {when} ago; it's removed from another computer only after {} days \
+             untouched",
+            HELD_FOR.num_days()
+        )
+    })
 }
 
 /// What a linked computer did with a Remove anyway: only its own job, and

@@ -68,6 +68,25 @@ async fn a_tree_held_three_days_asks_the_owner_who_removes_or_keeps_it() {
                 || row["cleanup_job_id"] == gone_job.as_str()),
         "{asked:?}"
     );
+    // UX-055: fields the app words, and a title with no path in it.
+    let row = &asked[0];
+    let fields = &row["cleanup"];
+    assert_eq!(fields["state"], "held", "{row}");
+    assert_eq!(fields["salvaged"], true, "{row}");
+    assert_eq!(fields["uncommitted"], 1, "{row}");
+    assert_eq!(fields["bot"]["name"], "Desktop Dev", "{row}");
+    assert!(fields["pr_number"].as_u64().unwrap() > 0, "{row}");
+    assert!(fields["since"].is_string(), "{row}");
+    assert!(
+        fields.get("reason").is_none_or(|r| r == ""),
+        "salvage path not shown: {row}"
+    );
+    let title = row["title"].as_str().unwrap();
+    assert!(
+        title.starts_with("Desktop Dev's worktree on ")
+            && title.ends_with(" is kept: 1 uncommitted file"),
+        "{title}"
+    );
 
     let resolve = |job: &str, action: &str| {
         json!({"type": "cleanup_resolve", "project_id": r.project, "job_id": job,

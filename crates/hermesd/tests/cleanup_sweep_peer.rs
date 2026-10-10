@@ -27,6 +27,19 @@ fn job_on(db: &hermesd::db::Db, machine: &str, path: &Path) -> Option<Job> {
     db.board_read(|t| t.sweep_job(machine, &path)).unwrap()
 }
 
+/// Moves every file's change time in `tree` back by `days`.
+fn age_tree(tree: &Path, days: u32) {
+    let at = (chrono::Local::now() - chrono::Duration::days(days.into()))
+        .format("%Y%m%d%H%M")
+        .to_string();
+    let shown = tree.display().to_string();
+    let ok = std::process::Command::new("find")
+        .args([shown.as_str(), "-exec", "touch", "-h", "-t", &at, "{}", "+"])
+        .status()
+        .unwrap();
+    assert!(ok.success());
+}
+
 #[tokio::test]
 async fn a_linked_computer_sweeps_its_trees_and_the_home_keeps_the_rows() {
     let b = board().await;
@@ -107,12 +120,38 @@ async fn a_linked_computer_sweeps_its_trees_and_the_home_keeps_the_rows() {
     assert!(held.reason.contains("salvaged to"), "{}", held.reason);
     assert!(dirty.exists());
 
-    // The owner's Remove anyway, on the Mac: the PC runs it.
+    // The owner's Remove anyway, on the Mac: the PC refuses a tree touched
+    // within 3 days (ARCH S1), keeping it held with why.
     let mut app = WsClient::connect(mac).await;
-    let out = app
-        .request(json!({"type": "cleanup_resolve", "project_id": b.mac_app,
-                        "job_id": held.id, "action": "remove"}))
-        .await;
+    let remove = json!({"type": "cleanup_resolve", "project_id": b.mac_app,
+                        "job_id": held.id, "action": "remove"});
+    let out = app.request(remove.clone()).await;
+    assert_eq!(out["type"], "cleanup_item", "{out}");
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    while !job_on(db, &pc, &dirty)
+        .unwrap()
+        .reason
+        .contains("untouched")
+    {
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "{:?}",
+            job_on(db, &pc, &dirty)
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let refused = job_on(db, &pc, &dirty).unwrap();
+    assert_eq!(refused.state.as_str(), "held", "{refused:?}");
+    assert!(
+        refused.reason.contains("3 days untouched"),
+        "{}",
+        refused.reason
+    );
+    assert!(dirty.join("draft.txt").exists(), "a tree in use stays");
+
+    // Untouched for 4 days: the PC runs it.
+    age_tree(&dirty, 4);
+    let out = app.request(remove).await;
     assert_eq!(out["type"], "cleanup_item", "{out}");
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     while job_on(db, &pc, &dirty).unwrap().state.as_str() != "done" {
