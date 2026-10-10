@@ -33,6 +33,8 @@ impl Db {
     /// Open a task and name the release it deploys or rolls back in one
     /// transaction (H-181), so no reader ever sees the task without its
     /// release: G4 would briefly count a forwarded deploy task off the board.
+    /// Where it installs commits with them too (H-312): a task seen without
+    /// its target is briefly no install here.
     #[allow(clippy::too_many_arguments)]
     pub fn create_task_with_release(
         &self,
@@ -43,6 +45,7 @@ impl Db {
         hop_count: i64,
         origin_chain: &str,
         release_id: Option<&str>,
+        target: Option<&str>,
     ) -> anyhow::Result<Task> {
         let mut conn = self.lock();
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -59,6 +62,12 @@ impl Db {
             tx.execute(
                 "INSERT OR REPLACE INTO task_release(task_id, release_id) VALUES (?1, ?2)",
                 params![task.id, release_id],
+            )?;
+        }
+        if let Some(target) = target {
+            tx.execute(
+                "INSERT OR REPLACE INTO task_target(task_id, target) VALUES (?1, ?2)",
+                params![task.id, target],
             )?;
         }
         tx.commit()?;

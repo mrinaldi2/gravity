@@ -58,6 +58,18 @@ impl<'a> Dm<'a> {
 
 /// Persist and deliver a direct message to one bot's DM conversation.
 pub fn send_dm(db: &Db, events: &Events, dm: Dm<'_>) -> anyhow::Result<Message> {
+    send_dm_then(db, events, dm, |_| Ok(())).map(|(msg, ())| msg)
+}
+
+/// [`send_dm`], running `before_queue` once the message is stored and before
+/// it is queued for delivery: what it records, the delivery sees (H-312). A
+/// deploy task forwarded the moment it is queued names its release and target.
+pub fn send_dm_then<T>(
+    db: &Db,
+    events: &Events,
+    dm: Dm<'_>,
+    before_queue: impl FnOnce(&Message) -> anyhow::Result<T>,
+) -> anyhow::Result<(Message, T)> {
     let conv = db
         .dm_conversation(dm.bot_id)?
         .context("bot has no DM conversation")?;
@@ -75,6 +87,7 @@ pub fn send_dm(db: &Db, events: &Events, dm: Dm<'_>) -> anyhow::Result<Message> 
     if let Some((peer_id, remote_id)) = dm.from_peer {
         db.map_peer_message(peer_id, remote_id, &msg.id)?;
     }
+    let done = before_queue(&msg)?;
     events.push(Push::MessageNew {
         message: Message {
             unverified_from: unverified_from(db, &msg)?,
@@ -84,7 +97,7 @@ pub fn send_dm(db: &Db, events: &Events, dm: Dm<'_>) -> anyhow::Result<Message> 
     let key = format!("{}:{}", msg.id, dm.bot_id);
     let delivery = db.enqueue_delivery(&msg.id, dm.bot_id, &key)?;
     events.push(Push::DeliveryUpdate { delivery });
-    Ok(msg)
+    Ok((msg, done))
 }
 
 /// True when the sender is the user (not subject to hop limits).

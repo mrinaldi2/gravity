@@ -90,15 +90,7 @@ impl Db {
             .flatten())
     }
 
-    /// Where a deploy or rollback task installs (H-288).
-    pub fn set_task_target(&self, task_id: &str, target: &str) -> anyhow::Result<()> {
-        self.lock().execute(
-            "INSERT OR REPLACE INTO task_target(task_id, target) VALUES (?1, ?2)",
-            params![task_id, target],
-        )?;
-        Ok(())
-    }
-
+    /// Where a deploy or rollback task installs (H-288); set as it opens.
     pub fn task_target(&self, task_id: &str) -> anyhow::Result<Option<String>> {
         Ok(self
             .lock()
@@ -238,7 +230,7 @@ mod tests {
 
     /// H-181: a forwarded deploy task and its release commit together. Once
     /// the task is visible its release is too, and if the release can't be
-    /// written the task isn't either.
+    /// written the task isn't either. Its target commits with them (H-312).
     #[test]
     fn a_task_and_its_release_commit_together() {
         let (db, bot) = setup();
@@ -256,13 +248,24 @@ mod tests {
             .id
         };
         let task = db
-            .create_task_with_release(&msg("deploy"), None, &bot.id, None, 1, "", Some("r1"))
+            .create_task_with_release(
+                &msg("deploy"),
+                None,
+                &bot.id,
+                None,
+                1,
+                "",
+                Some("r1"),
+                Some("win"),
+            )
             .unwrap();
         assert_eq!(db.task_release(&task.id).unwrap().as_deref(), Some("r1"));
+        assert_eq!(db.task_target(&task.id).unwrap().as_deref(), Some("win"));
         let plain = db
-            .create_task_with_release(&msg("plain"), None, &bot.id, None, 1, "", None)
+            .create_task_with_release(&msg("plain"), None, &bot.id, None, 1, "", None, None)
             .unwrap();
         assert_eq!(db.task_release(&plain.id).unwrap(), None);
+        assert_eq!(db.task_target(&plain.id).unwrap(), None);
 
         // The release row fails to write: the task rolls back with it.
         db.lock()
@@ -270,7 +273,7 @@ mod tests {
             .unwrap();
         let before = db.open_tasks_for(&bot.id).unwrap().len();
         assert!(db
-            .create_task_with_release(&msg("lost"), None, &bot.id, None, 1, "", Some("r2"))
+            .create_task_with_release(&msg("lost"), None, &bot.id, None, 1, "", Some("r2"), None)
             .is_err());
         assert_eq!(
             db.open_tasks_for(&bot.id).unwrap().len(),
