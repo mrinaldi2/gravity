@@ -194,7 +194,11 @@ impl Conn {
         let bot_id = Self::str_field(req, "bot_id")?;
         let data = Self::str_field(req, "data")?;
         if let Some(bot) = self.app.db.get_bot(bot_id)?.filter(bus::Bot::is_linked) {
-            crate::peer::term::input(&self.app, &bot, data);
+            // Refused while the bot's computer takes no typing from here
+            // (H-303); the app shows the words.
+            if let Err(e) = crate::peer::term::input(&self.app, &bot, data) {
+                self.reply_err(&req["req_id"], "forbidden", &e.to_string());
+            }
             return Ok(());
         }
         if let Err(e) = self.app.supervisor.input(bot_id, data.as_bytes()) {

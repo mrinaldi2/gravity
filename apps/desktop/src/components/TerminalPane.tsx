@@ -20,6 +20,8 @@ interface TerminalPaneProps {
   readonly botId: string;
   /** Whether typing/resizing is forwarded: bot running + `control` grant. */
   readonly canWrite: boolean;
+  /** Typing isn't taken where the bot runs (a linked bot, H-303): none is sent. */
+  readonly typingRefused?: boolean;
   readonly onToast?: AddToast;
 }
 
@@ -110,8 +112,8 @@ function viewportOf(element: HTMLElement): HTMLElement | null {
 }
 
 /** Modal dialogs own keyboard input while open, even if xterm retained focus. */
-function terminalInputAllowed(canWrite: boolean): boolean {
-  return canWrite && document.querySelector('[aria-modal="true"]') === null;
+function terminalInputAllowed(canWrite: boolean, refused: boolean): boolean {
+  return canWrite && !refused && document.querySelector('[aria-modal="true"]') === null;
 }
 
 /**
@@ -125,11 +127,13 @@ export default function TerminalPane({
   client,
   botId,
   canWrite,
+  typingRefused = false,
   onToast,
 }: TerminalPaneProps): ReactElement {
   const connectionGeneration = client.connectionGeneration;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canWriteRef = useRef(canWrite);
+  const refusedRef = useRef(typingRefused);
   const termRef = useRef<Terminal | null>(null);
   // Seeded with the mount-time value so only a real false→true transition
   // (bot restarted, grant arrived) forces a pty repaint below; the attach
@@ -138,7 +142,8 @@ export default function TerminalPane({
 
   useEffect(() => {
     canWriteRef.current = canWrite;
-  }, [canWrite]);
+    refusedRef.current = typingRefused;
+  }, [canWrite, typingRefused]);
 
   useEffect(() => {
     linkFailure.report = (body: string): void => {
@@ -156,7 +161,7 @@ export default function TerminalPane({
     }
     return listenForTerminalFileDrops({
       element: container,
-      canDrop: () => terminalInputAllowed(canWriteRef.current),
+      canDrop: () => terminalInputAllowed(canWriteRef.current, refusedRef.current),
       onDrop: (input) => {
         client.fire({ type: "input", bot_id: botId, data: input });
         termRef.current?.focus();
@@ -208,7 +213,7 @@ export default function TerminalPane({
       }
     };
     viewport?.addEventListener("scroll", trackScrollTop);
-    if (canWriteRef.current) {
+    if (canWriteRef.current && !refusedRef.current) {
       term.focus();
     }
 
@@ -240,14 +245,14 @@ export default function TerminalPane({
       // xterm skips the key once we return false, but the browser would still
       // let it reach the hidden textarea xterm reads input from.
       event.preventDefault();
-      if (terminalInputAllowed(canWriteRef.current)) {
+      if (terminalInputAllowed(canWriteRef.current, refusedRef.current)) {
         client.fire({ type: "input", bot_id: botId, data: "\u001b\r" });
       }
       return false;
     });
 
     const dataSub = term.onData((data) => {
-      if (terminalInputAllowed(canWriteRef.current)) {
+      if (terminalInputAllowed(canWriteRef.current, refusedRef.current)) {
         client.fire({ type: "input", bot_id: botId, data });
       }
     });
@@ -387,7 +392,7 @@ export default function TerminalPane({
   }, [botId, client, canWrite]);
 
   return (
-    <div className={`terminal-wrap ${canWrite ? "" : "terminal-readonly"}`}>
+    <div className={`terminal-wrap ${canWrite && !typingRefused ? "" : "terminal-readonly"}`}>
       <div ref={containerRef} className="terminal-host" />
     </div>
   );

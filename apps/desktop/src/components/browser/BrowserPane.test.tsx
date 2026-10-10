@@ -137,7 +137,7 @@ describe("BrowserPane", () => {
     expect(screen.getByText(/your Chrome is off limits/)).toBeInTheDocument();
   });
 
-  it("says a linked bot's browser streams from its machine", async () => {
+  it("says a linked bot's browser streams from its machine, and is driven there", async () => {
     render(
       <Pane
         client={agentsDaemon()}
@@ -147,7 +147,9 @@ describe("BrowserPane", () => {
       />,
     );
     expect(
-      await screen.findByText("alice runs on win-pc; its browser streams from there."),
+      await screen.findByText(
+        "alice runs on win-pc; its browser streams from there. To take control, do it on win-pc or your phone.",
+      ),
     ).toBeInTheDocument();
   });
 

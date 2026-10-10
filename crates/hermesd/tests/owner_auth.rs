@@ -7,7 +7,7 @@
 
 mod common;
 
-use common::peers::{team, wait_until};
+use common::peers::{team, team_trusting, wait_until};
 use common::*;
 use hermesd::db::OwnerVia;
 use serde_json::{json, Value};
@@ -171,7 +171,8 @@ fn newest(d: &TestDaemon, bot_id: &str) -> Option<bus::Message> {
 
 #[tokio::test]
 async fn a_linked_computer_vouches_for_its_owner_one_hop_only() {
-    let mut t = team().await;
+    // Kept for signed approvals (H-303).
+    let mut t = team_trusting().await;
     let (windev, linked) = (t.windev_id.clone(), t.linked_windev.clone());
 
     // The Mac app's chat to the PC's bot arrives there as the owner's own.
@@ -255,7 +256,8 @@ async fn a_peer_can_not_vouch_for_a_relay_or_an_unexposed_bot() {
 
 #[tokio::test]
 async fn a_peer_types_only_for_an_owner_it_verified() {
-    let mut t = team().await;
+    // Kept for signed approvals (H-303).
+    let mut t = team_trusting().await;
     let (windev, linked) = (t.windev_id.clone(), t.linked_windev.clone());
     let mac_peer = t
         .mac

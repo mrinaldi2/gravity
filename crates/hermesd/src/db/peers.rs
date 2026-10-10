@@ -271,6 +271,18 @@ impl Db {
         )
     }
 
+    /// The peer a message here was forwarded from, if one was.
+    pub fn peer_of_message(&self, message_id: &str) -> anyhow::Result<Option<String>> {
+        Ok(self
+            .lock()
+            .query_row(
+                "SELECT peer_id FROM peer_message WHERE message_id = ?1",
+                params![message_id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
     /// The local copy of a message the peer knows by an id starting with
     /// `prefix`: how a folder of files a peer sent is traced to its message.
     pub fn local_message_by_prefix(

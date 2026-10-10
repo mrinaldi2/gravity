@@ -618,6 +618,7 @@ dependencies = [
  "chrono-tz",
  "cron",
  "futures",
+ "hermesd",
  "hex",
  "libc",
  "portable-pty",

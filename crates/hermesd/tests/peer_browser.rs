@@ -8,7 +8,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use common::devtools::{fake_devtools, recording_devtools, start_browser};
-use common::peers::{team, wait_until};
+use common::peers::{team, team_trusting, wait_until};
 use common::*;
 use serde_json::{json, Value};
 
@@ -61,7 +61,8 @@ async fn the_other_machines_bot_browser_can_be_watched() {
 
 #[tokio::test]
 async fn the_owner_types_into_the_other_machines_bot_browser() {
-    let mut t = team().await;
+    // Kept for signed approvals (H-303).
+    let mut t = team_trusting().await;
     let windev = t.linked_windev.clone();
     let (port, calls) = recording_devtools("Sign in").await;
     start_browser(&t.win, &t.windev_id, port);
@@ -137,7 +138,8 @@ async fn the_other_machines_bot_browser_log_is_read_from_there() {
 
 #[tokio::test]
 async fn the_peer_types_into_a_bot_browser_only_for_an_owner_it_verified() {
-    let mut t = team().await;
+    // Kept for signed approvals (H-303).
+    let mut t = team_trusting().await;
     let windev = t.linked_windev.clone();
     let mac_peer = t
         .mac

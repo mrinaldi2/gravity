@@ -145,7 +145,9 @@ async fn the_owner_can_message_a_linked_bot_from_the_other_machine() {
     assert_eq!(sent["type"], "message", "{sent}");
     let inbox = drain_until(&mut t.windev, "which SDK").await;
     let chat = find(&inbox, "which SDK");
-    assert_eq!(chat["from"], "user");
+    // Not the owner's: a linked computer's word isn't proof (H-303).
+    let mac = t.win.app.db.get_peer(&t.win_peer_id).unwrap().unwrap().name;
+    assert_eq!(chat["from"], format!("unverified @ {mac}"));
     assert_eq!(chat["kind"], "chat");
 }
 

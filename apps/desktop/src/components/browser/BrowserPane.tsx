@@ -21,7 +21,8 @@ interface BrowserPaneProps {
 /** Where the bot's own browser stands, said above the screen. */
 function chromeNote(bot: Bot): string {
   if (bot.peer != null) {
-    return `${bot.name} runs on ${bot.peer.name}; its browser streams from there.`;
+    // Its computer takes no browser control from this one (H-303).
+    return `${bot.name} runs on ${bot.peer.name}; its browser streams from there. To take control, do it on ${bot.peer.name} or your phone.`;
   }
   return bot.user_chrome === true
     ? `${bot.name} uses a browser of its own, and may also use your Chrome.`

@@ -13,6 +13,7 @@ import RoutinesPanel from "../RoutinesPanel";
 import TerminalPane from "../TerminalPane";
 import type { BotTab } from "./BotTabs";
 import BotChat from "./BotChat";
+import { doElsewhere } from "./doElsewhere";
 import ReportsPane from "./ReportsPane";
 
 interface BotPanesProps {
@@ -202,6 +203,7 @@ function TalkPanes(
 export default function BotPanes(props: BotPanesProps): ReactElement {
   const { client, bot, tabs, active, connected, canControl, onToast } = props;
   const linked = bot.peer != null;
+  const refusal = doElsewhere(bot);
   const permissions = usePermissions(client, bot.id, connected && !linked);
   return (
     <>
@@ -215,11 +217,18 @@ export default function BotPanes(props: BotPanesProps): ReactElement {
         <TalkPanes {...props} />
         {tabs.includes("terminal") ? (
           <div className={paneClass(active === "terminal")}>
-            {/* The terminal belongs to the user: any `control` connection may type while the bot runs. */}
+            {refusal === null ? null : (
+              <div className="chat-note terminal-refusal" role="status">
+                {refusal}
+              </div>
+            )}
+            {/* The terminal belongs to the user: any `control` connection may type while the bot runs,
+                except into a linked bot, whose computer takes no typing from here (H-303). */}
             <TerminalPane
               client={client}
               botId={bot.id}
               canWrite={canControl && !isStopped(bot)}
+              typingRefused={refusal !== null}
               onToast={onToast}
             />
           </div>
@@ -233,7 +242,7 @@ export default function BotPanes(props: BotPanesProps): ReactElement {
               bot={bot}
               watch={props.browser}
               connected={connected}
-              canControl={canControl && client.capabilities.includes("browser_input")}
+              canControl={canControl && !linked && client.capabilities.includes("browser_input")}
             />
           </div>
         ) : null}

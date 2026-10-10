@@ -167,11 +167,9 @@ async fn mcp_bot_to_bot_task_and_completion() {
 #[tokio::test]
 async fn bus_survives_daemon_restart_with_pending_delivery() {
     let home = tempfile::tempdir().expect("tempdir");
-    let mut cfg = Config {
-        home: home.path().to_path_buf(),
-        runtime: RuntimeKind::Double,
-        ..Config::default()
-    };
+    let mut cfg = Config::default();
+    cfg.home = home.path().to_path_buf();
+    cfg.runtime = RuntimeKind::Double;
     // Slow worker so the delivery is still queued when we "crash".
     cfg.delivery.poll_interval_ms = 60_000;
 

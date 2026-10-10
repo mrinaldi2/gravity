@@ -51,7 +51,13 @@ impl Conn {
             return Ok(());
         };
         if let Err(e) = crate::browser::view::input(&self.app, &bot, tab_id, &req["event"]) {
-            self.reply_err(&Value::Null, "invalid_request", &format!("{e:#}"));
+            // A linked bot's browser isn't driven from here (H-303): the
+            // refusal answers the request, so a client can show it.
+            if bot.is_linked() {
+                self.reply_err(&req["req_id"], "forbidden", &format!("{e:#}"));
+            } else {
+                self.reply_err(&Value::Null, "invalid_request", &format!("{e:#}"));
+            }
         }
         Ok(())
     }

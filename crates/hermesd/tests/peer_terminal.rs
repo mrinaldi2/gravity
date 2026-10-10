@@ -4,13 +4,14 @@
 
 mod common;
 
-use common::peers::{team, wait_until};
+use common::peers::{team_trusting, wait_until};
 use common::*;
 use serde_json::json;
 
 #[tokio::test]
 async fn the_other_machines_bot_terminal_can_be_watched_and_typed_into() {
-    let mut t = team().await;
+    // Typing over the link is the path kept for signed approvals (H-303).
+    let mut t = team_trusting().await;
     let windev = t.linked_windev.clone();
 
     let attached = t

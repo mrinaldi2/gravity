@@ -158,9 +158,13 @@ fn build(
 /// How the owner proved they sent `msg` here, for the peer to record it as
 /// the owner's own (H-195 D1). Only the owner's chat recorded from a device
 /// or the app's ticket: one a peer forwarded here is never passed on as
-/// verified (CE-029 V2).
+/// verified (CE-029 V2). Not said at all while the peer takes no owner acts
+/// from a linked computer (H-303): the chat goes as a plain message.
 fn owner_verified(app: &Arc<AppState>, msg: &Message) -> anyhow::Result<Option<String>> {
-    if msg.sender.kind != SenderKind::User || msg.kind != MessageKind::Chat {
+    if msg.sender.kind != SenderKind::User
+        || msg.kind != MessageKind::Chat
+        || !super::owner_trust::trusted(app)
+    {
         return Ok(None);
     }
     Ok(match app.db.owner_message_via(&msg.id)? {

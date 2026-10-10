@@ -270,9 +270,18 @@ impl DeliveryWorker {
     }
 
     /// A linked sender is named with its machine, so a bot can tell a peer
-    /// on the other daemon from a colleague here.
+    /// on the other daemon from a colleague here. The owner's chat from a
+    /// linked computer, unproven, isn't shown as the owner's (H-303).
     fn sender_view(&self, msg: &Message) -> anyhow::Result<Message> {
         let mut view = msg.clone();
+        if let Some(name) = crate::messaging::unverified_owner_name(&self.db, msg)? {
+            view.sender = bus::Sender {
+                kind: bus::SenderKind::Bot,
+                bot_id: None,
+                name,
+            };
+            return Ok(view);
+        }
         let Some(bot_id) = &msg.sender.bot_id else {
             return Ok(view);
         };
