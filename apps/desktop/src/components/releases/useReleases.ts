@@ -2,9 +2,10 @@ import { useCallback, useState } from "react";
 import type { AddToast } from "../../app/useToasts";
 import { useLoadOnConnect } from "../../hooks/useLoadOnConnect";
 import type { DaemonApi } from "../../protocol/api";
-import type { ItemVerdict, Release } from "../../protocol/releases";
+import type { ItemVerdict, PrRef, Release } from "../../protocol/releases";
 import { errText } from "../../util";
 import { releaseTitle } from "./labels";
+import { leaveOutDone } from "./releaseMain";
 import { useDelayedSend } from "./useDelayedSend";
 
 export interface ReleaseActions {
@@ -16,6 +17,8 @@ export interface ReleaseActions {
   readonly unhold: (release: Release) => void;
   readonly pause: (release: Release, reason: string) => void;
   readonly resume: (release: Release) => void;
+  /** The owner's Leave out of one PR of a release cut from main (UX-051 decision 10). */
+  readonly leaveOut: (release: Release, pr: PrRef) => void;
 }
 
 /**
@@ -86,6 +89,30 @@ export function useReleaseActions(
         { type: "release_resume", release_id: release.id },
         `Couldn't resume ${releaseTitle(release)}`,
       ),
+    // Sent at once: the confirmation said what happens, and the service
+    // starts the package over, so there is nothing to undo locally.
+    leaveOut: (release, pr) =>
+      void (async () => {
+        try {
+          const reply = await client.request(
+            {
+              type: "release_leave_out",
+              project_id: release.project_id,
+              release_id: release.id,
+              prs: [pr.number],
+            },
+            "leave_out",
+          );
+          addToast("info", leaveOutDone(release, pr, reply.result), "");
+        } catch (error) {
+          addToast("error", `Couldn't leave #${pr.number} out`, errText(error));
+          return;
+        }
+        await send(
+          { type: "get_release", release_id: release.id },
+          `Couldn't read ${releaseTitle(release)} again`,
+        );
+      })(),
   };
 }
 

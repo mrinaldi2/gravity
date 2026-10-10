@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 import OverlayShell from "../overlay/OverlayShell";
 
-function Dialog({
+export function Dialog({
   title,
   onCancel,
   children,

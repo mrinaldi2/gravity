@@ -188,16 +188,33 @@ export interface Release {
   readonly commit?: string;
   readonly prs?: readonly PrRef[];
   readonly also_included?: readonly PrRef[];
+  /** The tag it gets once approved, `desktop-v<version>` (H-272). */
+  readonly tag_name?: string;
+  /** Where its range starts: the last tagged release's commit; null for the first. */
+  readonly previous_commit?: string | null;
+  /** Planned cards with no merged pull request in the range. */
+  readonly not_merged?: readonly string[];
 }
 
 /** A merged pull request as a release lists it (`hermes.pr.v1.PrRef`). */
-interface PrRef {
+export interface PrRef {
   readonly number: number;
   readonly item_id: string;
   readonly merged_sha: string;
   readonly title?: string;
   /** Its repository, "owner/name". */
   readonly repo?: string;
+  /** Left out: reverted on main by an undo pull request (H-272). */
+  readonly reverted?: boolean;
+  /** It is such an undo pull request. */
+  readonly revert?: boolean;
+}
+
+/** What the owner's Leave out did (H-272): cut again, or an undo PR on its way. */
+interface LeaveOutResult {
+  readonly mode: "recut" | "revert";
+  /** `recut`: the commit the release is cut at now. */
+  readonly commit?: string;
 }
 
 /**
@@ -260,6 +277,13 @@ export type ReleaseRequestBody =
       readonly type: "release_send_to_device";
       readonly release_id: string;
       readonly device_id: string;
+    }
+  | {
+      /** The owner's Leave out (UX-051 decision 10): the app or a paired device only. */
+      readonly type: "release_leave_out";
+      readonly project_id: string;
+      readonly release_id: string;
+      readonly prs: readonly number[];
     };
 
 /** The computers a package must pass on before it is submitted (H-115). */
@@ -345,4 +369,5 @@ export type ReleaseReply =
   | { readonly type: "release"; readonly release: Release }
   | { readonly type: "release_machines"; readonly machines: ReleaseMachines }
   | { readonly type: "release_install"; readonly install: ReleaseInstall }
-  | { readonly type: "install_offer"; readonly offer: InstallOffer };
+  | { readonly type: "install_offer"; readonly offer: InstallOffer }
+  | { readonly type: "leave_out"; readonly result: LeaveOutResult };

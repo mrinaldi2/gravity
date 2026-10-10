@@ -98,6 +98,7 @@ const REPLY_TYPES: ReadonlySet<string> = new Set(
     release_machines: true,
     release_install: true,
     install_offer: true,
+    leave_out: true,
     dashboard: true,
     metrics: true,
     relayed_confirmed: true,
