@@ -1,0 +1,1462 @@
+docker-up
+✔ reject unsafe endpoints before reading any home or credentials (7.397416ms)
+✔ require an explicit home and match its published port (8.842667ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 507.117708
+Dependency notice inputs and bundles match the reviewed inventory.
+......
+----------------------------------------------------------------------
+Ran 6 tests in 1.377s
+
+OK
+Dependency notice inputs and bundles match the reviewed inventory.
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.47
+   Compiling libc v0.2.189
+    Checking cfg-if v1.0.4
+   Compiling serde_core v1.0.229
+    Checking bytes v1.12.1
+   Compiling anyhow v1.0.104
+    Checking itoa v1.0.18
+    Checking core-foundation-sys v0.8.7
+    Checking once_cell v1.21.4
+   Compiling regex-syntax v0.8.11
+   Compiling serde v1.0.229
+   Compiling version_check v0.9.5
+    Checking smallvec v1.15.2
+   Compiling rustix v1.1.4
+   Compiling memchr v2.8.3
+   Compiling either v1.18.0
+   Compiling itertools v0.14.0
+    Checking pin-project-lite v0.2.17
+    Checking futures-core v0.3.34
+   Compiling autocfg v1.5.1
+   Compiling fnv v1.0.7
+    Checking stable_deref_trait v1.2.1
+   Compiling zmij v1.0.23
+   Compiling aho-corasick v1.1.5
+    Checking futures-sink v0.3.34
+   Compiling parking_lot_core v0.9.12
+    Checking log v0.4.34
+   Compiling semver v1.0.28
+   Compiling syn v2.0.119
+   Compiling syn v3.0.4
+   Compiling rustc_version v0.4.1
+   Compiling generic-array v0.14.7
+    Checking scopeguard v1.2.0
+    Checking lock_api v0.4.14
+    Checking errno v0.3.14
+   Compiling logos-codegen v0.15.1
+    Checking tracing-core v0.1.36
+    Checking slab v0.4.12
+   Compiling hashbrown v0.17.1
+   Compiling prettyplease v0.2.37
+    Checking typenum v1.20.1
+   Compiling getrandom v0.4.3
+   Compiling equivalent v1.0.2
+   Compiling bitflags v2.13.1
+   Compiling foldhash v0.1.5
+   Compiling hashbrown v0.15.5
+   Compiling indexmap v2.14.1
+   Compiling regex-automata v0.4.18
+    Checking parking_lot v0.12.5
+    Checking signal-hook-registry v1.4.8
+    Checking socket2 v0.6.5
+    Checking mio v1.2.2
+    Checking futures-channel v0.3.34
+    Checking http v1.5.0
+   Compiling thiserror v2.0.20
+   Compiling lazy_static v1.5.0
+   Compiling fixedbitset v0.5.7
+   Compiling fastrand v2.5.0
+   Compiling heck v0.5.0
+   Compiling beef v0.5.2
+   Compiling zerocopy v0.8.56
+   Compiling petgraph v0.8.3
+   Compiling num-traits v0.2.19
+    Checking futures-io v0.3.34
+   Compiling unicode-width v0.1.14
+    Checking futures-task v0.3.34
+   Compiling multimap v0.10.1
+   Compiling tempfile v3.27.0
+    Checking base64 v0.22.1
+    Checking crypto-common v0.1.7
+    Checking block-buffer v0.10.4
+   Compiling serde_json v1.0.151
+    Checking digest v0.10.7
+    Checking cpufeatures v0.2.17
+    Checking iana-time-zone v0.1.65
+   Compiling httparse v1.10.1
+    Checking litemap v0.8.3
+    Checking writeable v0.6.4
+    Checking http-body v1.1.0
+    Checking utf8_iter v1.0.4
+    Checking percent-encoding v2.3.2
+   Compiling icu_normalizer_data v2.3.0
+   Compiling icu_properties_data v2.3.0
+   Compiling thiserror v1.0.69
+    Checking tower-service v0.3.3
+   Compiling system-configuration-sys v0.6.0
+    Checking getrandom v0.2.17
+    Checking atomic-waker v1.1.2
+    Checking try-lock v0.2.5
+    Checking form_urlencoded v1.2.2
+    Checking want v0.3.1
+    Checking rand_core v0.6.4
+    Checking uuid v1.26.0
+    Checking core-foundation v0.10.1
+    Checking security-framework-sys v2.17.0
+    Checking core-foundation v0.9.4
+    Checking sync_wrapper v1.0.2
+   Compiling ahash v0.8.12
+    Checking httpdate v1.0.3
+   Compiling shlex v2.0.1
+    Checking tower-layer v0.3.3
+   Compiling find-msvc-tools v0.1.11
+    Checking system-configuration v0.7.0
+    Checking security-framework v3.7.0
+    Checking http-body-util v0.1.5
+    Checking sha2 v0.10.9
+   Compiling cc v1.4.4
+   Compiling synstructure v0.13.2
+   Compiling serde_derive v1.0.229
+   Compiling zerovec-derive v0.11.6
+   Compiling prost-derive v0.14.4
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling displaydoc v0.2.7
+   Compiling tokio-macros v2.7.2
+   Compiling tracing-attributes v0.1.31
+   Compiling miette-derive v7.6.0
+   Compiling logos-codegen v0.16.1
+   Compiling regex v1.13.1
+    Checking zerofrom v0.1.8
+    Checking tokio v1.53.1
+   Compiling thiserror-impl v2.0.20
+    Checking yoke v0.8.3
+   Compiling futures-macro v0.3.34
+    Checking zerovec v0.11.8
+   Compiling prost v0.14.4
+   Compiling miette v7.6.0
+    Checking tracing v0.1.44
+    Checking futures-util v0.3.34
+   Compiling logos-derive v0.15.1
+    Checking tinystr v0.8.4
+   Compiling prost-types v0.14.4
+   Compiling logos v0.15.1
+    Checking potential_utf v0.1.6
+    Checking icu_locale_core v2.3.0
+    Checking zerotrie v0.2.5
+   Compiling logos-derive v0.16.1
+    Checking icu_collections v2.3.0
+   Compiling logos v0.16.1
+   Compiling thiserror-impl v1.0.69
+    Checking ppv-lite86 v0.2.21
+   Compiling memoffset v0.6.5
+   Compiling pkg-config v0.3.34
+   Compiling rustversion v1.0.23
+    Checking rand_chacha v0.3.1
+    Checking ipnet v2.12.1
+    Checking hex v0.4.3
+    Checking icu_provider v2.3.1
+   Compiling vcpkg v0.2.15
+    Checking rand v0.8.8
+    Checking chrono v0.4.45
+    Checking pbjson v0.9.0
+    Checking icu_properties v2.3.0
+    Checking icu_normalizer v2.3.0
+   Compiling prost-build v0.14.4
+   Compiling pbjson-build v0.9.0
+   Compiling protox-parse v0.9.0
+   Compiling prost-reflect v0.16.5
+   Compiling libsqlite3-sys v0.30.1
+    Checking sha1 v0.10.7
+    Checking serial-core v0.4.0
+    Checking ioctl-rs v0.1.6
+    Checking termios v0.2.2
+    Checking ryu v1.0.23
+    Checking byteorder v1.5.0
+    Checking siphasher v1.0.3
+    Checking utf-8 v0.7.6
+    Checking mime v0.3.17
+    Checking data-encoding v2.11.1
+   Compiling pbjson-types v0.9.0
+    Checking idna_adapter v1.2.2
+   Compiling native-tls v0.2.18
+    Checking idna v1.1.0
+    Checking phf_shared v0.12.1
+    Checking tungstenite v0.24.0
+    Checking serde_urlencoded v0.7.1
+    Checking serial-unix v0.4.0
+    Checking hashbrown v0.14.5
+    Checking url v2.5.8
+    Checking serde_spanned v0.6.9
+    Checking toml_datetime v0.6.11
+   Compiling async-trait v0.1.92
+    Checking toml_write v0.1.2
+   Compiling chrono-tz v0.10.4
+    Checking pin-utils v0.1.0
+    Checking minimal-lexical v0.2.1
+    Checking winnow v0.7.15
+    Checking bitflags v1.3.2
+    Checking sharded-slab v0.1.7
+    Checking nix v0.25.1
+    Checking nom v7.1.3
+    Checking tokio-util v0.7.19
+    Checking tower v0.5.3
+    Checking axum-core v0.4.5
+    Checking h2 v0.4.19
+    Checking tower-http v0.6.11
+   Compiling protox v0.9.1
+    Checking matchers v0.2.0
+    Checking toml_edit v0.22.27
+    Checking tokio-tungstenite v0.24.0
+    Checking hashlink v0.9.1
+    Checking serial v0.4.0
+    Checking phf v0.12.1
+    Checking futures-executor v0.3.34
+    Checking filedescriptor v0.8.3
+    Checking tracing-serde v0.2.0
+    Checking serde_path_to_error v0.1.20
+    Checking tracing-log v0.2.0
+    Checking thread_local v1.1.10
+    Checking downcast-rs v1.2.1
+    Checking nu-ansi-term v0.50.3
+    Checking matchit v0.7.3
+    Checking fallible-iterator v0.3.0
+    Checking shell-words v1.1.1
+    Checking fallible-streaming-iterator v0.1.9
+    Checking portable-pty v0.8.1
+    Checking futures v0.3.34
+    Checking tracing-subscriber v0.3.23
+   Compiling bus v0.17.5 (/Users/manuelrinaldi/Developer/gravity-wt-desktopdev-h285/crates/bus)
+    Checking tokio-native-tls v0.3.1
+    Checking cron v0.13.0
+    Checking zeroize v1.9.0
+    Checking encoding_rs v0.8.35
+    Checking rustls-pki-types v1.15.1
+    Checking toml v0.8.23
+    Checking rusqlite v0.32.1
+    Checking hyper v1.11.1
+    Checking hyper-util v0.1.20
+    Checking axum v0.7.9
+    Checking hyper-tls v0.6.0
+    Checking reqwest v0.12.28
+    Checking hermesd v0.17.5 (/Users/manuelrinaldi/Developer/gravity-wt-desktopdev-h285/crates/hermesd)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2m 57s
+   Compiling cfg-if v1.0.4
+   Compiling bytes v1.12.1
+   Compiling itoa v1.0.18
+   Compiling bitflags v2.13.1
+   Compiling equivalent v1.0.2
+   Compiling once_cell v1.21.4
+   Compiling libc v0.2.189
+   Compiling serde_core v1.0.229
+   Compiling fnv v1.0.7
+   Compiling hashbrown v0.17.1
+   Compiling core-foundation-sys v0.8.7
+   Compiling memchr v2.8.3
+   Compiling smallvec v1.15.2
+   Compiling anyhow v1.0.104
+   Compiling pin-project-lite v0.2.17
+   Compiling fastrand v2.5.0
+   Compiling futures-core v0.3.34
+   Compiling zerofrom v0.1.8
+   Compiling stable_deref_trait v1.2.1
+   Compiling futures-sink v0.3.34
+   Compiling log v0.4.34
+   Compiling yoke v0.8.3
+   Compiling lazy_static v1.5.0
+   Compiling scopeguard v1.2.0
+   Compiling tracing-core v0.1.36
+   Compiling lock_api v0.4.14
+   Compiling slab v0.4.12
+   Compiling prost-derive v0.14.4
+   Compiling typenum v1.20.1
+   Compiling zerovec v0.11.8
+   Compiling rustix v1.1.4
+   Compiling zmij v1.0.23
+   Compiling indexmap v2.14.1
+   Compiling http v1.5.0
+   Compiling futures-channel v0.3.34
+   Compiling logos-codegen v0.15.1
+   Compiling logos-codegen v0.16.1
+   Compiling base64 v0.22.1
+   Compiling errno v0.3.14
+   Compiling parking_lot_core v0.9.12
+   Compiling signal-hook-registry v1.4.8
+   Compiling parking_lot v0.12.5
+   Compiling generic-array v0.14.7
+   Compiling mio v1.2.2
+   Compiling prost v0.14.4
+   Compiling socket2 v0.6.5
+   Compiling petgraph v0.8.3
+   Compiling getrandom v0.4.3
+   Compiling tempfile v3.27.0
+   Compiling tokio v1.53.1
+   Compiling futures-io v0.3.34
+   Compiling prost-types v0.14.4
+   Compiling futures-task v0.3.34
+   Compiling miette v7.6.0
+   Compiling logos-derive v0.15.1
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling futures-util v0.3.34
+   Compiling tracing v0.1.44
+   Compiling zerocopy v0.8.56
+   Compiling thiserror v2.0.20
+   Compiling logos v0.15.1
+   Compiling logos-derive v0.16.1
+   Compiling num-traits v0.2.19
+   Compiling digest v0.10.7
+   Compiling logos v0.16.1
+   Compiling cpufeatures v0.2.17
+   Compiling tinystr v0.8.4
+   Compiling iana-time-zone v0.1.65
+   Compiling litemap v0.8.3
+   Compiling writeable v0.6.4
+   Compiling http-body v1.1.0
+   Compiling potential_utf v0.1.6
+   Compiling zerotrie v0.2.5
+   Compiling icu_locale_core v2.3.0
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling percent-encoding v2.3.2
+   Compiling utf8_iter v1.0.4
+   Compiling icu_collections v2.3.0
+   Compiling pbjson-build v0.9.0
+   Compiling protox-parse v0.9.0
+   Compiling chrono v0.4.45
+   Compiling prost-build v0.14.4
+   Compiling prost-reflect v0.16.5
+   Compiling icu_provider v2.3.1
+   Compiling httparse v1.10.1
+   Compiling tower-service v0.3.3
+   Compiling icu_properties_data v2.3.0
+   Compiling pbjson v0.9.0
+   Compiling icu_normalizer_data v2.3.0
+   Compiling getrandom v0.2.17
+   Compiling atomic-waker v1.1.2
+   Compiling try-lock v0.2.5
+   Compiling pbjson-types v0.9.0
+   Compiling rand_core v0.6.4
+   Compiling want v0.3.1
+   Compiling thiserror v1.0.69
+   Compiling icu_normalizer v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling system-configuration-sys v0.6.0
+   Compiling form_urlencoded v1.2.2
+   Compiling uuid v1.26.0
+   Compiling core-foundation v0.10.1
+   Compiling security-framework-sys v2.17.0
+   Compiling core-foundation v0.9.4
+   Compiling sync_wrapper v1.0.2
+   Compiling tower-layer v0.3.3
+   Compiling httpdate v1.0.3
+   Compiling security-framework v3.7.0
+   Compiling http-body-util v0.1.5
+   Compiling sha2 v0.10.9
+   Compiling system-configuration v0.7.0
+   Compiling hex v0.4.3
+   Compiling ipnet v2.12.1
+   Compiling sha1 v0.10.7
+   Compiling ioctl-rs v0.1.6
+   Compiling termios v0.2.2
+   Compiling serial-core v0.4.0
+   Compiling byteorder v1.5.0
+   Compiling mime v0.3.17
+   Compiling siphasher v1.0.3
+   Compiling utf-8 v0.7.6
+   Compiling data-encoding v2.11.1
+   Compiling idna_adapter v1.2.2
+   Compiling regex-syntax v0.8.11
+   Compiling idna v1.1.0
+   Compiling ryu v1.0.23
+   Compiling serde_urlencoded v0.7.1
+   Compiling url v2.5.8
+   Compiling phf_shared v0.12.1
+   Compiling serial-unix v0.4.0
+   Compiling protox v0.9.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling ahash v0.8.12
+   Compiling memoffset v0.6.5
+   Compiling hashbrown v0.14.5
+   Compiling serde_spanned v0.6.9
+   Compiling rand_chacha v0.3.1
+   Compiling toml_datetime v0.6.11
+   Compiling rand v0.8.8
+   Compiling toml_write v0.1.2
+   Compiling pin-utils v0.1.0
+   Compiling bitflags v1.3.2
+   Compiling winnow v0.7.15
+   Compiling minimal-lexical v0.2.1
+   Compiling native-tls v0.2.18
+   Compiling nom v7.1.3
+   Compiling nix v0.25.1
+   Compiling regex-automata v0.4.18
+   Compiling hashlink v0.9.1
+   Compiling tokio-util v0.7.19
+   Compiling bus v0.17.5 (/Users/manuelrinaldi/Developer/gravity-wt-desktopdev-h285/crates/bus)
+   Compiling tower v0.5.3
+   Compiling tungstenite v0.24.0
+   Compiling axum-core v0.4.5
+   Compiling tower-http v0.6.11
+   Compiling h2 v0.4.19
+   Compiling tokio-tungstenite v0.24.0
+   Compiling libsqlite3-sys v0.30.1
+   Compiling serial v0.4.0
+   Compiling phf v0.12.1
+   Compiling futures-executor v0.3.34
+   Compiling filedescriptor v0.8.3
+   Compiling tracing-serde v0.2.0
+   Compiling serde_path_to_error v0.1.20
+   Compiling tracing-log v0.2.0
+   Compiling toml_edit v0.22.27
+   Compiling sharded-slab v0.1.7
+   Compiling thread_local v1.1.10
+   Compiling fallible-iterator v0.3.0
+   Compiling downcast-rs v1.2.1
+   Compiling nu-ansi-term v0.50.3
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling matchit v0.7.3
+   Compiling shell-words v1.1.1
+   Compiling rusqlite v0.32.1
+   Compiling cron v0.13.0
+   Compiling futures v0.3.34
+   Compiling chrono-tz v0.10.4
+   Compiling tokio-native-tls v0.3.1
+   Compiling matchers v0.2.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling portable-pty v0.8.1
+   Compiling zeroize v1.9.0
+   Compiling rustls-pki-types v1.15.1
+   Compiling encoding_rs v0.8.35
+   Compiling toml v0.8.23
+   Compiling hyper v1.11.1
+   Compiling hyper-util v0.1.20
+   Compiling axum v0.7.9
+   Compiling hyper-tls v0.6.0
+   Compiling reqwest v0.12.28
+   Compiling hermesd v0.17.5 (/Users/manuelrinaldi/Developer/gravity-wt-desktopdev-h285/crates/hermesd)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7m 24s
+     Running unittests src/lib.rs (/Users/manuelrinaldi/.thehermes/projects/gravity/bots/desktop-dev/cargo-target/debug/deps/bus-a91e8179c0f18d25)
+
+running 34 tests
+test avatar::tests::normalises_icon_case ... ok
+test avatar::tests::accepts_every_built_in_icon ... ok
+test avatar::tests::rejects_unknown_icons ... ok
+test avatar::tests::stored_form_round_trips ... ok
+test avatar::tests::empty_is_none ... ok
+test avatar::tests::rejects_malformed_colour ... ok
+test avatar::tests::normalises_colour_case ... ok
+test avatar::tests::rejects_emoji ... ok
+test contract::tests::versions_list_every_surface ... ok
+test avatar::tests::rejects_paths_data_uris_and_urls ... ok
+test envelope::decisions::tests::a_comment_points_the_answer_back_at_the_thread ... ok
+test envelope::decisions::tests::a_deadline_is_stated_so_the_bot_can_plan_around_it ... ok
+test envelope::decisions::tests::a_hold_says_it_is_parked_rather_than_refused ... ok
+test envelope::decisions::tests::a_raise_names_the_asking_bot_and_its_recommendation ... ok
+test envelope::decisions::tests::a_ruling_comes_from_the_user_and_says_it_is_not_a_relay ... ok
+test envelope::decisions::tests::a_title_cannot_break_out_of_the_envelope_header ... ok
+test envelope::tests::renders_reply_reference ... ok
+test envelope::tests::renders_routine_envelope ... ok
+test envelope::tests::renders_task_envelope ... ok
+test envelope::tests::renders_task_id_for_the_assignee ... ok
+test envelope::tests::renders_the_correlated_run_id ... ok
+test envelope::tests::routine_name_cannot_break_the_envelope_header ... ok
+test envelope::tests::strips_control_characters ... ok
+test names::tests::accepts_ordinary_names ... ok
+test names::tests::dir_name_is_non_empty_for_valid_names ... ok
+test names::tests::project_names_share_the_charset_but_not_the_reserved_list ... ok
+test names::tests::rejects_edge_separators ... ok
+test names::tests::rejects_empty_overlong_and_odd_charsets ... ok
+test names::tests::rejects_reserved_addresses ... ok
+test names::tests::sanitizing_is_lossy_across_valid_names ... ok
+test schema::tests::no_migration_is_empty ... ok
+test types::permissions::tests::spellings_round_trip_and_match_serde ... ok
+test types::workers::tests::a_repo_needs_a_plain_url_and_branch ... ok
+test schema::tests::migrations_are_append_only ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/contract_fixtures.rs (/Users/manuelrinaldi/.thehermes/projects/gravity/bots/desktop-dev/cargo-target/debug/deps/contract_fixtures-0f21a9e020c044de)
+
+running 4 tests
+test fixtures_and_entities_match_one_to_one ... ok
+test the_enum_fixture_lists_every_value ... ok
+test every_board_fixture_round_trips ... ok
+test every_message_arm_has_a_fixture_that_round_trips ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/home_fixtures.rs (/Users/manuelrinaldi/.thehermes/projects/gravity/bots/desktop-dev/cargo-target/debug/deps/home_fixtures-1f17ce5658ffe21c)
+
+running 2 tests
+test by_kind_keys_are_lowercase_kind_names ... ok
+test every_home_fixture_round_trips_with_proto_field_names ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/pr_fixtures.rs (/Users/manuelrinaldi/.thehermes/projects/gravity/bots/desktop-dev/cargo-target/debug/deps/pr_fixtures-1f08a0a1bc191c6f)
+
+running 4 tests
+test approvals_on_older_commits_are_stale_or_carried ... ok
+test mergeable_agrees_with_its_blockers ... ok
+test the_fixtures_cover_every_state_check_result_and_blocker ... ok
+test every_pr_fixture_round_trips_with_proto_field_names ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/Users/manuelrinaldi/.thehermes/projects/gravity/bots/desktop-dev/cargo-target/debug/deps/hermesd-a667368c374fb898)
+
+running 787 tests
+test activity::tests::daemon_notices_preview_as_hermes ... ok
+test activity::tests::mangles_the_workspace_path_the_way_claude_code_does ... ok
+test activity::tests::mangles_underscores_like_claude_code ... ok
+test activity::tests::compares_stamps_as_instants_not_strings ... ok
+test activity::tests::returns_nothing_without_a_transcript ... ok
+test activity::tests::newer_picks_the_later_stamp ... ok
+test attention::tests::every_kind_weighs_as_the_table_says ... ok
+test attention::tests::row_ids_are_stable ... ok
+test activity::tests::truncate_collapses_whitespace_and_caps_length ... ok
+test attention::tests::titles_are_one_line_and_cut ... ok
+test attention::tests::rows_sort_by_weight_then_age_then_id ... ok
+test approval::tests::summarises_the_prompt ... ok
+test attention::tests::the_summary_counts_scores_and_keeps_the_oldest ... ok
+test approval::claude::tests::session_rules_never_persist ... ok
+test activity::tests::reads_the_newest_assistant_turn ... ok
+test activity::tests::skips_turns_without_text_and_unparsable_lines ... ok
+test attention::tests::relayed_rulings_are_one_row_counted_by_bot ... ok
+test board::defaults::tests::roles_are_guessed_from_names ... ok
+test board::defaults::tests::only_cancelled_is_hidden ... ok
+test board::defaults::tests::keys_come_from_initials ... ok
+test board::defaults::tests::every_item_type_has_a_template_and_the_skeleton_lists_its_sections ... ok
+test attention::tests::the_dashboard_sends_new_kinds_only_when_asked ... ok
+test board::guards::tests::ac::a_flag_stays_once_the_package_is_submitted ... ok
+test board::guards::tests::ac::flagging_is_the_leads_or_the_assignees_before_verify ... ok
+test board::contract::tests::stored_spellings_match_the_proto_names ... ok
+test board::guards::tests::acceptance_criteria_are_fixed_from_verify_on ... ok
+test board::guards::tests::a_named_reviewer_is_the_only_reviewer ... ok
+test board::guards::tests::close::nobody_closes_what_they_did_themselves_but_the_owner_still_does ... ok
+test board::guards::tests::ac::post_install_criteria_wait_for_done_not_for_the_package ... ok
+test board::guards::tests::close::code_once_linked_keeps_the_release_path_whatever_the_type_is_now ... ok
+test board::guards::tests::a_spike_not_yet_started_is_told_how_to_close ... ok
+test board::guards::tests::rules_cover_every_category_pair ... ok
+test board::guards::tests::rules_outside_moves ... ok
+test board::guards::tests::same_column_is_refused_even_for_the_daemon ... ok
+test board::guards::tests::the_lead_or_another_reviewer_closes_a_spike_on_its_outcome ... ok
+test board::guards::tests::only_the_owner_closes_verify_without_a_release_and_never_a_released_item ... ok
+test board::guards::tests::the_owner_does_not_close_an_item_in_an_open_package ... ok
+test board::guards::tests::templates_name_only_known_dor_fields ... ok
+test board::guards::tests::wip_is_overridden_only_by_the_lead_or_owner_with_a_reason ... ok
+test board::guards::tests::dor_sections_come_from_the_description ... ok
+test board::import::tests::daemon_only_states_wait_in_verify_with_their_label ... ok
+test board::guards::tests::table::every_transition_rule_passes_when_met_and_names_what_is_not ... ok
+test board::import::tests::a_table_needs_its_header_and_a_heading_needs_an_id ... ok
+test board::contract::tests::unknown_or_unset_enum_values_are_refused ... ok
+test board::import::tests::states_types_and_fields_map_without_guessing ... ok
+test board::import::tests::rows_and_sections_map_to_entries_and_the_rest_is_reported ... ok
+test board::meetings::tests::due_dates_take_rfc3339_or_a_day ... ok
+test board::meetings::tests::a_series_name_is_short_and_plain ... ok
+test board::meetings::tests::a_series_next_time_follows_its_cron_while_enabled ... ok
+test board::feed::tests::each_project_counts_its_own_changes_from_one ... ok
+test board::metrics::tests::percentiles_are_nearest_rank ... ok
+test board::metrics::tests::an_empty_board_has_zeros_not_errors ... ok
+test board::metrics::tests::rework_is_the_share_of_items_past_doing_that_came_back ... ok
+test board::metrics::tests::aging_lists_open_work_longest_in_its_column_first ... ok
+test board::metrics::tests::cycle_time_runs_from_first_doing_to_done ... ok
+test board::metrics::tests::throughput_counts_items_reaching_done_this_range_and_per_week ... ok
+test board::metrics::tests::wip_over_time_replays_where_each_item_stood ... ok
+test board::model::tests::stored_spellings_parse_back ... ok
+test board::meetings::tests::a_series_meets_at_most_hourly ... ok
+test board::mirror::tests::only_the_holding_peer_can_withdraw_a_board ... ok
+test board::mirror::tests::a_pushed_card_never_rolls_back_a_newer_one ... ok
+test board::contract::tests::every_fixture_survives_the_mapping ... ok
+test board::feed::tests::a_reader_waits_for_a_writer_to_publish ... ok
+test board::moves::tests::the_check_lists_every_other_column_for_the_asker ... ok
+test board::moves::tests::a_stale_version_is_a_conflict_before_any_guard ... ok
+test board::moves::tests::a_bot_of_another_project_is_turned_away ... ok
+test board::moves::tests::a_wip_override_is_logged_and_flags_the_card_until_it_leaves ... ok
+test board::meetings::tests::the_meetings_migration_runs_again_without_losing_meetings ... ok
+test board::policy::glob::tests::a_plain_path_matches_only_itself ... ok
+test board::policy::glob::tests::double_star_spans_any_depth ... ok
+test board::policy::glob::tests::star_stays_within_a_segment ... ok
+test board::policy::tests::a_change_no_area_matches_needs_the_architect ... ok
+test board::policy::tests::a_matched_area_replaces_the_default ... ok
+test board::policy::tests::a_policy_change_always_needs_architect_ce_and_the_owner ... ok
+test board::policy::tests::a_stored_waiver_for_ce_or_the_owner_takes_nothing_off ... ok
+test board::policy::tests::a_waiver_is_refused_for_ce_the_owner_no_reason_or_no_lead ... ok
+test board::policy::tests::checks_run_for_the_paths_they_name ... ok
+test board::policy::tests::malformed_files_are_refused_with_the_file_named ... ok
+test board::policy::tests::required_roles_are_the_union_of_the_matched_areas ... ok
+test board::policy::tests::roles_map_to_board_roles ... ok
+test board::policy::tests::the_fixtures_parse ... ok
+test board::policy::tests::the_lead_waives_a_role_with_a_reason ... ok
+test board::rank::tests::keys_land_strictly_between_their_bounds ... ok
+test board::rank::tests::many_insertions_stay_ordered ... ok
+test board::rank::tests::spread_keys_ascend ... ok
+test board::rank::tests::the_first_key_sits_in_the_middle ... ok
+test board::rank::tests::unordered_or_invalid_bounds_are_refused ... ok
+test board::moves::tests::the_lead_refines_once_the_definition_of_ready_is_met ... ok
+test board::meetings::tests::contributions_count_once_per_attendee_and_actions_carry_over ... ok
+test board::moves::tests::returned_work_goes_over_wip_first_and_flagged ... ok
+warning: You appear to have cloned an empty repository.
+test board::policy::base::tests::the_base_is_read_at_one_commit ... ok
+test board::release::build_installer::tests::the_command_reads_its_flags ... ok
+test board::release::build_installer::tests::a_changed_script_is_refused ... ok
+test board::release::cli::tests::a_refusal_is_an_error ... ok
+test board::release::cli::tests::flags_and_positionals_split ... ok
+test board::release::confine::os::tests::a_handle_knows_its_real_path_its_names_and_its_kind ... ok
+test board::release::confine::os::tests::a_link_at_the_end_is_not_followed ... ok
+test board::release::build_installer::tests::the_build_gets_a_fresh_worktree_of_the_commit ... ok
+test board::release::confine::tests::a_hard_linked_source_is_refused ... ok
+test board::release::confine::tests::an_open_build_must_still_be_where_it_was_checked ... ok
+test board::release::confine::tests::a_served_root_that_would_expose_the_home_is_refused ... ok
+test board::release::confine::tests::only_the_dedicated_folder_is_served_from_inside_the_home ... ok
+test board::release::confine::tests::the_default_served_root_is_prepared_beside_its_staging_folder ... ok
+test board::release::confine::tests::builds_come_only_from_release_worktrees_and_artifacts ... ok
+test board::policy::base::tests::a_base_without_policy_files_needs_the_architect ... ok
+test board::release::install::apply::tests::a_first_install_has_no_backup_to_restore ... ok
+test board::release::install::apply::tests::a_kept_app_changed_since_is_never_put_back ... ok
+test board::release::install::apply::tests::the_job_runs_the_swap_with_its_rollback ... ok
+test board::release::install::rollback_notice::tests::the_card_names_only_a_plain_app_in_applications ... ok
+test board::release::install::tests::a_build_is_checked_against_the_compiled_identity_or_says_why_not ... ok
+test board::release::install::apply::tests::the_app_swaps_in_and_the_one_it_replaced_is_kept_and_put_back ... ok
+test board::release::install::tests::each_file_installs_its_own_way_on_its_own_system ... ok
+test board::release::install::tests::handoff_tests::status_reads_the_outcome_the_job_left ... ok
+test board::release::install::tests::handoff_tests::the_job_runs_once_records_its_outcome_and_cleans_up ... ok
+test board::release::install::tests::handoff_tests::the_windows_job_records_its_outcome_and_unschedules_itself ... ok
+test board::release::install::tests::only_the_approved_file_installs ... ok
+test board::release::install::tests::takes_one_release_and_passes_the_daemons_own_config_on ... ok
+test board::release::install::tests::the_build_waits_in_a_fresh_private_stage ... ok
+test board::release::install::tests::the_desktop_app_installs_where_there_is_one_and_the_daemon_elsewhere ... ok
+test board::release::install::apply::tests::the_boot_gate_waits_for_the_new_binary_not_its_version ... ok
+test board::release::build_installer::tests::another_commit_or_untracked_files_are_refused ... ok
+test board::release::install::tests::codesign_holds_a_binary_to_its_requirement ... ok
+warning: You appear to have cloned an empty repository.
+warning: You appear to have cloned an empty repository.
+warning: You appear to have cloned an empty repository.
+test backup::tests::backup_and_restore_roundtrip ... ok
+test board::release::land::tests::the_command_reads_its_flags_and_the_transport_falls_back_only_for_ssh_auth ... ok
+test board::release::phone::tests::a_build_not_served_as_built_has_no_links ... ok
+test board::release::phone::tests::a_dot_or_dot_dot_step_has_no_links_in_any_spelling ... ok
+test board::release::phone::tests::install_actions_show_while_tested_approved_rolling_out_or_live ... ok
+test board::release::phone::tests::links_come_from_the_served_file_never_the_row ... ok
+test board::release::phone::tests::the_notification_names_the_version_and_why_it_waits ... ok
+test board::release::phone::tests::the_page_links_the_install_and_escapes_what_it_shows ... ok
+test board::release::phone_version::tests::only_short_printable_strings_are_kept ... ok
+test board::release::phone_version::tests::the_label_names_the_build_when_there_is_one ... ok
+test board::release::serve::tests::a_build_is_copied_hashed_and_never_replaced_by_another ... ok
+warning: You appear to have cloned an empty repository.
+test board::release::serve::tests::an_ipa_gets_a_manifest_naming_it ... ok
+test board::release::serve::tests::platforms_and_the_base_url ... ok
+test board::release::serve::tests::symlinks_in_the_served_directory_are_refused ... ok
+test board::release::sha_cache::tests::a_same_size_swap_with_the_old_mtime_is_hashed_again ... ok
+test board::release::sha_cache::tests::hashes_once_until_the_file_changes ... ok
+test board::release::sha_cache::tests::matches_like_serve_and_refuses_what_isnt_a_file ... ok
+test board::release::tag_cli::tests::a_release_and_dry_run ... ok
+test board::release::tests::the_hash_pins_items_builds_and_tests_not_verdicts_or_order ... ok
+test board::release::tests::the_ios_repair_leaves_every_other_package_alone ... ok
+test board::release::tests::the_plan_is_not_part_of_the_frozen_hash ... ok
+test board::release::tests::verdicts_decide_the_outcome ... ok
+test bot_permissions::exact::tests::a_binary_a_bot_could_rebuild_is_bot_writable ... ok
+test bot_permissions::exact::tests::a_path_a_rule_would_read_as_a_pattern_gets_no_rule ... ok
+test bot_permissions::exact::tests::a_path_with_a_space_is_allowed_in_each_quoting_only ... ok
+test bot_permissions::exact::tests::a_plain_path_is_allowed_bare_and_quoted ... ok
+test bot_permissions::guard::cargo::tests::a_config_path_is_folded_to_one_spelling ... ok
+test bot_permissions::guard::cargo::verbatim_tests::a_verbatim_target_is_read_plainly ... ok
+test bot_permissions::guard::cargo_alias::tests::an_alias_keeps_a_windows_path_whole ... ok
+test bot_permissions::guard::glob::tests::a_backslash_escapes_a_wildcard_on_unix ... ok
+test bot_permissions::guard::glob::tests::names_match_as_the_shell_expands_them ... ok
+test bot_permissions::guard::path_key::tests::git_bash_drive_paths_take_their_drive ... ok
+test bot_permissions::guard::words::verbatim_tests::a_verbatim_path_is_matched_plainly ... ok
+test bot_permissions::shell::heredoc::tests::a_heredoc_body_is_kept_out_of_the_commands ... ok
+test bot_permissions::shell::heredoc::tests::heredoc_spellings ... ok
+test bot_permissions::shell::tests::reaches_into_substitutions_and_groups ... ok
+test bot_permissions::shell::tests::redirections_are_not_separators ... ok
+test bot_permissions::shell::tests::splits_on_operators_and_strips_quotes ... ok
+test bot_permissions::shell::tests::wrappers_are_skipped_to_the_real_program ... ok
+test board::release::build_installer::tests::the_release_as_committed_passes ... ok
+test bot_permissions::tests::bypass_table::an_existing_symlink_cannot_launder_a_path ... ok
+test board::policy::base::tests::a_broken_base_file_fails_closed ... ok
+test board::release::build_installer::tests::a_named_commit_is_built_only_when_it_is_on_the_release_branch ... ok
+test bot_permissions::tests::every_path_rule_is_anchored ... ok
+test bot_permissions::tests::exact_rules::a_binary_a_bot_could_rebuild_gets_no_exact_rule ... ok
+test bot_permissions::tests::exact_rules::every_bot_is_denied_edits_of_the_daemons_run_folder ... ok
+test bot_permissions::tests::exact_rules::publish_land_and_build_installers_allow_this_binary_by_its_exact_path ... ok
+test bot_permissions::tests::full_bypasses_and_skips_the_unanswerable_warning ... ok
+test bot_permissions::tests::full_is_disabled_and_falls_back_to_trusted ... ok
+test bot_permissions::tests::guard_cases::an_unreadable_call_is_refused ... ok
+test bot_permissions::tests::guard_cases::bsd_sed_in_place_takes_the_expression_as_the_script ... ok
+test bot_permissions::tests::guard_cases::destructive_commands_stay_in_the_bots_own_folders ... ok
+test bot_permissions::tests::guard_cases::forced_pushes_are_caught_in_any_spelling ... ok
+test board::policy::base::tests::a_pr_editing_the_policy_is_judged_by_the_base_rules ... ok
+test bot_permissions::tests::guard_cases::only_the_daemon_writes_the_served_builds ... ok
+test bot_permissions::tests::guard_cases::protected_files_are_refused_even_through_an_interpreter ... ok
+test bot_permissions::tests::guard_cases::shared_machine_rules_are_enforced ... ok
+test bot_permissions::tests::guard_cases::the_verdict_is_a_pre_tool_use_deny ... ok
+test bot_permissions::tests::guard_h155::awk_and_sed_programs_are_not_paths ... ok
+test bot_permissions::tests::guard_cases::main_is_reserved_for_release_main ... ok
+test board::release::land::tests::code_pushed_after_the_builds_never_lands ... ok
+test bot_permissions::tests::guard_h155::echoed_text_into_an_own_file_is_a_mention ... ok
+test bot_permissions::tests::bypass_table::every_review_bypass_is_blocked ... ok
+test bot_permissions::tests::guard_h155::full_refuses_heredoc_scripts ... ok
+test bot_permissions::tests::guard_h155::fd_duplication_is_not_a_path ... ok
+test board::release::land::tests::a_main_that_moved_on_is_never_forced ... ok
+test bot_permissions::tests::guard_h155_ce032::a_mention_into_a_pipe_or_terminal_link_is_judged ... ok
+test bot_permissions::tests::guard_h155::cd_and_then_sets_the_base ... ok
+test bot_permissions::tests::guard_h155_ce032::a_cdpath_set_on_the_line_makes_cd_uncertain ... ok
+test bot_permissions::tests::guard_h155_ce032::glob_options_and_zsh_patterns_reach_anything ... ok
+test bot_permissions::tests::guard_install::no_bot_writes_the_daemons_run_folder ... ok
+test board::release::land::tests::a_dry_run_and_a_pre_push_hook_push_nothing_of_theirs ... ok
+test bot_permissions::tests::guard_links::links_at_claude_or_to_the_owners_config_are_refused ... ok
+test bot_permissions::tests::guard_links::other_links_still_pass ... ok
+test bot_permissions::tests::guard_links::other_windows_links_and_items_still_pass ... ok
+test bot_permissions::tests::guard_h155_ce032::a_redefined_cd_or_echo_gets_the_old_rules ... ok
+test bot_permissions::tests::guard_links::windows_links_at_claude_or_to_the_owners_config_are_refused ... ok
+test bot_permissions::tests::guard_h155::heredoc_scripts_are_not_read_as_shell ... ok
+test bot_permissions::tests::guard_powershell::an_empty_or_missing_command_is_refused ... ok
+test bot_permissions::tests::bypass_table::rewordings_of_the_bypasses_are_blocked_too ... ok
+test bot_permissions::tests::guard_install::a_pending_install_refuses_vms_and_vr_runs_only ... ok
+test bot_permissions::tests::guard_powershell::a_bot_changes_only_its_own_worktrees ... ok
+test bot_permissions::tests::guard_powershell::full_refuses_what_it_cant_read ... ok
+test bot_permissions::tests::guard_powershell::links_at_claude_are_still_refused ... ok
+test bot_permissions::tests::guard_powershell::only_the_daemon_writes_the_served_builds_and_the_run_folder ... ok
+test bot_permissions::tests::bypass_table::everyday_work_still_passes ... ok
+test board::release::land::tests::the_built_commit_fast_forwards_main_and_is_tagged_on_the_remote ... ok
+test bot_permissions::tests::guard_powershell::powershell_and_cmd_from_bash_get_the_same_rules ... ok
+test bot_permissions::tests::guard_powershell::forced_pushes_and_main_need_release_main ... ok
+test bot_permissions::tests::guard_powershell::recursive_reads_of_a_folder_holding_a_protected_one_are_refused ... ok
+test bot_permissions::tests::guard_powershell::protected_paths_are_refused_in_every_powershell_spelling ... ok
+test bot_permissions::tests::guard_powershell::shared_machine_rules_are_enforced ... ok
+test bot_permissions::tests::guard_links::the_owners_home_is_seen_in_every_quoting_and_slash ... ok
+test bot_permissions::tests::guard_powershell::encoded_commands_are_decoded_and_judged ... ok
+test bot_permissions::tests::guard_ps_derived::string_concatenation_is_folded_before_paths_are_judged ... ok
+test bot_permissions::tests::guard_targets::a_cargo_config_names_a_target_too ... ok
+test bot_permissions::tests::guard_targets::a_bot_builds_and_cleans_only_its_own_target ... ok
+test bot_permissions::tests::guard_targets::device_paths_are_refused_drive_paths_are_not ... ok
+test bot_permissions::tests::guard_worktrees::a_bot_changes_only_its_own_worktrees ... ok
+test bot_permissions::tests::guard_targets::cargo_aliases_and_subcommand_binaries_are_followed ... ok
+test bot_permissions::tests::guard_worktrees::release_worktrees_belong_to_the_publisher ... ok
+test bot_permissions::tests::guard_worktrees::the_inline_code_deny_says_report_it ... ok
+test bot_permissions::tests::install_and_quiesce_allow_this_binary_by_its_exact_path ... ok
+test bot_permissions::tests::installers_are_denied_to_everyone_but_devops ... ok
+test bot_permissions::tests::locks::a_moved_home_keeps_its_locks_on_the_renamed_config ... ok
+test bot_permissions::tests::locks::reading_sensitive_locations_is_denied_by_rule_and_by_the_guard ... ok
+test bot_permissions::tests::locks::the_guard_is_told_worktrees_not_trusted_paths_are_writable ... ok
+test bot_permissions::tests::rule_paths_are_absolute_on_both_platforms ... ok
+test bot_permissions::tests::standard_keeps_the_built_in_mode_but_gets_context_denies_and_the_guard ... ok
+test bot_permissions::tests::the_interim_settings_are_folded_in_and_not_passed_twice ... ok
+test bot_permissions::tests::the_owners_trust_lines_survive_removing_the_interim_argument ... ok
+test bot_permissions::tests::the_quiesce_extra_allows_only_hermesd_quiesce ... ok
+test bot_permissions::tests::trusted_adds_routine_work_and_extras_add_their_powers ... ok
+test botmgmt::charter::tests::blank_and_missing_fall_back ... ok
+test botmgmt::charter::tests::introduction_asks_a_charterless_bot_what_it_is_for ... ok
+test botmgmt::charter::tests::only_the_first_bot_is_asked_for_a_tour ... ok
+test botmgmt::charter::tests::supplied_text_wins ... ok
+test botmgmt::charter::tests::the_tour_addresses_whoever_created_the_bot ... ok
+test brand::tests::bus_tools_are_read_under_both_names ... ok
+test brand::tests::names_follow_the_prefixes ... ok
+test brand::tests::the_new_prefix_wins_over_the_old_one ... ok
+test brand::tests::the_old_prefix_still_works_alone ... ok
+test browser::input::tests::a_click_is_a_press_at_the_page_point ... ok
+test browser::input::tests::a_paste_is_inserted_text ... ok
+test browser::input::tests::a_typing_key_carries_its_text_and_others_do_not ... ok
+test browser::input::tests::nonsense_is_refused ... ok
+test bot_permissions::tests::guard_ps_derived::dotnet_file_methods_are_judged_by_their_paths ... ok
+test browser::setup::tests::browsers_can_be_turned_off ... ok
+test browser::setup::tests::windows_runs_npx_through_cmd ... ok
+test bus_auth::app_identity::tests::only_a_real_team_id_counts ... ok
+test bus_auth::app_identity::tests::only_the_app_in_its_program_files_folder_counts ... ok
+test bus_auth::app_identity::tests::the_identity_line_says_how_the_app_is_known ... ok
+test bus_auth::app_identity::tests::the_requirement_names_the_team_and_the_app ... ok
+test bus_auth::app_identity::tests::the_task_runs_only_the_installed_daemon ... ok
+test bus_auth::detach::tests::mcp_servers_are_detached_only_under_the_composer_switch ... ok
+test bus_auth::hook::tests::a_daemon_still_starting_is_retried ... ok
+test bus_auth::hook::tests::a_permission_prompt_waits_for_the_owner ... ok
+test bus_auth::hook::tests::a_user_prompt_is_from_the_composer_or_doesnt_say ... ok
+test bus_auth::hook::tests::other_events_forward_the_payload_untouched ... ok
+test bus_auth::hook::tests::session_start_reports_the_inbox_socket_from_the_environment ... ok
+test browser::setup::tests::a_configured_node_dir_wins_and_writes_the_profile_config ... ok
+test bus_auth::origin::tests::a_reused_parent_pid_is_not_the_launcher ... ok
+test bus_auth::origin::tests::known_apps_by_their_executable_names ... ok
+test bus_auth::origin::tests::the_nearest_app_above_the_shell_launched_it ... ok
+test bus_auth::origin::tests::this_process_has_a_name_and_a_directory ... ok
+test bus_auth::origin::tests::windows_process_names_lose_the_exe_suffix ... ok
+test bus_auth::os::tests::the_os_table_knows_this_process_and_its_parent ... ok
+test bus_auth::inbox::tests::only_a_live_socket_of_the_current_session_is_accepted ... ok
+test bus_auth::owner_macos::tests::the_compiled_requirement_parses ... ok
+test bus_auth::session::tests::a_caller_started_after_its_connection_was_accepted_is_refused ... ok
+test bus_auth::session::tests::a_descendant_of_a_session_root_is_that_bot ... ok
+test bus_auth::session::tests::a_process_that_detached_from_the_session_is_refused ... ok
+test bus_auth::session::tests::a_restarted_session_replaces_its_root ... ok
+test bus_auth::session::tests::a_reused_parent_pid_breaks_the_chain ... ok
+test bus_auth::session::tests::the_walk_stops_eight_levels_up ... ok
+test bus_auth::tests::composer_bots_names_the_only_bots_typed_into ... ok
+test bus_auth::tests::phase_two_waits_for_the_hook_transport ... ok
+test bus_auth::tests::phase_two_waits_for_the_owner_team_id ... ok
+test bus_auth::tests::this_build_lets_phase_two_through ... ok
+test chat::answers::tests::a_chat_turn_is_answered_with_its_last_text ... ok
+test chat::answers::tests::a_turn_a_task_reached_midway_is_not_posted ... ok
+test chat::answers::tests::a_turn_that_wrote_to_the_owner_is_not_answered_twice ... ok
+test chat::answers::tests::only_turns_the_owner_started_from_chat_are_answered ... ok
+test chat::answers::tests::the_body_is_redacted_and_cut_to_the_thread_limit ... ok
+test chat::authors::tests::a_command_is_matched_by_path_then_by_distinct_name_then_by_folder ... ok
+test chat::authors::tests::files_are_grouped_by_the_task_they_are_named_after ... ok
+test chat::browser_steps::tests::says_what_happened_to_the_page ... ok
+test chat::browser_steps::tests::tells_the_bots_browser_from_the_owners ... ok
+test chat::builder_tests::a_bus_task_becomes_a_turn_with_steps_and_a_result ... ok
+test chat::builder_tests::a_prompt_typed_for_the_owner_is_their_chat_by_its_token_not_its_text ... ok
+test chat::builder_tests::bus_calls_read_the_same_across_the_rename ... ok
+test chat::builder_tests::changed_turns_are_reported_once ... ok
+test chat::builder_tests::codex_observations_read_as_turns ... ok
+test chat::builder_tests::codex_tool_records_read_as_steps_and_bus_calls ... ok
+test chat::builder_tests::images_failures_and_asides_are_kept ... ok
+test chat::builder_tests::the_daemon_and_routines_are_not_the_owner ... ok
+test chat::builder_tests::the_owner_is_recognised_from_the_composer_and_the_terminal ... ok
+test chat::builder_tests::the_owners_card_comment_is_not_an_owner_chat ... ok
+test chat::commands::tests::a_command_from_an_earlier_session_is_no_longer_running ... ok
+test chat::commands::tests::follows_background_commands_until_notified_or_stopped ... ok
+test chat::commands::tests::follows_foreground_commands_to_their_result ... ok
+test chat::envelope::tests::plain_text_is_not_an_envelope ... ok
+test chat::envelope::tests::reads_a_wrapped_task_with_its_id ... ok
+test chat::envelope::tests::reads_the_owner_chat_and_a_routine ... ok
+test chat::steps::tests::reads_bus_tools_as_what_they_did ... ok
+test chat::steps::tests::titles_common_tools ... ok
+test chat::writes::tests::keeps_the_first_touch_of_each_path ... ok
+test bus_auth::owner_macos::tests::a_process_satisfies_its_own_requirement_and_no_other ... ok
+test bot_permissions::tests::guard_ps_derived::everyday_pipelines_dotnet_and_concatenation_pass ... ok
+test bot_permissions::tests::guard_powershell::destructive_cmdlets_stay_in_the_bots_own_folders ... ok
+test config::overridden::tests::a_custom_home_is_an_override ... ok
+test config::overridden::tests::a_symlink_to_a_default_home_is_not_an_override ... ok
+test config::overridden::tests::an_unset_variable_is_not_an_override ... ok
+test config::overridden::tests::case_matters_only_where_the_file_system_ignores_it ... ok
+test config::overridden::tests::either_default_home_is_not_an_override ... ok
+test config::task_limits::tests::a_project_override_replaces_only_what_it_names ... ok
+test config::tests::a_check_timeout_of_zero_is_refused ... ok
+test config::tests::auto_compact_window_can_be_turned_off ... ok
+test config::tests::auto_compact_window_defaults_below_the_model_window ... ok
+test config::tests::auto_compact_window_is_clamped_into_the_accepted_range ... ok
+test config::tests::classic_renderer_is_on_unless_configured_off ... ok
+test config::tests::composer_bots_parse_beside_the_global_switch ... ok
+test config::tests::gravity_home_uses_the_new_namespace ... ok
+test contain::tests::a_future_that_panics_becomes_the_fallback ... ok
+test contain::tests::a_panic_becomes_the_fallback ... ok
+test contain::tests::the_panic_text_is_kept ... ok
+test bot_permissions::tests::guard_powershell::ordinary_powershell_work_passes ... ok
+test bot_permissions::tests::guard_ps_derived::pipeline_paths_are_judged_like_the_no_path_case ... ok
+test bot_permissions::tests::guard_install::the_daemons_commands_go_to_this_computers_daemon_only ... ok
+test check_tree::tests::a_tree_over_its_time_is_killed_before_its_runner_is_reaped ... ok
+test check_tree::tests::a_tree_is_never_signalled_once_its_runner_is_reaped ... ok
+test check_tree::tests::a_stopped_tree_says_it_was_stopped ... ok
+test bot_permissions::tests::guard_worktrees::a_glob_through_the_old_home_link_is_denied_before_and_after_the_move ... ok
+test db::board_import_tests::an_empty_board_takes_the_key_and_every_entry_keeps_or_gets_an_id ... ok
+test db::board_import_tests::flow_metrics_can_leave_imported_items_out ... ok
+test db::board_import_tests::a_rerun_creates_nothing_and_a_dry_run_writes_nothing ... ok
+test db::board_import_tests::ids_made_on_the_board_are_not_taken_for_imported_ones ... ok
+test db::board_import_tests::nothing_lands_where_only_the_daemon_moves_it ... ok
+test db::board_import_tests::the_owner_closes_an_imported_item_out_of_verify_and_it_is_logged ... ok
+test db::board_import_tests::the_owner_does_not_close_an_item_in_an_assembling_package ... ok
+test db::board_tests::a_linked_tester_is_seeded_with_its_machine ... ok
+test db::board_tests::a_new_board_gets_columns_templates_and_guessed_roles_once ... ok
+test db::board_tests::a_stale_version_is_refused_with_the_current_item ... ok
+test db::board_schema_tests::every_contract_value_passes_the_schema_checks ... ok
+test db::board_tests::cards_flag_blocked_and_count_criteria ... ok
+test db::board_import_tests::it_runs_only_on_the_home_and_never_renames_items ... ok
+test db::board_tests::board_keys_stay_unique_across_projects ... ok
+test db::board_tests::items_take_sequential_ids_and_rank_last_in_the_inbox ... ok
+test db::board_tests::moves_record_where_from_and_stamp_done ... ok
+test db::board_tests::links_are_recorded_once ... ok
+test db::decisions_list::tests::punctuation_only_does_not_narrow ... ok
+test db::decisions_list::tests::quotes_every_term_and_drops_syntax ... ok
+test db::checks_tests::only_a_heads_author_or_pusher_wrote_it ... ok
+test db::board_tests::search_finds_titles_descriptions_and_comments ... ok
+test db::board_tests::ranking_places_an_item_between_neighbours ... ok
+test db::checks_tests::a_pass_counts_for_every_commit_with_the_same_tree_and_nothing_else ... ok
+test db::checks_tests::queueing_a_head_again_keeps_its_results ... ok
+test db::checks_tests::machine_tools_replace_what_the_computer_reported_before ... ok
+test db::decisions_tests::a_gate_refuses_a_transition_from_the_wrong_state ... ok
+test db::decisions_tests::a_decision_round_trips_through_the_row_mapper ... ok
+test db::decisions_tests::a_hold_that_has_run_out_comes_back ... ok
+test db::checks_tests::the_checks_migration_runs_again_without_losing_results ... ok
+test db::decisions_tests::a_relayed_ruling_can_only_be_confirmed_once ... ok
+test db::decisions_tests::a_settled_decision_is_no_longer_a_duplicate_to_worry_about ... ok
+test db::decisions_tests::an_urgent_decision_and_a_near_deadline_are_counted_separately ... ok
+test db::decisions_tests::discarding_a_draft_puts_the_decision_back_on_the_pending_list ... ok
+test bot_permissions::tests::guard_h155_ce032::linux_home_globs_are_judged ... ok
+test db::decisions_tests::full_text_search_follows_an_edit ... ok
+test db::decisions_tests::the_badge_counts_drafts_but_not_what_the_owner_parked ... ok
+test db::decisions_tests::publishing_twice_notifies_a_bot_once ... ok
+test db::decisions_tests::the_same_question_asked_twice_is_recognised_whatever_the_punctuation ... ok
+test db::decisions_tests::the_cap_does_not_apply_to_a_ruling_already_given ... ok
+test db::decisions_tests::one_bot_cannot_bury_the_inbox ... ok
+test db::guardrails::tests::routine_cards_and_board_homes_round_trip ... ok
+test db::guardrails::tests::retention_prunes_a_tasks_release_with_the_task ... ok
+test db::owner_messages::tests::a_peer_proof_is_one_hop ... ok
+test db::guardrails::tests::a_task_and_its_release_commit_together ... ok
+test db::owner_threads_tests::a_pin_is_stored_once ... ok
+test db::owner_threads_tests::an_answer_claim_is_given_back_only_when_nothing_was_posted ... ok
+test db::owner_messages::tests::records_once_and_never_changes ... ok
+test db::release_work::tests::a_rel_title_names_its_version_only ... ok
+test db::owner_threads_tests::a_thread_question_closes_when_the_owner_writes_or_dismisses ... ok
+test db::owner_threads_tests::unread_counts_the_bots_messages_after_the_read_mark ... ok
+test db::owner_threads_tests::the_thread_is_the_owner_and_the_bot_only ... ok
+test db::permissions::tests::profiles_default_to_standard_and_extras_replace ... ok
+test db::permissions::tests::the_table_accepts_every_extra ... ok
+test db::release_machines::tests::a_tester_tests_where_it_runs ... ok
+test db::prs_tests::prs_are_numbered_per_project_and_a_card_has_one_live_pr ... ok
+test db::releases_tests::the_releases_migration_runs_again_without_losing_packages ... ok
+test db::prs_tests::the_pr_migration_runs_again_without_losing_prs ... ok
+test db::runs_tests::cancelled_run_cannot_dispatch_after_the_state_transition ... ok
+test db::roles_migration_tests::an_unknown_role_row_is_skipped_not_fatal ... ok
+test db::runs_tests::overlap_transitions_cannot_revive_or_overwrite_a_cancelled_run ... ok
+test db::roles_migration_tests::the_role_rebuild_accepts_the_new_roles_and_runs_again ... ok
+test db::runs_tests::routine_retry_gets_a_fresh_message_and_delivery ... ok
+test db::tags_tests::a_tag_dates_itself_by_the_last_decision_filed_under_it ... ok
+test db::runs_tests::routine_completion_updates_only_the_correlated_run ... ok
+test db::settings::tests::meta_round_trips_and_overwrites ... ok
+test db::tags_tests::deleting_a_decision_leaves_the_bot_its_history ... ok
+test db::runs_tests::routine_occurrence_unique ... ok
+test db::tags_tests::a_tag_is_the_same_tag_whatever_its_case ... ok
+test db::tags_tests::a_tag_reports_how_much_settled_history_it_carries ... ok
+test db::tags_tests::merging_relinks_every_decision_and_keeps_the_history ... ok
+test db::tags_tests::deleting_a_tag_unfiles_the_decision_without_losing_it ... ok
+test db::tags_tests::retention_never_prunes_the_exchange_a_decision_cites ... ok
+test db::tags_tests::open_uses_counts_what_the_tag_still_owes_the_owner ... ok
+test db::tags_tests::renaming_onto_a_name_in_use_leaves_both_tags_alone ... ok
+test db::tags_tests::renaming_a_tag_renames_it_everywhere_it_is_filed ... ok
+test db::tags_tests::retiring_without_a_target_leaves_the_links_in_place ... ok
+test db::tags_tests::setting_tags_replaces_rather_than_adds ... ok
+test db::tests::a_task_without_a_deadline_never_expires ... ok
+test db::tests::closing_a_task_succeeds_exactly_once ... ok
+test db::tests::delivery_fails_after_max_attempts ... ok
+test db::tags_tests::the_grant_notes_hermes_already_wrote_become_its_own ... ok
+test db::tests::expiring_a_task_succeeds_exactly_once ... ok
+test db::tests::delivery_is_idempotent_on_key ... ok
+test db::tests::lease_and_retry_flow ... ok
+test db::tests::fts_search_finds_messages ... ok
+test holders::ledger::tests::a_detached_grandchild_stays_listed_after_its_session_ends ... ok
+test holders::ledger::tests::a_new_session_ends_the_bots_last_and_finished_sessions_are_forgotten ... ok
+test holders::ledger::tests::a_recycled_pid_is_never_listed ... ok
+test db::tests::fanout_counts_open_children_per_chain_position ... ok
+test holders::ledger::tests::children_keep_the_leaders_session_id_after_it_exits ... ok
+test holders::ledger::tests::procargs_env_is_read_past_the_path_and_arguments ... ok
+test holders::ledger::tests::the_environment_tag_finds_what_no_sweep_saw ... ok
+test holders::tests::a_held_file_error_is_access_denied_or_a_sharing_violation ... ok
+test db::tests::migrations_apply_twice ... ok
+test holders::tests::descendants_in_their_own_groups_are_found ... ok
+test holders::tests::holders_are_named_by_exe_and_pid ... ok
+test holders::tests::lsof_output_names_each_holder_once_preferring_its_cwd ... ok
+test holders::tests::recorded_sessions_round_trip_through_the_file ... ok
+test home::tests::a_pre_rename_daemon_holding_the_old_lock_blocks_the_claim ... ok
+test home::tests::a_second_daemon_cannot_claim_the_same_home ... ok
+test home::tests::clearing_the_runtime_port_leaves_nothing_to_read ... ok
+test home::tests::publishes_the_runtime_port_atomically ... ok
+test home::tests::reclaim_restarts_accumulate_until_they_are_cleared ... ok
+test home::tests::reclaim_restarts_outside_the_window_are_forgotten ... ok
+test db::tests::task_hop_limit_enforced ... ok
+test machine_tools::tests::versions_are_read_from_each_tools_own_words ... ok
+test mcp::board_schema::tests::every_tool_has_its_message_and_every_enum_resolves ... ok
+test mcp::board_schema::tests::short_names_decode_and_come_back_short ... ok
+test mcp::board_schema::tests::the_list_follows_roles ... ok
+test db::tests::reply_budget_is_an_atomic_gate ... ok
+test db::workers_tests::queue_is_fifo_and_reserves_names ... ok
+test db::workers_tests::a_temporary_bot_finishes_once_its_task_closes ... ok
+test db::typed_prompts::tests::a_typed_prompt_is_found_by_its_bot_and_digest ... ok
+test migrate_home::env_home_tests::the_home_notice_names_the_variable_only_when_it_overrides ... ok
+test db::workers_tests::workers_do_not_count_against_the_bot_cap ... ok
+test holders::ledger::tests::a_setsid_runner_outlives_its_session_and_is_still_found ... ok
+test migrate_home::env_home_tests::a_variable_naming_the_old_home_resolves_to_the_new_one_and_migrates ... ok
+test migrate_home::env_home_tests::without_the_variable_the_new_home_is_used_and_the_old_one_migrates ... ok
+test migrate_home::env_home_tests::a_custom_home_is_used_as_given_and_never_migrated_automatically ... ok
+test migrate_home::env_home_tests::an_inherited_variable_naming_the_real_home_is_an_override_under_a_scratch_user_home ... ok
+test migrate_home::settings_tests::a_rewrite_that_drops_a_deny_is_refused ... ok
+test migrate_home::env_home_tests::a_variable_naming_the_new_home_resolves_to_it_and_nothing_is_left_after ... ok
+test migrate_home::sql::tests::a_loose_rewrite_takes_every_windows_spelling ... ok
+test migrate_home::sql::tests::any_spelling_under_the_home_counts_as_under_it ... ok
+test migrate_home::sql::tests::rewrites_whole_paths_and_prefixes_only ... ok
+test migrate_home::resume_tests::a_recreated_old_home_fails_the_link_step_and_rolls_back ... ok
+test migrate_home::settings_tests::settings_permission_rules_follow_the_home_and_renamed_files ... ok
+test board::moves::tests::concurrent_moves_never_both_take_the_last_wip_slot ... ok
+test holders::tests::a_process_working_in_the_home_is_listed_and_only_an_owned_one_stopped ... ok
+test migrate_home::resume_tests::a_process_holding_the_old_home_blocks_the_move ... ok
+test migrate_home::tests::a_dry_run_lists_the_work_and_changes_nothing ... ok
+test machine_tools::tests::a_probe_names_the_os_and_skips_what_isnt_there ... ok
+test migrate_home::tests::a_running_daemon_blocks_the_move ... ok
+test migrate_home::tests::free_disk_space_is_known_on_every_platform ... ok
+test migrate_home::settings_tests::config_and_the_settings_it_names_are_rewritten_and_restored ... ok
+test model::tests::a_dropped_context_suffix_is_not_a_new_choice ... ok
+test model::tests::falls_back_to_the_model_a_turn_ran_with ... ok
+test model::tests::reads_the_newest_model_the_session_named ... ok
+test model::tests::returns_nothing_without_a_transcript ... ok
+test offboard::tests::an_owner_conversation_is_exempt_until_it_becomes_work ... ok
+test offboard::tests::bus_and_routine_turns_count_unless_the_routine_names_a_card ... ok
+test overrides::tests::clamps_like_the_config_does ... ok
+test overrides::tests::falls_back_to_the_config_until_set ... ok
+test overrides::tests::meta_value_round_trips ... ok
+test overrides::tests::restores_persisted_values_and_ignores_garbage ... ok
+test overview::tests::a_waiting_bot_keeps_when_it_started_waiting ... ok
+test overview::tests::an_older_peer_is_old_not_failed ... ok
+test overview::tests::only_a_real_change_counts ... ok
+test overview::tests::refreshes_coalesce_per_peer ... ok
+test overview::tests::rows_rank_by_pin_score_age_activity_and_name ... ok
+test overview::tests::the_overview_is_watched_after_a_fetch ... ok
+test owner_action::redact::tests::linux_and_windows_homes_are_masked_too ... ok
+test owner_action::redact::tests::secrets_in_output_are_masked_and_the_rest_kept ... ok
+test owner_action::redact::tests::the_tail_keeps_the_end_within_the_limit ... ok
+test migrate_home::resume_tests::a_crash_between_the_move_and_the_state_save_resumes_or_rolls_back ... ok
+test migrate_home::tests::a_non_empty_destination_blocks_the_move ... ok
+test owner_action::tests::a_run_reports_its_exit_and_output ... ok
+test owner_action::tests::a_local_connection_is_traced_to_its_process ... ok
+test owner_action::tests::powershell_gets_the_content_utf16_encoded ... ok
+test owner_action::tests::the_hash_covers_every_field ... ok
+test owner_action::validate::tests::a_bot_writable_path_is_flagged_unless_pinned ... ok
+test owner_action::validate::tests::nothing_hidden_gets_into_the_content ... ok
+test owner_action::validate::tests::timeouts_default_and_cap ... ok
+test paths::no_follow::tests::a_file_link_at_the_name_is_replaced_not_written_through ... ok
+test paths::no_follow::tests::a_folder_link_at_the_name_is_replaced_never_followed ... ok
+test owner_action::tests::a_proposal_cant_change_and_runs_once ... ok
+test paths::no_follow::tests::a_hard_link_to_a_file_elsewhere_is_not_read ... ok
+test paths::no_follow::tests::create_new_never_follows_a_dangling_link ... ok
+test paths::no_follow::tests::writes_plain_folders_and_refuses_a_link_at_any_part ... ok
+test paths::own::tests::only_paths_under_the_root_count_as_inside ... ok
+test paths::prompt::tests::budgets_delegation_with_the_enforced_numbers ... ok
+test paths::prompt::tests::claude_md_imports_and_explains_the_fact_file ... ok
+test paths::prompt::tests::distinguishes_the_owners_word_from_a_relay_of_it ... ok
+test paths::prompt::tests::facts_md_seed_names_the_bot ... ok
+test paths::prompt::tests::grants_inbound_messages_full_authority ... ok
+test paths::prompt::tests::includes_instructions_and_the_cap ... ok
+test paths::prompt::tests::omits_the_section_when_there_are_no_instructions ... ok
+test paths::prompt::tests::points_at_the_fact_file_that_survives_compaction ... ok
+test paths::prompt::tests::points_substance_at_the_artifacts_directory ... ok
+test paths::prompt::tests::states_the_no_acknowledgment_contract ... ok
+test paths::prompt::tests::tells_bots_to_keep_messages_short ... ok
+test paths::prompt::tests::tells_bots_where_a_question_for_the_owner_goes ... ok
+test paths::prompt_sections::tests::names_the_machines_a_linked_project_spans ... ok
+test paths::prompt_sections::tests::tells_a_bot_how_to_spawn_workers ... ok
+test paths::prompt_sections::tests::tells_bots_to_report_where_the_owner_looks ... ok
+test paths::prompt_sections::tests::tells_the_bot_about_its_own_browser ... ok
+test paths::prompt_sections::tests::tells_workers_and_their_parents_about_the_repository ... ok
+test paths::tests::hooks_go_over_the_local_endpoint_without_a_token ... ok
+test paths::tests::memory_files_are_never_overwritten_after_creation ... ok
+test paths::tests::only_composer_bots_get_detached_mcp_servers ... ok
+test paths::tests::regeneration_is_idempotent ... ok
+test paths::tests::seeding_backfills_only_the_missing_file ... ok
+test paths::tests::system_md_carries_instructions_and_is_regenerated ... ok
+test paths::tests::system_md_puts_all_work_on_the_board ... ok
+test paths::tests::system_md_speaks_of_hermes_and_the_registered_bus ... ok
+test paths::tests::system_md_states_this_machines_task_limits_and_the_note_cap ... ok
+test paths::tests::the_composer_switch_adds_the_provenance_hooks_and_nothing_else_does ... ok
+test paths::tests::the_session_start_hook_retries_a_daemon_that_is_still_booting ... ok
+test paths::trust::tests::a_broken_stale_lock_is_taken_even_when_breaking_it_used_up_the_wait ... ok
+test owner_action::tests::a_timeout_stops_the_run_and_everything_it_started ... ok
+test migrate_home::tests::a_run_moves_the_home_rewrites_paths_and_keeps_transcripts ... ok
+test paths::trust::tests::a_held_config_lock_defers_the_trust_write ... ok
+test paths::trust::tests::a_stale_config_lock_is_broken ... ok
+test paths::trust::tests::an_already_trusted_workspace_never_takes_the_lock ... ok
+test peer::artifacts::tests::a_result_without_a_listing_has_no_paths ... ok
+test peer::artifacts::tests::splits_the_listing_complete_task_writes ... ok
+test peer::artifacts::tests::takes_the_file_name_from_windows_and_unix_paths ... ok
+test peer::board_home::tests::a_remote_install_gets_urls_never_the_homes_paths ... ok
+test paths::trust::tests::trusting_workspace_creates_missing_claude_config_privately ... ok
+test peer::board_ids::tests::tool_results_rewrite_bot_ids_at_any_depth ... ok
+test peer::task_card::tests::a_task_frame_carries_its_card_and_an_older_one_has_none ... ok
+test peer::task_card::tests::a_task_frame_carries_its_release_and_an_older_one_has_none ... ok
+test paths::trust::tests::trusting_workspace_preserves_existing_claude_config ... ok
+test peer::term_mirror::tests::a_first_replay_needs_no_reset ... ok
+test peer::term_mirror::tests::a_restarted_peer_numbering_from_one_again_is_mirrored ... ok
+test peer::term_mirror::tests::a_resumed_replay_skips_what_the_mirror_already_holds ... ok
+test pr_cli::tests::a_number_and_dry_run ... ok
+test paths::no_follow::tests::a_folder_swapped_for_a_link_mid_write_is_never_followed ... ok
+test prs::anchor::tests::a_changed_or_removed_line_is_outdated ... ok
+test prs::anchor::tests::hunks_add_up ... ok
+test prs::anchor::tests::lines_before_a_change_stay_and_after_it_shift ... ok
+test peer::task_card::tests::only_the_board_home_names_a_tasks_release ... ok
+test prs::check_checkout::tests::a_checkout_that_cant_be_made_says_why ... ok
+test prs::check_checkout::tests::the_disk_floor_holds_only_below_it ... ok
+test prs::check_route::tests::a_machine_is_named_by_its_name_or_its_os ... ok
+test prs::check_route::tests::an_offline_or_missing_computer_makes_the_check_wait ... ok
+test prs::check_route::tests::each_check_goes_where_its_tools_are ... ok
+test prs::check_route::tests::the_cap_and_the_disk_floor_hold_a_check_back ... ok
+test prs::check_route::tests::the_program_a_check_runs_is_needed_too ... ok
+test prs::diff::tests::name_status_reads_each_kind ... ok
+test prs::diff::tests::numstat_counts_lines_and_marks_binaries_and_renames ... ok
+test prs::diff::tests::the_diff_stops_at_two_megabytes_on_a_whole_line ... ok
+test prs::feed::tests::a_change_is_published_once_and_round_trips_as_a_push ... ok
+test prs::owner::tests::a_peer_relayed_owner_act_is_refused ... FAILED
+test prs::owner::tests::areas_flagged_and_none_behave_and_security_always_needs_the_owner ... ok
+test prs::owner::tests::no_row_means_every_pr_waits_for_the_owner ... ok
+test prs::wire::tests::a_comment_shows_at_its_line_there_or_where_it_was_written ... ok
+test prs::wire::tests::a_linked_computers_log_ref_is_opaque_text ... ok
+test prs::wire::tests::a_pr_maps_its_names_to_wire_enums_and_refs ... ok
+test quiesce::fallback::tests::a_live_process_has_a_start_time_the_script_reads_the_same ... ok
+test quiesce::fallback::tests::names_shown_in_the_reason_are_one_printable_line ... ok
+test quiesce::fallback::tests::only_a_start_time_reading_goes_into_the_script ... ok
+test quiesce::fallback::tests::the_script_stops_only_the_processes_found_while_they_are_the_same ... ok
+test quiesce::outcome::tests::a_boot_before_the_install_started_keeps_the_pause ... ok
+test quiesce::outcome::tests::once_started_the_binary_hash_decides_and_version_is_the_fallback ... ok
+test quiesce::outcome::tests::the_summary_counts_what_the_pause_did_and_says_why_it_waits ... ok
+test prs::check_checkout::tests::a_checkout_is_fresh_at_the_exact_sha_and_runs_nothing ... ok
+test quiesce::pending::tests::a_fresh_file_blocks_and_a_stale_or_missing_one_does_not ... ok
+test quiesce::reap::tests::a_group_whose_leader_isnt_listed_is_never_signalled_as_a_group ... ok
+test quiesce::reap::tests::a_whole_session_group_gets_one_signal_and_nothing_untagged_is_a_target ... ok
+test quiesce::services::tests::a_service_is_stopped_only_while_it_runs_and_holds_the_home ... ok
+test quiesce::pending::tests::a_forged_why_or_release_id_never_reaches_the_message ... ok
+test quiesce::services::tests::the_defaults_ship_colima_and_lima_looked_up_in_fixed_places ... ok
+test quiesce::services::tests::commands_run_by_absolute_path_never_through_path ... ok
+test redact::tests::masks_basic_auth ... ok
+test redact::tests::masks_bearer_tokens_and_secret_flags ... ok
+test redact::tests::leaves_ordinary_commands_alone ... ok
+test redact::tests::masks_curl_user_password ... ok
+test redact::tests::masks_credential_header_values ... ok
+test redact::tests::masks_mysql_passwords ... ok
+test redact::tests::masks_known_token_prefixes ... ok
+test redact::tests::masks_secret_assignments_and_query_values ... ok
+test redact::tests::masks_url_user_info ... ok
+test redact::tests::non_ascii_words_pass_and_tokens_beside_them_are_masked ... ok
+test resume::tests::the_note_says_what_was_running_and_what_is_open ... ok
+test runtime::codex::observations::tests::a_new_file_without_headers_is_all_additions ... ok
+test runtime::codex::observations::tests::reads_a_unified_diff_as_hunks ... ok
+test runtime::codex::observations::tests::writes_tool_items_in_claude_codes_shape ... ok
+test runtime::codex::tests::the_server_never_inherits_the_daemon_home ... ok
+test runtime::pty::tests::a_bot_never_inherits_the_daemon_home ... ok
+test runtime::pty::tests::a_real_pty_burst_is_merged_into_few_frames ... ok
+test runtime::pty::tests::caps_a_merged_frame ... ok
+test runtime::pty::tests::emits_separate_frames_when_output_pauses ... ok
+test runtime::pty::tests::flushes_continuous_output_when_the_batch_deadline_expires ... ok
+test runtime::pty::tests::holds_an_incomplete_character_for_the_next_read ... ok
+test runtime::pty::tests::holds_back_incomplete_trailing_sequences ... ok
+test runtime::pty::tests::keeps_complete_four_byte_sequences ... ok
+test runtime::pty::tests::merges_a_burst_of_small_writes_into_one_frame ... ok
+test runtime::pty::tests::stops_once_the_consumer_is_gone ... ok
+test peer::panic_tests::a_peer_request_that_panics_answers_internal_and_the_link_goes_on ... ok
+test prs::anchor::git_tests::hunks_run_no_planted_diff_driver_or_textconv ... ok
+test safe_git::callers_tests::the_bot_controlled_paths_are_not_on_the_lists ... ok
+test safe_git::callers_tests::the_reader_sees_past_test_modules_and_spellings ... ok
+test safe_git::callers_tests::bot_paths_use_no_other_git_wrapper ... ok
+test safe_git::tests::a_local_run_reaches_no_remote_and_inherits_no_git_env ... ok
+test safe_git::tests::diffs_and_status_through_the_helper_run_nothing_planted ... ok
+test safe_git::tests::git_env_holds_only_the_fixed_variables ... ok
+test safe_git::tests::paths_reach_git_in_a_spelling_it_can_use ... ok
+test migrate_home::tests::a_transcript_dir_already_under_the_new_name_is_merged ... ok
+test scheduler::dispatch::tests::finds_the_run_id_in_the_turns_user_message ... ok
+test scheduler::dispatch::tests::finds_the_run_id_inside_claude_codes_peer_wrapper ... ok
+test scheduler::dispatch::tests::newer_ordinary_turn_does_not_reuse_an_older_run_marker ... ok
+test scheduler::dispatch::tests::ordinary_user_turn_has_no_run_id ... ok
+test scheduler::dispatch::tests::prompt_marker_cannot_override_the_envelope_run_id ... ok
+test scheduler::signals::tests::accepts_dotted_lowercase_names ... ok
+test scheduler::signals::tests::rejects_names_that_are_not_addresses ... ok
+test scheduler::tests::cron_next_occurrence_parses ... ok
+test scheduler::tests::interval_next_occurrence_aligns_to_anchor ... ok
+test scheduler::tests::oversized_interval_yields_none_instead_of_panicking ... ok
+test scheduler::tests::signal_trigger_has_no_time_occurrence ... ok
+test migrate_home::tests::a_second_run_is_a_no_op_and_nothing_is_pending ... ok
+test secrets::devices::tests::a_device_is_stored_as_a_hash_and_still_recognised ... ok
+test secrets::devices::tests::phase_two_hashes_old_device_files_and_deletes_owner_and_bot_tokens ... ok
+test secrets::vault::keychain::tests::peer_tokens_round_trip_through_the_keychain ... ignored, uses the login Keychain
+test secrets::vault::keychain::tests::switching_to_the_keychain_moves_peer_files_into_it ... ignored, uses the login Keychain
+test secrets::devices::tests::phase_two_pairs_devices_by_hash_only_and_drops_phase_one_plaintext ... ok
+test safe_git::tests::git_gets_no_folder_a_bot_could_fill ... ok
+test server::port::tests::keeps_the_configured_port_when_it_is_available ... ok
+test safe_git::callers_tests::callers_start_git_only_through_the_helper ... ok
+test server::port::tests::only_a_loopback_daemon_asked_to_negotiate_may_negotiate ... ok
+test server::port::tests::reads_the_version_out_of_a_health_response ... ok
+test server::port::tests::recognizes_windows_reserved_ports_without_masking_other_errors ... ok
+test server::port::tests::refuses_to_move_aside_for_another_daemon ... ok
+test server::port::tests::rejects_a_collision_without_negotiation ... ok
+test server::port::tests::the_grace_period_never_delays_a_strict_launch ... ok
+test server::port::tests::a_freed_configured_port_wakes_the_reclaim_watch ... ok
+test migrate_home::tests::an_interrupted_run_resumes_after_its_last_finished_step ... ok
+test service::reap::tests::stand_in_daemon ... ignored, run only as the stand-in daemon of the reap test
+test service::reap::tests::reaping_finds_a_daemon_by_its_executable ... ok
+test safe_git::tests::planted_fsmonitor_and_hooks_never_run_in_provision_or_cleanup ... ok
+test server::port::tests::negotiates_when_the_configured_port_is_taken ... ok
+test server::port::tests::waits_out_a_port_that_clears_during_the_grace_period ... ok
+test server::port::tests::a_daemon_too_busy_for_the_first_probe_still_stops_the_launch ... ok
+test migrate_home::tests::a_workspace_left_under_the_old_home_fails_the_database_step ... ok
+test service::sequence::premigrate_tests::a_failed_migration_rollback_leaves_the_legacy_service_stopped ... ok
+test service::sequence::tests::a_failed_first_install_removes_what_it_registered ... ok
+test service::sequence::premigrate_tests::a_failed_migration_rollback_still_restarts_the_current_service ... ok
+test service::sequence::tests::a_same_identity_upgrade_restores_its_old_definition ... ok
+test service::sequence::tests::restart_reinstalls_a_missing_binary_and_never_migrates ... ok
+test redact::tests::random_utf8_never_panics ... ok
+test service::sequence::tests::verification_rejects_a_short_or_altered_copy ... ok
+test service::sequence::tests::version_output_is_parsed_and_checked ... ok
+test service::stage::tests::an_overridden_home_leaves_the_default_legacy_home_alone ... ok
+test service::tests::agent_pid_is_read_from_launchctl_print ... ok
+test service::tests::install::a_failed_same_label_upgrade_reloads_the_previous_plist_and_binary ... ok
+test migrate_home::tests::rollback_restores_the_old_layout ... ok
+Backup...
+test service::sequence::premigrate_tests::a_holder_blocks_the_install_before_anything_is_stopped ... ok
+test service::tests::install::an_overridden_home_never_takes_over_the_pre_rename_agent ... ok
+test service::tests::install::restart_reinstalls_a_missing_binary_without_migrating ... ok
+test service::tests::plist_bakes_absolute_paths ... ok
+test service::tests::plist_path_covers_the_claude_code_installer_location ... ok
+test service::sequence::tests::a_blocked_migration_stops_nothing ... ok
+test service::tests::status::the_status_report_names_a_lone_legacy_agent_and_an_unmanaged_daemon ... ok
+test service::tests::the_legacy_plist_is_the_pre_rename_label ... ok
+test service_audit::tests::a_line_says_when_what_and_who ... ok
+test service_audit::tests::the_caller_is_this_test_runner_s_parent ... ok
+Move...
+RenameFiles...
+Database...
+Transcripts...
+Symlink...
+Worktrees...
+migrated to /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpMZj8eq/user/.thehermes
+test service::sequence::premigrate_tests::the_other_rollback_steps_run_when_the_migration_rollback_fails ... ok
+test supervisor::claim::tests::concurrent_starts_launch_one_runtime ... ok
+test supervisor::composer::draft_tests::a_paste_is_a_draft_and_ctrl_u_clears_it ... ok
+test supervisor::composer::draft_tests::a_paste_left_after_text_blocks_until_the_owner_clears_it ... ok
+test supervisor::composer::draft_tests::a_typed_draft_blocks_until_erased_or_sent_and_never_lapses ... ok
+test supervisor::composer::draft_tests::alt_bracket_then_typing_is_a_draft ... ok
+test supervisor::composer::draft_tests::an_edit_that_cant_be_counted_lapses_once_idle ... ok
+test supervisor::composer::draft_tests::history_recall_blocks_but_mints_no_keyed_token ... ok
+test supervisor::composer::draft_tests::terminal_reports_and_moves_dont_mark_a_draft ... ok
+test supervisor::composer::draft_tests::the_paste_must_be_the_first_text_on_its_line ... ok
+test supervisor::composer::tests::a_body_can_not_close_the_paste_or_send_keys ... ok
+test supervisor::composer::tests::a_dialog_the_owners_draft_or_a_pending_delivery_defers ... ok
+test supervisor::composer::tests::a_forged_prompt_is_blocked ... ok
+test supervisor::composer::tests::a_keyed_token_lives_two_seconds_when_idle ... ok
+test supervisor::composer::tests::a_long_message_is_typed_as_its_first_line_and_a_pointer ... ok
+test supervisor::composer::tests::a_typed_token_expires_thirty_seconds_after_the_turn_ends ... ok
+test supervisor::composer::tests::an_enter_that_submits_nothing_leaves_no_token ... ok
+test supervisor::composer::tests::at_most_three_tokens_are_held ... ok
+test supervisor::composer::tests::nonces_differ ... ok
+test supervisor::composer::tests::only_the_nonce_and_body_on_screen_count_as_the_echo ... ok
+test supervisor::composer::tests::paste_mode_follows_the_output_even_split_across_writes ... ok
+test supervisor::composer::tests::the_owner_typing_a_line_passes_once ... ok
+test supervisor::composer::tests::the_typed_text_never_starts_with_a_composer_command ... ok
+test supervisor::composer::tests::the_typed_text_passes_and_nothing_else_spends_its_token ... ok
+test supervisor::composer::tests::vim_mode_is_never_typed_into ... ok
+test supervisor::composer::tests::while_working_a_keyed_token_waits_for_the_next_tool_boundary ... ok
+test supervisor::claim::tests::a_failed_start_releases_the_bot_for_the_next ... ok
+test supervisor::hooks::tests::reads_the_tool_from_a_permission_notification ... ok
+test supervisor::session_hooks::tests::a_failed_write_falls_back_to_the_inbox_and_logs_why ... ok
+test supervisor::session_hooks::tests::a_skipped_write_falls_back_to_the_inbox ... ok
+test supervisor::session_hooks::tests::the_composer_is_on_only_when_the_hooks_were_written ... ok
+test supervisor::termio::tests::the_repaint_wait_says_whether_the_runtime_answered ... ok
+test supervisor::deliver::tests::a_session_being_restarted_takes_no_message ... ok
+test service::sequence::premigrate_tests::a_migration_refused_after_the_stop_restarts_the_legacy_service ... ok
+test service::sequence::premigrate_tests::an_owned_holder_left_after_the_stop_is_caught_and_undone ... ok
+test supervisor::typing::tests::a_dialog_arriving_during_the_echo_wait_gets_no_cr ... ok
+test supervisor::typing::tests::a_bot_not_named_keeps_inbox_delivery ... ok
+Backup...
+test supervisor::typing::tests::a_dialog_hook_waits_for_the_cr_and_then_settles ... ok
+Move...
+RenameFiles...
+Database...
+Transcripts...
+Symlink...
+Worktrees...
+migrated to /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpuHsyPe/user/.thehermes
+test supervisor::typing::tests::an_open_dialog_or_pending_hook_defers_with_nothing_written ... ok
+test service::sequence::tests::the_legacy_service_goes_only_after_the_new_one_is_healthy ... ok
+test supervisor::typing::tests::deferred_and_refused_deliveries_say_why ... ok
+test supervisor::typing::tests::a_typed_delivery_logs_its_source_and_outcome_without_the_text ... ok
+test supervisor::typing::tests::deliveries_to_one_bot_are_serialised ... ok
+test supervisor::typing::tests::typed_text_submits_after_its_echo_and_passes_as_the_owners ... ok
+test supervisor::watchdog::tests::a_connected_session_is_left_alone_and_recovers_from_a_give_up ... ok
+test supervisor::watchdog::tests::a_hung_start_stops_holding_its_slot_after_the_warmup ... ok
+Backup...
+Move...
+RenameFiles...
+Database...
+Transcripts...
+Symlink...
+Worktrees...
+migrated to /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYyqbnc/user/.thehermes
+test service::tests::install::a_pre_rename_agent_is_migrated_and_removed_once_the_new_one_is_healthy ... ok
+test supervisor::typing::tests::no_echo_no_cr ... ok
+test supervisor::watchdog::tests::a_busy_config_lock_defers_the_start_and_retries ... ok
+test supervisor::watchdog::tests::a_mass_start_is_staggered_but_codex_is_not_held_back ... ok
+test service::tests::premigrate::a_migration_refused_after_the_bootout_reloads_the_pre_rename_agent ... ok
+test supervisor::watchdog::tests::toast::the_toast_names_one_bot_or_counts_many ... ok
+test terminal::tests::a_mid_session_replay_starts_at_a_line_boundary ... ok
+test terminal::tests::a_mid_session_replay_without_a_line_boundary_is_empty ... ok
+test terminal::tests::coalesce_keeps_an_oversized_frame_whole ... ok
+test terminal::tests::coalesce_merges_small_frames_up_to_the_cap ... ok
+test terminal::tests::newer_than_follows_a_live_cursor_and_reports_eviction ... ok
+test terminal::tests::replay_reports_gaps_and_idle_cursors ... ok
+test terminal::tests::replay_respects_cursor_and_capacity ... ok
+test workers::repo::tests::a_salvage_branch_is_the_workers_name_and_id ... ok
+test supervisor::watchdog::tests::a_silent_session_stops_holding_its_slot_after_the_warmup ... ok
+test supervisor::watchdog::tests::a_session_that_never_connects_is_restarted_then_given_up_on ... ok
+test supervisor::watchdog::tests::a_turn_in_flight_is_not_cut_off ... ok
+test supervisor::watchdog::tests::toast::a_bot_between_watchdog_restarts_holds_the_toast ... ok
+test workers::scratch::tests::making_a_tree_writable_never_touches_what_links_point_to ... ok
+test workers::scratch::tests::only_a_retired_workers_workspace_under_projects_is_cleaned ... ok
+test workers::scratch::tests::only_workers_get_a_scratch_folder_and_windows_ones_a_shared_target ... ok
+test workers::scratch::tests::read_only_files_are_removed_too ... ok
+test workers::spawn::tests::headline_is_the_first_line_cut_short ... ok
+test workers::target::tests::a_bot_builds_into_its_own_folder_unless_it_has_one ... ok
+test workers::scratch::tests::a_bot_session_gets_its_own_cargo_target ... ok
+test workers::scratch::tests::a_repository_that_cant_be_bundled_is_kept ... ok
+test worktree::tests::cleanup_refuses_foreign_directories ... ok
+test workers::target::tests::a_deleted_bots_target_goes ... ok
+test supervisor::watchdog::tests::toast::bots_that_dont_connect_together_are_told_in_one_toast ... ok
+test ws::binary::tests::a_board_request_is_served ... ok
+test ws::binary::tests::a_client_may_not_send_a_push ... ok
+test ws::binary::tests::a_home_request_is_served ... ok
+test ws::binary::tests::a_pr_request_is_served ... ok
+test ws::binary::tests::an_envelope_is_answered_under_its_own_request_id ... ok
+test ws::binary::tests::garbage_is_refused_without_a_request_id ... ok
+test ws::board::tests::a_lagging_connection_is_told_to_resync ... ok
+test ws::owner_auth::tests::terminal_input_and_permission_answers_are_owner_driven ... ok
+test worktree::tests::provision_copies_allowlist_and_writes_meta ... ok
+test workers::scratch::tests::a_retired_workers_clone_scratch_and_worktrees_go ... ok
+test worktree::tests::provision_rejects_bad_base_ref_and_traversal ... ok
+test worktree::tests::cleanup_keeps_dirty_worktrees ... ok
+test supervisor::watchdog::tests::the_owners_restart_gives_the_watchdog_its_budget_back ... ok
+test workers::scratch::tests::commits_no_remote_has_are_bundled_before_the_clone_goes ... ok
+test ws::panic_tests::a_binary_handler_that_panics_answers_internal_under_its_req_id ... ok
+test ws::panic_tests::a_connection_whose_task_panics_is_closed ... ok
+test ws::presence::tests::a_slow_handler_is_warned_with_its_kind_and_duration ... ok
+test ws::presence::tests::every_reason_reads_as_the_log_names_it ... ok
+test ws::terminal::tests::forwards_output_written_before_the_live_task_starts ... ok
+test ws::writer::tests::a_cleared_slot_sends_nothing ... ok
+test ws::writer::tests::a_stalled_link_skips_frames_and_lets_a_reply_through ... ok
+test ws::writer::tests::the_writer_pings_on_schedule_and_stops_when_the_connection_ends ... ok
+test ws::panic_tests::a_panic_mid_write_leaves_nothing_written_and_nothing_locked ... ok
+test ws::panic_tests::a_json_handler_that_panics_answers_internal ... ok
+test ws::presence::tests::a_client_that_closes_logs_its_connect_and_disconnect ... ok
+test ws::panic_tests::a_spawned_handler_that_panics_answers_internal ... ok
+test ws::presence::tests::a_device_with_two_sockets_is_logged_and_neither_is_closed ... ok
+test ws::presence::tests::a_refused_credential_logs_auth_refused_without_the_token ... ok
+Backup...
+Move...
+RenameFiles...
+Database...
+Transcripts...
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmp58XiSQ-user--gravity-projects-app-bots-lead-workspace", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmp58XiSQ-user--thehermes-projects-app-bots-lead-workspace" }
+undo Database { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.thehermes" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.thehermes/logs/gravityd.err.log", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.thehermes/logs/hermesd.err.log" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.thehermes/gravityd.toml", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.thehermes/hermesd.toml" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.thehermes" }
+rolled back; /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp58XiSQ/user/.gravity is as it was
+Backup...
+Move...
+RenameFiles...
+Database...
+undo Database { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpVUKhpB/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpVUKhpB/user/.thehermes" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpVUKhpB/user/.thehermes/logs/gravityd.err.log", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpVUKhpB/user/.thehermes/logs/hermesd.err.log" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpVUKhpB/user/.thehermes/gravityd.toml", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpVUKhpB/user/.thehermes/hermesd.toml" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpVUKhpB/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpVUKhpB/user/.thehermes" }
+rolled back; /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpVUKhpB/user/.gravity is as it was
+Backup...
+Move...
+RenameFiles...
+Database...
+Transcripts...
+Symlink...
+Worktrees...
+migrated to /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.thehermes
+undo Symlink { path: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.gravity" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmp8nRntZ-user--gravity-projects-app-bots-lead-workspace", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmp8nRntZ-user--thehermes-projects-app-bots-lead-workspace" }
+undo Database { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.thehermes" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.thehermes/logs/gravityd.err.log", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.thehermes/logs/hermesd.err.log" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.thehermes/gravityd.toml", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.thehermes/hermesd.toml" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.thehermes" }
+rolled back; /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp8nRntZ/user/.gravity is as it was
+Backup...
+Move...
+RenameFiles...
+Database...
+Transcripts...
+Symlink...
+Worktrees...
+migrated to /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.thehermes
+undo Symlink { path: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.gravity" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmpYL4aok-user--gravity-projects-app-bots-lead-workspace", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmpYL4aok-user--thehermes-projects-app-bots-lead-workspace" }
+undo Database { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.thehermes" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.thehermes/logs/gravityd.err.log", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.thehermes/logs/hermesd.err.log" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.thehermes/gravityd.toml", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.thehermes/hermesd.toml" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.thehermes" }
+rolled back; /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpYL4aok/user/.gravity is as it was
+Backup...
+Move...
+RenameFiles...
+Database...
+Transcripts...
+Symlink...
+Worktrees...
+migrated to /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.thehermes
+undo Symlink { path: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.gravity" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmpfST7UC-user--gravity-projects-app-bots-lead-workspace", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmpfST7UC-user--thehermes-projects-app-bots-lead-workspace" }
+undo Database { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.thehermes" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.thehermes/logs/gravityd.err.log", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.thehermes/logs/hermesd.err.log" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.thehermes/gravityd.toml", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.thehermes/hermesd.toml" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.thehermes" }
+rolled back; /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpfST7UC/user/.gravity is as it was
+Backup...
+Move...
+RenameFiles...
+Database...
+Transcripts...
+Symlink...
+Worktrees...
+migrated to /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.thehermes
+undo Symlink { path: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.gravity" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmpBRoVNa-user--gravity-projects-app-bots-lead-workspace", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmpBRoVNa-user--thehermes-projects-app-bots-lead-workspace" }
+undo Database { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.thehermes" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.thehermes/logs/gravityd.err.log", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.thehermes/logs/hermesd.err.log" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.thehermes/gravityd.toml", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.thehermes/hermesd.toml" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.thehermes" }
+rolled back; /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpBRoVNa/user/.gravity is as it was
+Backup...
+Move...
+RenameFiles...
+Database...
+Transcripts...
+Symlink...
+Worktrees...
+migrated to /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.thehermes
+undo Symlink { path: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.gravity" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmpAC3WBC-user--gravity-projects-app-bots-lead-workspace", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmpAC3WBC-user--thehermes-projects-app-bots-lead-workspace" }
+undo Database { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.thehermes" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.thehermes/logs/gravityd.err.log", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.thehermes/logs/hermesd.err.log" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.thehermes/gravityd.toml", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.thehermes/hermesd.toml" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.thehermes" }
+rolled back; /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmpAC3WBC/user/.gravity is as it was
+test service::sequence::tests::a_failure_at_any_step_restores_the_legacy_service_and_the_home ... ok
+Backup...
+Move...
+RenameFiles...
+Database...
+Transcripts...
+Symlink...
+Worktrees...
+migrated to /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.thehermes
+undo Symlink { path: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.gravity" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmp7HOors-user--gravity-projects-app-bots-lead-workspace", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.claude/projects/-var-folders-00-qtdh5vjs2kxfggxn64tk4l240000gn-T--tmp7HOors-user--thehermes-projects-app-bots-lead-workspace" }
+undo Database { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.thehermes" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.thehermes/logs/gravityd.err.log", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.thehermes/logs/hermesd.err.log" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.thehermes/gravityd.toml", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.thehermes/hermesd.toml" }
+undo Rename { from: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.gravity", to: "/var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.thehermes" }
+rolled back; /var/folders/00/qtdh5vjs2kxfggxn64tk4l240000gn/T/.tmp7HOors/user/.gravity is as it was
+test service::tests::install::a_failure_at_each_step_reloads_the_pre_rename_agent ... ok
+test migrate_home::resume_tests::a_crash_after_any_step_resumes_or_rolls_back has been running for over 60 seconds
+test migrate_home::resume_tests::a_crash_after_any_step_resumes_or_rolls_back ... ok
+
+failures:
+
+---- prs::owner::tests::a_peer_relayed_owner_act_is_refused stdout ----
+
+thread 'prs::owner::tests::a_peer_relayed_owner_act_is_refused' (35478256) panicked at crates/hermesd/src/prs/owner_tests.rs:90:5:
+assertion failed: provenance(&peer).is_err()
+
+
+failures:
+    prs::owner::tests::a_peer_relayed_owner_act_is_refused
+
+test result: FAILED. 783 passed; 1 failed; 3 ignored; 0 measured; 0 filtered out; finished in 81.11s
+
+error: test failed, to rerun pass `-p hermesd --lib`
+verify exit 101
