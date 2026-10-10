@@ -63,3 +63,17 @@ fn composer_bots_parse_beside_the_global_switch() {
     assert_eq!(cfg.delivery.composer_bots, ["Composer Test"]);
     assert!(Config::default().delivery.composer_bots.is_empty());
 }
+
+#[test]
+fn a_check_timeout_of_zero_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("daemon.toml");
+    std::fs::write(&path, "[checks]\ntimeout_secs = 0\n").unwrap();
+    let error = Config::load(Some(&path)).unwrap_err();
+    assert!(
+        format!("{error:#}").contains("checks.timeout_secs"),
+        "{error:#}"
+    );
+    std::fs::write(&path, "[checks]\ntimeout_secs = 60\n").unwrap();
+    assert_eq!(Config::load(Some(&path)).unwrap().checks.timeout_secs, 60);
+}

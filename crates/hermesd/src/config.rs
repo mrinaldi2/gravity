@@ -315,6 +315,12 @@ impl Config {
             Config::default()
         };
         crate::board::release::confine::check_at_load(&mut cfg);
+        // H-291 S3: 0 would stop every check as soon as it starts.
+        anyhow::ensure!(
+            cfg.checks.timeout_secs > 0,
+            "checks.timeout_secs must be more than 0 in {}",
+            path.display()
+        );
         Ok(cfg)
     }
 

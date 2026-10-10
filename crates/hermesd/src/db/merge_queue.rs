@@ -62,6 +62,8 @@ impl BoardTx<'_> {
              VALUES (?1, ?2, 'queued', ?3, ?4, ?3)",
             params![pr.id, pr.project_id, ts(at), pr.head_patch_id],
         )?;
+        self.note_queue(&pr.project_id);
+        self.note_pr(pr);
         Ok(())
     }
 
@@ -72,7 +74,11 @@ impl BoardTx<'_> {
             "DELETE FROM pr_merge_stuck WHERE pr_id = ?1",
             params![pr_id],
         )?;
-        Ok(())
+        self.conn.execute(
+            "DELETE FROM pr_merge_check WHERE pr_id = ?1",
+            params![pr_id],
+        )?;
+        self.note_queue_of(pr_id)
     }
 
     /// Moves a queue row on: `window` with its end, `handed` with the task,
@@ -92,7 +98,7 @@ impl BoardTx<'_> {
              WHERE pr_id = ?1",
             params![pr_id, state, merge_at.map(ts), task_id, patch_id, ts(at)],
         )?;
-        Ok(())
+        self.note_queue_of(pr_id)
     }
 
     /// The PR's state as the queue moves it: `merging` in the window, `open`
@@ -102,6 +108,7 @@ impl BoardTx<'_> {
             "UPDATE pr SET state = ?2, version = version + 1, updated_at = ?3 WHERE id = ?1",
             params![pr.id, state.as_str(), ts(chrono::Utc::now())],
         )?;
+        self.note_pr(pr);
         Ok(())
     }
 
@@ -111,7 +118,7 @@ impl BoardTx<'_> {
             "INSERT OR IGNORE INTO review_withdrawn(review_id, by, at) VALUES (?1, ?2, ?3)",
             params![review_id, by, ts(chrono::Utc::now())],
         )?;
-        Ok(())
+        self.note_pr_of(super::pr_changes::PrPart::Review, review_id)
     }
 
     /// Projects with a live PR or a queue row.

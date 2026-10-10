@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, OptionalExtension, Row};
 
 use super::board_tx::BoardTx;
+use super::pr_changes::PrPart;
 use super::{parse_ts, ts};
 use crate::prs::review_model::{Finding, Review, Verdict};
 
@@ -67,6 +68,7 @@ impl BoardTx<'_> {
                 ts(now())
             ],
         )?;
+        self.note_pr_id(new.pr_id)?;
         self.review(&id)?
             .ok_or_else(|| anyhow::anyhow!("review {id} vanished"))
     }
@@ -100,7 +102,7 @@ impl BoardTx<'_> {
             "UPDATE review SET findings = ?2 WHERE id = ?1",
             params![id, serde_json::to_string(findings)?],
         )?;
-        Ok(())
+        self.note_pr_of(PrPart::Review, id)
     }
 
     /// The roles the PR's head requires (§4.1), replacing the last set.
@@ -113,7 +115,7 @@ impl BoardTx<'_> {
                 params![pr_id, role],
             )?;
         }
-        Ok(())
+        self.note_pr_id(pr_id)
     }
 
     pub fn pr_needs(&self, pr_id: &str) -> anyhow::Result<Vec<String>> {

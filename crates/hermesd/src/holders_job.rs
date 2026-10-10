@@ -15,6 +15,18 @@ use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
 
 const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION: u32 = 9;
 const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x2000;
+const JOB_OBJECT_BASIC_ACCOUNTING_INFORMATION: u32 = 1;
+
+/// `JOBOBJECT_BASIC_ACCOUNTING_INFORMATION`.
+#[repr(C)]
+#[derive(Default)]
+struct Accounting {
+    times: [i64; 4],
+    page_faults: u32,
+    total_processes: u32,
+    active_processes: u32,
+    terminated_processes: u32,
+}
 
 #[repr(C)]
 #[derive(Default)]
@@ -53,6 +65,13 @@ extern "system" {
     fn SetInformationJobObject(job: RawHandle, class: u32, info: *const c_void, len: u32) -> i32;
     fn AssignProcessToJobObject(job: RawHandle, process: RawHandle) -> i32;
     fn TerminateJobObject(job: RawHandle, code: u32) -> i32;
+    fn QueryInformationJobObject(
+        job: RawHandle,
+        class: u32,
+        info: *mut c_void,
+        len: u32,
+        returned: *mut u32,
+    ) -> i32;
     fn IsProcessInJob(process: RawHandle, job: RawHandle, result: *mut i32) -> i32;
     fn OpenProcess(access: u32, inherit: i32, pid: u32) -> RawHandle;
     fn TerminateProcess(process: RawHandle, code: u32) -> i32;
@@ -145,6 +164,24 @@ impl Job {
             return Err(io::Error::last_os_error());
         }
         Ok(())
+    }
+
+    /// Whether no process runs in the job any more (H-291: a check's tree
+    /// is gone before its checkout is removed).
+    pub fn is_empty(&self) -> bool {
+        let mut info = Accounting::default();
+        // SAFETY: `info` is the documented struct for this class, and its
+        // size is passed with it.
+        let ok = unsafe {
+            QueryInformationJobObject(
+                self.0.as_raw_handle(),
+                JOB_OBJECT_BASIC_ACCOUNTING_INFORMATION,
+                (&raw mut info).cast(),
+                std::mem::size_of::<Accounting>() as u32,
+                std::ptr::null_mut(),
+            )
+        };
+        ok != 0 && info.active_processes == 0
     }
 
     /// Whether `pid` runs in this job (or a job nested in it).

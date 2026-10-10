@@ -6,7 +6,7 @@ use rusqlite::{params, OptionalExtension};
 
 use super::board_tx::BoardTx;
 use super::{ts, Db};
-use crate::prs::model::Pr;
+use crate::prs::model::{Pr, PrState};
 use crate::prs::owner::{Mode, Settings, Shape};
 
 impl Db {
@@ -37,7 +37,19 @@ impl Db {
         settings: &Settings,
         set_by: &str,
     ) -> anyhow::Result<()> {
-        self.lock().execute(
+        // Whether each live PR waits for the owner changes with it.
+        self.board_tx(|t| t.set_review_settings(project_id, settings, set_by))
+    }
+}
+
+impl BoardTx<'_> {
+    fn set_review_settings(
+        &self,
+        project_id: &str,
+        settings: &Settings,
+        set_by: &str,
+    ) -> anyhow::Result<()> {
+        self.conn.execute(
             "INSERT INTO project_review_settings(project_id, owner_review, owner_review_areas,
                 set_by, set_at)
              VALUES (?1, ?2, ?3, ?4, ?5)
@@ -53,6 +65,9 @@ impl Db {
                 ts(now())
             ],
         )?;
+        for pr in self.prs(project_id, &[PrState::Open, PrState::Merging])? {
+            self.note_pr(&pr);
+        }
         Ok(())
     }
 }
@@ -64,7 +79,7 @@ impl BoardTx<'_> {
              ON CONFLICT(pr_id) DO UPDATE SET areas = excluded.areas, security = excluded.security",
             params![pr_id, serde_json::to_string(&shape.areas)?, shape.security],
         )?;
-        Ok(())
+        self.note_pr_id(pr_id)
     }
 
     /// What the PR's head touches; unknown yet reads as security work, so
@@ -115,6 +130,7 @@ impl BoardTx<'_> {
                 .conn
                 .execute("DELETE FROM pr_flag WHERE pr_id = ?1", params![pr.id])?,
         };
+        self.note_pr(pr);
         Ok(())
     }
 

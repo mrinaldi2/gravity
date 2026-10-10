@@ -288,6 +288,25 @@ pub fn hunks(cache: &Path, from: &str, to: &str, path: &str) -> anyhow::Result<O
     Ok(Some(hunks))
 }
 
+/// `git diff` of `from..to` with `how` (`--numstat -z`, `--name-status -z`,
+/// or nothing for the patch), renames found, limited to `path` when given.
+/// No textconv or external diff runs; blobs are fetched on demand.
+pub fn diff(
+    cache: &Path,
+    from: &str,
+    to: &str,
+    path: Option<&str>,
+    how: &[&str],
+) -> anyhow::Result<Vec<u8>> {
+    let mut args = vec!["diff", "--no-color", "--no-ext-diff", "--no-textconv", "-M"];
+    args.extend_from_slice(how);
+    args.extend_from_slice(&[from, to, "--"]);
+    args.extend(path);
+    let out = git(cache, &args)?;
+    ok(&out, "diff")?;
+    Ok(out.stdout)
+}
+
 /// Whether `path` at `commit` is a file (a blob), not missing or a folder.
 pub fn is_blob(cache: &Path, commit: &str, path: &str) -> anyhow::Result<bool> {
     let out = git(cache, &["ls-tree", commit, "--", path])?;

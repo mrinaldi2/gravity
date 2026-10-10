@@ -41,7 +41,7 @@ pub(super) fn complete(conn: &Connection, release: &mut Release) -> rusqlite::Re
     release.plan = plan;
     release.work_item_id = super::release_work::work_item_in(conn, &release.id)?;
     // Shown, never a gate: a failure leaves the list empty.
-    release.tests_required = machines::tested_on(&BoardTx { conn }, release).unwrap_or_default();
+    release.tests_required = machines::tested_on(&BoardTx::new(conn), release).unwrap_or_default();
     Ok(())
 }
 

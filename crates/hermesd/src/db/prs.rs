@@ -182,6 +182,7 @@ impl BoardTx<'_> {
             ],
         )?;
         self.add_pr_push(&id, new.head_sha, new.patch_id, Some(new.author))?;
+        self.note_pr_id(&id)?;
         self.pr(new.project_id, number)?
             .ok_or_else(|| anyhow::anyhow!("PR #{number} vanished"))
     }
@@ -197,7 +198,7 @@ impl BoardTx<'_> {
             "INSERT INTO pr_push(pr_id, sha, patch_id, pushed_by, at) VALUES (?1, ?2, ?3, ?4, ?5)",
             params![pr_id, sha, patch_id, pushed_by, ts(now())],
         )?;
-        Ok(())
+        self.note_pr_id(pr_id)
     }
 
     /// A reported head becomes the PR's head; it is no longer unreported.
@@ -243,6 +244,7 @@ impl BoardTx<'_> {
              WHERE id = ?1",
             params![pr.id, reason, at],
         )?;
+        self.note_pr(pr);
         Ok(())
     }
 
@@ -283,7 +285,7 @@ impl BoardTx<'_> {
                 reported_at = excluded.reported_at",
             params![pr_id, w.machine, w.bot_id, w.path, w.main_clone, ts(now())],
         )?;
-        Ok(())
+        self.note_pr_id(pr_id)
     }
 
     pub fn pr_worktrees(&self, pr_id: &str) -> anyhow::Result<Vec<PrWorktree>> {

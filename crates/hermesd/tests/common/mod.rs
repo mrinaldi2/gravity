@@ -25,6 +25,7 @@ pub mod grants;
 pub mod ios_targets;
 pub mod peer_board;
 pub mod peers;
+pub mod pr_wire;
 pub mod proxy;
 pub mod prs;
 pub mod release_phone;

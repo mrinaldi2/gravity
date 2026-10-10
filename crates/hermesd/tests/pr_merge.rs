@@ -32,12 +32,13 @@ fn set_policy(r: &Repo) {
     git(&main, &["push", "-q", "origin", "main"]);
 }
 
-/// Every queued check on `sha` runs on the daemon's runner and passes.
+/// Every queued check on `sha` runs on the daemon's runner and passes: the
+/// result comes from its exit status, never from a bot (H-283).
 async fn pass_checks(r: &mut Repo, sha: &str) {
     let app = r.pair.d.app.clone();
     checks::dispatch(&app, &r.project, sha, "unit", SYSTEM_RUNNER).unwrap();
-    let ran = r.dev.join(format!("unit-{sha}.log"));
-    std::fs::write(&ran, "ok\n").unwrap();
+    let log = r.dev.join(format!("unit-{sha}.log"));
+    std::fs::write(&log, "ok\n").unwrap();
     let id = app
         .db
         .board_read(|t| t.check_run(&r.project, sha, "unit"))
@@ -50,7 +51,7 @@ async fn pass_checks(r: &mut Repo, sha: &str) {
         "mac",
         CheckResult::Pass,
         "exited 0",
-        RunLog::Here(ran),
+        RunLog::Here(log),
     )
     .unwrap();
 }

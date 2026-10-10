@@ -5,6 +5,7 @@
 
 use bus::contract::board::{BoardPush, BoardRequest, BoardResponse};
 use bus::contract::home::{HomeRequest, HomeResponse};
+use bus::contract::pr::{PrPush, PrRequest, PrResponse};
 use bus::contract::wire::{envelope::Body, Envelope, Error};
 use prost::Message;
 
@@ -12,6 +13,7 @@ use prost::Message;
 pub(super) enum Frame {
     Board(u64, BoardRequest),
     Home(u64, HomeRequest),
+    Pr(u64, PrRequest),
     Refused(Vec<u8>),
 }
 
@@ -19,7 +21,7 @@ impl Frame {
     /// The request's id, for an answer when its handler fails.
     pub(super) fn req_id(&self) -> u64 {
         match self {
-            Frame::Board(req_id, _) | Frame::Home(req_id, _) => *req_id,
+            Frame::Board(req_id, _) | Frame::Home(req_id, _) | Frame::Pr(req_id, _) => *req_id,
             Frame::Refused(_) => 0,
         }
     }
@@ -29,6 +31,7 @@ impl Frame {
         match self {
             Frame::Board(_, r) => kind("board", r.request.as_ref()),
             Frame::Home(_, r) => kind("home", r.request.as_ref()),
+            Frame::Pr(_, r) => kind("pr", r.request.as_ref()),
             Frame::Refused(_) => "refused".to_string(),
         }
     }
@@ -52,17 +55,10 @@ pub(super) fn decode(frame: &[u8]) -> Frame {
             req_id,
             body: Some(Body::HomeRequest(request)),
         }) => return Frame::Home(req_id, request),
-        // The contract is in (H-265); the daemon serves it from H-273.
         Ok(Envelope {
             req_id,
-            body: Some(Body::PrRequest(_)),
-        }) => {
-            return Frame::Refused(error(
-                req_id,
-                "unsupported",
-                "pull requests aren't served by this daemon yet".to_string(),
-            ))
-        }
+            body: Some(Body::PrRequest(request)),
+        }) => return Frame::Pr(req_id, request),
         Ok(Envelope { req_id, body: None }) => (req_id, "empty envelope".to_string()),
         Ok(Envelope {
             req_id,
@@ -89,6 +85,14 @@ pub(super) fn response(req_id: u64, response: BoardResponse) -> Vec<u8> {
 
 pub(super) fn home_response(req_id: u64, response: HomeResponse) -> Vec<u8> {
     encode(req_id, Body::HomeResponse(response))
+}
+
+pub(super) fn pr_response(req_id: u64, response: PrResponse) -> Vec<u8> {
+    encode(req_id, Body::PrResponse(response))
+}
+
+pub(super) fn pr_push(push: PrPush) -> Vec<u8> {
+    encode(0, Body::PrPush(push))
 }
 
 pub(super) fn push(push: BoardPush) -> Vec<u8> {
@@ -167,13 +171,13 @@ mod tests {
     }
 
     #[test]
-    fn a_pr_request_is_unsupported_until_the_daemon_serves_it() {
+    fn a_pr_request_is_served() {
         let request = Envelope {
             req_id: 13,
-            body: Some(Body::PrRequest(bus::contract::pr::PrRequest::default())),
+            body: Some(Body::PrRequest(PrRequest::default())),
         }
         .encode_to_vec();
-        assert_eq!(error_of(decode(&request)), (13, "unsupported".into()));
+        assert!(matches!(decode(&request), Frame::Pr(13, _)));
     }
 
     #[test]

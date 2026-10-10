@@ -21,6 +21,7 @@ pub mod mirror;
 pub mod owner_actions;
 #[cfg(test)]
 mod panic_tests;
+mod pr_relay;
 mod receive;
 pub mod remote_bots;
 mod roster;
@@ -32,6 +33,7 @@ mod term_mirror;
 pub use board_home::spawn_relay as spawn_board_relay;
 pub use forward::{forward, ForwardError};
 pub use hub::{PeerError, PeerHub, LINK_CLOSED, NO_ANSWER};
+pub use pr_relay::spawn_relay as spawn_pr_relay;
 pub use socket::{peer_handler, spawn_dialer, spawn_dialers};
 
 /// A refusal with a code a client can act on. Raised on either side of a
