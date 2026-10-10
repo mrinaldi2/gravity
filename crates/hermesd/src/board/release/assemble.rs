@@ -151,6 +151,15 @@ pub fn attach_build(
                 release.status.as_str()
             )));
         }
+        // Cut from main, a release is built from its cut commit (H-272).
+        if let Some(cut) = &release.cut {
+            if build.source_commit.as_deref() != Some(cut.source_commit.as_str()) {
+                return Err(conflict(format!(
+                    "release {} was cut at {}; its builds name that commit as source_commit",
+                    release.name, cut.source_commit
+                )));
+            }
+        }
         // One release is one commit: every build names the same (ARCH-R52 M1).
         let other = release.builds.iter().find(|b| {
             b.platform != build.platform

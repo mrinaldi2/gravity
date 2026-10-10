@@ -1187,6 +1187,31 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
 - **Guard:** the `pr_merge` extra pre-approves exactly `<this daemon's binary> pr merge`, run as given (no `--config` or home override). It doesn't lift the main denies: a raw `git push … main` stays refused.
 - **Stuck merges:** a merge `handed` for 30 min goes to DevOps again (the old task expires) and is recorded in `pr_merge_stuck`. Until it merges or leaves the queue, the owner's Needs you shows a `PR_MERGE_STUCK` row (weight 2): "PR #n (card) is waiting for DevOps to merge it; asked N times".
 
+**Releases cut from main (PR-7, H-272; §6.1–6.4, UX-051 decision 10).** Migration `RELEASE_PR` adds `release_cut`, `release_pr`, `release_leave_out` and `pr_reverted`. A release is a commit on main: there are no release branches.
+- **`release_cut {version, commit?, release_id?, repo?}`** (MCP, DevOps):
+  - The commit defaults to main's tip. It must be on main (an ancestor of the tip, in the daemon's own fetch); any other commit is refused.
+  - **The range** runs from the commit of the latest release tagged before it (`previous_commit`) to the cut commit.
+  - **Contents:** the PRs merged in that range are the release's `prs`, and their cards are its items. A card whose PRs there were all reverted by a Leave out is not an item.
+  - **From a planned package** (`release_id`): planned cards with no merged PR show in `not_merged`, and merged PRs whose cards nobody planned are in `also_included`.
+  - The package is then `assembling`, and the gate is unchanged. Every build must name the cut commit as its `source_commit`.
+- **The release JSON gains** `tag` (empty until pushed), `tag_name` (`desktop-v<version>`), `commit`, `previous_commit`, `repo`, `prs`, `also_included` (`PrRef`s, plus `reverted` and `revert`) and `not_merged`. `pr_get` gains `reverted_by`.
+- **`hermesd release tag <release> [--dry-run]`** (DevOps, the `release_main` extra, run in its checkout):
+  - **The gate, `hermes/release_tag`:** the release was cut from main, the owner approved it, and its builds come from the cut commit.
+  - **In the checkout:** the commit must be on origin's main. The annotated `desktop-v<version>` is pushed, and nothing else; an existing tag must already be on that commit. `ls-remote` checks the result.
+  - **The record, `hermes/release_tagged`:** the daemon asks the repository itself before recording it.
+  - `release land` refuses a release cut from main.
+- **Leave out, `release_leave_out {project_id, release_id, prs}`** (WS approve; the owner's device or ticket only). It's possible before the tag, while the release is assembling, built, awaiting the owner or held.
+  - **The package starts over:** its items go back to Verify, the builds and tests are dropped, and the ruling is withdrawn.
+  - **Left-out PRs that merged after every kept one:** the release is cut again at the last kept merge (mode `recut`). Their cards stay in Verify, with a comment that they ship later.
+  - **Otherwise** (mode `revert`):
+    - A later kept PR that changed the same files is refused by name: "PR #n (card) changed <files> after #m".
+    - Otherwise DevOps gets a task to run **`hermesd release leave-out <id>`**. In a fresh worktree of origin's main it runs `git revert --no-edit <base>..<merged>` for each PR, newest first, pushes `leave-out/<version>-<id>`, and asks `hermes/leave_out_pushed`.
+    - The daemon opens that branch as the owner's PR (author `owner:<device or ticket>`): no bot review, no owner review, checks required, the normal queue and `hermesd pr merge`.
+    - **When it merges:** the left-out PRs get `reverted_by`, the release is cut again at the new main, and their cards go back to Doing ("left out of <version>").
+  - **Re-adding** a left-out change later is a new PR that reverts the revert.
+- The `release_main` extra pre-approves `release land`, `release tag` and `release leave-out`, run as given.
+- **Process rule (not code):** DevOps proposes at most one release a day.
+
 **Checks (PR-5a, H-270).**
 - **Which checks:** each reported head queues the required checks of the base's `.hermes/checks.toml`, filtered by the paths the PR changes. A head's own `checks.toml` changes nothing.
 - **A broken base file:** if the base's `checks.toml` doesn't parse, a single `.hermes/checks.toml` check is recorded as `error`, so nothing counts as checked.

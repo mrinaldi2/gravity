@@ -119,6 +119,8 @@ pub fn detail(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
     out["areas"] = owner["areas"].clone();
     out["mergeable"] = mergeable::compute(app, pr, true)?.to_json();
     out["comments"] = serde_json::json!(comments::list(app, pr, None)?);
+    // A Leave out reverted it on main (H-272).
+    out["reverted_by"] = serde_json::json!(app.db.board_read(|t| t.reverted_by(&pr.id))?);
     if let Some(row) = app.db.board_read(|t| t.queue_row(&pr.id))? {
         out["merge"] = serde_json::json!({
             "state": row.state, "queued_at": row.queued_at, "merge_at": row.merge_at,

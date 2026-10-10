@@ -99,8 +99,10 @@ fn the_guard_is_told_worktrees_not_trusted_paths_are_writable() {
         assert!(publisher.contains("--releases"), "{publisher}");
     }
     let devops = start(PermissionProfile::Full, &[PermissionExtra::ReleaseMain]).guard_command();
+    // CE S1 on H-284 (H-272): `release_main` no longer lets DevOps push or
+    // merge to main itself; main moves through the daemon-checked commands.
     assert!(
-        devops.contains("--full") && devops.contains("--allow-main"),
+        devops.contains("--full") && !devops.contains("--allow-main"),
         "{devops}"
     );
     // H-284: `pr_merge` runs only `hermesd pr merge`; a raw push to main

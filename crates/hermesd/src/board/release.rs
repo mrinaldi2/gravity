@@ -28,6 +28,7 @@ pub mod cancel;
 pub mod cli;
 pub mod confine;
 mod contains;
+pub mod cut;
 pub mod deploy;
 pub mod deployed_via;
 pub mod gates;
@@ -36,6 +37,8 @@ pub mod git_cache;
 pub mod install;
 pub mod ios_repair;
 pub mod land;
+pub mod leave_out;
+pub mod leave_out_cli;
 pub mod lifecycle;
 pub mod machines;
 pub mod model;
@@ -50,6 +53,8 @@ pub mod rule;
 pub mod serve;
 pub mod sha_cache;
 mod supersede;
+pub mod tag;
+pub mod tag_cli;
 #[cfg(test)]
 mod tests;
 

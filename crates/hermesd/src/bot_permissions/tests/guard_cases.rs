@@ -137,14 +137,18 @@ fn main_is_reserved_for_release_main() {
     assert!(push("git push -f origin main", &release).is_some());
     git(&["switch", "-q", "-c", "feat"]);
     assert_eq!(push("git push", &ctx()), None);
-    // The rules fail fast for everyone but release_main.
-    let deny = rules(&input(PermissionProfile::Trusted, &[]), "deny");
-    assert!(deny.contains(&"Bash(git push * main)".to_string()));
-    let devops = rules(
-        &input(PermissionProfile::Trusted, &[PermissionExtra::ReleaseMain]),
-        "deny",
-    );
-    assert!(!devops.iter().any(|r| r.contains("main")));
+    // The rules fail fast for everyone, DevOps with release_main too (CE S1
+    // on H-284, H-272): main moves only through `pr merge` and `release land`.
+    for extras in [
+        &[][..],
+        &[PermissionExtra::ReleaseMain, PermissionExtra::PrMerge][..],
+    ] {
+        let deny = rules(&input(PermissionProfile::Trusted, extras), "deny");
+        assert!(
+            deny.contains(&"Bash(git push * main)".to_string()),
+            "{extras:?}"
+        );
+    }
 }
 
 #[test]

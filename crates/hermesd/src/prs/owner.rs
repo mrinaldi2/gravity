@@ -73,6 +73,10 @@ pub struct Shape {
 /// Whether the PR waits for the owner (§4.3, ruling 7629a873): never under
 /// `none`; always for security work otherwise; then per the setting.
 pub fn required(settings: &Settings, shape: &Shape, pr: &Pr) -> bool {
+    // The owner's own PR (a Leave out's revert, H-272) waits for nobody.
+    if is_owners(pr) {
+        return false;
+    }
     match settings.mode {
         Mode::None => false,
         _ if shape.security => true,
@@ -80,6 +84,12 @@ pub fn required(settings: &Settings, shape: &Shape, pr: &Pr) -> bool {
         Mode::Areas => shape.areas.iter().any(|a| settings.areas.contains(a)),
         Mode::Flagged => pr.owner_flagged,
     }
+}
+
+/// A PR the owner authored: a Leave out's revert (H-272), opened by the
+/// daemon for the owner's device or ticket.
+pub fn is_owners(pr: &Pr) -> bool {
+    pr.author.starts_with("owner:")
 }
 
 /// The owner's provenance as a review stores it.

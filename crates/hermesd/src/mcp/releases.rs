@@ -13,8 +13,8 @@ use crate::board::release::assemble::{self, NewPackage};
 use crate::board::release::model::{DeployResult, ReleaseBuild, Smoke};
 use crate::board::release::publish::{self, Publish};
 use crate::board::release::{
-    blockers, cancel, deploy, deployed_via, lifecycle, load, machines, model::parse_arg, package,
-    plan, Caller,
+    blockers, cancel, cut, deploy, deployed_via, lifecycle, load, machines, model::parse_arg,
+    package, plan, Caller,
 };
 use crate::db::NewReleaseTest;
 
@@ -24,6 +24,7 @@ pub(super) const RELEASE_TOOLS: &[BoardTool] = &[
     tool("release_list", "ReleaseList", Audience::Everyone),
     tool("release_get", "ReleaseGet", Audience::Everyone),
     tool("release_create", "ReleaseCreate", Audience::Devops),
+    tool("release_cut", "ReleaseCut", Audience::Devops),
     tool("release_plan", "ReleasePlan", Audience::LeadOrDevops),
     tool("release_items", "ReleaseItems", Audience::LeadOrDevops),
     tool(
@@ -108,6 +109,19 @@ pub(super) fn call(
                     changelog: req.changelog.as_deref().unwrap_or_default(),
                     how_to_test: json!([]),
                     from: req.from.as_deref(),
+                },
+            )?)
+        }
+        "release_cut" => {
+            let req: c::ReleaseCut = decode("ReleaseCut", args, project)?;
+            released(cut::cut(
+                app,
+                &me,
+                &cut::CutRequest {
+                    version: &req.version,
+                    commit: req.commit.as_deref(),
+                    release_id: req.release_id.as_deref(),
+                    repo: req.repo.as_deref(),
                 },
             )?)
         }

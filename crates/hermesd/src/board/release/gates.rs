@@ -175,6 +175,13 @@ fn gate(
         .db
         .board_read(|t| load(t, &bot.project_id, release_id))
         .map_err(|_| invalid(format!("no release {release_id} on this computer's board")))?;
+    // A release cut from main is already on main: it is tagged (H-272).
+    if extra == PermissionExtra::ReleaseMain && release.cut.is_some() {
+        return Err(forbidden(format!(
+            "release {} was cut from main: tag it with `hermesd release tag`",
+            release.name
+        )));
+    }
     // Landing takes the owner's approval. The installer is a build of the
     // package, made while it is still open for builds, before the owner
     // rules on it.

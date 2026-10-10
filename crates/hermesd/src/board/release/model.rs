@@ -187,6 +187,37 @@ pub struct Release {
     pub tests_required: Vec<String>,
     /// Its REL work card (H-247), where its owner Run cards hang.
     pub work_item_id: Option<String>,
+    /// Where it was cut from main (H-272), for a release cut that way.
+    pub cut: Option<Cut>,
+}
+
+/// A release cut from main (H-272; H-261 §6.1): its commit, the range it
+/// covers and the PRs merged in it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Cut {
+    /// "owner/name".
+    pub repo: String,
+    pub source_commit: String,
+    /// The commit of the release tagged before it: its range starts there.
+    pub previous_commit: Option<String>,
+    /// The cards the lead planned before the cut.
+    pub planned: Vec<String>,
+    /// The tag `release tag` pushed, once it did.
+    pub tag: Option<String>,
+    pub prs: Vec<CutPr>,
+}
+
+/// A PR merged in a cut's range.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CutPr {
+    pub number: u32,
+    pub item_id: String,
+    pub merged_sha: String,
+    pub title: String,
+    /// A Leave out reverted it on main.
+    pub reverted: bool,
+    /// It is a Leave out's revert.
+    pub revert: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -229,6 +260,14 @@ impl Release {
 
     /// What tools and the WS surface return.
     pub fn to_json(&self) -> Value {
+        let mut out = self.base_json();
+        if let Some(cut) = &self.cut {
+            super::cut::extend_json(self, cut, &mut out);
+        }
+        out
+    }
+
+    fn base_json(&self) -> Value {
         json!({
             "id": self.id,
             "project_id": self.project_id,

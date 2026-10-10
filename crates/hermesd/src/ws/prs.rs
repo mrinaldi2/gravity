@@ -20,6 +20,7 @@ pub(super) const KINDS: &[&str] = &[
     "pr_flag",
     "pr_merge_undo",
     "pr_comment_resolve",
+    "release_leave_out",
 ];
 
 /// The ones that are the owner's own acts: device or ticket only.
@@ -30,6 +31,7 @@ pub(super) const OWNER_ONLY: &[&str] = &[
     "pr_flag",
     "pr_merge_undo",
     "pr_comment_resolve",
+    "release_leave_out",
 ];
 
 fn number(req: &Value) -> anyhow::Result<u32> {
@@ -131,6 +133,24 @@ impl Conn {
             "pr_merge_undo" => {
                 let pr = crate::prs::queue::undo(&self.app, project, number(req)?, &self.proof()?)?;
                 json!({ "type": "pr", "pr": crate::prs::detail(&self.app, &pr)? })
+            }
+            "release_leave_out" => {
+                let release = Self::str_field(req, "release_id")?;
+                let numbers: Vec<u32> = req
+                    .get("prs")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|n| n.as_u64().and_then(|n| u32::try_from(n).ok()))
+                    .collect();
+                let out = crate::board::release::leave_out::request(
+                    &self.app,
+                    project,
+                    release,
+                    &numbers,
+                    &self.proof()?,
+                )?;
+                json!({ "type": "leave_out", "result": out })
             }
             other => anyhow::bail!("unknown PR request {other}"),
         };

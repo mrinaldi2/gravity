@@ -82,10 +82,10 @@ pub fn generate(input: &SettingsInput<'_>) -> Value {
     if !input.extras.contains(&PermissionExtra::DaemonRestart) {
         deny.push("Bash(launchctl *)".to_string());
     }
-    if !input.extras.contains(&PermissionExtra::ReleaseMain) {
-        // These fail fast; the guard is the real check (`git -C . push`).
-        deny.extend(MAIN_DENY.iter().map(|r| (*r).to_string()));
-    }
+    // Every bot, DevOps too (CE S1 on H-284): main moves only through the
+    // daemon-checked commands (`pr merge`, `release land`), which push from
+    // their own process. These fail fast; the guard is the real check.
+    deny.extend(MAIN_DENY.iter().map(|r| (*r).to_string()));
     if input.extras.contains(&PermissionExtra::Publish) {
         // DevOps may run its scripts but never rewrite them.
         for script in ["serve.sh", "publish.sh"] {
@@ -268,7 +268,7 @@ const STATIC_DENY: &[&str] = &[
     "mcp__claude_ai_Kaggle",
 ];
 
-/// Pushes to `main`, for every bot without `release_main`.
+/// Pushes to `main`, for every bot (H-272: `release_main` no longer lifts them).
 const MAIN_DENY: &[&str] = &[
     "Bash(git push * main)",
     "Bash(git push * HEAD:main)",
@@ -335,7 +335,12 @@ fn extra_allow(extra: PermissionExtra, workspace: &Path, hermesd: Option<&Path>)
         // Lifts the main denies above. The one push to main allowed without
         // review is the daemon-checked land (H-117 X2): approved release,
         // fast-forward only, never force.
-        PermissionExtra::ReleaseMain => exact("release land"),
+        // A release cut from main is tagged, and the owner's Leave out
+        // reverted, by the same daemon-checked commands (H-272).
+        PermissionExtra::ReleaseMain => ["release land", "release tag", "release leave-out"]
+            .into_iter()
+            .flat_map(&exact)
+            .collect(),
         // Only the command, which runs the script as committed; never the
         // script itself, which the bot could edit (H-117 X3, H-104).
         PermissionExtra::BuildInstallers => exact("release build-installer"),
