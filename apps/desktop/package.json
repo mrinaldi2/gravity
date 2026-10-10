@@ -1,6 +1,6 @@
 {
   "name": "hermes-desktop",
-  "version": "0.17.5",
+  "version": "0.18.0",
   "private": true,
   "license": "MIT",
   "type": "module",
