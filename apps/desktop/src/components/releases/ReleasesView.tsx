@@ -11,6 +11,7 @@ import type { Release } from "../../protocol/releases";
 import { isCurrent, releaseTitle, statusLabel } from "./labels";
 import type { BotName } from "./labels";
 import ReleaseReview from "./ReleaseReview";
+import { previousName } from "./releaseMain";
 import TestedOn from "./TestedOn";
 import type { WaitingActions } from "./WaitingForYou";
 import { anyInProgress, useLiveProgress } from "./useLiveProgress";
@@ -175,6 +176,7 @@ export default function ReleasesView(props: ReleasesViewProps): ReactElement {
           canControl={canControl}
           client={client}
           waiting={waiting}
+          previous={previousName(shown, releases)}
         />
       ) : null}
     </div>
