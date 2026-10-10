@@ -38,27 +38,35 @@ pub async fn project(c: &mut WsClient, name: &str) -> String {
 /// A lead on "the Mac" and a Windows developer on "the PC", paired, with the
 /// developer linked into the lead's project.
 pub async fn team() -> Team {
-    team_with(false).await
+    team_with(false, false).await
 }
 
 /// [`team`] whose daemons take the owner acts a linked computer forwards:
 /// the path kept for signed approvals (H-285, H-301), off in every real
 /// daemon.
 pub async fn team_trusting() -> Team {
-    team_with(true).await
+    team_with(true, true).await
+}
+
+/// [`team`] where only the PC trusts what the Mac forwards: what the Mac
+/// itself holds back shows (H-303).
+pub async fn team_trusting_on_the_pc() -> Team {
+    team_with(false, true).await
 }
 
 async fn spawn_computer(trust: bool) -> TestDaemon {
     spawn_daemon_with(|cfg| {
         cfg.user_home = cfg.home.join("user");
-        cfg.trust_forwarded_owner_acts = trust;
+        if trust {
+            cfg.trust_forwarded_owner_acts_for_tests();
+        }
     })
     .await
 }
 
-async fn team_with(trust: bool) -> Team {
-    let mac = spawn_computer(trust).await;
-    let win = spawn_computer(trust).await;
+async fn team_with(mac_trusts: bool, win_trusts: bool) -> Team {
+    let mac = spawn_computer(mac_trusts).await;
+    let win = spawn_computer(win_trusts).await;
     let mut mac_client = WsClient::connect(&mac).await;
     let mut win_client = WsClient::connect(&win).await;
 

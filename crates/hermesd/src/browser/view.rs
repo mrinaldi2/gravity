@@ -67,8 +67,7 @@ pub fn profile(app: &AppState, bot: &bus::Bot) -> Option<std::path::PathBuf> {
 /// someone here is watching, or to its machine for a linked bot.
 pub fn input(app: &AppState, bot: &bus::Bot, tab_id: &str, event: &Value) -> anyhow::Result<()> {
     if bot.is_linked() {
-        crate::peer::browser::input(app, bot, tab_id, event);
-        return Ok(());
+        return crate::peer::browser::input(app, bot, tab_id, event);
     }
     let commands = super::input::commands(event)?;
     app.browsers.input(&bot.id, tab_id, commands)

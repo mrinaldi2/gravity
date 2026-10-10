@@ -1,11 +1,13 @@
 import { vi } from "vitest";
 
 interface FileDropOptions {
+  readonly canDrop: () => boolean;
   readonly onDrop: (input: string) => void;
   readonly onError: (error: unknown) => void;
 }
 
 interface FileDropDouble {
+  canDrop?: () => boolean;
   onDrop?: (input: string) => void;
   onError?: (error: unknown) => void;
   readonly unlisten: () => void;
@@ -17,11 +19,13 @@ interface FileDropDouble {
 export const fileDropDouble: FileDropDouble = {
   unlisten: vi.fn<() => void>(),
   listen: vi.fn<(options: FileDropOptions) => () => void>((options) => {
+    fileDropDouble.canDrop = options.canDrop;
     fileDropDouble.onDrop = options.onDrop;
     fileDropDouble.onError = options.onError;
     return fileDropDouble.unlisten;
   }),
   reset: () => {
+    fileDropDouble.canDrop = undefined;
     fileDropDouble.onDrop = undefined;
     fileDropDouble.onError = undefined;
   },

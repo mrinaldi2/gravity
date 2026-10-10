@@ -85,6 +85,25 @@ pub fn user_sender() -> Sender {
     }
 }
 
+/// How a bot is shown the owner's chat a linked computer forwarded without
+/// proof this computer takes (H-303, owner ruling 1cb9b4df): as
+/// `unverified @ <computer>`, never as the owner. None for anything else.
+pub fn unverified_owner_name(db: &Db, msg: &Message) -> anyhow::Result<Option<String>> {
+    if msg.sender.kind != SenderKind::User
+        || msg.sender.name == DAEMON_SENDER_NAME
+        || db.owner_message_via(&msg.id)?.is_some()
+    {
+        return Ok(None);
+    }
+    let Some(peer_id) = db.peer_of_message(&msg.id)? else {
+        return Ok(None);
+    };
+    let computer = db
+        .get_peer(&peer_id)?
+        .map_or_else(|| "a linked computer".to_string(), |p| p.name);
+    Ok(Some(format!("unverified @ {computer}")))
+}
+
 /// The stored sender name of the daemon's own notices. The owner reads them
 /// as from [`crate::brand::SHORT_NAME`].
 pub const DAEMON_SENDER_NAME: &str = "system";

@@ -20,6 +20,12 @@ interface TerminalPaneProps {
   readonly botId: string;
   /** Whether typing/resizing is forwarded: bot running + `control` grant. */
   readonly canWrite: boolean;
+  /**
+   * Set when typing here isn't taken where the bot runs (a linked bot,
+   * H-303): said above the terminal, and nothing typed is sent. Watching and
+   * resizes still work.
+   */
+  readonly refusal?: string | null;
   readonly onToast?: AddToast;
 }
 
@@ -110,8 +116,8 @@ function viewportOf(element: HTMLElement): HTMLElement | null {
 }
 
 /** Modal dialogs own keyboard input while open, even if xterm retained focus. */
-function terminalInputAllowed(canWrite: boolean): boolean {
-  return canWrite && document.querySelector('[aria-modal="true"]') === null;
+function terminalInputAllowed(canWrite: boolean, refused: boolean): boolean {
+  return canWrite && !refused && document.querySelector('[aria-modal="true"]') === null;
 }
 
 /**
@@ -125,6 +131,7 @@ export default function TerminalPane({
   client,
   botId,
   canWrite,
+  refusal = null,
   onToast,
 }: TerminalPaneProps): ReactElement {
   const connectionGeneration = client.connectionGeneration;
@@ -136,9 +143,15 @@ export default function TerminalPane({
   // flow already handles the mount itself.
   const wasWritable = useRef(canWrite);
 
+  const refusedRef = useRef(refusal !== null);
+
   useEffect(() => {
     canWriteRef.current = canWrite;
   }, [canWrite]);
+
+  useEffect(() => {
+    refusedRef.current = refusal !== null;
+  }, [refusal]);
 
   useEffect(() => {
     linkFailure.report = (body: string): void => {
@@ -156,7 +169,7 @@ export default function TerminalPane({
     }
     return listenForTerminalFileDrops({
       element: container,
-      canDrop: () => terminalInputAllowed(canWriteRef.current),
+      canDrop: () => terminalInputAllowed(canWriteRef.current, refusedRef.current),
       onDrop: (input) => {
         client.fire({ type: "input", bot_id: botId, data: input });
         termRef.current?.focus();
@@ -208,7 +221,7 @@ export default function TerminalPane({
       }
     };
     viewport?.addEventListener("scroll", trackScrollTop);
-    if (canWriteRef.current) {
+    if (canWriteRef.current && !refusedRef.current) {
       term.focus();
     }
 
@@ -240,14 +253,14 @@ export default function TerminalPane({
       // xterm skips the key once we return false, but the browser would still
       // let it reach the hidden textarea xterm reads input from.
       event.preventDefault();
-      if (terminalInputAllowed(canWriteRef.current)) {
+      if (terminalInputAllowed(canWriteRef.current, refusedRef.current)) {
         client.fire({ type: "input", bot_id: botId, data: "\u001b\r" });
       }
       return false;
     });
 
     const dataSub = term.onData((data) => {
-      if (terminalInputAllowed(canWriteRef.current)) {
+      if (terminalInputAllowed(canWriteRef.current, refusedRef.current)) {
         client.fire({ type: "input", bot_id: botId, data });
       }
     });
@@ -387,7 +400,12 @@ export default function TerminalPane({
   }, [botId, client, canWrite]);
 
   return (
-    <div className={`terminal-wrap ${canWrite ? "" : "terminal-readonly"}`}>
+    <div className={`terminal-wrap ${canWrite && refusal === null ? "" : "terminal-readonly"}`}>
+      {refusal === null ? null : (
+        <div className="chat-note terminal-refusal" role="status">
+          {refusal}
+        </div>
+      )}
       <div ref={containerRef} className="terminal-host" />
     </div>
   );

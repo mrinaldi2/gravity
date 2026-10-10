@@ -292,10 +292,11 @@ pub(super) fn check_inbox(app: &Arc<AppState>, bot_id: &str) -> anyhow::Result<V
     }
     let mut rendered: Vec<Value> = Vec::with_capacity(msgs.len());
     for m in &msgs {
+        let from = crate::messaging::unverified_owner_name(&app.db, m)?;
         let mut item = json!({
             "message_id": m.id,
             "num": m.num,
-            "from": m.sender.name,
+            "from": from.as_deref().unwrap_or(&m.sender.name),
             "kind": m.kind.as_str(),
             "body": m.body,
             "created_at": m.created_at.to_rfc3339()

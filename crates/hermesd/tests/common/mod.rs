@@ -72,11 +72,9 @@ pub async fn spawn_daemon_on(
     tweak: impl FnOnce(&mut Config),
 ) -> TestDaemon {
     let home = tempfile::tempdir().expect("tempdir");
-    let mut cfg = Config {
-        home: home.path().to_path_buf(),
-        runtime: RuntimeKind::Double,
-        ..Config::default()
-    };
+    let mut cfg = Config::default();
+    cfg.home = home.path().to_path_buf();
+    cfg.runtime = RuntimeKind::Double;
     cfg.delivery.poll_interval_ms = 50;
     cfg.scheduler.tick_interval_ms = 100;
     // No tool probe or check routing behind a test's back (H-283).

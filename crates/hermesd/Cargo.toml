@@ -32,7 +32,13 @@ bytes = { workspace = true }
 tokio-tungstenite = "0.24"
 base64 = "0.22"
 
+[features]
+# Test-only switches the integration tests turn on through the dev-dependency
+# on this crate below; never part of a release build.
+test-support = []
+
 [dev-dependencies]
+hermesd = { path = ".", features = ["test-support"] }
 tempfile = "3"
 tokio = { workspace = true, features = ["test-util"] }
 reqwest = { version = "0.12", features = ["json"] }

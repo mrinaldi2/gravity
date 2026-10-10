@@ -13,6 +13,7 @@ import RoutinesPanel from "../RoutinesPanel";
 import TerminalPane from "../TerminalPane";
 import type { BotTab } from "./BotTabs";
 import BotChat from "./BotChat";
+import { doElsewhere } from "./doElsewhere";
 import ReportsPane from "./ReportsPane";
 
 interface BotPanesProps {
@@ -215,11 +216,13 @@ export default function BotPanes(props: BotPanesProps): ReactElement {
         <TalkPanes {...props} />
         {tabs.includes("terminal") ? (
           <div className={paneClass(active === "terminal")}>
-            {/* The terminal belongs to the user: any `control` connection may type while the bot runs. */}
+            {/* The terminal belongs to the user: any `control` connection may type while the bot runs,
+                except into a linked bot, whose computer takes no typing from here (H-303). */}
             <TerminalPane
               client={client}
               botId={bot.id}
               canWrite={canControl && !isStopped(bot)}
+              refusal={doElsewhere(bot)}
               onToast={onToast}
             />
           </div>
@@ -233,7 +236,7 @@ export default function BotPanes(props: BotPanesProps): ReactElement {
               bot={bot}
               watch={props.browser}
               connected={connected}
-              canControl={canControl && client.capabilities.includes("browser_input")}
+              canControl={canControl && !linked && client.capabilities.includes("browser_input")}
             />
           </div>
         ) : null}

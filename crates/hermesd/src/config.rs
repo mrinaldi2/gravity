@@ -52,9 +52,10 @@ pub struct Config {
     pub scratch: bool,
     /// Take the owner acts a linked computer forwards (H-285, H-301). Never
     /// read from a config file: off in every daemon until signed approvals
-    /// exist (owner ruling 6df14f7a); only tests of that path set it.
+    /// exist (owner ruling 6df14f7a); only tests of that path set it, through
+    /// [`Config::trust_forwarded_owner_acts_for_tests`].
     #[serde(skip)]
-    pub trust_forwarded_owner_acts: bool,
+    pub(crate) trust_forwarded_owner_acts: bool,
     /// `pty` (each bot's saved CLI) or `double` (deterministic test runtime).
     pub runtime: RuntimeKind,
     pub claude_bin: String,
@@ -305,6 +306,13 @@ fn dirs_home() -> PathBuf {
 }
 
 impl Config {
+    /// Takes the owner acts a linked computer forwards: for tests of that
+    /// path only (H-301, H-303). A release build has no way to set it.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn trust_forwarded_owner_acts_for_tests(&mut self) {
+        self.trust_forwarded_owner_acts = true;
+    }
+
     pub fn load(path: Option<&Path>) -> anyhow::Result<Self> {
         let path = match path {
             Some(p) => p.to_path_buf(),

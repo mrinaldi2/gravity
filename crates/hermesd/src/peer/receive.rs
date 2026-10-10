@@ -138,7 +138,7 @@ pub(super) fn receive(
                 frame.kind != MessageKind::Done,
                 "a result must name the task it closes"
             );
-            let proof = owner_proof(peer, &frame);
+            let proof = owner_proof(app, peer, &frame);
             let mut dm = Dm::new(&to.id, &sender, frame.kind, &body);
             dm.ref_message_id = ref_id.as_deref();
             dm.owner = proof.as_ref();
@@ -177,11 +177,17 @@ pub(super) fn receive(
 }
 
 /// The owner's proof for a chat the peer says its owner sent from a device or
-/// the app's ticket there (H-195 D1, CE-029 V1). Only the owner's chat
-/// counts, only from this linked peer (revoked ones never get here), for a
-/// bot exposed to it (checked above); anything else stays a plain message.
-fn owner_proof(peer: &Peer, frame: &MessageFrame) -> Option<OwnerProof> {
-    if !matches!(frame.from, FromFrame::User) || frame.kind != MessageKind::Chat {
+/// the app's ticket there (H-195 D1, CE-029 V1). None while this computer
+/// takes no owner acts from a linked one, whatever the frame says (H-303,
+/// owner ruling 1cb9b4df): the chat is a plain message, never the owner's
+/// and never typed into a composer. Behind the switch kept for signed
+/// approvals, only the owner's chat counts, only from this linked peer
+/// (revoked ones never get here), for a bot exposed to it (checked above).
+fn owner_proof(app: &AppState, peer: &Peer, frame: &MessageFrame) -> Option<OwnerProof> {
+    if !super::owner_trust::trusted(app)
+        || !matches!(frame.from, FromFrame::User)
+        || frame.kind != MessageKind::Chat
+    {
         return None;
     }
     let origin_via = match frame.owner_verified.as_deref().and_then(OwnerVia::parse) {

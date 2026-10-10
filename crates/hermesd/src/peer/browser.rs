@@ -172,11 +172,13 @@ async fn relay(
     }
 }
 
-/// The owner's mouse and keyboard from the peer, for a tab it watches. Only
-/// when the peer says its owner proved themselves there, as for terminal
-/// input (CE-029 M3, CE-030); an older peer never says so and is refused.
+/// The owner's mouse and keyboard from the peer, for a tab it watches.
+/// Refused whatever the frame says, as terminal typing is (H-303, owner
+/// ruling 1cb9b4df): the browser keeps the bot's logins. Behind the switch
+/// kept for signed approvals, only when the peer says its owner proved
+/// themselves there (CE-029 M3, CE-030).
 pub(super) fn serve_input(app: &AppState, peer: &Peer, frame: &Value) {
-    if frame["owner_verified"] != json!(true) {
+    if !crate::peer::owner_trust::trusted(app) || frame["owner_verified"] != json!(true) {
         tracing::warn!(peer = %peer.name, "unverified peer browser input dropped");
         return;
     }
@@ -281,9 +283,14 @@ async fn feed(
 }
 
 /// The owner's mouse and keyboard here, for the browser on the bot's machine.
-/// Only a client that proved it is the owner sends it (`ws::owner_auth`), so
-/// the frame says so.
-pub fn input(app: &AppState, stand_in: &Bot, tab_id: &str, event: &Value) {
+/// Not sent: the bot's computer takes no browser control from a linked one
+/// (H-303). Behind the switch kept for signed approvals, only a client that
+/// proved it is the owner sends it (`ws::owner_auth`), so the frame says so.
+pub fn input(app: &AppState, stand_in: &Bot, tab_id: &str, event: &Value) -> anyhow::Result<()> {
+    if !crate::peer::owner_trust::trusted(app) {
+        let home = crate::peer::term::machine_of(app, stand_in);
+        anyhow::bail!(crate::peer::owner_trust::do_elsewhere(&home));
+    }
     if let (Some(peer), Some(remote)) = (&stand_in.peer_id, &stand_in.remote_bot_id) {
         app.peers.notify(
             peer,
@@ -293,6 +300,7 @@ pub fn input(app: &AppState, stand_in: &Bot, tab_id: &str, event: &Value) {
             }),
         );
     }
+    Ok(())
 }
 
 /// Watches a linked bot's browser for one connection, through its machine.

@@ -5,7 +5,7 @@
 
 mod common;
 
-use common::peers::{team, wait_until};
+use common::peers::{team, team_trusting, wait_until};
 use common::*;
 use serde_json::{json, Value};
 
@@ -145,7 +145,8 @@ async fn a_peer_vouches_only_for_its_owners_chat() {
 
 #[tokio::test]
 async fn the_owner_tokens_forced_resize_is_not_vouched_for() {
-    let mut t = team().await;
+    // Kept for signed approvals (H-303).
+    let mut t = team_trusting().await;
     let (windev, linked) = (t.windev_id.clone(), t.linked_windev.clone());
     let mut forger = WsClient::connect_owner_token(&t.mac).await;
     forger

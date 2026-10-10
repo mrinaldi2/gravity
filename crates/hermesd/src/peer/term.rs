@@ -171,17 +171,21 @@ pub(super) fn serve_session(app: &AppState, peer: &Peer, frame: &Value) -> anyho
 
 /// Typing and resizes from the peer's clients, for a bot linked to it.
 ///
-/// Typing, and a forced resize, count only when the peer says its owner
-/// proved themselves there (a device or the app's ticket): a bot on the peer
-/// holding that computer's owner token must not type here either (H-195 D5,
-/// CE-029 M3). A peer older than that never says so, and is refused.
+/// Typing (a permission prompt's answer is typing too) and a forced resize
+/// are the owner's, and aren't taken from a linked computer whatever the
+/// frame says: a peer token is a file bots can read, so a bot could claim
+/// the owner proved themselves there (H-303, owner ruling 1cb9b4df). The
+/// owner types on this computer or a phone paired with it. Kept behind
+/// [`super::owner_trust::trusted`] for signed approvals, where it still
+/// takes only a peer that says so (H-195 D5, CE-029 M3).
 pub(super) fn serve_event(app: &AppState, peer: &Peer, frame: &Value) {
     let Ok(bot) = exposed_bot(app, peer, frame) else {
         return;
     };
     let kind = frame["type"].as_str().unwrap_or_default();
     let forced = kind == "term_resize" && frame["force"].as_bool().unwrap_or(false);
-    if (kind == "term_input" || forced) && frame["owner_verified"] != json!(true) {
+    let owners = super::owner_trust::trusted(app) && frame["owner_verified"] == json!(true);
+    if (kind == "term_input" || forced) && !owners {
         tracing::warn!(peer = %peer.name, bot = %bot.name, kind, "unverified peer input dropped");
         return;
     }
@@ -359,24 +363,40 @@ pub(super) async fn link_up(app: Arc<AppState>, peer_id: String) {
     }
 }
 
-/// Typing from a client here, for the real terminal on the peer. Only a
-/// client that proved it is the owner types (`ws::owner_auth`), so the frame
-/// says so.
-pub fn input(app: &AppState, stand_in: &Bot, data: &str) {
+/// Typing from a client here, for the real terminal on the peer. Not sent:
+/// the bot's computer takes no typing from a linked one (H-303), so the
+/// owner is told to type there or on a phone. Behind the switch kept for
+/// signed approvals, only a client that proved it is the owner types
+/// (`ws::owner_auth`), so the frame says so.
+pub fn input(app: &AppState, stand_in: &Bot, data: &str) -> anyhow::Result<()> {
+    if !super::owner_trust::trusted(app) {
+        anyhow::bail!(super::owner_trust::do_elsewhere(&machine_of(app, stand_in)));
+    }
     if let (Some(peer), Some(remote)) = (&stand_in.peer_id, &stand_in.remote_bot_id) {
         app.peers.notify(
             peer,
             json!({ "type": "term_input", "bot_id": remote, "data": data, "owner_verified": true }),
         );
     }
+    Ok(())
+}
+
+/// The name of the computer a linked bot runs on.
+pub(crate) fn machine_of(app: &AppState, stand_in: &Bot) -> String {
+    stand_in
+        .peer_id
+        .as_deref()
+        .and_then(|id| app.db.get_peer(id).ok().flatten())
+        .map_or_else(|| "its computer".to_string(), |p| p.name)
 }
 
 /// A client's terminal size, for the real terminal on the peer. `verified`
 /// when the client proved it is the owner: the peer takes a forced resize
-/// only then.
+/// only then, and only behind the switch kept for signed approvals (H-303).
 pub fn resize(app: &AppState, stand_in: &Bot, size: (u16, u16), force: bool, verified: bool) {
     if let (Some(peer), Some(remote)) = (&stand_in.peer_id, &stand_in.remote_bot_id) {
         let (cols, rows) = size;
+        let verified = verified && super::owner_trust::trusted(app);
         app.peers.notify(
             peer,
             json!({
