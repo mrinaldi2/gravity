@@ -31,3 +31,9 @@ CREATE TABLE IF NOT EXISTS pr_shape (
     security  INTEGER NOT NULL DEFAULT 0
 );
 "#;
+
+/// Whether a PR's head touches the policy files (H-313): the owner reviews
+/// it whatever the setting. Rows from before read 0 until the next head or
+/// the merge-time recompute rewrites them.
+pub(super) const MIGRATION_PR_SHAPE_POLICY: &str =
+    "ALTER TABLE pr_shape ADD COLUMN policy INTEGER NOT NULL DEFAULT 0;";

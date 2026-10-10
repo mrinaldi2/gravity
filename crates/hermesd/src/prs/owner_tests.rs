@@ -38,6 +38,7 @@ fn shape(areas: &[&str], security: bool) -> Shape {
     Shape {
         areas: areas.iter().map(|a| (*a).to_string()).collect(),
         security,
+        policy: false,
     }
 }
 
@@ -76,6 +77,26 @@ fn areas_flagged_and_none_behave_and_security_always_needs_the_owner() {
     assert!(required(&flagged, &security, &pr(false)));
     let none = set(Mode::None, &[]);
     assert!(!required(&none, &security, &pr(true)), "none is none");
+}
+
+fn policy() -> Shape {
+    Shape {
+        areas: Vec::new(),
+        security: true,
+        policy: true,
+    }
+}
+
+/// H-313: a PR on the policy files waits for the owner under every setting,
+/// `none` included; an ordinary PR under `none` still doesn't.
+#[test]
+fn a_policy_pr_needs_the_owner_whatever_the_setting() {
+    for mode in [Mode::None, Mode::Flagged, Mode::Areas, Mode::All] {
+        assert!(required(&set(mode, &[]), &policy(), &pr(false)), "{mode:?}");
+    }
+    let none = set(Mode::None, &[]);
+    assert!(!required(&none, &shape(&["ui"], false), &pr(true)));
+    assert!(!required(&none, &shape(&["security"], true), &pr(false)));
 }
 
 /// A linked computer's word that the owner acted there is never recorded as
