@@ -116,6 +116,16 @@ async fn a_deploy_task_forwarded_to_the_pcs_tester_is_on_the_board_there() {
         "the frame named the release, by the home's id"
     );
     assert_eq!(win.db.task_card(&task.id).unwrap(), None, "and no card");
+    // It installs on the PC (H-288): the PC flags its own install pending.
+    assert_eq!(
+        win.db
+            .install_task_here()
+            .unwrap()
+            .map(|(r, _)| r)
+            .as_deref(),
+        Some(id.as_str()),
+        "the PC's own install is pending there"
+    );
     assert!(win.db.task_on_board(&task.id).unwrap());
 
     win.supervisor.set_state(&tester, BotState::Working, "test");

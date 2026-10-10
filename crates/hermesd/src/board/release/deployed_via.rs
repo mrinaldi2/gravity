@@ -169,6 +169,43 @@ pub(super) fn close_via(
 }
 
 /// Its deploys still waiting for a result.
+/// A package just deployed may still list installs nobody confirmed, such as
+/// the 'iphone' row of an iOS package confirmed through its 'ios' row
+/// (H-288). They're called off and their tasks closed, so no tester keeps an
+/// install task, and no computer an install-pending flag, for a closed
+/// package.
+pub(super) fn close_leftovers(app: &Arc<AppState>, release: &Release) -> anyhow::Result<()> {
+    let left: Vec<ReleaseDeployment> = open_installs(release).cloned().collect();
+    if left.is_empty() {
+        return Ok(());
+    }
+    app.db.board_tx(|t| {
+        for d in &left {
+            t.finish_deployment(
+                &release.id,
+                &d.machine,
+                DeployAction::Deploy,
+                DeployResult::Superseded,
+                None,
+                None,
+            )?;
+        }
+        Ok(())
+    })?;
+    for d in &left {
+        let note = format!(
+            "Release {} is deployed, so the install on {} isn't needed any more. Confirm \
+             nothing for it.",
+            release.name, d.machine
+        );
+        if let Err(e) = call_off(app, d, &note) {
+            tracing::warn!(release = %release.id, machine = %d.machine, error = %e,
+                "couldn't call off a leftover install");
+        }
+    }
+    Ok(())
+}
+
 fn open_installs(release: &Release) -> impl Iterator<Item = &ReleaseDeployment> {
     release
         .deployments

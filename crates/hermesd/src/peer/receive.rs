@@ -166,6 +166,16 @@ pub(super) fn receive(
             release,
         )?;
         app.db.map_peer_task(&peer.id, &spec.id, &task.id)?;
+        // Where it installs: the home named this computer, or the iPhone.
+        if let (Some(_), Some(target)) = (release, spec.target.as_deref()) {
+            let here = if crate::board::release::machines::is_ios_target(target) {
+                target.to_string()
+            } else {
+                app.db
+                    .board_read(crate::board::release::machines::this_computer)?
+            };
+            app.db.set_task_target(&task.id, &here)?;
+        }
         super::task_card::received(app, &to, linked, &task.id, spec.item_id.as_deref())?;
         task_id = Some(task.id);
     }

@@ -108,3 +108,15 @@ CREATE TABLE IF NOT EXISTS task_release (
     release_id TEXT NOT NULL
 );
 "#;
+
+/// Where a deploy or rollback task installs (H-288): the deployment row's
+/// machine, kept by the task (and sent with it to a linked computer), so a
+/// computer flags an install as pending only when it installs there, never
+/// for the iPhone or another computer. A table of its own, so it runs again
+/// safely.
+pub(super) const MIGRATION_TASK_TARGET: &str = r#"
+CREATE TABLE IF NOT EXISTS task_target (
+    task_id TEXT PRIMARY KEY,
+    target  TEXT NOT NULL
+);
+"#;

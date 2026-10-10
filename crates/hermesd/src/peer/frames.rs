@@ -60,6 +60,11 @@ pub struct TaskFrame {
     /// release accounts for it. An older peer sends none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release_id: Option<String>,
+    /// Where that deploy or rollback installs, by the release home's name for
+    /// it (H-288): the receiver flags an install as pending only when it is
+    /// this computer, never the iPhone. An older peer sends none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

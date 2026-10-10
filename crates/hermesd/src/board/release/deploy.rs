@@ -171,6 +171,7 @@ fn roll(
     };
     let task_id = open_task(app, me.bot, &tester, &body)?;
     app.db.set_task_release(&task_id, &release.id)?;
+    app.db.set_task_target(&task_id, machine)?;
     app.db.board_tx(|t| {
         t.start_deployment(&release.id, machine, action, &tester, Some(&task_id))?;
         if action == DeployAction::Deploy && release.status == ReleaseStatus::Approved {

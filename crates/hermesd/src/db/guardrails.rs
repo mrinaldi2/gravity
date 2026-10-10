@@ -90,23 +90,61 @@ impl Db {
             .flatten())
     }
 
-    /// An install under way here (H-166): a bot on this computer holds an
-    /// open deploy or rollback task. The release and the bot's name.
-    pub fn install_task_here(&self) -> anyhow::Result<Option<(String, String)>> {
+    /// Where a deploy or rollback task installs (H-288).
+    pub fn set_task_target(&self, task_id: &str, target: &str) -> anyhow::Result<()> {
+        self.lock().execute(
+            "INSERT OR REPLACE INTO task_target(task_id, target) VALUES (?1, ?2)",
+            params![task_id, target],
+        )?;
+        Ok(())
+    }
+
+    pub fn task_target(&self, task_id: &str) -> anyhow::Result<Option<String>> {
         Ok(self
             .lock()
             .query_row(
-                "SELECT coalesce(tr.release_id, rd.release_id), b.name
+                "SELECT target FROM task_target WHERE task_id = ?1",
+                params![task_id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    /// An install under way here (H-166): a bot on this computer holds an
+    /// open deploy or rollback task that installs on this computer, its
+    /// install not confirmed yet (a confirmed one is done whether or not its
+    /// tester has closed the task). The
+    /// release and the bot's name. An install on the iPhone (`ios`/`iphone`)
+    /// or on a linked computer isn't one here, and a task with no known
+    /// target (DevOps asked to roll back, or a peer older than H-288) installs
+    /// nothing by itself (H-288).
+    pub fn install_task_here(&self) -> anyhow::Result<Option<(String, String)>> {
+        let rows: Vec<(String, String, Option<String>)> = {
+            let conn = self.lock();
+            let mut stmt = conn.prepare(
+                "SELECT coalesce(tr.release_id, rd.release_id), b.name,
+                        coalesce(tt.target, rd.machine)
                  FROM task t JOIN bot b ON b.id = t.to_bot_id
                  LEFT JOIN task_release tr ON tr.task_id = t.id
                  LEFT JOIN release_deployment rd ON rd.task_id = t.id
+                 LEFT JOIN task_target tt ON tt.task_id = t.id
                  WHERE t.state = 'open' AND b.peer_id IS NULL
                    AND coalesce(tr.release_id, rd.release_id) IS NOT NULL
-                 ORDER BY t.created_at LIMIT 1",
-                [],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
-            .optional()?)
+                   AND (rd.task_id IS NULL OR rd.result IS NULL)
+                 ORDER BY t.created_at",
+            )?;
+            let rows = stmt
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            rows
+        };
+        let elsewhere = self.board_read(|t| t.peer_names())?;
+        Ok(rows.into_iter().find_map(|(release, bot, target)| {
+            let target = target?;
+            let here = !crate::board::release::machines::is_ios_target(&target)
+                && !elsewhere.iter().any(|p| p.eq_ignore_ascii_case(&target));
+            here.then_some((release, bot))
+        }))
     }
 
     /// The message with this number, as an envelope names it.

@@ -54,6 +54,10 @@ pub(super) fn after_deploy(
     actor: &Actor<'_>,
     deployed: &Release,
 ) {
+    // Its own installs nobody confirmed close first (H-288).
+    if let Err(e) = super::deployed_via::close_leftovers(app, deployed) {
+        tracing::warn!(release = %deployed.id, error = %e, "couldn't close its leftover installs");
+    }
     let project = bot.project_id.as_str();
     let older = match app.db.board_read(|t| t.releases(project)) {
         Ok(all) => all
