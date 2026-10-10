@@ -249,6 +249,51 @@ pub fn conflicts(cache: &Path, a: &str, b: &str) -> anyhow::Result<Vec<String>> 
     }
 }
 
+/// The tree reverting each `(base, merged)` range, in order, onto `onto`
+/// would give (H-272 M1): each step is a three-way merge with the range's
+/// end as the base, its start as theirs (`git merge-tree --write-tree
+/// --merge-base`), chained on trees, writing nothing to any ref. `None`
+/// when a step doesn't apply cleanly.
+pub fn revert_tree(
+    cache: &Path,
+    onto: &str,
+    reverts: &[(String, String)],
+) -> anyhow::Result<Option<String>> {
+    let Some(mut tree) = tree_of(cache, onto) else {
+        anyhow::bail!("{onto} isn't in the repository");
+    };
+    for (base, merged) in reverts {
+        let merge_base = format!("--merge-base={merged}");
+        let out = git(
+            cache,
+            &[
+                "merge-tree",
+                "--write-tree",
+                "--no-messages",
+                &merge_base,
+                &tree,
+                base,
+            ],
+        )?;
+        match out.status.code() {
+            Some(0) => {
+                tree = String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string();
+            }
+            Some(1) => return Ok(None),
+            _ => {
+                ok(&out, "merge-tree")?;
+                return Ok(None);
+            }
+        }
+    }
+    Ok(Some(tree))
+}
+
 /// One hunk of a zero-context diff: old lines `old_start..old_start+old_len`
 /// became `new_len` lines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

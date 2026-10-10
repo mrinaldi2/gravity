@@ -223,6 +223,16 @@ impl BoardTx<'_> {
         self.add_pr_push(&pr.id, tip, patch_id, None)
     }
 
+    /// The PR's author becomes `by` (H-272 M1: a bot pushed to the owner's
+    /// revert, so it is that bot's change now).
+    pub fn set_pr_author(&self, pr: &Pr, by: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "UPDATE pr SET author = ?2, version = version + 1, updated_at = ?3 WHERE id = ?1",
+            params![pr.id, by, ts(now())],
+        )?;
+        Ok(())
+    }
+
     /// Main fast-forwarded to `sha`, the PR's head, by `by` (H-284).
     pub fn set_pr_merged(&self, pr: &Pr, sha: &str, by: &str) -> anyhow::Result<()> {
         let at = ts(now());
