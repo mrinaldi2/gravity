@@ -165,6 +165,9 @@ pub struct BotProvision<'a> {
     /// The task limits this machine enforces for the project, stated in
     /// the prompt as numbers (ARCH-R59 b).
     pub task_limits: crate::config::TaskLimits,
+    /// The project's code goes through pull requests (H-286): its bots'
+    /// prompts say how. Set per project at cut-over (`pr_flow_projects`).
+    pub pull_requests: bool,
 }
 
 /// Create the bot's directory tree: `bot.json`, `system.md`, `mcp.json`, and a

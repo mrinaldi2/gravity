@@ -117,6 +117,7 @@ pub(super) fn provision_spec<'a>(
         own_browser: app.cfg.browser.enabled,
         user_chrome: bot.user_chrome,
         task_limits: app.cfg.tasks.for_project(&project.name),
+        pull_requests: app.cfg.pr_flow(&project.name),
     }
 }
 

@@ -28,6 +28,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
         own_browser,
         user_chrome,
         task_limits,
+        pull_requests,
         ..
     } = spec;
     // The caps are interpolated from the enforcing constants so the prompt can
@@ -61,6 +62,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
     let shared_section = super::prompt_sections::shared_computer();
     let owner_section = super::prompt_sections::owner_reporting();
     let board_section = super::prompt_sections::board_work(task_limits);
+    let pr_section = super::prompt_sections::pull_requests(*pull_requests);
     format!(
         "# {name}\n\n{description}\n\n{worker_section}{repo_section}{instructions_section}\
          ## How to use the {short} bus\n\n\
@@ -125,6 +127,7 @@ pub fn system_md(spec: &BotProvision<'_>) -> String {
          than escalating to a human who may not be there.\n\n\
          {shared_section}\
          {board_section}\
+         {pr_section}\
          {owner_section}\
          ## When the owner has to decide\n\n\
          Some things are not yours to settle and no bot can settle them for\n\
