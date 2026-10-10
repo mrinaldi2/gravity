@@ -1186,7 +1186,8 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
   - `review_settings_set {project_id, owner_review: all|areas|flagged|none, owner_review_areas?}` (approve) is accepted only from a paired device or the app's ticket. The owner token is refused and nothing is stored.
   - No row means `all`.
 - **`owner_review_required`, shown on `pr_get`:**
-  - `none`: never.
+  - A PR on the policy files (`.hermes/*.toml`): always, whatever the setting, `none` included (H-313). Migration `PR_SHAPE_POLICY` adds `pr_shape.policy`; the merge gate reads it again.
+  - `none`: otherwise never.
   - Otherwise, always for security work: a matched area whose roles include `ce`, or the policy files.
   - Then by setting: `all` → yes; `areas` → when an area the PR matches is listed; `flagged` → when the PR is `owner_flagged`.
   - Docs-only PRs follow the setting.
