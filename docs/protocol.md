@@ -908,7 +908,12 @@ A refusal says which of these is missing.
 - The tester's own daemon handles `install_quiesce`. It checks the bot's extras there, asks the home for the gate (`install_release` as the stand-in), and then pauses its own computer.
 - The home refuses a forwarded `install_quiesce` ("doesn't pause itself for another computer's install"). An older peer that still forwards the tool gets that refusal, not a pause of the home.
 
-**Install pending (H-166).** While a bot on this computer holds an open deploy or rollback task, or a pause is open, the daemon refreshes `<home>/run/install-pending.json` (`{why, release_id}`) every 15 s, and removes it when neither holds.
+**Install pending (H-166, H-288).** While a bot on this computer holds an open deploy or rollback task that installs **here**, or while a pause is open, the daemon refreshes `<home>/run/install-pending.json` (`{why, release_id}`) every 15 s. It removes the file when neither holds.
+- **What installs here:**
+  - **The target** is the task's deployment machine, kept in `task_target` (migration `TASK_TARGET`). It's sent to a linked computer in the task frame as `target`, and the receiver stores its own name, or `ios`/`iphone`.
+  - **Not here:** an `ios` or `iphone` target installs on the phone, and a linked computer's name installs there. A task with no target (DevOps asked to roll back, or a peer older than H-288) installs nothing by itself.
+  - **A confirmed install** isn't pending, even while its tester still holds the task.
+- **When a package becomes `deployed`,** its installs nobody confirmed (for example the `iphone` row of an iOS package confirmed through its `ios` row) are called off as `superseded`. Their testers' tasks are closed with a note, so no stale task keeps the flag.
 - The guard refuses `colima start`, `limactl start` and a VR run (`vr-ci.sh`) while the file is fresh, saying why. A VM sharing the home blocks the install.
 - A file older than 2 minutes means the daemon stopped refreshing it, and is ignored.
 - Bots learn this from the shared-computer section of their prompt. `start` pauses with the caller as `exempt_bot`, reaps and answers `{quiesce, report, proceed}`. Its report is recorded on the release as a `quiesce` event, and each lead gets a note.
