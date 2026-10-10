@@ -68,16 +68,22 @@ pub struct Shape {
     pub areas: Vec<String>,
     /// A ce area or the policy files: security work.
     pub security: bool,
+    /// The policy files (`.hermes/*.toml`): the owner reviews it whatever
+    /// the setting (H-267, H-313).
+    #[serde(default)]
+    pub policy: bool,
 }
 
-/// Whether the PR waits for the owner (§4.3, ruling 7629a873): never under
-/// `none`; always for security work otherwise; then per the setting.
+/// Whether the PR waits for the owner (§4.3, ruling 7629a873): always for
+/// the policy files (H-267, H-313); never under `none`; always for security
+/// work otherwise; then per the setting.
 pub fn required(settings: &Settings, shape: &Shape, pr: &Pr) -> bool {
     // The owner's own PR (a Leave out's revert, H-272) waits for nobody.
     if is_owners(pr) {
         return false;
     }
     match settings.mode {
+        _ if shape.policy => true,
         Mode::None => false,
         _ if shape.security => true,
         Mode::All => true,

@@ -107,8 +107,10 @@ pub fn compute(app: &AppState, pr: &Pr, exact: bool) -> anyhow::Result<Mergeable
         }
     }
     let settings = app.db.review_settings(&pr.project_id)?;
-    let owner_needed = owner::required(&settings, &shape, pr) || needs.iter().any(|r| r == "owner");
-    if owner_needed && settings.mode != owner::Mode::None {
+    // `required` holds the policy files to the owner under `none` too (H-313).
+    let owner_needed = owner::required(&settings, &shape, pr)
+        || (settings.mode != owner::Mode::None && needs.iter().any(|r| r == "owner"));
+    if owner_needed {
         let fresh = latest(&reviews, "owner")
             .is_some_and(|r| r.verdict == Verdict::Approved && !r.stale(pr));
         if !fresh {

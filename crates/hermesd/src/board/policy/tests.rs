@@ -120,22 +120,70 @@ fn checks_run_for_the_paths_they_name() {
 #[test]
 fn the_lead_waives_a_role_with_a_reason() {
     let required = roles(&[Architect, Ux, Ce]);
-    let waiver = waive(&required, Ux, "  copy-only change  ", "lead-bot", true).unwrap();
+    let changed = paths(&["apps/desktop/src/App.tsx"]);
+    let waiver = waive(
+        &required,
+        &changed,
+        Ux,
+        "  copy-only change  ",
+        "lead-bot",
+        true,
+    )
+    .unwrap();
     assert_eq!(waiver.reason, "copy-only change");
     assert_eq!(waiver.by, "lead-bot");
-    assert_eq!(after_waivers(&required, &[waiver]), roles(&[Architect, Ce]));
+    assert_eq!(
+        after_waivers(&required, &changed, &[waiver]),
+        roles(&[Architect, Ce])
+    );
 }
 
 #[test]
 fn a_waiver_is_refused_for_ce_the_owner_no_reason_or_no_lead() {
     let required = roles(&[Architect, Ce, Owner]);
+    let changed = paths(&["crates/x.rs"]);
     for role in [Ce, Owner] {
-        let err = waive(&required, role, "trust me", "lead", true).unwrap_err();
+        let err = waive(&required, &changed, role, "trust me", "lead", true).unwrap_err();
         assert!(err.to_string().contains("never be waived"), "{err}");
     }
-    assert!(waive(&required, Architect, " ", "lead", true).is_err());
-    assert!(waive(&required, Architect, "why", "dev", false).is_err());
-    assert!(waive(&required, Ux, "not needed", "lead", true).is_err());
+    assert!(waive(&required, &changed, Architect, " ", "lead", true).is_err());
+    assert!(waive(&required, &changed, Architect, "why", "dev", false).is_err());
+    assert!(waive(&required, &changed, Ux, "not needed", "lead", true).is_err());
+}
+
+/// H-313: on the policy files the lead can't waive architect, ce or the
+/// owner, and the refusal says why; an ordinary PR's architect still can be.
+#[test]
+fn a_waiver_on_a_policy_pr_is_refused_with_the_reason() {
+    for file in [REVIEWERS_PATH, CHECKS_PATH] {
+        let changed = paths(&["crates/x.rs", file]);
+        let required = required_roles(&fixture(), &changed);
+        for role in [Architect, Ce, Owner] {
+            let err = waive(&required, &changed, role, "trivial", "lead", true).unwrap_err();
+            let text = err.to_string();
+            assert!(text.contains("policy files"), "{file} {role:?}: {text}");
+            assert!(text.contains(role.as_str()), "{file} {role:?}: {text}");
+        }
+    }
+    let ordinary = paths(&["crates/x.rs"]);
+    let required = roles(&[Architect]);
+    let waiver = waive(&required, &ordinary, Architect, "trivial", "lead", true).unwrap();
+    assert!(after_waivers(&required, &ordinary, &[waiver]).is_empty());
+}
+
+/// H-313: an architect waiver stored for a PR that later touches the policy
+/// files takes nothing off.
+#[test]
+fn a_stored_architect_waiver_takes_nothing_off_a_policy_pr() {
+    let changed = paths(&[REVIEWERS_PATH]);
+    let required = required_roles(&fixture(), &changed);
+    let stored = [Waiver {
+        role: Architect,
+        reason: "given before the policy change".into(),
+        by: "lead".into(),
+    }];
+    assert_eq!(after_waivers(&required, &changed, &stored), required);
+    assert!(after_waivers(&required, &changed, &stored).contains(&Architect));
 }
 
 #[test]
@@ -149,7 +197,10 @@ fn a_stored_waiver_for_ce_or_the_owner_takes_nothing_off() {
             by: "lead".into(),
         })
         .collect();
-    assert_eq!(after_waivers(&required, &forged), required);
+    assert_eq!(
+        after_waivers(&required, &paths(&["crates/x.rs"]), &forged),
+        required
+    );
 }
 
 #[test]

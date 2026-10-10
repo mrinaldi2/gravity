@@ -79,28 +79,37 @@ impl BoardTx<'_> {
              ON CONFLICT(pr_id) DO UPDATE SET areas = excluded.areas, security = excluded.security",
             params![pr_id, serde_json::to_string(&shape.areas)?, shape.security],
         )?;
+        self.conn.execute(
+            "INSERT INTO pr_shape_policy(pr_id, policy) VALUES (?1, ?2)
+             ON CONFLICT(pr_id) DO UPDATE SET policy = excluded.policy",
+            params![pr_id, shape.policy],
+        )?;
         self.note_pr_id(pr_id)
     }
 
-    /// What the PR's head touches; unknown yet reads as security work, so
-    /// a PR whose shape wasn't read never skips the owner.
+    /// What the PR's head touches; unknown yet reads as security work on
+    /// the policy files, so a PR whose shape wasn't read never skips the
+    /// owner, whatever the setting (H-313).
     pub fn pr_shape(&self, pr_id: &str) -> anyhow::Result<Shape> {
-        let row: Option<(String, bool)> = self
+        let row: Option<(String, bool, bool)> = self
             .conn
             .query_row(
-                "SELECT areas, security FROM pr_shape WHERE pr_id = ?1",
+                "SELECT s.areas, s.security, COALESCE(p.policy, 0) FROM pr_shape s
+                 LEFT JOIN pr_shape_policy p ON p.pr_id = s.pr_id WHERE s.pr_id = ?1",
                 params![pr_id],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .optional()?;
         Ok(match row {
-            Some((areas, security)) => Shape {
+            Some((areas, security, policy)) => Shape {
                 areas: serde_json::from_str(&areas).unwrap_or_default(),
                 security,
+                policy,
             },
             None => Shape {
                 areas: Vec::new(),
                 security: true,
+                policy: true,
             },
         })
     }

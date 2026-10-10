@@ -174,25 +174,29 @@ pub fn needs(app: &AppState, pr: &Pr) -> anyhow::Result<(Vec<ReviewRole>, Shape)
             Shape {
                 areas: Vec::new(),
                 security: false,
+                policy: false,
             },
         ));
     }
     let cache = repo::of_project(app, &pr.project_id, Some(&pr.repo))?.cached(app);
     let base = policy::read(&cache, &pr.base_sha)?;
     let changed = git_cache::changed_paths(&cache, &pr.base_sha, &pr.head_sha)?;
+    // Read from the paths alone, so a broken reviewers.toml can't hide it.
+    let policy = crate::board::policy::touches_policy(&changed);
     let shape = match &base.reviewers {
         Ok(reviewers) => {
             let areas = crate::board::policy::matched_areas(reviewers, &changed);
             Shape {
-                security: crate::board::policy::touches_policy(&changed)
-                    || areas.iter().any(|a| a.roles.contains(&ReviewRole::Ce)),
+                security: policy || areas.iter().any(|a| a.roles.contains(&ReviewRole::Ce)),
                 areas: areas.iter().map(|a| a.name.clone()).collect(),
+                policy,
             }
         }
         // A broken reviewers.toml asks for everything, the owner included.
         Err(_) => Shape {
             areas: Vec::new(),
             security: true,
+            policy,
         },
     };
     Ok((base.required_roles(&changed).into_iter().collect(), shape))

@@ -236,10 +236,18 @@ pub struct Waiver {
     pub by: String,
 }
 
+/// Whether `role` is one a change to `changed` can't do without: architect,
+/// ce and the owner on the policy files (H-267, H-313).
+fn policy_bound(role: ReviewRole, changed: &[String]) -> bool {
+    POLICY_ROLES.contains(&role) && touches_policy(changed)
+}
+
 /// A waiver the lead asks for, if it may be given: only by the lead, with a
-/// reason, for a role the PR needs, and never for ce or the owner.
+/// reason, for a role the PR needs, never for ce or the owner, and never for
+/// architect, ce or the owner when `changed` touches the policy files.
 pub fn waive(
     required: &BTreeSet<ReviewRole>,
+    changed: &[String],
     role: ReviewRole,
     reason: &str,
     by: &str,
@@ -247,6 +255,13 @@ pub fn waive(
 ) -> anyhow::Result<Waiver> {
     if !by_lead {
         return Err(forbidden("only the lead can waive a reviewer role"));
+    }
+    if policy_bound(role, changed) {
+        return Err(forbidden(format!(
+            "this PR changes the policy files (.hermes/*.toml), which always need \
+             architect, ce and the owner: the {} review can't be waived",
+            role.as_str()
+        )));
     }
     if !role.waivable() {
         return Err(forbidden(format!(
@@ -272,12 +287,21 @@ pub fn waive(
 }
 
 /// The roles still to review once the waivers are taken off. A waiver for ce
-/// or the owner, however it was stored, takes nothing off.
-pub fn after_waivers(required: &BTreeSet<ReviewRole>, waivers: &[Waiver]) -> BTreeSet<ReviewRole> {
+/// or the owner, or for architect on the policy files, however it was
+/// stored, takes nothing off.
+pub fn after_waivers(
+    required: &BTreeSet<ReviewRole>,
+    changed: &[String],
+    waivers: &[Waiver],
+) -> BTreeSet<ReviewRole> {
     required
         .iter()
         .copied()
-        .filter(|role| !waivers.iter().any(|w| w.role == *role && role.waivable()))
+        .filter(|role| {
+            !waivers
+                .iter()
+                .any(|w| w.role == *role && role.waivable() && !policy_bound(*role, changed))
+        })
         .collect()
 }
 
