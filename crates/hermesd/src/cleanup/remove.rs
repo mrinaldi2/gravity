@@ -7,7 +7,8 @@
 //! On Windows a file an antivirus or the indexer holds makes a delete fail
 //! for a moment: it is retried with a growing wait, and a file still held
 //! after the last one leaves the job held, naming the holder. Long paths go
-//! to the file system in their `\\?\` spelling.
+//! to the file system in their `\\?\` spelling. Nothing is deleted while a
+//! program has its current folder in the tree ([`not_in_use`]).
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -95,6 +96,51 @@ pub fn retrying(
     }
 }
 
+/// Rule 3 where the Restart Manager can't see it: on Windows it names the
+/// programs with a file open under `tree`, never one whose current folder is
+/// there. The tree's folder is renamed to a sibling and straight back, which
+/// Windows refuses while any process has its current folder or an open file
+/// under it: busy, retried, when refused; held when the tree can't be put
+/// back. Elsewhere a rename always works and `lsof` lists working folders.
+pub fn not_in_use(tree: &Path) -> Result<(), Outcome> {
+    if !cfg!(windows) {
+        return Ok(());
+    }
+    let mut name = tree.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".in-use-check-{}", std::process::id()));
+    let aside = tree.with_file_name(name);
+    if let Err(error) = std::fs::rename(tree, &aside) {
+        let error = anyhow::Error::from(error);
+        if !crate::holders::is_held_error(&error) {
+            return Err(Outcome::Busy(format!(
+                "couldn't tell whether it is in use: {error:#}"
+            )));
+        }
+        let who = crate::holders::list(&crate::holders::spellings(tree))
+            .ok()
+            .filter(|h| !h.is_empty())
+            .map(|h| crate::holders::held_by(&h))
+            .unwrap_or_else(|| "a program has it open".to_string());
+        return Err(Outcome::Busy(format!("in use: {who}")));
+    }
+    // Back, retried: a scanner may open the moved folder for a moment.
+    let mut back = std::fs::rename(&aside, tree);
+    for ms in HELD_WAITS_MS {
+        if back.is_ok() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(ms));
+        back = std::fs::rename(&aside, tree);
+    }
+    back.map_err(|error| {
+        Outcome::Held(format!(
+            "{} was moved to {} to check nothing had it open, and couldn't be put back              ({error}): move it back by hand",
+            tree.display(),
+            aside.display()
+        ))
+    })
+}
+
 /// `remove_dir_all`, after making read-only files writable (links skipped,
 /// never followed) if the first try fails. The OS error stays in the chain,
 /// so a held file can be told apart.
@@ -118,8 +164,9 @@ fn git(dir: &Path, args: &[&str]) -> anyhow::Result<String> {
 }
 
 /// Removes the worktree at `tree`, registered in `main_clone`: its build
-/// output first, then the worktree itself. `recheck` is §15.3 rule 2 again.
-/// The bytes freed, or why it stopped.
+/// output first, then the worktree itself. `recheck` is §15.3 rule 2 again,
+/// and [`not_in_use`] runs before each delete. The bytes freed, or why it
+/// stopped.
 pub fn worktree(
     tree: &Path,
     main_clone: &Path,
@@ -135,9 +182,13 @@ pub fn worktree(
             continue;
         }
         recheck().map_err(Outcome::Held)?;
+        not_in_use(tree)?;
         retrying(&out, &HELD_WAITS_MS, recheck, || remove_dir(&long(&out)))?;
     }
     recheck().map_err(Outcome::Held)?;
+    // `worktree remove` deletes what it can before it stops on a folder in
+    // use, so a session sitting in the tree is found first.
+    not_in_use(tree)?;
     let shown = tree.display().to_string();
     // `worktree remove` runs `status` in the tree; the tree's emptied
     // filters reach it through git's own command-line config.
@@ -155,6 +206,7 @@ pub fn worktree(
         } else if cfg!(windows) {
             // git passed its clean check and stopped on a file it couldn't
             // delete: what is left goes by path, held files retried.
+            not_in_use(tree)?;
             retrying(tree, &HELD_WAITS_MS, recheck, || remove_dir(&long(tree)))?;
         } else {
             return Err(Outcome::Failed(format!("removing {shown}: {text}")));

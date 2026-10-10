@@ -17,12 +17,35 @@ use hermesd::cleanup::model::JobState;
 const DEV: usize = 1;
 
 /// A process whose working directory is `dir`, as a session in the tree.
+/// On Windows a native one, back once it has started: an MSYS `sleep` lets
+/// its folder be deleted, and a process takes its folder as it starts up.
 fn sitting_in(dir: &std::path::Path) -> Child {
-    Command::new("sleep")
-        .arg("300")
+    if !cfg!(windows) {
+        return Command::new("sleep")
+            .arg("300")
+            .current_dir(dir)
+            .spawn()
+            .expect("sleep");
+    }
+    let mut session = Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "'ready'; Start-Sleep 300",
+        ])
         .current_dir(dir)
+        .stdout(std::process::Stdio::piped())
         .spawn()
-        .expect("sleep")
+        .expect("powershell");
+    let mut ready = String::new();
+    std::io::BufRead::read_line(
+        &mut std::io::BufReader::new(session.stdout.take().unwrap()),
+        &mut ready,
+    )
+    .unwrap();
+    assert_eq!(ready.trim(), "ready");
+    session
 }
 
 #[tokio::test]
@@ -59,7 +82,7 @@ async fn a_tree_in_use_is_retried_every_15_minutes_then_held_after_24_hours() {
         "{}",
         job.reason
     );
-    assert!(busy.join("a.txt").exists());
+    assert!(busy.join("a.txt").exists() && busy.join(".git").is_file());
     let _ = session.kill();
     let _ = session.wait();
 
@@ -74,6 +97,43 @@ async fn a_tree_in_use_is_retried_every_15_minutes_then_held_after_24_hours() {
     step(&r, t0 + Duration::minutes(16)).await;
     assert_eq!(job_at(&r, &pr, &brief).state, JobState::Done);
     assert!(!brief.exists());
+}
+
+/// The removal itself looks again on Windows, where the Restart Manager
+/// can't name a program whose current folder is the tree: every file stays,
+/// `.git` included. (Elsewhere rule 3's `lsof` lists working folders.)
+#[cfg(windows)]
+#[tokio::test]
+async fn a_tree_a_program_sits_in_is_never_touched_by_the_removal() {
+    use common::cleanup::listed;
+    use hermesd::cleanup::model::Outcome;
+    use hermesd::cleanup::remove;
+
+    let r = setup().await;
+    let tree = linked(&r, "a", "H-1-a");
+    let main = main_clone(&r);
+    std::fs::create_dir_all(tree.join("target/debug")).unwrap();
+    std::fs::write(
+        tree.join("target/debug/out"),
+        "built
+",
+    )
+    .unwrap();
+    let mut session = sitting_in(&tree);
+
+    let out = remove::worktree(&tree, &main, &|| Ok(()));
+    match &out {
+        Err(Outcome::Busy(why)) => assert!(why.contains("in use"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+    assert!(tree.join(".git").is_file() && tree.join("a.txt").exists());
+    assert!(tree.join("target/debug/out").exists(), "nothing deleted");
+    assert!(listed(&main).contains("gravity-wt-desktopdev-a"));
+    let _ = session.kill();
+    let _ = session.wait();
+
+    remove::worktree(&tree, &main, &|| Ok(())).unwrap_or_else(|e| panic!("{e:?}"));
+    assert!(!tree.exists());
 }
 
 #[tokio::test]
@@ -91,9 +151,10 @@ async fn dirty_or_unpushed_work_is_salvaged_and_held_never_deleted() {
     std::fs::write(dirty.join("notes.md"), "work in progress\n").unwrap();
     let marker = r.dev.join("filter-ran");
     let main = main_clone(&r);
+    // sh would eat a Windows path's backslashes.
     let clean = format!(
         "sh -c 'ps -o command= -p $PPID >> {}; cat'",
-        marker.display()
+        marker.display().to_string().replace('\\', "/")
     );
     // `git status` here would run it (the control), as `diff-index` does
     // when the tree's stat is too fresh to trust.

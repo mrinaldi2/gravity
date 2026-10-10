@@ -150,11 +150,12 @@ fn a_local_run_reaches_no_remote_and_inherits_no_git_env() {
         .run()
         .unwrap();
     for line in origins.lines() {
+        // Windows shows the path quoted, each `\` doubled.
+        let shown = line.replace(r"\\", "/").replace('\\', "/");
         assert!(
             line.starts_with("file:.git/config")
                 || line.starts_with("command line:")
-                || line.contains("/run/git/line-endings-")
-                || line.contains("\\run\\git\\line-endings-"),
+                || shown.contains("/run/git/line-endings-"),
             "{line}"
         );
     }

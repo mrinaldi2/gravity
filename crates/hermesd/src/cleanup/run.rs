@@ -101,6 +101,9 @@ pub fn attempt(app: &AppState, target: &Target, merge: &Merge<'_>) -> Outcome {
     if let Some(who) = in_use(tree) {
         return Outcome::Busy(who);
     }
+    if let Err(outcome) = remove::not_in_use(tree) {
+        return outcome;
+    }
     // Rule 4: no unsaved work, or it is saved first and the tree kept.
     let found = match unsaved::find(tree, merge.merged_sha) {
         Ok(found) => found,

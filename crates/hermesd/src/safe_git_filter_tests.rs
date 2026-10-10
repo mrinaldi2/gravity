@@ -168,6 +168,8 @@ fn planted_filters_never_run_in_unsaved_work_salvage_or_removal() {
 
     racy(&wt);
     assert!(unsaved::find(&wt, "").unwrap().changed.is_empty());
+    // As checked out (CRLF on Windows), so putting it back leaves it clean.
+    let checked_out = std::fs::read(wt.join("file.txt")).unwrap();
     // A changed file: the salvage diff reads it, through its filter.
     std::fs::write(wt.join("file.txt"), "changed\n").unwrap();
     let found = unsaved::find(&wt, "").unwrap();
@@ -175,7 +177,7 @@ fn planted_filters_never_run_in_unsaved_work_salvage_or_removal() {
     unsaved::salvage(&wt, "", &found, &dir.path().join("salvage")).unwrap();
     not_run(&marker, "unsaved work and salvage");
 
-    std::fs::write(wt.join("file.txt"), "hello\n").unwrap();
+    std::fs::write(wt.join("file.txt"), checked_out).unwrap();
     std::fs::remove_file(wt.join(crate::worktree::METADATA_FILE)).unwrap();
     racy(&wt);
     remove::worktree(&wt, &repo, &|| Ok(())).unwrap_or_else(|e| panic!("{e:?}"));
@@ -192,7 +194,8 @@ fn a_filter_only_the_worktree_names_never_runs_when_it_is_removed() {
     std::fs::remove_file(wt.join(crate::worktree::METADATA_FILE)).unwrap();
     plain(&repo, &["config", "extensions.worktreeConfig", "true"]);
     plant(&wt, &marker, true);
-    let main = unchecked(&repo, &["config", "--get-regexp", r"^filter\."]);
+    // The main clone's own config: a system one may name `lfs`.
+    let main = unchecked(&repo, &["config", "--local", "--get-regexp", r"^filter\."]);
     assert!(
         main.stdout.is_empty(),
         "only the worktree names the drivers"
