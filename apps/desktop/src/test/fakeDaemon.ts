@@ -3,6 +3,8 @@ import type { BoardCall, BoardReply } from "../protocol/board";
 import type { ConnectionStatus, Endpoint } from "../protocol/connection";
 import type { Grant } from "../protocol/entities";
 import type { BoardEvent } from "../protocol/gen/hermes/board/v1/requests_pb";
+import type { PrPush } from "../protocol/gen/hermes/pr/v1/pr_pb";
+import type { PrCall, PrReply } from "../protocol/prs";
 import type {
   PushOf,
   ReplyOf,
@@ -26,6 +28,9 @@ type Responder = (body: RequestBody) => ServerReply;
 /** Answers one board request arm. Throw (a `DaemonError`) to simulate an `Envelope.error`. */
 type BoardResponder = (call: BoardCall) => BoardReply | Promise<BoardReply>;
 
+/** Answers one pull request arm. Throw (a `DaemonError`) to simulate an `Envelope.error`. */
+type PrResponder = (call: PrCall) => PrReply | Promise<PrReply>;
+
 /**
  * In-memory `DaemonApi` for component tests: requests are answered from a
  * per-type responder table and pushes can be emitted on demand. Replies are
@@ -43,6 +48,7 @@ export class FakeDaemon implements DaemonApi {
   readonly requests: RecordedRequest[] = [];
   readonly fired: FireBody[] = [];
   readonly boardCalls: BoardCall[] = [];
+  readonly prCalls: PrCall[] = [];
   attachResult: AttachResult = { seq: 0, resumed: false };
   /** The `resume` flag of every attach, in order. */
   readonly attachResumes: boolean[] = [];
@@ -56,6 +62,8 @@ export class FakeDaemon implements DaemonApi {
   private readonly handlers: PushHandlerSets = emptyHandlers();
   private readonly boardResponders = new Map<string, BoardResponder>();
   private readonly boardHandlers = new Set<(event: BoardEvent) => void>();
+  private readonly prResponders = new Map<string, PrResponder>();
+  private readonly prHandlers = new Set<(push: PrPush) => void>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
 
   /** Registers the reply for one request type; later calls replace earlier ones. */
@@ -73,6 +81,18 @@ export class FakeDaemon implements DaemonApi {
   emitBoardEvent(event: BoardEvent): void {
     for (const handler of this.boardHandlers) {
       handler(event);
+    }
+  }
+
+  /** Registers the reply for one pull request arm; later calls replace earlier ones. */
+  onPr(arm: PrCall["case"], responder: PrResponder): this {
+    this.prResponders.set(arm, responder);
+    return this;
+  }
+
+  emitPrPush(push: PrPush): void {
+    for (const handler of this.prHandlers) {
+      handler(push);
     }
   }
 
@@ -153,6 +173,24 @@ export class FakeDaemon implements DaemonApi {
     this.boardHandlers.add(handler);
     return () => {
       this.boardHandlers.delete(handler);
+    };
+  }
+
+  // fallow-ignore-next-line unused-class-member -- reached through PrApi and the PR tab tests
+  async pr(call: PrCall): Promise<PrReply> {
+    this.prCalls.push(call);
+    const responder = this.prResponders.get(call.case);
+    if (responder === undefined) {
+      throw new Error(`no fake pull request responder for '${call.case}'`);
+    }
+    return responder(call);
+  }
+
+  // fallow-ignore-next-line unused-class-member -- reached through PrApi and the PR tab tests
+  onPrPush(handler: (push: PrPush) => void): () => void {
+    this.prHandlers.add(handler);
+    return () => {
+      this.prHandlers.delete(handler);
     };
   }
 

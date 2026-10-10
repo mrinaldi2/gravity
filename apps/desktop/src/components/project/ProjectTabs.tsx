@@ -1,11 +1,12 @@
 import { useRef, useState } from "react";
 import type { KeyboardEvent, ReactElement } from "react";
-import { MORE_TABS, PRIMARY_TABS } from "../../app/selection";
+import { MORE_TABS } from "../../app/selection";
 import type { ProjectTab } from "../../app/selection";
 
 const PROJECT_TAB_LABEL: Readonly<Record<ProjectTab, string>> = {
   overview: "Overview",
   board: "Board",
+  prs: "Pull requests",
   team: "Team",
   releases: "Releases",
   meetings: "Meetings",
@@ -22,14 +23,19 @@ export function projectTabId(tab: ProjectTab): string {
 
 export const PROJECT_PANEL_ID = "project-panel";
 
-interface ProjectTabsProps {
+interface MoreMenuProps {
   readonly active: ProjectTab;
   readonly onSelect: (tab: ProjectTab) => void;
 }
 
-/** Where an arrow, Home or End key moves focus from tab `index`. */
-function targetIndex(key: string, index: number): number | null {
-  const last = PRIMARY_TABS.length - 1;
+interface ProjectTabsProps extends MoreMenuProps {
+  /** The tabs in the bar, in ⌘1… order. */
+  readonly tabs: readonly ProjectTab[];
+}
+
+/** Where an arrow, Home or End key moves focus from tab `index` of `count`. */
+function targetIndex(key: string, index: number, count: number): number | null {
+  const last = count - 1;
   switch (key) {
     case "ArrowRight":
       return index === last ? 0 : index + 1;
@@ -45,7 +51,7 @@ function targetIndex(key: string, index: number): number | null {
 }
 
 /** More ▾: the project's secondary views (UX-024 §2), as a small menu. */
-function MoreMenu({ active, onSelect }: ProjectTabsProps): ReactElement {
+function MoreMenu({ active, onSelect }: MoreMenuProps): ReactElement {
   const [open, setOpen] = useState(false);
   const current = MORE_TABS.find((tab) => tab === active);
   return (
@@ -85,17 +91,17 @@ function MoreMenu({ active, onSelect }: ProjectTabsProps): ReactElement {
 }
 
 /**
- * The project window's tab bar: a WAI-ARIA tablist of the five main views
+ * The project window's tab bar: a WAI-ARIA tablist of the main views
  * with one tab stop, where the arrow keys, Home and End move between them and
  * select as they go; then More for the rest.
  */
-export default function ProjectTabs({ active, onSelect }: ProjectTabsProps): ReactElement {
+export default function ProjectTabs({ tabs, active, onSelect }: ProjectTabsProps): ReactElement {
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
-  const primary = PRIMARY_TABS.some((tab) => tab === active);
+  const primary = tabs.some((tab) => tab === active);
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
-    const next = targetIndex(event.key, index);
-    const tab = next === null ? undefined : PRIMARY_TABS[next];
+    const next = targetIndex(event.key, index, tabs.length);
+    const tab = next === null ? undefined : tabs[next];
     if (next === null || tab === undefined) {
       return;
     }
@@ -107,7 +113,7 @@ export default function ProjectTabs({ active, onSelect }: ProjectTabsProps): Rea
   return (
     <div className="tabs project-tabs">
       <div className="project-tablist" role="tablist" aria-label="Project">
-        {PRIMARY_TABS.map((tab, index) => {
+        {tabs.map((tab, index) => {
           const selected = tab === active;
           return (
             <button

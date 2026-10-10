@@ -1,6 +1,7 @@
 import type { AttachResult, DaemonApi } from "./api";
 import type { BoardCall, BoardReply } from "./board";
-import { BoardChannel, PROTO_ENCODING } from "./board";
+import { PROTO_ENCODING } from "./board";
+import { BinaryChannel } from "./channel";
 import { CLIENT_ID, DaemonError, PROTOCOL_VERSION } from "./connection";
 import type { ConnectionStatus, Endpoint } from "./connection";
 import type { Grant } from "./entities";
@@ -19,6 +20,8 @@ import { isReply, parseServerMessage, replyIs } from "./wire";
 import { CONTRACTS } from "./contracts";
 import { OWNER_ACTIONS_FEATURE } from "./ownerActions";
 import type { BoardEvent } from "./gen/hermes/board/v1/requests_pb";
+import type { PrPush } from "./gen/hermes/pr/v1/pr_pb";
+import type { PrCall, PrReply } from "./prs";
 
 interface PendingRequest {
   readonly resolve: (reply: ServerReply) => void;
@@ -61,7 +64,7 @@ export class DaemonClient implements DaemonApi {
   private backoffMs = MIN_BACKOFF_MS;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly pending = new Map<string, PendingRequest>();
-  private readonly boardChannel = new BoardChannel();
+  private readonly binary = new BinaryChannel();
   private readonly cursors = new Map<string, number>();
   private readonly statusListeners = new Set<(status: ConnectionStatus) => void>();
   private readonly handlers: PushHandlerSets = emptyHandlers();
@@ -163,20 +166,19 @@ export class DaemonClient implements DaemonApi {
   }
 
   board(call: BoardCall): Promise<BoardReply> {
-    const ws = this.ws;
-    if (this.status !== "connected" || ws === null || ws.readyState !== WebSocket.OPEN) {
-      return Promise.reject(new DaemonError("disconnected", "not connected to daemon"));
-    }
-    if (!this.encodings.includes(PROTO_ENCODING)) {
-      return Promise.reject(
-        new DaemonError("unsupported", "the board needs a newer Hermes service"),
-      );
-    }
-    return this.boardChannel.send(ws, BigInt(this.newReqId()), call);
+    return this.sendBinary((ws, reqId) => this.binary.board(ws, reqId, call));
   }
 
   onBoardEvent(handler: (event: BoardEvent) => void): () => void {
-    return this.boardChannel.on(handler);
+    return this.binary.onBoard(handler);
+  }
+
+  pr(call: PrCall): Promise<PrReply> {
+    return this.sendBinary((ws, reqId) => this.binary.pr(ws, reqId, call));
+  }
+
+  onPrPush(handler: (push: PrPush) => void): () => void {
+    return this.binary.onPr(handler);
   }
 
   /**
@@ -244,7 +246,7 @@ export class DaemonClient implements DaemonApi {
       if (typeof event.data === "string") {
         this.handleFrame(event.data);
       } else if (event.data instanceof ArrayBuffer) {
-        this.boardChannel.receive(new Uint8Array(event.data));
+        this.binary.receive(new Uint8Array(event.data));
       }
     });
     ws.addEventListener("close", () => {
@@ -312,12 +314,23 @@ export class DaemonClient implements DaemonApi {
     }
   }
 
-  private sendRequest(body: RequestBody): Promise<ServerReply> {
-    if (this.status !== "connected") {
+  /** A binary request: the board and pull requests need a daemon that speaks proto. */
+  private sendBinary<T>(send: (ws: WebSocket, reqId: bigint) => Promise<T>): Promise<T> {
+    const ws = this.ws;
+    if (this.status !== "connected" || ws === null || ws.readyState !== WebSocket.OPEN) {
       return Promise.reject(new DaemonError("disconnected", "not connected to daemon"));
     }
+    if (!this.encodings.includes(PROTO_ENCODING)) {
+      return Promise.reject(
+        new DaemonError("unsupported", "the board needs a newer Hermes service"),
+      );
+    }
+    return send(ws, BigInt(this.newReqId()));
+  }
+
+  private sendRequest(body: RequestBody): Promise<ServerReply> {
     const ws = this.ws;
-    if (ws === null || ws.readyState !== WebSocket.OPEN) {
+    if (this.status !== "connected" || ws === null || ws.readyState !== WebSocket.OPEN) {
       return Promise.reject(new DaemonError("disconnected", "not connected to daemon"));
     }
     return this.sendRawOn(ws, body);
@@ -366,7 +379,7 @@ export class DaemonClient implements DaemonApi {
   private failPending(error: Error): void {
     const entries = [...this.pending.values()];
     this.pending.clear();
-    this.boardChannel.failAll(error);
+    this.binary.failAll(error);
     for (const entry of entries) {
       entry.reject(error);
     }

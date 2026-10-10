@@ -2,6 +2,7 @@ import type { BoardApi } from "./board";
 import type { ConnectionStatus, Endpoint } from "./connection";
 import type { Grant } from "./entities";
 import type { PushOf, ReplyOf, ServerPushType, ServerReplyType } from "./messages";
+import type { PrApi } from "./prs";
 import type { FireBody, RequestBody } from "./requests";
 
 /** Terminal attach result: the server's sequence number and whether replay resumed. */
@@ -14,7 +15,7 @@ export interface AttachResult {
  * The control-plane surface the UI depends on. `DaemonClient` is the real
  * implementation; tests supply their own, so no component imports a socket.
  */
-export interface DaemonApi extends BoardApi {
+export interface DaemonApi extends BoardApi, PrApi {
   /** Changes whenever the configured daemon endpoint changes. */
   readonly connectionGeneration: number;
   readonly status: ConnectionStatus;

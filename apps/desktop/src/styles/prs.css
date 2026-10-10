@@ -1,0 +1,168 @@
+/* The Pull requests tab (H-276, UX-051): the list, and one PR with its
+   overview, files and checks. States are a glyph plus a word; the tone only
+   adds colour. */
+
+.pr-list-pane,
+.pr-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 16px 20px;
+  overflow-y: auto;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.pr-tone-ok {
+  color: var(--green);
+}
+
+.pr-tone-warn {
+  color: var(--amber);
+}
+
+.pr-tone-bad {
+  color: var(--red);
+}
+
+.pr-tone-you {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pr-tone-dim,
+.pr-dim {
+  color: var(--text-dim);
+}
+
+.pr-mono,
+.pr-sha {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.pr-sha {
+  color: var(--text-strong);
+}
+
+.pr-plain {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pr-empty {
+  color: var(--text-dim);
+}
+
+/* Filters: "Waiting for you · 2" "Open · 5" … */
+.pr-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pr-filter {
+  padding: 3px 10px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.pr-filter:hover {
+  color: var(--text);
+}
+
+.pr-filter-on {
+  color: var(--text-strong);
+  background: var(--bg-active);
+  border-color: var(--bg-active);
+}
+
+/* List rows */
+.pr-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-raised);
+}
+
+.pr-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 4px 10px;
+  align-items: start;
+  padding: 10px 14px;
+}
+
+.pr-row + .pr-row {
+  border-top: 1px solid var(--border);
+}
+
+.pr-row-number {
+  font-family: var(--mono);
+  color: var(--text-dim);
+  padding-top: 1px;
+}
+
+.pr-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pr-row-title {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.pr-row-open {
+  padding: 0;
+  font-weight: 600;
+  color: var(--text-strong);
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.pr-row-open:hover {
+  text-decoration: underline;
+}
+
+.pr-row-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.pr-marker {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pr-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 3px;
+}
+
+.pr-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  font-size: 11.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}

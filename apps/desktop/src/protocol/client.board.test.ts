@@ -155,3 +155,80 @@ describe("DaemonClient board surface", () => {
     await expect(reply).rejects.toMatchObject({ code: "disconnected" });
   });
 });
+
+describe("DaemonClient pull request surface (H-273)", () => {
+  let harness: SocketHarness;
+  let client: DaemonClient;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    harness = installFakeWebSocket();
+    client = new DaemonClient({ host: "mini", port: 7777 }, () => Promise.resolve("token"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("sends a PR request on the board's request ids and resolves with its response", async () => {
+    const socket = await connectWith(client, harness, ["proto"]);
+    const board = client.board({ case: "boardGet", value: { projectId: "p1" } });
+    const boardId = lastRequest(socket).reqId;
+    const reply = client.pr({ case: "prGet", value: { projectId: "p1", number: 42 } });
+    const request = lastRequest(socket);
+    expect(request.body.case).toBe("prRequest");
+    expect(request.reqId).not.toBe(boardId);
+    expect(request.body.value).toMatchObject({ request: { case: "prGet", value: { number: 42 } } });
+
+    deliver(socket, {
+      reqId: request.reqId,
+      body: { case: "prResponse", value: { response: { case: "pr", value: { number: 42 } } } },
+    });
+    await expect(reply).resolves.toMatchObject({ case: "pr", value: { number: 42 } });
+    deliver(socket, {
+      reqId: boardId,
+      body: { case: "prResponse", value: { response: { case: "pr", value: { number: 1 } } } },
+    });
+    await expect(board).rejects.toMatchObject({ code: "protocol_error" });
+  });
+
+  it("rejects a PR request with the envelope error's code", async () => {
+    const socket = await connectWith(client, harness, ["proto"]);
+    const reply = client.pr({ case: "prGet", value: { projectId: "p1", number: 9 } });
+    deliver(socket, {
+      reqId: lastRequest(socket).reqId,
+      body: { case: "error", value: { code: "not_found", message: "no PR #9" } },
+    });
+    await expect(reply).rejects.toMatchObject({ code: "not_found" });
+  });
+
+  it("hands PR pushes to their subscribers, not the board's", async () => {
+    const socket = await connectWith(client, harness, ["proto"]);
+    const prs: string[] = [];
+    const boards: bigint[] = [];
+    const off = client.onPrPush((push) => {
+      prs.push(push.push.case ?? "");
+    });
+    client.onBoardEvent((event) => {
+      boards.push(event.seq);
+    });
+    deliver(socket, {
+      body: {
+        case: "prPush",
+        value: {
+          push: { case: "checkUpdated", value: { projectId: "p1", sha: "abc", name: "rust" } },
+        },
+      },
+    });
+    off();
+    deliver(socket, {
+      body: {
+        case: "prPush",
+        value: { push: { case: "prUpdated", value: { projectId: "p1", number: 1 } } },
+      },
+    });
+    expect(prs).toEqual(["checkUpdated"]);
+    expect(boards).toEqual([]);
+  });
+});

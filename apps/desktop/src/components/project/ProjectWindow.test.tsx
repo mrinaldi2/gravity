@@ -134,4 +134,27 @@ describe("ProjectWindow", () => {
       "Meta+5",
     );
   });
+
+  it("shows Pull requests after Board, on ⌘3, only when the service serves them", () => {
+    const onSelectTab = vi.fn<(tab: ProjectTab) => void>();
+    render(
+      <ProjectWindow project={fx.project()} botCount={2} tab="prs" prs onSelectTab={onSelectTab}>
+        <p>tab content</p>
+      </ProjectWindow>,
+    );
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Overview",
+      "Board",
+      "Pull requests",
+      "Team",
+      "Releases",
+      "Meetings",
+    ]);
+    expect(screen.getByRole("tabpanel", { name: "Pull requests" })).toHaveTextContent(
+      "tab content",
+    );
+    fireEvent.keyDown(window, { key: "3", metaKey: true });
+    fireEvent.keyDown(window, { key: "6", metaKey: true });
+    expect(onSelectTab.mock.calls.map((call) => call[0])).toEqual(["prs", "meetings"]);
+  });
 });

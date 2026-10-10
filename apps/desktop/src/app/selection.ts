@@ -1,12 +1,14 @@
 import type { BotTab } from "../components/bot/BotTabs";
 
 /**
- * The tabs of a project window (UX-024 §2): the first five are in the tab bar
- * on ⌘1…⌘5; the rest sit under More.
+ * The tabs of a project window (UX-024 §2, UX-051 §1): the first six are in
+ * the tab bar on ⌘1…⌘6; the rest sit under More. Pull requests shows only when
+ * the service serves them.
  */
 const PROJECT_TABS = [
   "overview",
   "board",
+  "prs",
   "team",
   "releases",
   "meetings",
@@ -16,11 +18,16 @@ const PROJECT_TABS = [
 
 export type ProjectTab = (typeof PROJECT_TABS)[number];
 
-/** The tabs in the tab bar itself, in ⌘1…⌘5 order. */
-export const PRIMARY_TABS = PROJECT_TABS.slice(0, 5);
+const WITH_PRS: readonly ProjectTab[] = PROJECT_TABS.slice(0, 6);
+const WITHOUT_PRS: readonly ProjectTab[] = WITH_PRS.filter((tab) => tab !== "prs");
+
+/** The tabs in the tab bar itself, in ⌘1… order; `prs` when the service serves pull requests. */
+export function primaryTabs(prs: boolean): readonly ProjectTab[] {
+  return prs ? WITH_PRS : WITHOUT_PRS;
+}
 
 /** The tabs under More. */
-export const MORE_TABS = PROJECT_TABS.slice(5);
+export const MORE_TABS = PROJECT_TABS.slice(6);
 
 /** What the main pane is currently showing. */
 export type Selection =
