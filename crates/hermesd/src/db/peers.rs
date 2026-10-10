@@ -250,12 +250,7 @@ impl Db {
         remote_message_id: &str,
         message_id: &str,
     ) -> anyhow::Result<()> {
-        self.lock().execute(
-            "INSERT OR IGNORE INTO peer_message(peer_id, remote_message_id, message_id)
-             VALUES (?1, ?2, ?3)",
-            params![peer_id, remote_message_id, message_id],
-        )?;
-        Ok(())
+        insert_peer_message(&self.lock(), peer_id, remote_message_id, message_id)
     }
 
     /// The local copy of a message the peer knows as `remote_message_id`.
@@ -360,4 +355,20 @@ impl Db {
         }
         Ok(tasks)
     }
+}
+
+/// [`Db::map_peer_message`] on `conn`, so a message and the peer's id for it
+/// can commit together (H-312).
+pub(super) fn insert_peer_message(
+    conn: &rusqlite::Connection,
+    peer_id: &str,
+    remote_message_id: &str,
+    message_id: &str,
+) -> anyhow::Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO peer_message(peer_id, remote_message_id, message_id)
+         VALUES (?1, ?2, ?3)",
+        params![peer_id, remote_message_id, message_id],
+    )?;
+    Ok(())
 }

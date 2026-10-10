@@ -160,6 +160,18 @@ pub(super) fn receive(
         };
         let release =
             super::task_card::accepted_release(app, peer, &to, spec.release_id.as_deref())?;
+        // Where it installs: the home named this computer, or the iPhone. It
+        // opens with the task (H-312), so no reader sees a target-less one.
+        let target = match (release, spec.target.as_deref()) {
+            (Some(_), Some(target)) if crate::board::release::machines::is_ios_target(target) => {
+                Some(target.to_string())
+            }
+            (Some(_), Some(_)) => Some(
+                app.db
+                    .board_read(crate::board::release::machines::this_computer)?,
+            ),
+            _ => None,
+        };
         let task = app.db.create_task_with_release(
             &msg.id,
             Some(&linked.id),
@@ -168,18 +180,9 @@ pub(super) fn receive(
             spec.hop_count,
             &linked.id,
             release,
+            target.as_deref(),
         )?;
         app.db.map_peer_task(&peer.id, &spec.id, &task.id)?;
-        // Where it installs: the home named this computer, or the iPhone.
-        if let (Some(_), Some(target)) = (release, spec.target.as_deref()) {
-            let here = if crate::board::release::machines::is_ios_target(target) {
-                target.to_string()
-            } else {
-                app.db
-                    .board_read(crate::board::release::machines::this_computer)?
-            };
-            app.db.set_task_target(&task.id, &here)?;
-        }
         super::task_card::received(app, &to, linked, &task.id, spec.item_id.as_deref())?;
         task_id = Some(task.id);
     }

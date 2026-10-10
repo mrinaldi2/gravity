@@ -2,7 +2,7 @@
 //! is stored, that the owner sent it over a connection only the owner holds.
 //! Written once, by the daemon, and never changed (the migration's trigger).
 
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{ts, Db};
 
@@ -67,41 +67,7 @@ impl Db {
     /// the owner proved it there, and only a device or a ticket counts: a
     /// message one peer forwarded is never passed on as verified (one hop).
     pub fn record_owner_message(&self, message_id: &str, proof: &OwnerProof) -> anyhow::Result<()> {
-        let (device_id, peer_id, origin_id, origin_via) = match proof {
-            OwnerProof::Device { device_id } => (Some(device_id.as_str()), None, None, None),
-            OwnerProof::Ticket => (None, None, None, None),
-            OwnerProof::Peer {
-                peer_id,
-                origin_message_id,
-                origin_via,
-            } => {
-                anyhow::ensure!(
-                    *origin_via != OwnerVia::Peer,
-                    "an owner message is verified for one hop only"
-                );
-                (
-                    None,
-                    Some(peer_id.as_str()),
-                    Some(origin_message_id.as_str()),
-                    Some(origin_via.as_str()),
-                )
-            }
-        };
-        self.lock().execute(
-            "INSERT INTO owner_message(message_id, via, device_id, peer_id, origin_message_id,
-                                       origin_via, at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![
-                message_id,
-                proof.via().as_str(),
-                device_id,
-                peer_id,
-                origin_id,
-                origin_via,
-                ts(chrono::Utc::now())
-            ],
-        )?;
-        Ok(())
+        insert_owner_message(&self.lock(), message_id, proof)
     }
 
     /// How the owner proved they sent `message_id`, if they did.
@@ -116,6 +82,50 @@ impl Db {
             .optional()?;
         Ok(via.as_deref().and_then(OwnerVia::parse))
     }
+}
+
+/// [`Db::record_owner_message`] on `conn`, so a message and its proof can
+/// commit together (H-312).
+pub(super) fn insert_owner_message(
+    conn: &Connection,
+    message_id: &str,
+    proof: &OwnerProof,
+) -> anyhow::Result<()> {
+    let (device_id, peer_id, origin_id, origin_via) = match proof {
+        OwnerProof::Device { device_id } => (Some(device_id.as_str()), None, None, None),
+        OwnerProof::Ticket => (None, None, None, None),
+        OwnerProof::Peer {
+            peer_id,
+            origin_message_id,
+            origin_via,
+        } => {
+            anyhow::ensure!(
+                *origin_via != OwnerVia::Peer,
+                "an owner message is verified for one hop only"
+            );
+            (
+                None,
+                Some(peer_id.as_str()),
+                Some(origin_message_id.as_str()),
+                Some(origin_via.as_str()),
+            )
+        }
+    };
+    conn.execute(
+        "INSERT INTO owner_message(message_id, via, device_id, peer_id, origin_message_id,
+                                   origin_via, at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            message_id,
+            proof.via().as_str(),
+            device_id,
+            peer_id,
+            origin_id,
+            origin_via,
+            ts(chrono::Utc::now())
+        ],
+    )?;
+    Ok(())
 }
 
 #[cfg(test)]

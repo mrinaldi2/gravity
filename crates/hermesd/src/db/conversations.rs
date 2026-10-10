@@ -1,7 +1,7 @@
 //! Conversations and messages.
 
 use bus::*;
-use rusqlite::{params, OptionalExtension, Row};
+use rusqlite::{params, OptionalExtension, Row, TransactionBehavior};
 
 use super::{parse_ts, ts, Db};
 
@@ -88,11 +88,38 @@ impl Db {
         ref_message_id: Option<&str>,
         decision_id: Option<&str>,
     ) -> anyhow::Result<Message> {
-        let conn = self.lock();
-        let num: i64 =
-            conn.query_row("SELECT COALESCE(MAX(num), 0) + 1 FROM message", [], |r| {
-                r.get(0)
-            })?;
+        self.insert_message_with(
+            conversation_id,
+            sender,
+            kind,
+            body,
+            ref_message_id,
+            decision_id,
+            None,
+            None,
+        )
+    }
+
+    /// [`Db::insert_message`] with the owner's proof and the peer's id for
+    /// it, in one transaction (H-312): no reader sees a linked computer's
+    /// chat before what says where it came from and whose it is.
+    #[allow(clippy::too_many_arguments)]
+    pub fn insert_message_with(
+        &self,
+        conversation_id: &str,
+        sender: &Sender,
+        kind: MessageKind,
+        body: &str,
+        ref_message_id: Option<&str>,
+        decision_id: Option<&str>,
+        owner: Option<&super::OwnerProof>,
+        from_peer: Option<(&str, &str)>,
+    ) -> anyhow::Result<Message> {
+        let mut conn = self.lock();
+        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let num: i64 = tx.query_row("SELECT COALESCE(MAX(num), 0) + 1 FROM message", [], |r| {
+            r.get(0)
+        })?;
         let msg = Message {
             id: new_id(),
             num,
@@ -105,7 +132,7 @@ impl Db {
             created_at: now(),
             unverified_from: None,
         };
-        conn.execute(
+        tx.execute(
             "INSERT INTO message(id, num, conversation_id, sender_kind, sender_bot_id, sender_name, kind, body, ref_message_id, decision_id, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
@@ -126,6 +153,13 @@ impl Db {
                 ts(msg.created_at)
             ],
         )?;
+        if let Some(proof) = owner {
+            super::owner_messages::insert_owner_message(&tx, &msg.id, proof)?;
+        }
+        if let Some((peer_id, remote_id)) = from_peer {
+            super::peers::insert_peer_message(&tx, peer_id, remote_id, &msg.id)?;
+        }
+        tx.commit()?;
         Ok(msg)
     }
 

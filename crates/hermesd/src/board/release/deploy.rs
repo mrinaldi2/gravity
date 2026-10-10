@@ -77,18 +77,37 @@ fn sender(bot: &bus::Bot) -> Sender {
     }
 }
 
-/// A delegated task from `from` to `to`, as `send_message(kind=task)` opens one.
-fn open_task(app: &Arc<AppState>, from: &bus::Bot, to: &str, body: &str) -> anyhow::Result<String> {
+/// A delegated task from `from` to `to`, as `send_message(kind=task)` opens
+/// one, for `release` and installing on `target`. Both are stored with the
+/// task before the message is queued (H-312): forwarded at once to a
+/// tester on a linked computer, its frame still names them.
+fn open_task(
+    app: &Arc<AppState>,
+    from: &bus::Bot,
+    to: &str,
+    body: &str,
+    release: &str,
+    target: Option<&str>,
+) -> anyhow::Result<String> {
     let s = sender(from);
-    let msg = messaging::send_dm(
+    let deadline = chrono::Utc::now() + chrono::Duration::hours(DEFAULT_TASK_DEADLINE_HOURS);
+    let (_, task) = messaging::send_dm_then(
         &app.db,
         &app.events,
         Dm::new(to, &s, MessageKind::Task, body),
+        |msg| {
+            app.db.create_task_with_release(
+                &msg.id,
+                Some(&from.id),
+                to,
+                Some(deadline),
+                1,
+                &from.id,
+                Some(release),
+                target,
+            )
+        },
     )?;
-    let deadline = chrono::Utc::now() + chrono::Duration::hours(DEFAULT_TASK_DEADLINE_HOURS);
-    let task = app
-        .db
-        .create_task(&msg.id, Some(&from.id), to, Some(deadline), 1, &from.id)?;
     Ok(task.id)
 }
 
@@ -169,9 +188,7 @@ fn roll(
             release.rollback_to.as_deref().map(|r| format!(" to release {r}")).unwrap_or_default()
         ),
     };
-    let task_id = open_task(app, me.bot, &tester, &body)?;
-    app.db.set_task_release(&task_id, &release.id)?;
-    app.db.set_task_target(&task_id, machine)?;
+    let task_id = open_task(app, me.bot, &tester, &body, &release.id, Some(machine))?;
     app.db.board_tx(|t| {
         t.start_deployment(&release.id, machine, action, &tester, Some(&task_id))?;
         if action == DeployAction::Deploy && release.status == ReleaseStatus::Approved {
@@ -373,8 +390,7 @@ fn ask_rollback(
              release_rollback (release_id {}, machine {machine}).",
             release.name, release.id
         );
-        let task_id = open_task(app, me.bot, &devops, &body)?;
-        app.db.set_task_release(&task_id, &release.id)?;
+        open_task(app, me.bot, &devops, &body, &release.id, None)?;
     }
     Ok(())
 }
