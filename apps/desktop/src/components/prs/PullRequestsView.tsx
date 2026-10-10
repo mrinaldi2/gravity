@@ -1,8 +1,9 @@
 // The project's Pull requests tab (H-276, UX-051): the list, and one PR in
 // full. Read-only here; Approve and Ask for changes are H-277's. Both update
-// live from `pr_updated` and `check_updated` pushes, with no reload.
+// live from `pr_updated` and `check_updated` pushes, with no reload. Back
+// returns focus to the row that opened the PR (UX-012).
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { Project } from "../../protocol/entities";
 import type { PrApi } from "../../protocol/prs";
@@ -70,9 +71,20 @@ export default function PullRequestsView(props: PullRequestsViewProps): ReactEle
   const [open, setOpen] = useState<number | null>(props.initialNumber ?? null);
   const [chosen, setChosen] = useState<PrFilter | null>(null);
   const list = usePrList(client, project.id, connected);
+  const backTo = useRef<number | null>(null);
+  useEffect(() => {
+    if (open === null && backTo.current !== null) {
+      document.querySelector<HTMLElement>(`.pr-row-open[data-pr="${backTo.current}"]`)?.focus();
+      backTo.current = null;
+    }
+  }, [open]);
 
   if (open !== null) {
-    return <OpenPr {...props} number={open} onBack={() => setOpen(null)} />;
+    const back = (): void => {
+      backTo.current = open;
+      setOpen(null);
+    };
+    return <OpenPr {...props} number={open} onBack={back} />;
   }
   const note = listNote(list, connected);
   if (note !== null || list.data === null) {

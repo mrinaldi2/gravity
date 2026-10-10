@@ -89,7 +89,8 @@ function Row(props: {
           <button
             type="button"
             className="pr-row-open"
-            aria-label={`Open pull request #${pr.number}: ${title}`}
+            data-pr={pr.number}
+            aria-label={`${title}, pull request #${pr.number}`}
             onClick={() => props.onOpen(pr.number)}
           >
             {title}

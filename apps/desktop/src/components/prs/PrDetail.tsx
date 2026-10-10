@@ -1,7 +1,8 @@
 // One pull request (UX-051 "overview", "files", "checks"): its card and
 // title, who wants to merge what, and its Overview, Files and Checks.
+// Opening it moves focus to its heading (UX-013); the caller returns it on Back.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import type { PullRequest } from "../../protocol/gen/hermes/pr/v1/pr_pb";
 import { BlockerKind, PrState } from "../../protocol/gen/hermes/pr/v1/pr_pb";
@@ -61,6 +62,10 @@ export default function PrDetail(props: {
 }): ReactElement {
   const { pr, now } = props;
   const [section, setSection] = useState<Section>("overview");
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
   const pill = headPill(pr);
   const head = splitChecks(pr).head;
   const sections: readonly { readonly key: Section; readonly word: string }[] = [
@@ -75,7 +80,7 @@ export default function PrDetail(props: {
           <button type="button" className="pr-crumb" onClick={props.onBack}>
             {props.projectName} › Pull requests ›
           </button>
-          <h3>
+          <h3 tabIndex={-1} ref={heading}>
             #{pr.number} · {pr.itemId ? <CardLink id={pr.itemId} /> : null}{" "}
             {pr.itemTitle || pr.title}
           </h3>

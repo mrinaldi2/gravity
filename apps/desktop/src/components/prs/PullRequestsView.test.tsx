@@ -52,9 +52,7 @@ function busFixture(name: string): JsonValue {
 describe("PullRequestsView: the list", () => {
   it("shows each PR with its card, review chips and checks, waiting for you first", async () => {
     show(prDaemon());
-    const row = (await screen.findByRole("button", { name: /Open pull request #42/ })).closest(
-      "li",
-    );
+    const row = (await screen.findByRole("button", { name: /, pull request #42$/ })).closest("li");
     expect(screen.getByRole("button", { name: "Waiting for you · 1" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -194,6 +192,32 @@ describe("PullRequestsView: one PR", () => {
     show(prDaemon(), 42);
     await user.click(await screen.findByRole("button", { name: "The Hermes › Pull requests ›" }));
     expect(await screen.findByRole("list", { name: "Pull requests" })).toBeInTheDocument();
+  });
+
+  const ROW = "Waiting for you on releases, pull request #42";
+
+  it("moves focus to the PR's heading when it opens", async () => {
+    const user = userEvent.setup();
+    show(prDaemon(prList(), [waitingPr()]));
+    (await screen.findByRole("button", { name: ROW })).focus();
+    await user.keyboard("{Enter}");
+    // The heading takes focus so it is read (UX-013).
+    const heading = await screen.findByRole("heading", { level: 3, name: /^#42 · / });
+    expect(heading).toHaveFocus();
+    expect(heading).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("returns focus to the row that opened the PR on Back", async () => {
+    const user = userEvent.setup();
+    show(prDaemon(prList(), [waitingPr()]));
+    (await screen.findByRole("button", { name: ROW })).focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("heading", { level: 3, name: /^#42 · / });
+    await user.tab({ shift: true });
+    expect(screen.getByRole("button", { name: "The Hermes › Pull requests ›" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    // As the drawers do (UX-012).
+    expect(await screen.findByRole("button", { name: ROW })).toHaveFocus();
   });
 });
 
