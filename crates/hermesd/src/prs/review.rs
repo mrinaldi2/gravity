@@ -166,6 +166,17 @@ pub fn submit(
 /// The roles the PR's head needs under its base's `reviewers.toml` (§4.1),
 /// from the daemon's cache of its repository.
 pub fn needs(app: &AppState, pr: &Pr) -> anyhow::Result<(Vec<ReviewRole>, Shape)> {
+    // The owner's own revert goes through the queue with checks and no bot
+    // review (H-272, UX-051 decision 10).
+    if super::owner::is_owners(pr) {
+        return Ok((
+            Vec::new(),
+            Shape {
+                areas: Vec::new(),
+                security: false,
+            },
+        ));
+    }
     let cache = repo::of_project(app, &pr.project_id, Some(&pr.repo))?.cached(app);
     let base = policy::read(&cache, &pr.base_sha)?;
     let changed = git_cache::changed_paths(&cache, &pr.base_sha, &pr.head_sha)?;

@@ -42,10 +42,11 @@ fn trusted(extras: &[PermissionExtra]) -> Value {
 #[test]
 fn publish_land_and_build_installers_allow_this_binary_by_its_exact_path() {
     let app = Path::new(APP_HERMESD);
-    assert_eq!(
-        added(trusted, PermissionExtra::ReleaseMain),
-        exact::rules(app, "release land")
-    );
+    let land: Vec<String> = ["release land", "release tag", "release leave-out"]
+        .into_iter()
+        .flat_map(|c| exact::rules(app, c))
+        .collect();
+    assert_eq!(added(trusted, PermissionExtra::ReleaseMain), land);
     // H-284: `pr_merge` allows exactly the daemon-checked merge.
     assert_eq!(
         added(trusted, PermissionExtra::PrMerge),

@@ -25,6 +25,7 @@ mod peers;
 mod permissions;
 mod prs;
 mod quiesce;
+mod release_pr;
 mod releases;
 mod review_settings;
 mod reviews;
@@ -58,6 +59,7 @@ use permissions::{
 };
 use prs::MIGRATION_PR_CORE;
 use quiesce::MIGRATION_QUIESCE;
+use release_pr::MIGRATION_RELEASE_PR;
 use releases::{
     MIGRATION_DEPLOY_SUPERSEDED, MIGRATION_RELEASES, MIGRATION_RELEASE_BUILD_COMMIT,
     MIGRATION_RELEASE_EVENTS, MIGRATION_RELEASE_MACHINES, MIGRATION_RELEASE_PLANS,
@@ -126,6 +128,7 @@ pub const MIGRATIONS: &[&str] = &[
     MIGRATION_MERGE_QUEUE,
     MIGRATION_PERMISSION_EXTRAS_PR_MERGE,
     MIGRATION_PR_MERGE,
+    MIGRATION_RELEASE_PR,
 ];
 
 #[cfg(test)]

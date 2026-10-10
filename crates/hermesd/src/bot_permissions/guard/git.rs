@@ -287,7 +287,7 @@ fn push(args: &[String], dirs: &[PathBuf], ctx: &GuardContext) -> Option<String>
 
 const FORCED: &str = "forced pushes rewrite shared history; push normally or ask the owner";
 const DELETE: &str = "deleting a remote branch can't be undone by a bot; ask the owner";
-const MAIN_DENIED: &str = "only the bot with the release_main extra (DevOps) pushes or merges to main; push a feature branch and hand the merge over";
+const MAIN_DENIED: &str = "nobody pushes or merges to main directly: push a feature branch and open a PR; main moves through `hermesd pr merge`";
 
 fn on_main(dir: &Path) -> bool {
     Command::new("git")

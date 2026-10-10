@@ -149,6 +149,13 @@ fn check(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
             ),
         );
     }
+    // The owner's revert merges unreviewed only as the daemon checked it
+    // (H-272 M1).
+    if super::owner::is_owners(pr) {
+        if let Err(e) = crate::board::release::leave_out_gate::check_revert(app, &cache, pr) {
+            return refuse(app, pr, e.to_string());
+        }
+    }
     // What the merge brings is main..head: its roles and shape decide, not
     // a value cached at an earlier head (CE on H-269).
     let at_merge = Pr {
@@ -310,6 +317,14 @@ fn merged(
         Ok((waiting, moved))
     })?;
     publish_moves(app, &mut feed, &pr.project_id, &moved);
+    drop(feed);
+    // A Leave out's revert re-cuts its release (H-272).
+    let done = app.db.board_read(|t| t.pr_by_id(&pr.id))?;
+    if let Some(done) = done {
+        if let Err(e) = crate::board::release::leave_out_gate::after_merge(app, &done) {
+            tracing::warn!(pr = pr.number, error = %e, "the Leave out couldn't re-cut its release");
+        }
+    }
     if let Some(task) = task {
         app.db.try_close_task(&task, TaskState::Done)?;
     }

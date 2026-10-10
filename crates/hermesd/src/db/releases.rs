@@ -62,6 +62,7 @@ fn release_row(r: &Row<'_>) -> rusqlite::Result<Release> {
         plan: Vec::new(),
         tests_required: Vec::new(),
         work_item_id: None,
+        cut: None,
     })
 }
 
@@ -142,6 +143,7 @@ fn release_in(conn: &Connection, id: &str) -> rusqlite::Result<Option<Release>> 
     release.post_install = super::release_life::post_install_in(conn, id)?;
     release.targets = super::release_machines::targets_in(conn, id)?;
     super::release_plans::complete(conn, &mut release)?;
+    release.cut = super::release_cut::cut_in(conn, id)?;
     Ok(Some(release))
 }
 

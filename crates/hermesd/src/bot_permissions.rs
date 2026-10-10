@@ -160,9 +160,6 @@ impl BotStart<'_> {
         if self.profile == PermissionProfile::Full {
             parts.push("--full".to_string());
         }
-        if self.extras.contains(&PermissionExtra::ReleaseMain) {
-            parts.push("--allow-main".to_string());
-        }
         parts.join(" ")
     }
 

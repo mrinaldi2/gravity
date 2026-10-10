@@ -12,6 +12,8 @@ const USAGE: &str = "usage:
                           [--source-commit <sha>]   (default: this checkout's HEAD, when clean)
   hermesd release install <release> [--dry-run | --status]
   hermesd release land <release> [--commit <sha>] [--branch <b>] [--tag <t>] [--dry-run]
+  hermesd release tag <release> [--dry-run]
+  hermesd release leave-out <leave-out id>
   hermesd release build-installer <release> [--commit <sha>] [--script <path>] [--output <file>]";
 
 const FLAGS: [&str; 4] = ["--platform", "--version", "--bundle-id", "--source-commit"];
@@ -37,6 +39,10 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
         Some("apply-app") => return super::install::apply::run(cfg, &args[1..]),
         // DevOps lands an approved release on main and tags it (X2).
         Some("land") => return super::land::run(cfg, &args[1..]).await,
+        // DevOps tags an approved release cut from main (H-272).
+        Some("tag") => return super::tag_cli::run(cfg, &args[1..]).await,
+        // DevOps reverts the PRs the owner left out (H-272).
+        Some("leave-out") => return super::leave_out_cli::run(cfg, &args[1..]).await,
         // Tester Win builds the installer, the script only as committed (X3).
         Some("build-installer") => return super::build_installer::run(cfg, &args[1..]).await,
         _ => anyhow::bail!("{USAGE}"),

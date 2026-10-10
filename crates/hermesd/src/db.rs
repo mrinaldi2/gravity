@@ -22,6 +22,7 @@ pub use owner_messages::{OwnerProof, OwnerVia};
 pub use owner_threads::{Asked, OwnerQuestion};
 pub use peer_grants::{GrantEnd, GrantRuling, PeerGrant};
 pub use quiesce::{NewQuiesce, Quiesce};
+pub use release_cut::{LeaveOut, NewCut};
 pub use release_life::NewReleaseTest;
 pub use release_work::OnCard;
 pub use releases::NewRelease;
@@ -85,6 +86,7 @@ pub mod prs;
 #[cfg(test)]
 mod prs_tests;
 mod quiesce;
+mod release_cut;
 mod release_life;
 mod release_machines;
 mod release_plans;

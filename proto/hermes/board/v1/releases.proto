@@ -253,3 +253,17 @@ message ReleaseDeployedVia {
   string release_id = 1;
   string via_release_id = 2;
 }
+
+// DevOps cuts a release from main (H-272; H-261 §6.1): at `commit` (default
+// main's tip, which it must be on), holding the cards of the PRs merged
+// since the last tagged release. From a planned package (`release_id`), its
+// planned cards not merged yet show as `not_merged`, and merged cards nobody
+// planned as `also_included`. Builds must come from that commit.
+message ReleaseCut {
+  // e.g. "0.18.0"; the release's name and its tag desktop-v<version>.
+  string version = 1;
+  optional string commit = 2;
+  optional string release_id = 3;
+  // "owner/name": the project's repo unless named (one the owner added).
+  optional string repo = 4;
+}

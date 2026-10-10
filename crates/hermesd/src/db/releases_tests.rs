@@ -43,8 +43,9 @@ fn the_releases_migration_runs_again_without_losing_packages() {
         .collect();
     assert_eq!(
         ours.len(),
-        6,
-        "releases, release events, build commits, required machines, plans and work cards"
+        7,
+        "releases, release events, build commits, required machines, plans, work cards and \
+         cuts from main"
     );
     for sql in ours {
         db.lock().execute_batch(sql).unwrap();

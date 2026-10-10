@@ -83,6 +83,30 @@ impl BoardTx<'_> {
             .optional()?)
     }
 
+    pub fn pr_by_id(&self, id: &str) -> anyhow::Result<Option<Pr>> {
+        Ok(self
+            .conn
+            .query_row(
+                &format!("SELECT {COLUMNS} FROM pr WHERE id = ?1"),
+                params![id],
+                pr_row,
+            )
+            .optional()?)
+    }
+
+    /// The PR that reverted this one for a Leave out (H-272), by number.
+    pub fn reverted_by(&self, pr_id: &str) -> anyhow::Result<Option<u32>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT p.number FROM pr_reverted v JOIN pr p ON p.id = v.revert_pr_id
+                 WHERE v.pr_id = ?1",
+                params![pr_id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
     /// The card's open or merging PR in `repo`, if it has one: a card has
     /// at most one per repo (H-261 §6.5).
     pub fn live_pr_of(&self, item_id: &str, repo: &str) -> anyhow::Result<Option<Pr>> {
@@ -197,6 +221,16 @@ impl BoardTx<'_> {
             params![pr.id, tip, ts(now())],
         )?;
         self.add_pr_push(&pr.id, tip, patch_id, None)
+    }
+
+    /// The PR's author becomes `by` (H-272 M1: a bot pushed to the owner's
+    /// revert, so it is that bot's change now).
+    pub fn set_pr_author(&self, pr: &Pr, by: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "UPDATE pr SET author = ?2, version = version + 1, updated_at = ?3 WHERE id = ?1",
+            params![pr.id, by, ts(now())],
+        )?;
+        Ok(())
     }
 
     /// Main fast-forwarded to `sha`, the PR's head, by `by` (H-284).

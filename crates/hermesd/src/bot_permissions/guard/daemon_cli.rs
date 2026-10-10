@@ -9,7 +9,14 @@ use crate::bot_permissions::shell::{self, Words};
 
 /// `release <sub>`, `quiesce` and `pr merge` (H-284): the subcommands an
 /// extra pre-approves.
-const RELEASE: [&str; 4] = ["install", "publish", "land", "build-installer"];
+const RELEASE: [&str; 6] = [
+    "install",
+    "publish",
+    "land",
+    "tag",
+    "leave-out",
+    "build-installer",
+];
 
 /// Why this `hermesd` line must not run, or `None`.
 pub(super) fn redirected(words: &Words, at: usize, scope: &Scope) -> Option<String> {
