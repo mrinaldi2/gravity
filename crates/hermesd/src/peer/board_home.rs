@@ -68,10 +68,19 @@ pub(super) fn serve_call(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> any
             )
         })?;
     let args = frame.get("args").cloned().unwrap_or_else(|| json!({}));
+    // A PR's worktree, checked on the bot's computer (H-285).
+    let found = frame.get("worktree").filter(|w| w.is_object());
+    if let Some(found) = found {
+        super::pr_worktree::check(app, &link, tool, &args, found)
+            .map_err(|e| refuse("invalid_request", format!("{e:#}")))?;
+    }
     let mut result = match crate::mcp::board_call_as(app, &stand_in.id, tool, &args) {
         Ok(mut result) => {
             if tool == "install_release" {
                 published_builds(&mut result)?;
+            }
+            if let Some(found) = found {
+                super::pr_worktree::record(app, peer, &stand_in, &result, found)?;
             }
             result
         }
