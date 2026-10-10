@@ -21,7 +21,7 @@ use std::sync::OnceLock;
 
 use serde_json::{json, Value};
 
-use crate::db::BoardTx;
+use crate::db::{BoardTx, Runs};
 use crate::decisions::{forbidden, invalid};
 
 use super::model::{DeployAction, DeployResult, Release, ReleaseTargets};
@@ -146,12 +146,30 @@ pub fn this_computer(t: &BoardTx<'_>) -> anyhow::Result<String> {
     Ok(t.daemon_name()?.unwrap_or_else(|| host_name().to_string()))
 }
 
-/// Each tester and the computer it tests on.
+/// Each tester and the computer it tests on; first those whose bot really
+/// runs on that computer, then those standing in for it (H-254): a bot here
+/// whose role names another computer, or one whose linked computer is gone.
 pub fn testers(t: &BoardTx<'_>, project_id: &str) -> anyhow::Result<Vec<(String, String)>> {
     let here = this_computer(t)?;
-    Ok(t.tester_machines(project_id)?
+    let mut all: Vec<(bool, String, String)> = t
+        .tester_machines(project_id)?
         .into_iter()
-        .map(|(bot, machine)| (bot, machine.unwrap_or_else(|| here.clone())))
+        .map(|tm| {
+            let machine = tm.machine.unwrap_or_else(|| here.clone());
+            let real = is_ios_target(&machine)
+                || match tm.runs {
+                    Runs::Here => machine.eq_ignore_ascii_case(&here),
+                    Runs::OnItsPeer => true,
+                    Runs::Unlinked => false,
+                };
+            (!real, tm.bot_id, machine)
+        })
+        .collect();
+    // Stable: by bot id within each.
+    all.sort_by_key(|(stands_in, _, _)| *stands_in);
+    Ok(all
+        .into_iter()
+        .map(|(_, bot, machine)| (bot, machine))
         .collect())
 }
 

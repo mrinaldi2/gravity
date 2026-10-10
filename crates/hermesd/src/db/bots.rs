@@ -169,6 +169,11 @@ impl Db {
             params![bot_id],
         )?;
         conn.execute("DELETE FROM routine WHERE bot_id = ?1", params![bot_id])?;
+        // Its board roles go with it: a deleted tester takes no deploy (H-254).
+        conn.execute(
+            "DELETE FROM project_role WHERE bot_id = ?1",
+            params![bot_id],
+        )?;
         // Undelivered mail has nowhere to land.
         conn.execute(
             "DELETE FROM inbox WHERE delivery_id IN
