@@ -126,7 +126,11 @@ pub fn on_branch(reported: &str, head: &str, branch: &str) -> anyhow::Result<()>
     anyhow::ensure!(
         head == branch,
         "{reported} is on {}, not on the PR's branch {branch}",
-        if head.is_empty() { "a detached HEAD" } else { head }
+        if head.is_empty() {
+            "a detached HEAD"
+        } else {
+            head
+        }
     );
     Ok(())
 }

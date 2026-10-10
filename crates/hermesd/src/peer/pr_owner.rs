@@ -40,8 +40,17 @@ pub(super) fn serve(app: &Arc<AppState>, peer: &Peer, frame: &Value) -> anyhow::
         .get("kind")
         .and_then(Value::as_str)
         .filter(|k| FORWARDED.contains(k))
-        .ok_or_else(|| refuse("forbidden", "not an owner request a linked computer forwards"))?;
-    let proof = match frame.get("via").and_then(Value::as_str).and_then(OwnerVia::parse) {
+        .ok_or_else(|| {
+            refuse(
+                "forbidden",
+                "not an owner request a linked computer forwards",
+            )
+        })?;
+    let proof = match frame
+        .get("via")
+        .and_then(Value::as_str)
+        .and_then(OwnerVia::parse)
+    {
         Some(via @ (OwnerVia::Device | OwnerVia::Ticket)) => Some(OwnerProof::Peer {
             peer_id: peer.id.clone(),
             origin_message_id: new_id(),

@@ -69,8 +69,14 @@ pub fn check(
     let project = link.project_id.as_str();
     let (repo, branch) = if tool == "pr_open" {
         let asked = args.get("repo").and_then(Value::as_str);
-        let branch = args.get("branch").and_then(Value::as_str).unwrap_or_default();
-        (repo::of_project(app, project, asked)?, branch.trim().to_string())
+        let branch = args
+            .get("branch")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        (
+            repo::of_project(app, project, asked)?,
+            branch.trim().to_string(),
+        )
     } else {
         let number = args
             .get("number")

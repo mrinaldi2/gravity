@@ -70,9 +70,7 @@ pub fn serve(
                 .get("owner_review")
                 .and_then(Value::as_str)
                 .and_then(Mode::parse)
-                .ok_or_else(|| {
-                    anyhow::anyhow!("owner_review is all, areas, flagged or none")
-                })?;
+                .ok_or_else(|| anyhow::anyhow!("owner_review is all, areas, flagged or none"))?;
             let areas: Vec<String> = req
                 .get("owner_review_areas")
                 .and_then(Value::as_array)
@@ -82,8 +80,7 @@ pub fn serve(
                 .collect();
             let proof = need(proof)?;
             let by = owner::provenance(&proof)?;
-            app
-                .db
+            app.db
                 .set_review_settings(project, &Settings { mode, areas }, &by)?;
             review_settings(app, project)?
         }
@@ -144,8 +141,7 @@ pub fn serve(
         "pr_comment_resolve" => {
             let by = format!("owner:{}", owner::provenance(&need(proof)?)?);
             let id = field(req, "comment_id")?;
-            let c =
-                crate::prs::comments::resolve(app, project, number(req)?, id, &by, true)?;
+            let c = crate::prs::comments::resolve(app, project, number(req)?, id, &by, true)?;
             let pr = pr(app, project, number(req)?)?;
             json!({ "type": "comment", "comment": crate::prs::comments::shown(app, &pr, &c, &pr.head_sha)? })
         }

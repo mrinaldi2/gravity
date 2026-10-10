@@ -42,7 +42,14 @@ fn ready(b: &Board, dir: &std::path::Path) -> (std::path::PathBuf, String) {
     mac.move_item(&item.id, item.version, &to, &Actor::User)
         .unwrap();
     // In the PC tester's own workspace: a folder that bot may work in.
-    let ws = b.p.win.app.db.get_bot(&b.tester_id).unwrap().unwrap().workspace_path;
+    let ws =
+        b.p.win
+            .app
+            .db
+            .get_bot(&b.tester_id)
+            .unwrap()
+            .unwrap()
+            .workspace_path;
     let tree = std::path::Path::new(&ws).join("H-1-peer");
     std::fs::create_dir_all(&ws).unwrap();
     clone(&origin, &tree, "H-1-peer");
@@ -53,7 +60,9 @@ fn ready(b: &Board, dir: &std::path::Path) -> (std::path::PathBuf, String) {
 
 fn on_mac(b: &Board, number: u32) -> hermesd::prs::model::Pr {
     let db = &b.p.mac.app.db;
-    db.board_read(|t| t.pr(&b.mac_app, number)).unwrap().unwrap()
+    db.board_read(|t| t.pr(&b.mac_app, number))
+        .unwrap()
+        .unwrap()
 }
 
 /// A second bot on the PC, linked to the Mac's project, holding a board
@@ -96,7 +105,10 @@ async fn a_linked_bot_works_on_its_pr_from_its_own_computer() {
         )
         .await;
     assert!(
-        raw["content"][0]["text"].as_str().unwrap().contains("doesn't exist on"),
+        raw["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("doesn't exist on"),
         "checked on the PC: {raw}"
     );
     let opened = b
@@ -123,12 +135,18 @@ async fn a_linked_bot_works_on_its_pr_from_its_own_computer() {
     let second = commit(&tree, "peer.txt", "one\ntwo\n");
     git(&tree, &["push", "-q", "origin", "H-1-peer"]);
     b.tester
-        .call("pr_push", json!({"number": 1, "sha": second, "worktree": path}))
+        .call(
+            "pr_push",
+            json!({"number": 1, "sha": second, "worktree": path}),
+        )
         .await;
     let pr = on_mac(&b, 1);
     assert_eq!(pr.head_sha, second);
     let pushes = mac.board_read(|t| t.pr_pushes(&pr.id)).unwrap();
-    assert_eq!(pushes.last().unwrap().pushed_by.as_deref(), Some(b.stand_in.as_str()));
+    assert_eq!(
+        pushes.last().unwrap().pushed_by.as_deref(),
+        Some(b.stand_in.as_str())
+    );
     assert_ne!(head, second);
 
     b.tester
@@ -138,7 +156,10 @@ async fn a_linked_bot_works_on_its_pr_from_its_own_computer() {
         )
         .await;
     let comments = mac.board_read(|t| t.comments(&pr.id)).unwrap();
-    assert_eq!(comments[0].author, b.stand_in, "the comment is the tester's");
+    assert_eq!(
+        comments[0].author, b.stand_in,
+        "the comment is the tester's"
+    );
 
     let (mut arch, arch_stand_in) = pc_bot(&mut b, "arch", Role::ReviewerArch).await;
     arch.call(
@@ -149,7 +170,10 @@ async fn a_linked_bot_works_on_its_pr_from_its_own_computer() {
     .await;
     let mac = &b.p.mac.app.db;
     let reviews = mac.board_read(|t| t.reviews(&pr.id)).unwrap();
-    assert_eq!(reviews[0].reviewer, arch_stand_in, "the review is the architect's");
+    assert_eq!(
+        reviews[0].reviewer, arch_stand_in,
+        "the review is the architect's"
+    );
 }
 
 /// AC2: the owner's acts from the PC's app reach the Mac with how the owner
@@ -175,7 +199,11 @@ async fn the_owners_acts_from_a_linked_computer_carry_its_proof() {
     let review = json!({"type": "pr_review_submit", "project_id": b.win_app, "number": 1,
                         "sha": head, "verdict": "approved"});
     let mut token = WsClient::connect_owner_token(&b.p.win).await;
-    assert_eq!(token.request(review.clone()).await["type"], "error", "the owner token");
+    assert_eq!(
+        token.request(review.clone()).await["type"],
+        "error",
+        "the owner token"
+    );
     let raw = b
         .tester
         .call_raw(
@@ -183,20 +211,32 @@ async fn the_owners_acts_from_a_linked_computer_carry_its_proof() {
             json!({"number": 1, "sha": head, "role": "owner", "verdict": "approved"}),
         )
         .await;
-    assert_eq!(raw["isError"], true, "a bot can't review as the owner: {raw}");
+    assert_eq!(
+        raw["isError"], true,
+        "a bot can't review as the owner: {raw}"
+    );
 
     let mut app = WsClient::connect(&b.p.win).await;
     let out = app.request(review).await;
     assert_eq!(out["type"], "pr", "{out}");
     let pr = on_mac(&b, 1);
     let reviews = b.p.mac.app.db.board_read(|t| t.reviews(&pr.id)).unwrap();
-    let owner = reviews.iter().find(|r| r.role == "owner").expect("recorded");
+    let owner = reviews
+        .iter()
+        .find(|r| r.role == "owner")
+        .expect("recorded");
     let proof = format!("ticket@peer:{}", b.p.mac_peer_id);
-    assert_eq!(owner.provenance.as_deref(), Some(proof.as_str()), "{owner:?}");
+    assert_eq!(
+        owner.provenance.as_deref(),
+        Some(proof.as_str()),
+        "{owner:?}"
+    );
 
     let resolved = app
-        .request(json!({"type": "pr_comment_resolve", "project_id": b.win_app,
-                        "number": 1, "comment_id": comment_id}))
+        .request(
+            json!({"type": "pr_comment_resolve", "project_id": b.win_app,
+                        "number": 1, "comment_id": comment_id}),
+        )
         .await;
     assert_eq!(resolved["comment"]["resolved"], true, "{resolved}");
 
@@ -209,9 +249,16 @@ async fn the_owners_acts_from_a_linked_computer_carry_its_proof() {
                                   "text": "No."}]}});
     let refused = b.p.win.app.peers.request(&b.p.win_peer_id, bare).await;
     let why = format!("{refused:?}");
-    assert!(why.contains("only the owner's app or a paired device"), "{why}");
+    assert!(
+        why.contains("only the owner's app or a paired device"),
+        "{why}"
+    );
     let reviews = b.p.mac.app.db.board_read(|t| t.reviews(&pr.id)).unwrap();
-    assert_eq!(reviews.iter().filter(|r| r.role == "owner").count(), 1, "nothing new");
+    assert_eq!(
+        reviews.iter().filter(|r| r.role == "owner").count(),
+        1,
+        "nothing new"
+    );
 
     // The re-run goes to the Mac: its answer, not "re-run it there".
     let (code, message) = error(call(&mut app, w::rerun(&b.win_app, &head, "rust")).await);
