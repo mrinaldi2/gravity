@@ -5,6 +5,7 @@ use super::Roots;
 fn roots(dir: &Path) -> Roots {
     let workspace = dir.join("home/projects/p/bots/dev/workspace");
     std::fs::create_dir_all(&workspace).unwrap();
+    std::fs::create_dir_all(dir.join("dev")).unwrap();
     Roots::new(
         Some(&workspace),
         &[dir.join("dev")],
