@@ -26,6 +26,9 @@ import type { BarAction } from "./ReviewParts";
 import type { ReleaseActions } from "./useReleases";
 import WaitingForYou, { NowLine } from "./WaitingForYou";
 import type { WaitingActions } from "./WaitingForYou";
+import FromMain from "./FromMain";
+import { isFromMain, itemsEditable, tagLine } from "./releaseMain";
+import type { PrRecords } from "./releaseMain";
 
 type Open = BarAction | "pause" | { readonly leaveOut: string } | null;
 
@@ -42,6 +45,12 @@ export interface ReleaseReviewProps {
   readonly client?: DaemonApi;
   /** Where "Waiting for you"'s buttons go (H-247); none, only the ruling row's. */
   readonly waiting?: WaitingActions;
+  /** Cut from main: the release its range starts after (H-278); null for the first. */
+  readonly previous?: string | null;
+  /** The PRs' own records, for their review chips (H-278); none, no chips. */
+  readonly records?: PrRecords;
+  /** Opens a PR in the Pull requests tab; none, PR numbers are plain text. */
+  readonly onOpenPr?: (num: number) => void;
 }
 
 /**
@@ -151,12 +160,26 @@ function PackageFacts({
 }): ReactElement {
   const planned = release.status === "planned";
   const targets = targetsLine(release);
+  const replaces = release.supersedes ? " · replaces an earlier package" : "";
+  const who = botName(release.created_by) ?? "a bot";
+  // Cut from main, the tag line leads and already names the version (UX-054 nit 2).
+  if (isFromMain(release) && !planned) {
+    return (
+      <>
+        <p className="release-meta">{tagLine(release)}</p>
+        <p className="release-meta">
+          Packaged by {who}
+          {replaces}
+        </p>
+        {targets ? <p className="release-meta">{targets}</p> : null}
+      </>
+    );
+  }
   return (
     <>
       <p className="release-meta">
-        {planned ? "Planned" : "Packaged"} by {botName(release.created_by) ?? "a bot"} ·{" "}
-        <span className="mono">{release.name}</span>
-        {release.supersedes ? " · replaces an earlier package" : ""}
+        {planned ? "Planned" : "Packaged"} by {who} · <span className="mono">{release.name}</span>
+        {replaces}
       </p>
       {planned ? null : <p className="release-meta">{sourceLine(release, version)}</p>}
       {targets ? <p className="release-meta">{targets}</p> : null}
@@ -173,6 +196,8 @@ export default function ReleaseReview({
   now = Date.now,
   client,
   waiting,
+  // A release cut from main's previous release, PR records and PR links.
+  ...fromMain
 }: ReleaseReviewProps): ReactElement {
   const install = useReleaseInstall(client, release);
   const installBox = client ? <InstallBox release={release} install={install} now={now} /> : null;
@@ -209,6 +234,7 @@ export default function ReleaseReview({
       />
       {installBox}
       <PackageFacts release={release} version={version} botName={botName} />
+      <FromMain {...fromMain} release={release} titles={titles} onLeaveOut={actions.leaveOut} />
       <Banner release={release} actions={actions} canControl={canControl} />
       <NowLine release={release} botName={botName} onNeedsYou={waiting?.onNeedsYou} />
       <ReleaseProgress release={release} botName={botName} />
@@ -219,7 +245,7 @@ export default function ReleaseReview({
         release={release}
         titles={titles}
         leftOut={leftOut}
-        editable={release.status === "awaiting_owner" && canRule}
+        editable={itemsEditable(release)}
         canControl={canControl}
         onLeaveOut={(id) => setOpen({ leaveOut: id })}
         onInclude={(id) => {

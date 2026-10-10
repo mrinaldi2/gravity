@@ -186,7 +186,6 @@ export class FakeDaemon implements DaemonApi {
     return responder(call);
   }
 
-  // fallow-ignore-next-line unused-class-member -- reached through PrApi and the PR tab tests
   onPrPush(handler: (push: PrPush) => void): () => void {
     this.prHandlers.add(handler);
     return () => {

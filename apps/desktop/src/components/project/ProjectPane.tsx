@@ -188,6 +188,26 @@ function Prs({ ctx }: { readonly ctx: TabContext }): ReactElement {
   );
 }
 
+/** The Releases tab; its PR numbers open in Pull requests when the service serves them. */
+function Releases({ ctx }: { readonly ctx: TabContext }): ReactElement {
+  const { client, daemon, project } = ctx;
+  return (
+    <ReleasesView
+      client={client}
+      project={project}
+      bots={ctx.bots}
+      connected={daemon.connected}
+      canControl={daemon.canControl}
+      addToast={ctx.addToast}
+      onOpenDecision={(decisionId) => daemon.select({ kind: "control", decisionId })}
+      onOpenNeedsYou={() => daemon.select({ kind: "control" })}
+      onOpenPr={
+        client.capabilities.includes(PULL_REQUESTS) ? (pr) => ctx.onOpenPr(pr, false) : undefined
+      }
+    />
+  );
+}
+
 /** The active tab's view. */
 function TabView({ ctx }: { readonly ctx: TabContext }): ReactElement {
   const { client, daemon, project, bots } = ctx;
@@ -212,18 +232,7 @@ function TabView({ ctx }: { readonly ctx: TabContext }): ReactElement {
     case "team":
       return <Team ctx={ctx} />;
     case "releases":
-      return (
-        <ReleasesView
-          client={client}
-          project={project}
-          bots={bots}
-          connected={connected}
-          canControl={canControl}
-          addToast={ctx.addToast}
-          onOpenDecision={(decisionId) => daemon.select({ kind: "control", decisionId })}
-          onOpenNeedsYou={() => daemon.select({ kind: "control" })}
-        />
-      );
+      return <Releases ctx={ctx} />;
     case "meetings":
       return (
         <MeetingsView
