@@ -1,11 +1,11 @@
 //! Unsaved work in a worktree, and saving it before anything is kept or
 //! removed (H-261 §15.3 rule 4). Everything runs through [`SafeGit`] with
 //! plumbing: the tree is a bot's, so its config must not make this git run
-//! a program. A diff passes `--no-ext-diff --no-textconv`, and every clean
-//! or smudge filter the repository's config names is emptied on the
-//! command line ([`without_filters`]). That matters even for `diff-index`:
-//! a file whose stat matches the index too closely to trust (racy git) is
-//! read and hashed, through the clean filter its attributes name.
+//! a program. A diff passes `--no-ext-diff --no-textconv`, and SafeGit
+//! empties every filter driver the tree's config names (H-295). That
+//! matters even for `diff-index`: a file whose stat matches the index too
+//! closely to trust (racy git) is read and hashed, through the clean filter
+//! its attributes name.
 
 use std::path::{Component, Path, PathBuf};
 
@@ -66,7 +66,7 @@ fn unpushed_range(tree: &Path, merged: &str) -> Vec<String> {
 
 /// What `tree` holds that would be lost if it were removed.
 pub fn find(tree: &Path, merged: &str) -> anyhow::Result<Unsaved> {
-    let changed = without_filters(tree, tree)?
+    let changed = SafeGit::local(tree)?
         .args(&[
             "diff-index",
             "--name-only",
@@ -85,31 +85,6 @@ pub fn find(tree: &Path, merged: &str) -> anyhow::Result<Unsaved> {
         untracked: lines(&untracked),
         unpushed: unpushed.trim().parse().unwrap_or(u32::MAX),
     })
-}
-
-/// git in `dir` with every filter driver `tree`'s config names (its own
-/// worktree config included) emptied, so no clean, smudge or process
-/// filter runs, here or in a git it starts.
-pub fn without_filters(tree: &Path, dir: &Path) -> anyhow::Result<SafeGit> {
-    let named = git(
-        tree,
-        &["config", "--name-only", "--get-regexp", r"^filter\."],
-    )
-    .unwrap_or_default();
-    let mut drivers: Vec<&str> = named
-        .lines()
-        .filter_map(|l| l.strip_prefix("filter.")?.rsplit_once('.').map(|(d, _)| d))
-        .collect();
-    drivers.sort_unstable();
-    drivers.dedup();
-    let mut cmd = SafeGit::local(dir)?;
-    for d in drivers {
-        for key in ["clean", "smudge", "process"] {
-            cmd = cmd.configured(&format!("filter.{d}.{key}="));
-        }
-        cmd = cmd.configured(&format!("filter.{d}.required=false"));
-    }
-    Ok(cmd)
 }
 
 /// Saves what `unsaved` names into `dir`: a bundle of the unpushed commits,
@@ -133,7 +108,7 @@ pub fn salvage(
         SafeGit::local(tree)?.args(&args).run()?;
     }
     if !unsaved.changed.is_empty() {
-        let out = without_filters(tree, tree)?
+        let out = SafeGit::local(tree)?
             .args(&[
                 "diff",
                 "--binary",

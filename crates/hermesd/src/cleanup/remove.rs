@@ -139,9 +139,10 @@ pub fn worktree(
     }
     recheck().map_err(Outcome::Held)?;
     let shown = tree.display().to_string();
-    // `worktree remove` runs `status` in the tree; the emptied filters reach
-    // it through git's own command-line config.
-    let removed = super::unsaved::without_filters(tree, main_clone)
+    // `worktree remove` runs `status` in the tree; the tree's emptied
+    // filters reach it through git's own command-line config.
+    let removed = SafeGit::local(main_clone)
+        .and_then(|g| g.without_filters_of(tree))
         .and_then(|g| g.args(&["worktree", "remove", &shown]).run());
     if let Err(error) = removed {
         let text = format!("{error:#}");

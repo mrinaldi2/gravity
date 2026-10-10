@@ -126,8 +126,9 @@ pub fn cleanup(worktree: &Path) -> anyhow::Result<CleanupOutcome> {
         read_meta(worktree).context("refusing cleanup: not a daemon-provisioned worktree")?;
 
     // Plumbing instead of `status`: tracked paths whose content or stat
-    // differs from HEAD (a stat-only change counts, so no file is read or
-    // filtered), then untracked paths.
+    // differs from HEAD, then untracked paths. A file whose stat is too
+    // fresh to trust is still read and hashed; SafeGit empties the
+    // filters that would run then (H-295).
     let changed = git(
         worktree,
         &[
@@ -165,10 +166,11 @@ pub fn cleanup(worktree: &Path) -> anyhow::Result<CleanupOutcome> {
     }
 
     std::fs::remove_file(worktree.join(METADATA_FILE)).ok();
-    git(
-        &meta.repo,
-        &["worktree", "remove", &worktree.display().to_string()],
-    )?;
+    // `worktree remove` runs `status` in the tree: empty its filters too.
+    SafeGit::local(&meta.repo)?
+        .without_filters_of(worktree)?
+        .args(&["worktree", "remove", &worktree.display().to_string()])
+        .run()?;
     Ok(CleanupOutcome::Removed)
 }
 
