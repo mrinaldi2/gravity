@@ -25,13 +25,16 @@ fn script(path: &Path, marker: &Path) {
 }
 
 /// Racy git: an index dated no later than any file in it, so git can't
-/// trust their stat and re-hashes them, through their filter.
+/// trust their stat and re-hashes them, through their filter. (Not the
+/// epoch itself: git reads a zero time as no time.)
 fn racy(tree: &Path) {
     let index = std::fs::File::options()
         .write(true)
         .open(tree.join(".git/index"))
         .unwrap();
-    index.set_modified(std::time::UNIX_EPOCH).unwrap();
+    index
+        .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(86_400))
+        .unwrap();
 }
 
 #[tokio::test]

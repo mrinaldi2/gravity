@@ -8,6 +8,10 @@ use std::path::{Path, PathBuf};
 const DIRECT_GIT: &[(&str, &str)] = &[
     ("safe_git.rs", "the helper itself"),
     (
+        "safe_git_line_endings.rs",
+        "the helper reading core.autocrlf/core.eol from the system config, outside any repository",
+    ),
+    (
         "board/release/git.rs",
         "the `hermesd release` CLI, run by DevOps in its own terminal and checkout",
     ),

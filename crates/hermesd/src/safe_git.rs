@@ -10,9 +10,11 @@
 //!
 //! - the environment is cleared, then only `PATH` is kept; `HOME`,
 //!   `USERPROFILE` and `XDG_CONFIG_HOME` name an empty folder under the
-//!   daemon's `<home>/run/` (bots may not write there), and
-//!   `GIT_CONFIG_NOSYSTEM=1` and `GIT_CONFIG_GLOBAL` (the null device) leave
-//!   the repository's own config the only file git reads;
+//!   daemon's `<home>/run/` (bots may not write there),
+//!   `GIT_CONFIG_NOSYSTEM=1`, and `GIT_CONFIG_GLOBAL` is a daemon-written
+//!   file holding only this computer's line-ending settings (see
+//!   `safe_git_line_endings.rs`), so the repository's own config is the
+//!   only file git reads that a bot can write;
 //! - command-line config, which wins over every file: `core.fsmonitor=false`,
 //!   `core.hooksPath` a path under the null device (it can't hold files), no
 //!   credential helper, no attributes file, and no transport at all unless
@@ -200,7 +202,10 @@ impl SafeGit {
             .env("USERPROFILE", &home)
             .env("XDG_CONFIG_HOME", &home)
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", null_device())
+            .env(
+                "GIT_CONFIG_GLOBAL",
+                line_endings::config_file(&run_dir()?, &home)?,
+            )
             .env("GIT_TERMINAL_PROMPT", "0")
             .env("GIT_OPTIONAL_LOCKS", "0")
             .stdin(Stdio::null());
@@ -357,6 +362,9 @@ fn github_token() -> Option<String> {
 #[cfg(test)]
 #[path = "safe_git_tests.rs"]
 pub(crate) mod tests;
+
+#[path = "safe_git_line_endings.rs"]
+mod line_endings;
 
 #[cfg(test)]
 #[path = "safe_git_filter_tests.rs"]
