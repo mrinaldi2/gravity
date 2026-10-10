@@ -21,6 +21,8 @@ pub mod remote;
 pub mod remove;
 pub mod run;
 pub mod scope;
+pub mod sweep;
+pub mod sweep_remote;
 pub mod unsaved;
 
 use std::collections::{BTreeMap, HashSet};

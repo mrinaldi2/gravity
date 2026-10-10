@@ -76,7 +76,7 @@ fn workspace_here(app: &AppState, project_id: &str, work: &Work) -> Option<PathB
 }
 
 /// The project's bots as this computer knows them.
-fn bots_here(app: &AppState, project_id: &str) -> Vec<BotHere> {
+pub fn bots_here(app: &AppState, project_id: &str) -> Vec<BotHere> {
     app.db
         .list_bots(Some(project_id))
         .unwrap_or_default()

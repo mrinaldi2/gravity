@@ -139,6 +139,7 @@ pub fn spawn_workers(app: &Arc<AppState>) {
     crate::board::release::blockers_watch::spawn(app.clone());
     crate::prs::watch::spawn(app.clone());
     crate::cleanup::spawn(app.clone());
+    crate::cleanup::sweep::spawn(app.clone());
     crate::prs::queue::spawn(app.clone());
     crate::machine_tools::spawn(app.clone());
     crate::prs::check_jobs::on_boot(app);
