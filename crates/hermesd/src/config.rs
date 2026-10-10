@@ -332,11 +332,12 @@ impl Config {
         self.trust_forwarded_owner_acts = true;
     }
 
-    /// Stops the daemon's own merge-queue ticker, so a test's
+    /// With `on`, stops the daemon's own merge-queue ticker, so a test's
     /// `prs::queue::step(now)` is the only clock the queue sees (H-308).
+    /// The PR fixture turns it on; the ticker's own test turns it off.
     #[cfg(any(test, feature = "test-support"))]
-    pub fn merge_queue_by_hand_for_tests(&mut self) {
-        self.merge_queue_by_hand = true;
+    pub fn merge_queue_by_hand_for_tests(&mut self, on: bool) {
+        self.merge_queue_by_hand = on;
     }
 
     pub fn load(path: Option<&Path>) -> anyhow::Result<Self> {

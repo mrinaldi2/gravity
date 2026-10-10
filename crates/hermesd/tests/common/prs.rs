@@ -37,7 +37,7 @@ pub async fn setup_with(tweak: impl FnOnce(&mut hermesd::config::Config)) -> Rep
     let d = super::spawn_daemon_with(|cfg| {
         cfg.trusted_paths = vec![trusted];
         // The merge queue moves only on the test's clock (H-308).
-        cfg.merge_queue_by_hand_for_tests();
+        cfg.merge_queue_by_hand_for_tests(true);
         tweak(cfg);
     })
     .await;
