@@ -12,7 +12,7 @@ use super::super::exact;
 use super::super::settings::{generate, SettingsInput};
 use super::{input, rules, APP_HERMESD};
 
-const ALL: [PermissionExtra; 7] = [
+const ALL: [PermissionExtra; 8] = [
     PermissionExtra::Publish,
     PermissionExtra::DaemonRestart,
     PermissionExtra::AppRestart,
@@ -20,6 +20,7 @@ const ALL: [PermissionExtra; 7] = [
     PermissionExtra::ReleaseMain,
     PermissionExtra::Quiesce,
     PermissionExtra::BuildInstallers,
+    PermissionExtra::PrMerge,
 ];
 
 /// What `extra` adds to a Trusted bot's allow-list.
@@ -44,6 +45,11 @@ fn publish_land_and_build_installers_allow_this_binary_by_its_exact_path() {
     assert_eq!(
         added(trusted, PermissionExtra::ReleaseMain),
         exact::rules(app, "release land")
+    );
+    // H-284: `pr_merge` allows exactly the daemon-checked merge.
+    assert_eq!(
+        added(trusted, PermissionExtra::PrMerge),
+        exact::rules(app, "pr merge")
     );
     let build = added(trusted, PermissionExtra::BuildInstallers);
     assert_eq!(build, exact::rules(app, "release build-installer"));

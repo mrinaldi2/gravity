@@ -45,6 +45,11 @@ const EXTRAS: readonly {
     label: "Build the Windows installer",
     help: "Runs the repo's installer build for an approved release, only as committed. Give it to Tester Win.",
   },
+  {
+    id: "pr_merge",
+    label: "Merge pull requests",
+    help: "Fast-forwards main to a mergeable PR when the daemon asks, with hermesd pr merge. Give it to DevOps only.",
+  },
 ];
 
 /** The extras rulings on linked computers granted the bot, read on connect. */

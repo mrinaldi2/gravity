@@ -341,6 +341,9 @@ fn extra_allow(extra: PermissionExtra, workspace: &Path, hermesd: Option<&Path>)
         PermissionExtra::BuildInstallers => exact("release build-installer"),
         // The daemon checks the extra, the role and the release again (H-117).
         PermissionExtra::Quiesce => exact("quiesce"),
+        // The daemon checks the extra, the role, the task and that the PR is
+        // still mergeable at its head (H-284); a raw push to main stays denied.
+        PermissionExtra::PrMerge => exact("pr merge"),
         PermissionExtra::Install => {
             // The supported install, with no owner prompt; the daemon checks
             // the gate and swaps the app from its own job (H-117 X1).

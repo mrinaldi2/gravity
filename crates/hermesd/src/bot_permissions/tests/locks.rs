@@ -103,6 +103,10 @@ fn the_guard_is_told_worktrees_not_trusted_paths_are_writable() {
         devops.contains("--full") && devops.contains("--allow-main"),
         "{devops}"
     );
+    // H-284: `pr_merge` runs only `hermesd pr merge`; a raw push to main
+    // stays refused.
+    let merger = start(PermissionProfile::Full, &[PermissionExtra::PrMerge]).guard_command();
+    assert!(!merger.contains("--allow-main"), "{merger}");
     let tester = start(PermissionProfile::Trusted, &[PermissionExtra::Install]).guard_command();
     assert_eq!(
         tester.contains("--writable '/Applications'"),

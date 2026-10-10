@@ -83,18 +83,31 @@ impl BoardTx<'_> {
             .optional()?)
     }
 
-    /// The card's open or merging PR, if it has one.
-    pub fn live_pr_of(&self, item_id: &str) -> anyhow::Result<Option<Pr>> {
+    /// The card's open or merging PR in `repo`, if it has one: a card has
+    /// at most one per repo (H-261 §6.5).
+    pub fn live_pr_of(&self, item_id: &str, repo: &str) -> anyhow::Result<Option<Pr>> {
         Ok(self
             .conn
             .query_row(
                 &format!(
-                    "SELECT {COLUMNS} FROM pr WHERE item_id = ?1 AND state IN ('open', 'merging')"
+                    "SELECT {COLUMNS} FROM pr WHERE item_id = ?1 AND repo = ?2
+                       AND state IN ('open', 'merging')"
                 ),
-                params![item_id],
+                params![item_id, repo],
                 pr_row,
             )
             .optional()?)
+    }
+
+    /// Every PR the card ever had, in every repo, oldest first.
+    pub fn prs_of_item(&self, item_id: &str) -> anyhow::Result<Vec<Pr>> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {COLUMNS} FROM pr WHERE item_id = ?1 ORDER BY number"
+        ))?;
+        let rows = stmt
+            .query_map(params![item_id], pr_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
     }
 
     /// The project's PRs in these states (every state when empty), open
@@ -184,6 +197,18 @@ impl BoardTx<'_> {
             params![pr.id, tip, ts(now())],
         )?;
         self.add_pr_push(&pr.id, tip, patch_id, None)
+    }
+
+    /// Main fast-forwarded to `sha`, the PR's head, by `by` (H-284).
+    pub fn set_pr_merged(&self, pr: &Pr, sha: &str, by: &str) -> anyhow::Result<()> {
+        let at = ts(now());
+        self.conn.execute(
+            "UPDATE pr SET state = 'merged', merged_sha = ?2, merged_at = ?3, merged_by = ?4,
+                closed_at = ?3, version = version + 1, updated_at = ?3
+             WHERE id = ?1",
+            params![pr.id, sha, at, by],
+        )?;
+        Ok(())
     }
 
     pub fn close_pr(&self, pr: &Pr, reason: &str) -> anyhow::Result<()> {

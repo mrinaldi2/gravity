@@ -1114,6 +1114,79 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
   - The reviewer, the PR's author or the lead files a `should` or `nit` finding as an Inbox chore, labelled `follow-up`, related to the PR's card.
   - The finding records `follow_up_item_id`, so it can't be filed twice.
 
+**The owner as a reviewer (PR-4, H-269; ruling 7629a873).** It uses migration `REVIEW_SETTINGS`, which adds the tables `project_review_settings` and `pr_shape`.
+- **The setting:**
+  - `review_settings_get {project_id}` (read) answers `{type: "review_settings", review_settings: {owner_review, owner_review_areas, areas}}`. `areas` are the `reviewers.toml` area names on main.
+  - `review_settings_set {project_id, owner_review: all|areas|flagged|none, owner_review_areas?}` (approve) is accepted only from a paired device or the app's ticket. The owner token is refused and nothing is stored.
+  - No row means `all`.
+- **`owner_review_required`, shown on `pr_get`:**
+  - `none`: never.
+  - Otherwise, always for security work: a matched area whose roles include `ce`, or the policy files.
+  - Then by setting: `all` → yes; `areas` → when an area the PR matches is listed; `flagged` → when the PR is `owner_flagged`.
+  - Docs-only PRs follow the setting.
+- **Needs you:** a row `PR_REVIEW` (target `pr_number`) on the board's home appears only once every required bot role has a fresh approval. It leaves when the owner approves the current change.
+- **`pr_review_submit {project_id, number, sha, verdict, summary?, findings?}`** (approve; device or ticket only):
+  - records the owner's verdict on the head, with provenance `device:<id>` or `ticket`;
+  - is refused while the branch moved unreported;
+  - `changes_requested` needs a `summary`, and sends the card back to Doing.
+  - Answers `{type: "pr", pr, review}`.
+- **`pr_comment_add {project_id, number, sha, path, line, side?, body, severity?, reply_to?}`** (approve; device or ticket only) stores an owner line comment on a commit of the PR. Bots' comments and re-anchoring come in H-282.
+- **`pr_flag`:**
+  - The owner uses WS `pr_flag {project_id, number, flagged, reason}` (approve, from a device or the app's ticket only; the owner token is refused).
+  - The lead uses the MCP `pr_flag` tool, which can only set a flag.
+  - Flagging needs a reason, and `pr_flag` records who flagged.
+  - Only the owner clears a flag, so under `flagged` no bot can take the owner's review away. The lead's flag never replaces the owner's.
+  - The PR shows `owner_flagged` and `owner_flag_reason`.
+
+**Line comments (PR-3b, H-282; §1.4, §5.1(3)).** They're stored in `review_comment`, from H-268; no migration.
+- **`pr_comment {number, sha?, path?, line?, side?, body, severity?, reply_to?}`** (MCP, any bot in the project):
+  - It comments on a line at a commit the PR has had; `side` is `new` (default) or `old`.
+  - The anchor must name a line of a text file at that commit (`old` side: at its merge-base with the PR's base). A missing path, a folder, a binary file or a line past the end is refused.
+  - A reply (`reply_to`) joins the thread of the comment it answers, takes the thread's anchor, and carries no severity.
+- **`pr_comments {number, sha?}`** (MCP) lists every comment as shown on `sha` (default: the head):
+  - each one has `shown_line`, where its line went, through the zero-context diff of its file from the commit it was written on;
+  - it's `outdated`, with no line, when that line was changed or removed, when the file is gone or isn't a file, or when it changed without line hunks (binary or `-diff`);
+  - a comment on the `old` side is outdated on any other commit;
+  - it's never shown on a line it wasn't written about, and `line`/`sha` keep the original anchor.
+  - `pr_get` includes `comments` as shown on the head.
+- **The diff:** it runs through SafeGit (H-289), so no external diff or textconv runs.
+- **`pr_comment_resolve {number, comment_id}`:**
+  - It resolves a thread; resolving a reply resolves its thread.
+  - A `must` thread: only its author or the owner.
+  - A thread the owner started: only the owner.
+  - Any other thread: its author or the PR's author, over MCP.
+  - The owner resolves any thread over WS, from a device or the app's ticket.
+- **An open `must` thread** (a thread's first comment with `severity: must`, unresolved) is a mergeable blocker: `unresolved_must`, subject `comments`.
+
+**Merging (PR-6a, H-271; §5.1, §5.2, §16).** Migration `MERGE_QUEUE` adds the tables `pr_merge` and `review_withdrawn`.
+- **`pr_get` shows `mergeable {ok, blockers[]}`.** Each blocker is `{kind, text, subject, paths}`, where `kind` is a lowercase `BlockerKind` (§5.1):
+  - **open and reported:** `not_open`, `moved_unreported`;
+  - **every required role approved this change:** `review_missing`, `changes_requested`;
+  - **the owner, if needed:** `owner_review`;
+  - **no open `must`:** `unresolved_must`;
+  - **every required check passed on the head or its tree:** `check_pending`, `check_failed`;
+  - **the head descends from main's tip:** `behind_main`, or `conflicts` with `paths` from `git merge-tree`;
+  - **the card isn't blocked and its ACs other than post-install ones are ticked:** `card_blocked`, `ac_unticked`.
+- **The queue (nobody presses merge):**
+  - every 2 s the daemon puts each newly mergeable PR at the back of its project's queue, and takes out any that stopped being mergeable;
+  - the head of the queue gets a 10 s `merging` window (`pr.state = merging`, `merge.merge_at`) in which nothing is pushed;
+  - once the window ends, DevOps gets a `pr_merge` daemon task, linked to the card, naming `hermesd pr merge <n>` (`merge.state = handed`; H-284 runs it);
+  - one PR at a time per project: after a merge, main moved, so the next one shows `behind_main` until its author updates it, and is out of the queue meanwhile. Updated without conflict, its approvals carry (same patch-id) and its checks are queued again on the new head.
+- **Undo:**
+  - `pr_merge_undo {project_id, number}` (approve; from a device or the app's ticket only) works only in the window.
+  - It returns the PR to `open` and withdraws the owner's approval of this change (kept in `review_withdrawn`, no longer counted).
+  - The PR stays out of the queue until its change or the owner's approval changes. After the hand-off it is refused.
+
+**The merge executor (PR-6b, H-284; §5.2, §5.3, §6.5, §15.2).** Migrations `PERMISSION_EXTRAS_PR_MERGE` (the `pr_merge` extra) and `PR_MERGE` (one live PR per card **per repo**; the `pr_merge_stuck` table).
+- **`hermesd pr merge <n> [--dry-run]`**, run by DevOps in its own checkout of the PR's repo on its `pr_merge` task. It asks the daemon over the local endpoint, like `release land`:
+  - **`hermes/pr_merge {number}`:** the bot holds the `pr_merge` extra (off for every bot until the owner grants it), is the project's DevOps and holds the PR's open `pr_merge` task. The daemon fetches the repo; the branch must still be at the PR's head. It recomputes the roles and shape the change needs **at the merge** (main's tip to the head; the base's `reviewers.toml` at main's tip), then every §5.1 condition. A PR that no longer holds leaves the queue, its task is cancelled, and the reason comes back. Otherwise it answers `{number, head_sha, branch, main_sha, repo, repo_url}`.
+  - **In the checkout** (git hooks off): origin must be that repo; the branch on origin must be at the head and main an ancestor of it. Then `git push origin <head>:refs/heads/main`, never forced, and `ls-remote` of the repo must show main at the head.
+  - **The branch** is deleted with `--force-with-lease=refs/heads/<branch>:<head>`, so it goes only while its tip is still the merged commit; a branch that moved is kept and reported.
+  - **`hermes/pr_merged {number, sha, branch: {deleted, note}}`:** the daemon's own fetch must show main at `sha`, the PR's head, and the gate must have passed this head (`pr_merge_check`: same head, the main it saw an ancestor of it, under 15 min old). Otherwise main moved outside the gate: nothing is recorded, the card stays, and the owner's Needs you shows a `MAIN_MOVED_OUTSIDE` row (weight 3). The PR becomes `merged` (`merged_sha`, `merged_at`, `merged_by`), leaves the queue, and its task is done. A kept branch is said on the card. Answers `{number, sha, card, moved, waiting_for[], branch_kept}`.
+- **Board:** once every PR of the card, in every repo, is merged, the daemon moves the card Review → Verify ("PR #n merged"). A manual Review → Verify on a card with a PR link is refused (`review.merged_by_pr`); spikes and chores without a PR keep the H-154 path.
+- **Guard:** the `pr_merge` extra pre-approves exactly `<this daemon's binary> pr merge`, run as given (no `--config` or home override). It doesn't lift the main denies: a raw `git push … main` stays refused.
+- **Stuck merges:** a merge `handed` for 30 min goes to DevOps again (the old task expires) and is recorded in `pr_merge_stuck`. Until it merges or leaves the queue, the owner's Needs you shows a `PR_MERGE_STUCK` row (weight 2): "PR #n (card) is waiting for DevOps to merge it; asked N times".
+
 **Checks (PR-5a, H-270).**
 - **Which checks:** each reported head queues the required checks of the base's `.hermes/checks.toml`, filtered by the paths the PR changes. A head's own `checks.toml` changes nothing.
 - **A broken base file:** if the base's `checks.toml` doesn't parse, a single `.hermes/checks.toml` check is recorded as `error`, so nothing counts as checked.

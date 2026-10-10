@@ -162,7 +162,11 @@ pub(super) async fn serve_connection<S>(
             // `hermesd release land` / `build-installer` (H-117 X2, X3).
             None => match crate::board::release::gates::serve(&app, bot_id, &request) {
                 Some(reply) => Some(reply),
-                None => crate::mcp::rpc_response(&app, bot_id, &request).await,
+                // `hermesd pr merge` (H-284).
+                None => match crate::prs::merge::serve(&app, bot_id, &request).await {
+                    Some(reply) => Some(reply),
+                    None => crate::mcp::rpc_response(&app, bot_id, &request).await,
+                },
             },
         };
         if let Some(reply) = reply {

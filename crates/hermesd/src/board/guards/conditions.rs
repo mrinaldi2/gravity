@@ -69,7 +69,18 @@ pub(super) fn conditions(
                 ));
             }
         }
-        Rule::Approve => independent_review(item, who, ctx, out),
+        Rule::Approve => {
+            // A card with a pull request reaches Verify when its PRs merge,
+            // by the daemon's move (H-284, H-261 §5.3).
+            if ctx.has_link(&[LinkKind::Pr]) {
+                out.push(unmet(
+                    "review.merged_by_pr",
+                    "A card with a pull request moves to Verify when its PRs merge.",
+                    Some("Approve the PR with pr_review; the merge moves the card."),
+                ));
+            }
+            independent_review(item, who, ctx, out)
+        }
         Rule::Package => ready_to_package(item, ctx, out),
         Rule::Finish => {
             // Until releases exist (B7), the owner closes released-by-hand

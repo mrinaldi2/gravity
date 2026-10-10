@@ -53,6 +53,7 @@ pub mod check_jobs;
 mod checks;
 #[cfg(test)]
 mod checks_tests;
+pub mod comments;
 mod conversations;
 pub mod dashboard;
 mod decision_threads;
@@ -65,6 +66,7 @@ mod deliveries;
 mod devices;
 mod guardrails;
 mod meetings;
+pub mod merge_queue;
 pub mod metrics;
 mod overview;
 mod owner_actions;
@@ -90,6 +92,7 @@ mod release_work;
 mod releases;
 #[cfg(test)]
 mod releases_tests;
+pub mod review_settings;
 pub mod reviews;
 mod revisions;
 #[cfg(test)]

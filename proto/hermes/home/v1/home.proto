@@ -109,6 +109,9 @@ enum AttentionKind {
   OFF_BOARD = 8;
   SERVING_OFF = 9;
   OWNER_QUESTION = 10;
+  PR_REVIEW = 11;                           // a PR waits for the owner's review (H-269)
+  PR_MERGE_STUCK = 12;                      // DevOps hasn't run a PR's merge in 30 min (H-284)
+  MAIN_MOVED_OUTSIDE = 13;                  // main reached a PR's head with no merge gate pass (H-284)
 }
 
 message AttentionRow {
@@ -126,6 +129,7 @@ message AttentionRow {
     string request_id = 13;                 // permission prompt or terminal card
     BotRef bot = 14;                        // bot_waiting, off_board, owner_question in a thread
     string item_id = 15;                    // p0_item, owner_question on a card
+    uint32 pr_number = 16;                  // pr_review: the PR, in the project's numbering
   }
   uint32 relayed_count = 20;                // relayed_rulings only
   string priority = 21;                     // decision only: P0..P3

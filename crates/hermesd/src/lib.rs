@@ -38,6 +38,7 @@ pub mod owner_threads;
 pub mod paths;
 pub mod peer;
 mod permissions;
+pub mod pr_cli;
 pub mod projectmgmt;
 pub mod prs;
 pub mod quiesce;

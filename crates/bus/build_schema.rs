@@ -24,6 +24,12 @@ const MAY_OMIT: &[(&str, &str)] = &[
     ("Finding", "line"),
     ("Finding", "resolved_in"),
     ("Finding", "follow_up_item_id"),
+    // A reply takes its thread's anchor; side defaults to new (H-282).
+    ("PrComment", "sha"),
+    ("PrComment", "path"),
+    ("PrComment", "line"),
+    ("PrComment", "side"),
+    ("PrComment", "severity"),
 ];
 
 pub fn message_schemas(set: &FileDescriptorSet) -> Value {

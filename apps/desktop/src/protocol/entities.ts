@@ -12,7 +12,8 @@ export type PermissionExtra =
   | "install"
   | "release_main"
   | "quiesce"
-  | "build_installers";
+  | "build_installers"
+  | "pr_merge";
 
 /** Extras a linked computer granted a bot by a ruling there (ARCH-R51). */
 export interface BotGrant {

@@ -2,6 +2,7 @@
 //! PR-1 keeps the record, its verified head and its card's moves; PR-5a the
 //! checks each head must pass. Reviews and merges come with their own slices.
 
+pub mod anchor;
 pub mod check_checkout;
 pub mod check_jobs;
 pub mod check_log;
@@ -10,9 +11,14 @@ pub mod check_remote;
 pub mod check_rerun;
 pub mod check_route;
 pub mod checks;
+pub mod comments;
 pub mod flow;
 pub mod follow_up;
+pub mod merge;
+pub mod mergeable;
 pub mod model;
+pub mod owner;
+pub mod queue;
 pub mod repo;
 pub mod review;
 pub mod review_model;
@@ -47,6 +53,7 @@ pub fn spellings(enum_name: &str) -> Option<Vec<(&'static str, &'static str)>> {
             ("approved", "VERDICT_APPROVED"),
             ("changes_requested", "VERDICT_CHANGES_REQUESTED"),
         ]),
+        "Side" => Some(vec![("old", "SIDE_OLD"), ("new", "SIDE_NEW")]),
         "Severity" => Some(vec![
             ("must", "SEVERITY_MUST"),
             ("should", "SEVERITY_SHOULD"),
@@ -107,6 +114,17 @@ pub fn detail(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
     let mut out = pr.to_json();
     out["reviews"] = reviews.iter().map(|r| r.to_json(pr)).collect();
     out["required_roles"] = serde_json::json!(needs);
+    let owner = owner::owner_json(app, pr)?;
+    out["owner_review_required"] = owner["owner_review_required"].clone();
+    out["areas"] = owner["areas"].clone();
+    out["mergeable"] = mergeable::compute(app, pr, true)?.to_json();
+    out["comments"] = serde_json::json!(comments::list(app, pr, None)?);
+    if let Some(row) = app.db.board_read(|t| t.queue_row(&pr.id))? {
+        out["merge"] = serde_json::json!({
+            "state": row.state, "queued_at": row.queued_at, "merge_at": row.merge_at,
+            "task_id": row.task_id,
+        });
+    }
     out["pushes"] = pushes.iter().map(model::PrPush::to_json).collect();
     out["worktrees"] = worktrees.iter().map(model::PrWorktree::to_json).collect();
     out["checks"] = checks.iter().map(check_model::CheckRun::to_json).collect();

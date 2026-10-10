@@ -53,6 +53,7 @@ mod presence;
 mod probe;
 mod profiles;
 mod project_repo;
+mod prs;
 mod quiesce;
 mod release_install;
 mod releases;

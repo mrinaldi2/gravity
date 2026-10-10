@@ -56,7 +56,9 @@ pub(super) const CREDENTIALS: &[&str] = &[
 
 /// Whether `kind` drives a bot as the owner.
 pub(super) fn owner_driven(kind: &str) -> bool {
-    OWNER_DRIVEN.contains(&kind) || CREDENTIALS.contains(&kind)
+    OWNER_DRIVEN.contains(&kind)
+        || CREDENTIALS.contains(&kind)
+        || super::prs::OWNER_ONLY.contains(&kind)
 }
 
 impl Conn {

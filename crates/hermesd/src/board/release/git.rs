@@ -127,6 +127,20 @@ pub fn push(repo: &Path, refspecs: &[String]) -> anyhow::Result<&'static str> {
     to_origin(repo, "push", refspecs)
 }
 
+/// Deletes `branch` on origin only while its tip is still `expect`: the
+/// lease makes the check and the delete one step on the remote, so a branch
+/// pushed to after the merge is kept (H-284, H-261 §15.2).
+pub fn delete_branch(repo: &Path, branch: &str, expect: &str) -> anyhow::Result<&'static str> {
+    to_origin(
+        repo,
+        "push",
+        &[
+            format!("--force-with-lease=refs/heads/{branch}:{expect}"),
+            format!(":refs/heads/{branch}"),
+        ],
+    )
+}
+
 /// What `url` has for each of `refs` (`refs/tags/x^{}` for a tag's commit),
 /// asked outside the checkout and with no git config of the user's or the
 /// checkout's, so no `insteadOf` or `pushurl` can redirect it (ARCH-R52 S1).

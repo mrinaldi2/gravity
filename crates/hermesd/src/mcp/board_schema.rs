@@ -374,7 +374,15 @@ mod tests;
 /// Plain proto3 fields a tool takes as optional. Their wire cardinality stays
 /// as it shipped (buf breaking), and an empty value means "left out":
 /// `ReleaseTest.machine`, the tester's one computer (H-115).
-const OPTIONAL: &[(&str, &str)] = &[("ReleaseTest", "machine"), ("PrReview", "summary")];
+const OPTIONAL: &[(&str, &str)] = &[
+    ("ReleaseTest", "machine"),
+    ("PrReview", "summary"),
+    ("PrComment", "sha"),
+    ("PrComment", "path"),
+    ("PrComment", "line"),
+    ("PrComment", "side"),
+    ("PrComment", "severity"),
+];
 
 fn leave_out(message: &str, field: &str) -> bool {
     OPTIONAL.contains(&(message, field))

@@ -7,7 +7,8 @@
 use super::paths::Scope;
 use crate::bot_permissions::shell::{self, Words};
 
-/// `release <sub>` and `quiesce`: the subcommands an extra pre-approves.
+/// `release <sub>`, `quiesce` and `pr merge` (H-284): the subcommands an
+/// extra pre-approves.
 const RELEASE: [&str; 4] = ["install", "publish", "land", "build-installer"];
 
 /// Why this `hermesd` line must not run, or `None`.
@@ -36,6 +37,7 @@ pub(super) fn redirected(words: &Words, at: usize, scope: &Scope) -> Option<Stri
     let sub = rest.get(i..);
     let gated = match sub {
         Some([first, ..]) if first == "quiesce" => true,
+        Some([first, second, ..]) if first == "pr" => second == "merge",
         Some([first, second, ..]) if first == "release" => RELEASE.contains(&second.as_str()),
         _ => false,
     };

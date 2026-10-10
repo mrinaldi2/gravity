@@ -53,3 +53,18 @@ INSERT OR IGNORE INTO bot_permission_extra_new(bot_id, extra) SELECT bot_id, ext
 DROP TABLE bot_permission_extra;
 ALTER TABLE bot_permission_extra_new RENAME TO bot_permission_extra;
 "#;
+
+/// `pr_merge` (H-284) joins the extras by the same rebuild. Safe to run again.
+pub(super) const MIGRATION_PERMISSION_EXTRAS_PR_MERGE: &str = r#"
+DROP TABLE IF EXISTS bot_permission_extra_new;
+CREATE TABLE bot_permission_extra_new (
+    bot_id TEXT NOT NULL REFERENCES bot(id),
+    extra  TEXT NOT NULL CHECK(extra IN ('publish', 'daemon_restart', 'app_restart', 'install',
+                                         'release_main', 'quiesce', 'build_installers',
+                                         'pr_merge')),
+    PRIMARY KEY (bot_id, extra)
+);
+INSERT OR IGNORE INTO bot_permission_extra_new(bot_id, extra) SELECT bot_id, extra FROM bot_permission_extra;
+DROP TABLE bot_permission_extra;
+ALTER TABLE bot_permission_extra_new RENAME TO bot_permission_extra;
+"#;
