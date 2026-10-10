@@ -1,9 +1,9 @@
 //! `hermesd release leave-out <id>` (H-272; UX-051 decision 10): DevOps, on
 //! the daemon's task, reverts the PRs the owner left out of a release.
 //!
-//! The daemon says what (`hermes/leave_out`): the branch name and, newest
-//! first, each PR's merged range. In a fresh worktree of DevOps' checkout
-//! at origin's main (git hooks off), each range is reverted with
+//! The daemon says what (`hermes/leave_out`): the branch name, main as it
+//! saw it, and, newest first, each PR's merged range. In a fresh worktree of
+//! DevOps' checkout at that main (git hooks off), each range is reverted with
 //! `git revert --no-edit <from>..<to>`; the branch is pushed (never forced)
 //! and the worktree removed. The daemon then opens it as the owner's PR
 //! (`hermes/leave_out_pushed`), which merges through the normal queue.
@@ -24,6 +24,8 @@ const USAGE: &str = "usage: hermesd release leave-out <leave-out id>";
 pub struct Plan {
     pub branch: String,
     pub repo_url: String,
+    /// Main as the daemon saw it: the revert starts there (H-272 M1).
+    pub main_at: String,
     /// (number, from, to), newest first.
     pub reverts: Vec<(u64, String, String)>,
 }
@@ -51,6 +53,7 @@ impl Plan {
         Ok(Self {
             branch: text(gate, "branch")?,
             repo_url: text(gate, "repo_url")?,
+            main_at: text(gate, "main_at")?,
             reverts,
         })
     }
@@ -92,13 +95,7 @@ pub fn revert_in(checkout: &Path, plan: &Plan, scratch: &Path) -> anyhow::Result
     let path = tree.display().to_string();
     run_git(
         checkout,
-        &[
-            "worktree",
-            "add",
-            "--detach",
-            &path,
-            "refs/remotes/origin/main",
-        ],
+        &["worktree", "add", "--detach", &path, &plan.main_at],
     )?;
     let result = revert_each(&tree, plan).and_then(|()| {
         git::push(&tree, &[format!("HEAD:refs/heads/{}", plan.branch)])?;

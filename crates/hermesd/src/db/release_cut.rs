@@ -28,6 +28,12 @@ pub struct LeaveOut {
     pub by: String,
     pub task_id: Option<String>,
     pub revert_pr_id: Option<String>,
+    /// Main when DevOps asked what to revert (H-272 M1).
+    pub main_at: Option<String>,
+    /// The revert branch's head, as opened.
+    pub head: Option<String>,
+    /// The tree the daemon computed for the reverts on `main_at`.
+    pub expected_tree: Option<String>,
 }
 
 /// The release's cut, with its PRs, if it was cut from main.
@@ -84,10 +90,14 @@ fn leave_out_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<LeaveOut> {
         by: r.get(5)?,
         task_id: r.get(6)?,
         revert_pr_id: r.get(7)?,
+        main_at: r.get(8)?,
+        head: r.get(9)?,
+        expected_tree: r.get(10)?,
     })
 }
 
-const LEAVE_OUT: &str = "id, release_id, prs, mode, state, by, task_id, revert_pr_id";
+const LEAVE_OUT: &str =
+    "id, release_id, prs, mode, state, by, task_id, revert_pr_id, main_at, head, expected_tree";
 
 impl BoardTx<'_> {
     /// Records (or replaces) where the release was cut and the PRs in its
@@ -181,7 +191,7 @@ impl BoardTx<'_> {
         self.conn.execute(
             &format!(
                 "INSERT INTO release_leave_out({LEAVE_OUT}, at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, NULL, ?7)"
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL, NULL, NULL, NULL, NULL, ?7)"
             ),
             params![
                 id,
@@ -273,5 +283,23 @@ impl BoardTx<'_> {
             .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
+    }
+
+    /// Main as DevOps' revert starts from it.
+    pub fn set_leave_out_main(&self, id: &str, main_at: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "UPDATE release_leave_out SET main_at = ?2 WHERE id = ?1",
+            params![id, main_at],
+        )?;
+        Ok(())
+    }
+
+    /// The revert branch as opened: its head and the tree it must have.
+    pub fn set_leave_out_revert(&self, id: &str, head: &str, tree: &str) -> anyhow::Result<()> {
+        self.conn.execute(
+            "UPDATE release_leave_out SET head = ?2, expected_tree = ?3 WHERE id = ?1",
+            params![id, head, tree],
+        )?;
+        Ok(())
     }
 }

@@ -149,6 +149,13 @@ fn check(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
             ),
         );
     }
+    // The owner's revert merges unreviewed only as the daemon checked it
+    // (H-272 M1).
+    if super::owner::is_owners(pr) {
+        if let Err(e) = crate::board::release::leave_out_gate::check_revert(app, &cache, pr) {
+            return refuse(app, pr, e.to_string());
+        }
+    }
     // What the merge brings is main..head: its roles and shape decide, not
     // a value cached at an earlier head (CE on H-269).
     let at_merge = Pr {

@@ -10,7 +10,10 @@
 //! - `release_pr`: the PRs merged in `(previous_commit, source_commit]`.
 //! - `release_leave_out`: the owner's Leave out (UX-051 decision 10): the
 //!   PRs left out (JSON ids), how (`recut` before them, or `revert` through
-//!   an owner-authored PR), and where it stands.
+//!   an owner-authored PR), and where it stands. For a revert, `main_at` is
+//!   main when DevOps asked what to revert, `head` the branch it pushed, and
+//!   `expected_tree` the tree the daemon itself computed for the reverts
+//!   (H-272 M1): only that tree is opened, and merged, as the owner's PR.
 //! - `pr_reverted`: a merged PR a Leave out reverted, and the revert PR.
 pub(super) const MIGRATION_RELEASE_PR: &str = r#"
 CREATE TABLE IF NOT EXISTS release_cut (
@@ -39,6 +42,9 @@ CREATE TABLE IF NOT EXISTS release_leave_out (
     by           TEXT NOT NULL,
     task_id      TEXT,
     revert_pr_id TEXT,
+    main_at      TEXT,
+    head         TEXT,
+    expected_tree TEXT,
     at           TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_release_leave_out_release ON release_leave_out(release_id);

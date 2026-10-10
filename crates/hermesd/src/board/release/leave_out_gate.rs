@@ -24,7 +24,7 @@ use crate::prs::model::Pr;
 use crate::prs::{checks, repo};
 
 use super::cut::{self, version_of};
-use super::{daemon_move, load, publish_moves};
+use super::{daemon_move, git_cache, load, publish_moves};
 
 const GATE: &str = "hermes/leave_out";
 const PUSHED: &str = "hermes/leave_out_pushed";
@@ -99,9 +99,17 @@ pub fn executor(
         version_of(&release),
         &lo.id[..8.min(lo.id.len())]
     );
+    let cache = repo.fetch(app)?;
     if method == GATE {
+        // Main as the revert starts from it: what the pushed branch must be
+        // the exact revert of (H-272 M1).
+        let main_at = git_cache::resolve(&cache, "refs/heads/main")
+            .ok_or_else(|| conflict(format!("{} has no main branch", repo.name)))?;
+        app.db
+            .board_tx(|t| t.set_leave_out_main(&lo.id, &main_at))?;
         return Ok(json!({
             "id": lo.id, "branch": branch, "repo_url": repo.url, "release": release.name,
+            "main_at": main_at,
             "reverts": left.iter().map(|p| json!({
                 "number": p.number, "from": p.base_sha, "to": p.merged_sha,
             })).collect::<Vec<_>>(),
@@ -110,13 +118,13 @@ pub fn executor(
     let head = params["head"]
         .as_str()
         .ok_or_else(|| invalid("'head' is required"))?;
-    let cache = repo.fetch(app)?;
     if repo::tip(&cache, &branch).as_deref() != Some(head) {
         return Err(conflict(format!(
             "{branch} on {} isn't at {head}; push it first",
             repo.name
         )));
     }
+    let expected = expected_tree(&cache, &lo, &left, head)?;
     let facts = repo::facts(&cache, head)?;
     let required = checks::required(&cache, &facts.base_sha, head)?;
     let card = left.last().map(|p| p.item_id.clone()).unwrap_or_default();
@@ -155,12 +163,65 @@ pub fn executor(
             &Actor::User,
         )?;
         t.set_leave_out(&lo.id, "pr_open", None, Some(&pr.id))?;
+        t.set_leave_out_revert(&lo.id, head, &expected)?;
         Ok(pr)
     })?;
     if let Some(task) = &lo.task_id {
         app.db.try_close_task(task, TaskState::Done)?;
     }
     Ok(json!({ "number": pr.number, "branch": branch, "head": head }))
+}
+
+/// The tree the pushed branch must have (H-272 M1): the daemon reverts the
+/// left-out PRs on the main it named at the gate itself. The branch must
+/// start from that main and hold exactly that tree: nothing added, nothing
+/// else changed, since the owner's PR needs no review.
+fn expected_tree(
+    cache: &std::path::Path,
+    lo: &crate::db::LeaveOut,
+    newest_first: &[Pr],
+    head: &str,
+) -> anyhow::Result<String> {
+    let main_at = lo
+        .main_at
+        .as_deref()
+        .ok_or_else(|| conflict("ask what to revert first (hermes/leave_out)"))?;
+    if !git_cache::contains(cache, head, main_at)? {
+        return Err(conflict(format!(
+            "{head} doesn't start from main as it was ({main_at}); nothing opened"
+        )));
+    }
+    let reverts: Vec<(String, String)> = newest_first
+        .iter()
+        .map(|p| (p.base_sha.clone(), p.merged_sha.clone().unwrap_or_default()))
+        .collect();
+    let expected = git_cache::revert_tree(cache, main_at, &reverts)?
+        .ok_or_else(|| conflict("the PRs don't revert cleanly on main; nothing opened"))?;
+    if git_cache::tree_of(cache, head).as_deref() != Some(expected.as_str()) {
+        return Err(conflict(format!(
+            "{head} isn't exactly the revert of the left-out PRs: its files differ from \
+             reverting them on main, so it isn't opened as the owner's PR"
+        )));
+    }
+    Ok(expected)
+}
+
+/// The owner's revert PR may merge only as opened: its head, with the tree
+/// the daemon computed (H-272 M1). `pr merge` asks this before pushing.
+pub fn check_revert(app: &AppState, cache: &std::path::Path, pr: &Pr) -> anyhow::Result<()> {
+    let lo = app.db.board_read(|t| t.leave_out_of_revert(&pr.id))?;
+    let ok = lo.is_some_and(|lo| {
+        lo.head.as_deref() == Some(pr.head_sha.as_str())
+            && lo.expected_tree.is_some()
+            && git_cache::tree_of(cache, &pr.head_sha) == lo.expected_tree
+    });
+    if !ok {
+        return Err(conflict(format!(
+            "PR #{} is the owner's only as the revert the daemon checked; its head changed",
+            pr.number
+        )));
+    }
+    Ok(())
 }
 
 /// After a merge: a Leave out's revert re-cuts its release at the new main,

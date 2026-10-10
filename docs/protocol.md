@@ -1215,7 +1215,10 @@ The typed surface `hermes.pr.v1` (`proto/hermes/pr/v1/pr.proto`, contract `pr` 1
   - **Otherwise** (mode `revert`):
     - A later kept PR that changed the same files is refused by name: "PR #n (card) changed <files> after #m".
     - Otherwise DevOps gets a task to run **`hermesd release leave-out <id>`**. In a fresh worktree of origin's main it runs `git revert --no-edit <base>..<merged>` for each PR, newest first, pushes `leave-out/<version>-<id>`, and asks `hermes/leave_out_pushed`.
-    - The daemon opens that branch as the owner's PR (author `owner:<device or ticket>`): no bot review, no owner review, checks required, the normal queue and `hermesd pr merge`.
+    - **The daemon checks the branch first:** `hermes/leave_out` records `main_at`, main as it was then, and the command reverts from exactly that commit. At `hermes/leave_out_pushed`, the daemon computes the expected tree itself, chaining `git merge-tree --write-tree --merge-base=<merged> <tree> <base>` over the ranges on `main_at`'s tree. The head must descend from `main_at` and hold exactly that tree; otherwise nothing is opened.
+    - **Then** it opens the branch as the owner's PR (author `owner:<device or ticket>`): no bot review, no owner review, checks required, the normal queue and `hermesd pr merge`.
+    - **`hermesd pr merge` checks it again:** for an owner-authored PR, the head and tree must still be the ones recorded.
+    - **A later `pr_push`** to it makes the pusher its author, so the usual reviews apply.
     - **When it merges:** the left-out PRs get `reverted_by`, the release is cut again at the new main, and their cards go back to Doing ("left out of <version>").
   - **Re-adding** a left-out change later is a new PR that reverts the revert.
 - The `release_main` extra pre-approves `release land`, `release tag` and `release leave-out`, run as given. It **no longer lifts the main denies** (CE S1 on H-284): no bot, DevOps included, pushes or merges to main itself. Main moves only through `hermesd pr merge` and `release land`, which push from their own process.

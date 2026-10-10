@@ -197,6 +197,11 @@ pub fn push(
         let pr = t
             .pr(project, number)?
             .ok_or_else(|| not_found(format!("no PR #{number}")))?;
+        // A push to the owner's revert makes it the pusher's change: it no
+        // longer passes unreviewed as the owner's (H-272 M1).
+        if super::owner::is_owners(&pr) && pr.head_sha != tip {
+            t.set_pr_author(&pr, &bot.id)?;
+        }
         if pr.head_sha != tip || pr.moved_unreported {
             t.set_pr_head(
                 &pr,
