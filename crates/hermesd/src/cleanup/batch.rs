@@ -33,6 +33,8 @@ pub struct Batch {
     pub branch: String,
     pub url: String,
     pub merged_sha: String,
+    /// Closed without merging: no merged commit to check main for.
+    pub closed: bool,
     pub jobs: Vec<Work>,
     /// Paths already queued for this PR here, which discovery leaves alone.
     pub known: Vec<String>,
@@ -191,7 +193,8 @@ impl Batch {
         json!({
             "type": super::remote::REQUEST, "project_id": home_project, "pr": self.pr_id,
             "number": self.pr_number, "branch": self.branch, "url": self.url,
-            "merged_sha": self.merged_sha, "jobs": jobs, "known": self.known,
+            "merged_sha": self.merged_sha, "closed": self.closed, "jobs": jobs,
+            "known": self.known,
         })
     }
 
@@ -222,6 +225,7 @@ impl Batch {
             branch: text(&frame["branch"]),
             url,
             merged_sha: text(&frame["merged_sha"]),
+            closed: frame["closed"].as_bool() == Some(true),
             jobs,
             known: frame["known"]
                 .as_array()

@@ -49,13 +49,22 @@ pub async fn run(cfg: &Config, args: &[String]) -> anyhow::Result<()> {
         );
         return Ok(());
     }
+    let stale = drop_stale(&here, &plan);
     let reply = ask(
         cfg,
         "hermes/pr_merged",
         json!({ "number": number, "sha": plan.head,
-                "branch": { "deleted": done.branch_deleted, "note": done.branch_note } }),
+                "branch": { "deleted": done.branch_deleted, "note": done.branch_note },
+                "stale_branches": stale }),
     )
     .await?;
+    for row in &stale {
+        println!(
+            "closed PR #{}'s branch {}: {}",
+            row["number"], row["branch"].as_str().unwrap_or_default(),
+            row["note"].as_str().unwrap_or_default()
+        );
+    }
     println!(
         "PR #{number}: main on {} is at {} (pushed over {})",
         plan.repo, plan.head, done.transport
@@ -106,10 +115,12 @@ pub struct Plan {
     /// Where the result is checked.
     pub repo_url: String,
     pub dry_run: bool,
+    /// Closed PRs' branches past their 14 days: (number, branch, closed head).
+    pub stale: Vec<(u32, String, String)>,
 }
 
 impl Plan {
-    fn from_gate(gate: &Value, dry_run: bool) -> anyhow::Result<Self> {
+    pub fn from_gate(gate: &Value, dry_run: bool) -> anyhow::Result<Self> {
         let text = |key: &str| {
             gate[key]
                 .as_str()
@@ -122,6 +133,19 @@ impl Plan {
             repo: text("repo")?,
             repo_url: text("repo_url")?,
             dry_run,
+            stale: gate["stale_branches"]
+                .as_array()
+                .map(Vec::as_slice)
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|s| {
+                    Some((
+                        u32::try_from(s["number"].as_u64()?).ok()?,
+                        s["branch"].as_str()?.to_string(),
+                        s["sha"].as_str()?.to_string(),
+                    ))
+                })
+                .collect(),
         })
     }
 }
@@ -206,15 +230,32 @@ fn remote_tip(url: &str, branch: &str) -> anyhow::Result<Option<String>> {
 
 /// Deletes the remote branch only while it is still at the merged commit.
 fn drop_branch(checkout: &Path, plan: &Plan) -> (bool, String) {
-    match remote_tip(&plan.repo_url, &plan.branch) {
-        Ok(Some(tip)) if tip != plan.head => {
-            return (false, format!("kept: it moved to {tip} after the merge"))
+    drop_at(checkout, &plan.repo_url, &plan.branch, &plan.head, "the merge")
+}
+
+/// Each closed PR's branch past its 14 days, deleted only while its tip is
+/// still the head the PR was closed at (§15.4).
+pub fn drop_stale(checkout: &Path, plan: &Plan) -> Vec<Value> {
+    plan.stale
+        .iter()
+        .map(|(number, branch, sha)| {
+            let (deleted, note) = drop_at(checkout, &plan.repo_url, branch, sha, "it was closed");
+            json!({ "number": number, "branch": branch, "deleted": deleted, "note": note })
+        })
+        .collect()
+}
+
+/// Deletes `branch` on `url` only while it is at `expect` (a lease).
+fn drop_at(checkout: &Path, url: &str, branch: &str, expect: &str, since: &str) -> (bool, String) {
+    match remote_tip(url, branch) {
+        Ok(Some(tip)) if tip != expect => {
+            return (false, format!("kept: it moved to {tip} after {since}"))
         }
         Ok(None) => return (true, "already gone".to_string()),
         Err(e) => return (false, format!("kept: couldn't read it ({e})")),
         Ok(Some(_)) => {}
     }
-    match git::delete_branch(checkout, &plan.branch, &plan.head) {
+    match git::delete_branch(checkout, branch, expect) {
         Ok(_) => (true, "deleted".to_string()),
         Err(e) => (false, format!("kept: {e}")),
     }

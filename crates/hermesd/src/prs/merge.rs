@@ -75,7 +75,12 @@ pub fn answer(
             .get("sha")
             .and_then(Value::as_str)
             .ok_or_else(|| invalid("'sha' is required"))?;
-        merged(app, &bot, &pr, sha, &params["branch"])
+        let done = merged(app, &bot, &pr, sha, &params["branch"])?;
+        if let Err(error) = crate::cleanup::closed::record_stale(app, &pr, &params["stale_branches"])
+        {
+            tracing::warn!(pr = pr.number, %error, "stale branches weren't recorded");
+        }
+        Ok(done)
     }
 }
 
@@ -189,6 +194,8 @@ fn check(app: &Arc<AppState>, pr: &Pr) -> anyhow::Result<Value> {
         // Where the result is checked: the project's repo, not the
         // checkout's own remote.
         "repo_url": repo.url,
+        // Closed PRs' branches past their 14 days, deleted in this run (§15.4).
+        "stale_branches": crate::cleanup::closed::stale_branches(app, pr)?,
     }))
 }
 

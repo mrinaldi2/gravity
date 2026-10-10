@@ -66,6 +66,7 @@ fn plan(gate: &Value) -> Plan {
         repo: text("repo"),
         repo_url: text("repo_url"),
         dry_run: false,
+        stale: Vec::new(),
     }
 }
 

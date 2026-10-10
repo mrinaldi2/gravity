@@ -9,10 +9,10 @@ use super::board_tx::BoardTx;
 use super::{parse_ts, ts};
 use crate::cleanup::model::{Job, JobState, Kind, NewJob};
 
-const COLUMNS: &str = "id, project_id, pr_id, machine, kind, path_or_ref, main_clone, bot_id,
+pub(super) const COLUMNS: &str = "id, project_id, pr_id, machine, kind, path_or_ref, main_clone, bot_id,
     state, reason, bytes_freed, attempts, busy_since, next_at, sent_at, at";
 
-fn job_row(r: &Row<'_>) -> rusqlite::Result<Job> {
+pub(super) fn job_row(r: &Row<'_>) -> rusqlite::Result<Job> {
     let opt_ts = |i: usize| -> rusqlite::Result<_> {
         Ok(r.get::<_, Option<String>>(i)?.as_deref().map(parse_ts))
     };

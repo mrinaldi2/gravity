@@ -116,6 +116,7 @@ async fn an_earlier_pr_is_reverted_through_the_owners_pr() {
         repo: check["repo"].as_str().unwrap().into(),
         repo_url: check["repo_url"].as_str().unwrap().into(),
         dry_run: false,
+        stale: Vec::new(),
     };
     let done = merge_in(&checkout(&r, &r.origin, "merge"), &plan).unwrap();
     answer(
