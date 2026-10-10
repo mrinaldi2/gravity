@@ -8,8 +8,8 @@ mod common;
 use chrono::{Duration, Utc};
 use common::cuts::{checkout, cut, cuts, get, leave_out, main_tip, merged, numbers, DEVOPS};
 use common::WsClient;
-use hermesd::board::release::leave_out::executor;
 use hermesd::board::release::leave_out_cli::{revert_in, Plan};
+use hermesd::board::release::leave_out_gate::executor;
 use hermesd::pr_cli::{merge_in, Plan as MergePlan};
 use hermesd::prs::merge::answer;
 use hermesd::prs::queue;
@@ -133,7 +133,7 @@ async fn an_earlier_pr_is_reverted_through_the_owners_pr() {
         main_tip(&r.origin).as_str(),
         "cut at the new main"
     );
-    assert_eq!(items(&after), [b.clone()], "{after}");
+    assert_eq!(items(&after), std::slice::from_ref(&b), "{after}");
     let reverted = after["prs"]
         .as_array()
         .unwrap()

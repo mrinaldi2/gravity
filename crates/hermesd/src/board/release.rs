@@ -39,6 +39,7 @@ pub mod ios_repair;
 pub mod land;
 pub mod leave_out;
 pub mod leave_out_cli;
+pub mod leave_out_gate;
 pub mod lifecycle;
 pub mod machines;
 pub mod model;

@@ -314,7 +314,7 @@ fn merged(
     // A Leave out's revert re-cuts its release (H-272).
     let done = app.db.board_read(|t| t.pr_by_id(&pr.id))?;
     if let Some(done) = done {
-        if let Err(e) = crate::board::release::leave_out::after_merge(app, &done) {
+        if let Err(e) = crate::board::release::leave_out_gate::after_merge(app, &done) {
             tracing::warn!(pr = pr.number, error = %e, "the Leave out couldn't re-cut its release");
         }
     }
